@@ -760,7 +760,9 @@ def _screen(out: Features, s: Site, body: Body, seat: float, zmax: float, clear:
     else:
         win = _rrect(s.x, s.y, w, d, s.rot, 2.0)
     ledge = win.offset(2.2, mf.JoinType.Round)
-    out.cuts.append(_flare(win, seat - 1.0, zmax + 4, 0.55 * (zmax + 5 - seat)))
+    zf = max(seat - 1.0, zc - 4.5)  # straight shaft below, a bevel only through the last few mm
+    out.cuts.append(_prism(win, seat - 1.0, zf + 0.01))
+    out.cuts.append(_flare(win, zf, zmax + 4, 0.55 * (zmax + 4 - zf)))
     out.cuts.append(_prism(ledge, zc - 1.0, zmax + 4))
     lip = ledge.offset(1.4, mf.JoinType.Round) - ledge.offset(0.2, mf.JoinType.Round)
     out.adds.append(_prism(lip, zc - 1.6, zc + 0.5))
