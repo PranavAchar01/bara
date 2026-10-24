@@ -1772,3 +1772,21 @@ label.check {
 .explode-label:hover {
   background: var(--accent-soft);
 }
+
+/* A device standing beside the build on the same canvas: its name, and the way to open it. */
+.companion-tag {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font: 600 12px/1.2 var(--font-sans, system-ui, sans-serif);
+  white-space: nowrap;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  border: 1px solid var(--line);
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+.companion-tag.on {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}

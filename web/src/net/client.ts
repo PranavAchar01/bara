@@ -6,6 +6,7 @@ import { createBuild, isKnownEvent, reduceAll } from "../state/reducer";
 import { emptyView, editSent, reduceView, type ViewState } from "../state/view";
 import { pushLog, showToast, useApp, type CanvasSnapshot } from "../state/store";
 import {
+  addCompanionCanvas,
   applyStoredCanvases,
   CANVAS_STORE,
   canvasForOpening,
@@ -300,6 +301,24 @@ export function getRest(): RestClient {
 
 export function isReady(): boolean {
   return conn?.ready ?? false;
+}
+
+/**
+ * A prompt typed over a finished build may ask for a second device beside it ("add a mouse to the
+ * keyboard"): that one is built on a new canvas linked to this one, so both stand in one scene.
+ * Anything else starts a build as before. With no engine answer it falls back to that too.
+ */
+export async function routePrompt(prompt: string): Promise<void> {
+  const s = useApp.getState();
+  if (s.build?.status === "done" && !s.mode.mock) {
+    const res = await getRest().request<{ kind: string; prompt: string }>("POST", "/v1/intent", { prompt, has_build: true });
+    if (res.ok && res.body.kind === "companion") {
+      addCompanionCanvas();
+      startBuild(res.body.prompt);
+      return;
+    }
+  }
+  startBuild(prompt);
 }
 
 export function startBuild(prompt: string): void {

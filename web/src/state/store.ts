@@ -70,6 +70,7 @@ export type CanvasSnapshot = Pick<
   | "resizeTarget"
   | "dismissedWarnings"
   | "dragPose"
+  | "companions"
 >;
 
 export interface AppState {
@@ -112,6 +113,8 @@ export interface AppState {
   toast: string | null;
   /** Local pose shown while a move is committing (C20). */
   dragPose: { instance_id: string; position_mm: number[]; rotation_deg: number[] } | null;
+  /** Other canvases whose devices stand beside this one ("add a mouse to the keyboard"). */
+  companions: string[];
   /** Canvas tabs in order; there is always at least one. */
   canvases: CanvasMeta[];
   activeCanvas: string;
@@ -168,6 +171,7 @@ export const useApp = create<AppState>(() => ({
   dismissedWarnings: [],
   toast: null,
   dragPose: null,
+  companions: [],
   canvases: [{ id: "c1", name: null }],
   activeCanvas: "c1",
   canvasStash: {},

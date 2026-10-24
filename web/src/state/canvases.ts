@@ -28,6 +28,7 @@ export const CANVAS_KEYS = [
   "resizeTarget",
   "dismissedWarnings",
   "dragPose",
+  "companions",
 ] as const satisfies readonly (keyof CanvasSnapshot)[];
 
 /** A canvas with nothing on it, looked at the way a fresh page looks. */
@@ -54,6 +55,7 @@ export function blankCanvas(): CanvasSnapshot {
     resizeTarget: null,
     dismissedWarnings: [],
     dragPose: null,
+    companions: [],
   };
 }
 
@@ -159,6 +161,22 @@ export function addCanvas(): string {
   return id;
 }
 
+/**
+ * A second device next to the one on screen: a new canvas, switched to, linked both ways with
+ * every canvas already in this one's scene. Returns its id.
+ */
+export function addCompanionCanvas(): string {
+  const from = useApp.getState().activeCanvas;
+  const scene = [from, ...useApp.getState().companions];
+  const id = addCanvas();
+  useApp.setState((s) => {
+    const stash = { ...s.canvasStash };
+    for (const c of scene) if (stash[c]) stash[c] = { ...stash[c], companions: [...stash[c].companions.filter((x) => x !== id), id] };
+    return { companions: scene, canvasStash: stash };
+  });
+  return id;
+}
+
 export function renameCanvas(id: string, name: string): void {
   const n = name.trim();
   useApp.setState((s) => ({ canvases: s.canvases.map((c) => (c.id === id ? { ...c, name: n || null } : c)) }));
@@ -166,10 +184,13 @@ export function renameCanvas(id: string, name: string): void {
 
 /** Removes a canvas; closing the last one leaves a fresh empty canvas. Returns what it held. */
 export function closeCanvas(id: string): CanvasSnapshot | null {
+  if (useApp.getState().canvases.every((c) => c.id !== id)) return null;
+  const closed = canvasState(useApp.getState(), id);
+  // the closed device leaves every scene it stood in
+  for (const c of useApp.getState().canvases)
+    if (c.id !== id) patchCanvas(c.id, (cs) => (cs.companions.includes(id) ? { companions: cs.companions.filter((x) => x !== id) } : {}));
   const s = useApp.getState();
   const at = s.canvases.findIndex((c) => c.id === id);
-  if (at < 0) return null;
-  const closed = canvasState(s, id);
   const left = s.canvases.filter((c) => c.id !== id);
   if (left.length === 0) {
     const fresh = nextId(s.canvases);
@@ -224,6 +245,7 @@ export interface StoredCanvas {
   name: string | null;
   build_id: string | null;
   prompt: string | null;
+  companions?: string[];
 }
 
 export interface StoredCanvases {
@@ -236,7 +258,7 @@ export function serializeCanvases(s: AppState): StoredCanvases {
     active: s.activeCanvas,
     canvases: s.canvases.map((m) => {
       const c = canvasState(s, m.id);
-      return { id: m.id, name: m.name, build_id: c?.build?.build_id ?? null, prompt: c?.build?.prompt ?? null };
+      return { id: m.id, name: m.name, build_id: c?.build?.build_id ?? null, prompt: c?.build?.prompt ?? null, companions: c?.companions ?? [] };
     }),
   };
 }
@@ -254,6 +276,7 @@ export function parseCanvases(raw: string | null): StoredCanvases | null {
         name: typeof c.name === "string" ? c.name : null,
         build_id: typeof c.build_id === "string" ? c.build_id : null,
         prompt: typeof c.prompt === "string" ? c.prompt : null,
+        companions: Array.isArray(c.companions) ? c.companions.filter((x): x is string => typeof x === "string") : [],
       }));
     if (canvases.length === 0) return null;
     const active = canvases.some((c) => c.id === v.active) ? (v.active as string) : canvases[0].id;
@@ -266,9 +289,13 @@ export function parseCanvases(raw: string | null): StoredCanvases | null {
 /** Puts the stored tabs back, empty; their builds are fetched afterwards (net/client.ts restoreCanvases). */
 export function applyStoredCanvases(stored: StoredCanvases): void {
   const stash: Record<string, CanvasSnapshot> = {};
-  for (const c of stored.canvases) if (c.id !== stored.active) stash[c.id] = blankCanvas();
+  const ids = new Set(stored.canvases.map((c) => c.id));
+  const linked = (c: StoredCanvas) => (c.companions ?? []).filter((x) => ids.has(x) && x !== c.id);
+  for (const c of stored.canvases) if (c.id !== stored.active) stash[c.id] = { ...blankCanvas(), companions: linked(c) };
+  const active = stored.canvases.find((c) => c.id === stored.active);
   useApp.setState({
     ...blankCanvas(),
+    companions: active ? linked(active) : [],
     canvases: stored.canvases.map((c) => ({ id: c.id, name: c.name })),
     activeCanvas: stored.active,
     canvasStash: stash,

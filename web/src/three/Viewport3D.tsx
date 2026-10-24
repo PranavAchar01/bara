@@ -12,6 +12,7 @@ import { GizmoHelper, GizmoViewcube, Html, OrbitControls, TransformControls } fr
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { focusPart, select, setView, useApp, type ViewPreset } from "../state/store";
+import { switchCanvas } from "../state/canvases";
 import { applyEdit } from "../net/client";
 import { fetchPart } from "../components/Overlays";
 import type { BBox, Board, Build, BuildPart, Enclosure, Layout } from "../spec/types";
@@ -927,6 +928,8 @@ function framePose(kind: FrameKind, cam: THREE.PerspectiveCamera, predictExplode
   const box = stageBox() ?? fallbackBox();
   if (predictExplode !== null) box.max.z += stage.gap * maxRank() * (predictExplode - stage.explode);
   if (kind === "exploded") return fitPose(box, EXPLODED_DIR, cam, LABEL_MODEL_WIDTH, Math.max(0.7, sizedFill(box, 0.88)), 0.04);
+  const row = kind === "hero" || kind === "iso" || kind === "scene" ? rowDir() : null;
+  if (row) return fitPose(box, row, cam, 1, sizedFill(box, 0.78), 0.05);
   const dir =
     kind === "top"
       ? new THREE.Vector3(0, -0.0001, 1)
@@ -940,6 +943,23 @@ function framePose(kind: FrameKind, cam: THREE.PerspectiveCamera, predictExplode
           : HERO_DIR;
   // Hero: a full-size device spans about half of the tighter axis; smaller ones less (sizedFill).
   return fitPose(box, dir.clone().normalize(), cam, 1, sizedFill(box, kind === "hero" || kind === "iso" || kind === "scene" ? 0.5 : 0.7), 0.05);
+}
+
+/**
+ * Several devices on one canvas stand in a row along x, so they are looked at from the front with
+ * the row across the screen, the way they would sit on a desk. Flat devices (a keyboard, a mouse)
+ * are seen from higher up so their tops read; tall ones from lower, so their faces do.
+ */
+function rowDir(): THREE.Vector3 | null {
+  const side = stage.companions;
+  if (!stage.root || !side?.children.length) return null;
+  const boxes = [new THREE.Box3().setFromObject(stage.root), ...side.children.map((c) => new THREE.Box3().setFromObject(c))].filter((b) => !b.isEmpty());
+  if (boxes.length < 2) return null;
+  const size = new THREE.Vector3();
+  const ratio = boxes.reduce((sum, b) => (b.getSize(size), sum + size.z / Math.max(1, Math.min(size.x, size.y))), 0) / boxes.length;
+  const t = Math.min(1, Math.max(0, (ratio - 0.15) / 0.45));
+  const elev = (55 - 35 * t) * DEG;
+  return new THREE.Vector3(0, -Math.cos(elev), Math.sin(elev));
 }
 
 let rankMax = LAYER_RANK.keycaps;
@@ -1285,6 +1305,196 @@ export function labelRows(build: Build | null): LabelRowData[] {
   return [...rows.values()];
 }
 
+// ---------------------------------------------------------------- companion devices
+
+/** Space between devices standing side by side on one canvas. */
+const COMPANION_GAP_MM = 40;
+
+function assemblyBox(build: Build | null): THREE.Box3 | null {
+  const bb = build?.scene?.assembly_bbox_mm;
+  if (!bb?.min || !bb?.max) return null;
+  return new THREE.Box3(new THREE.Vector3(bb.min[0], bb.min[1], bb.min[2]), new THREE.Vector3(bb.max[0], bb.max[1], bb.max[2]));
+}
+
+interface CompanionPick {
+  onClick: (e: ThreeEvent<MouseEvent>) => void;
+  onHover: (on: boolean) => void;
+}
+
+/** One part of a device standing beside the build: its model where the build placed it, nothing else. */
+function CompanionPart(props: { part: BuildPart; build: Build; pick: CompanionPick }) {
+  const { part, build } = props;
+  const layout = (build.layouts ?? []).find((l) => l.layout_id === part.placement.layout_id);
+  const poses = useMemo(() => elementPoses(part.placement, part.quantity, layout), [part.placement, part.quantity, layout]);
+  const model = useModel(modelAsset(part.assets, poses.length > 1)?.url ?? null, isBoardPart(part));
+  const loaded = model.status === "ready" && model.model.groups.length > 0 ? model.model : null;
+  const preset = presetFor(part);
+  const color = defaultColor(part);
+  const groups = useMemo<MeshGroup[]>(() => {
+    if (!loaded) return [];
+    if (usesPreset(preset)) {
+      const mat = presetMaterial(preset, color);
+      return loaded.groups.map((g) => ({ ...g, material: mat }));
+    }
+    if (loaded.groups.length === 1 && part.color?.hex && !loaded.groups[0].material.map) return [{ ...loaded.groups[0], material: tinted(loaded.groups[0].material, part.color.hex) }];
+    return loaded.groups;
+  }, [loaded, preset, color, part.color?.hex]);
+  const matrices = useMemo(() => poses.map((p) => elementMatrix(p)), [poses]);
+  if (!groups.length) return null;
+  return <InstancedGroups groups={groups} matrices={matrices} onClick={props.pick.onClick} onHover={props.pick.onHover} />;
+}
+
+function CompanionBoard(props: { board: Board; pick: CompanionPick }) {
+  const model = useModel(boardModelUrl(props.board), true);
+  const loaded = model.status === "ready" && model.model.groups.length > 0 ? model.model : null;
+  const pos = props.board.position_mm ?? [0, 0, 0];
+  const rot = props.board.rotation_deg ?? [0, 0, 0];
+  if (!loaded) return null;
+  return (
+    <group position={[pos[0], pos[1], pos[2]]} rotation={new THREE.Euler(rot[0] * DEG, rot[1] * DEG, rot[2] * DEG, "XYZ")}>
+      {loaded.groups.map((g) => (
+        <mesh key={`${g.geometry.uuid}:${g.material.uuid}`} geometry={g.geometry} material={g.material} onClick={props.pick.onClick} onPointerOver={(e) => (e.stopPropagation(), props.pick.onHover(true))} onPointerOut={() => props.pick.onHover(false)} />
+      ))}
+    </group>
+  );
+}
+
+/** The case as the assembled build shows it: a translucent shell with its creases drawn. */
+function CompanionCase(props: { enc: Enclosure; pick: CompanionPick }) {
+  const { enc } = props;
+  const model = useModel(modelAsset(enc.assets, false)?.url ?? null);
+  const loaded = model.status === "ready" && model.model.groups.length > 0 ? model.model : null;
+  const geoms = useMemo(() => (loaded ? casePieces(loaded).flatMap((p) => p.geoms) : []), [loaded]);
+  const hex = caseHex(enc);
+  const material = useMemo(() => {
+    const m = presetMaterial("case", hex).clone();
+    m.transparent = true;
+    m.opacity = 0.3;
+    m.depthWrite = false;
+    return m;
+  }, [hex]);
+  useEffect(() => () => material.dispose(), [material]);
+  const edges = useMemo(() => geoms.map((g) => new THREE.EdgesGeometry(g, 40)), [geoms]);
+  useEffect(() => () => edges.forEach((e) => e.dispose()), [edges]);
+  const edgeMat = useMemo(() => new THREE.LineBasicMaterial({ color: "#1F2226", transparent: true, opacity: 0.3, depthWrite: false, toneMapped: false }), []);
+  useEffect(() => () => edgeMat.dispose(), [edgeMat]);
+  const pos = enc.position_mm ?? [0, 0, 0];
+  const rot = enc.rotation_deg ?? [0, 0, 0];
+  return (
+    <group position={[pos[0], pos[1], pos[2]]} rotation={new THREE.Euler(rot[0] * DEG, rot[1] * DEG, rot[2] * DEG, "XYZ")}>
+      {geoms.map((g) => (
+        <mesh key={g.uuid} geometry={g} material={material} renderOrder={2} onClick={props.pick.onClick} onPointerOver={(e) => (e.stopPropagation(), props.pick.onHover(true))} onPointerOut={() => props.pick.onHover(false)} />
+      ))}
+      {edges.map((e) => (
+        <lineSegments key={e.uuid} geometry={e} material={edgeMat} raycast={() => null} renderOrder={3} />
+      ))}
+    </group>
+  );
+}
+
+/** Another device in this canvas's scene, display only: clicking it opens its own canvas. */
+function CompanionDevice(props: { canvasId: string; build: Build; offset: THREE.Vector3; name: string }) {
+  const { build } = props;
+  const [hover, setHover] = useState(false);
+  const pick = useMemo<CompanionPick>(
+    () => ({
+      onClick: (e) => {
+        e.stopPropagation();
+        document.body.style.cursor = "";
+        switchCanvas(props.canvasId);
+      },
+      onHover: (on) => {
+        setHover(on);
+        document.body.style.cursor = on ? "pointer" : "";
+      },
+    }),
+    [props.canvasId],
+  );
+  const boardGlb = (build.boards ?? []).some((b) => boardModelUrl(b));
+  const hiddenPcbs = boardDrawnPcbs(build);
+  // with the routed board drawn, what it already carries (its parts, the bare PCB) is not drawn twice
+  const parts = build.parts.filter((p) => !hiddenPcbs.has(p.instance_id) && !(boardGlb && (layerOf(p) === "board_parts" || layerOf(p) === "pcb" || layerOf(p) === "under")));
+  const box = assemblyBox(build);
+  const tag = box ? new THREE.Vector3((box.min.x + box.max.x) / 2, (box.min.y + box.max.y) / 2, box.max.z + 6) : new THREE.Vector3(0, 0, 30);
+  return (
+    <group position={props.offset} userData={{ companion: props.canvasId }}>
+      {parts.map((p) => (
+        <CompanionPart key={p.instance_id} part={p} build={build} pick={pick} />
+      ))}
+      {(build.boards ?? []).map((b) => (
+        <CompanionBoard key={b.board_id} board={b} pick={pick} />
+      ))}
+      {(build.enclosures ?? [])
+        .filter((e) => e.kind !== "none")
+        .map((e) => (
+          <CompanionCase key={e.enclosure_id} enc={e} pick={pick} />
+        ))}
+      <Html position={tag} center zIndexRange={[4, 0]} style={{ pointerEvents: "none" }}>
+        <span className={`companion-tag ${hover ? "on" : ""}`}>{hover ? `Open ${props.name}` : props.name}</span>
+      </Html>
+    </group>
+  );
+}
+
+/**
+ * The other devices of this canvas's scene ("add a mouse to the keyboard"), stood to the right of
+ * it on the same floor, centres in line, a gap apart. They step away while the build is pulled
+ * apart or a part is in focus: those views are about this one device.
+ */
+function CompanionRow() {
+  const ids = useApp(useShallow((s) => s.companions));
+  const others = useApp(useShallow((s) => s.companions.map((id) => s.canvasStash[id]?.build ?? null)));
+  const names = useApp(useShallow((s) => s.companions.map((id) => s.canvases.find((c) => c.id === id)?.name ?? s.canvasStash[id]?.build?.prompt ?? "")));
+  const active = useApp((s) => s.build);
+  const away = useApp((s) => s.focusKey !== null || s.explode > 0.5);
+  const ref = useRef<THREE.Group>(null);
+  useLayoutEffect(() => {
+    stage.companions = ref.current;
+    return () => {
+      stage.companions = null;
+    };
+  }, []);
+  const activeId = useApp((s) => s.activeCanvas);
+  const order = useApp(useShallow((s) => s.canvases.map((c) => c.id)));
+  const slots = useMemo(() => {
+    // the row keeps tab order whichever device is open, so switching never swaps their places
+    const here = assemblyBox(active) ?? fallbackBox();
+    const cy = (here.min.y + here.max.y) / 2;
+    const rank = (id: string) => order.indexOf(id);
+    const sized = ids.map((id, i) => ({ id, build: others[i], bb: assemblyBox(others[i]) ?? new THREE.Box3(new THREE.Vector3(-40, -40, 0), new THREE.Vector3(40, 40, 20)) }));
+    const place = (d: (typeof sized)[number], x: number) => new THREE.Vector3(x, cy - (d.bb.min.y + d.bb.max.y) / 2, here.min.z - d.bb.min.z);
+    const out: { id: string; build: Build | null; offset: THREE.Vector3 }[] = [];
+    let right = here.max.x + COMPANION_GAP_MM;
+    for (const d of sized.filter((d) => rank(d.id) > rank(activeId)).sort((a, b) => rank(a.id) - rank(b.id))) {
+      out.push({ id: d.id, build: d.build, offset: place(d, right - d.bb.min.x) });
+      right += d.bb.max.x - d.bb.min.x + COMPANION_GAP_MM;
+    }
+    let left = here.min.x - COMPANION_GAP_MM;
+    for (const d of sized.filter((d) => rank(d.id) < rank(activeId)).sort((a, b) => rank(b.id) - rank(a.id))) {
+      out.push({ id: d.id, build: d.build, offset: place(d, left - d.bb.max.x) });
+      left -= d.bb.max.x - d.bb.min.x + COMPANION_GAP_MM;
+    }
+    return out;
+  }, [ids, others, active, activeId, order]);
+  useEffect(() => {
+    stage.settleVersion++;
+  }, [slots, away]);
+  return (
+    <group ref={ref}>
+      {!away &&
+        slots.map((sl) =>
+          sl.build ? <CompanionDevice key={sl.id} canvasId={sl.id} build={sl.build} offset={sl.offset} name={shortName(names[ids.indexOf(sl.id)])} /> : null,
+        )}
+    </group>
+  );
+}
+
+/** "a wireless mouse with a scroll wheel" reads as "Wireless mouse" on its tag. */
+function shortName(prompt: string): string {
+  const t = prompt.replace(/^(?:an?|the|make|build|create)\s+/i, "").split(/\s+(?:with|that|for|to)\s+/i)[0].trim();
+  return t ? t.charAt(0).toUpperCase() + t.slice(1, 40) : "Device";
+}
+
 function SceneContents(props: {
   gizmoMode: "translate" | "rotate";
   theme: Theme;
@@ -1419,6 +1629,7 @@ function SceneContents(props: {
               <BoardNode key={b.board_id} board={b} labelKey={i === 0 ? "b:board" : null} candidates={candidates} onCovered={onCovered} parts={parts} theme={theme} />
             ))}
       </group>
+      <CompanionRow />
       <MoveGizmo mode={props.gizmoMode} />
       <CameraRig />
       <AgentCam />

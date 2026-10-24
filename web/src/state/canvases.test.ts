@@ -6,6 +6,7 @@ import { emptyView } from "./view";
 import { useApp } from "./store";
 import {
   addCanvas,
+  addCompanionCanvas,
   applyStoredCanvases,
   canvasForOpening,
   canvasLabel,
@@ -152,8 +153,8 @@ describe("canvas tabs", () => {
     expect(stored).toEqual({
       active: b,
       canvases: [
-        { id: "c1", name: null, build_id: "bld_1", prompt: "one" },
-        { id: b, name: "Second", build_id: null, prompt: null },
+        { id: "c1", name: null, build_id: "bld_1", prompt: "one", companions: [] },
+        { id: b, name: "Second", build_id: null, prompt: null, companions: [] },
       ],
     });
     const parsed = parseCanvases(JSON.stringify(stored));
@@ -172,13 +173,31 @@ describe("canvas tabs", () => {
     expect(s.canvasStash.c1.build).toBeNull();
   });
 
+  it("links a companion canvas both ways, and unlinks it when closed", () => {
+    const a = useApp.getState().activeCanvas;
+    const b = addCompanionCanvas();
+    expect(useApp.getState().activeCanvas).toBe(b);
+    expect(useApp.getState().companions).toEqual([a]);
+    expect(canvasState(useApp.getState(), a)?.companions).toEqual([b]);
+    const c = addCompanionCanvas();
+    expect(useApp.getState().companions).toEqual([b, a]);
+    expect(canvasState(useApp.getState(), a)?.companions).toEqual([b, c]);
+    closeCanvas(b);
+    expect(useApp.getState().companions).toEqual([a]);
+    expect(canvasState(useApp.getState(), a)?.companions).toEqual([c]);
+    const stored = parseCanvases(JSON.stringify(serializeCanvases(useApp.getState())))!;
+    applyStoredCanvases(stored);
+    expect(useApp.getState().companions).toEqual([a]);
+    expect(canvasState(useApp.getState(), a)?.companions).toEqual([c]);
+  });
+
   it("ignores a stored list it cannot read", () => {
     expect(parseCanvases(null)).toBeNull();
     expect(parseCanvases("{nope")).toBeNull();
     expect(parseCanvases(JSON.stringify({ canvases: [] }))).toBeNull();
     expect(parseCanvases(JSON.stringify({ active: "zz", canvases: [{ id: "c4", build_id: 3 }, { id: "bad" }] }))).toEqual({
       active: "c4",
-      canvases: [{ id: "c4", name: null, build_id: null, prompt: null }],
+      canvases: [{ id: "c4", name: null, build_id: null, prompt: null, companions: [] }],
     });
   });
 });

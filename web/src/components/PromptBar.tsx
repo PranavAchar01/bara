@@ -3,7 +3,7 @@ import { useApp } from "../state/store";
 import { focusKeyOf } from "../three/Viewport3D";
 import { setReplies, startListening, stopListening, useVoice } from "../voice/voice";
 import { BaraBot, botBubbles } from "../bot/BaraBot";
-import { cancelBuild, startBuild } from "../net/client";
+import { cancelBuild, routePrompt, startBuild } from "../net/client";
 import { demoPrompts } from "../spec/fixtures";
 import { Icon } from "../ui/common";
 
@@ -32,7 +32,7 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean }) {
     if (disabled || pending || !text.trim()) return;
     // with a part in focus the pill asks about it; it never throws the build away for a new one
     if (focusKey) window.dispatchEvent(new CustomEvent("bara:ask", { detail: text.trim() }));
-    else startBuild(text.slice(0, maxChars));
+    else void routePrompt(text.slice(0, maxChars));
     setText("");
   };
   useEffect(() => {
@@ -55,7 +55,7 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean }) {
       const t = (e as CustomEvent<string>).detail;
       if (!t || disabled || pending) return;
       setText(t);
-      startBuild(t.slice(0, maxChars));
+      void routePrompt(t.slice(0, maxChars));
       setText("");
     };
     window.addEventListener("bara:prompt", onPrompt);
