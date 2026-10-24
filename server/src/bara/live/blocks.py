@@ -239,6 +239,8 @@ def chain(
             continue
         if slot.chosen is not None:
             outcome = f"part {slot.chosen.get('part_id')}"
+            if slot.chosen.get("composed"):
+                outcome = f"composed: {slot.chosen['composed']} ({slot.chosen.get('part_id')})"
         elif slot.covered_by:
             outcome = f"covered by {slot.covered_by}"
         else:

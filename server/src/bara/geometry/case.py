@@ -688,6 +688,7 @@ def enclose_report(
 
     # ---- bezel openings
     holes_cs: list[mf.CrossSection] = []
+    pockets: list[tuple[mf.CrossSection, float]] = []
     openings: dict[str, Any] = {"keys": 0, "encoders": [], "screens": [], "usb": []}
     keycaps = [f for f in feats if f.role == "keycap"]
     for f in feats:
@@ -728,8 +729,10 @@ def enclose_report(
                 .offset(r, mf.JoinType.Round)
             )
         elif z_hi > seat - 0.01:
+            # hidden, so it gets a blind pocket under the skin, not a hole a person sees; a part
+            # taller than the shell still breaks through and the fit checks report it
             c = 2 * H["part_opening_clearance_mm"]
-            holes_cs.append(_rect_cs(f.x, f.y, f.w + c, f.d + c, f.rot_deg))
+            pockets.append((_rect_cs(f.x, f.y, f.w + c, f.d + c, f.rot_deg), z_hi + c / 2))
     for g in ball_geo:
         holes_cs.append(_circle_cs(g["x"], g["y"], g["r"] + H["ball_ring_clearance_mm"]))
     if sculpt is not None:
@@ -752,6 +755,9 @@ def enclose_report(
             seat - 1,
             zhole,
         )
+
+    for cs, z_top in pockets:
+        bezel = bezel - _prism(cs, seat - 1, z_top)
 
     # ---- USB openings through the wall (tray and bezel)
     cutouts: list[dict[str, Any]] = []

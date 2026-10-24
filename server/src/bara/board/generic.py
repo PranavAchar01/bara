@@ -765,9 +765,10 @@ def _attempt(
     targets: dict[int, tuple[float, float]],
     gaps: dict[int, float],
     flippable: set[int] | None = None,
-) -> bool:
+) -> Item | None:
     """Put each item at the free spot nearest its target, on its own side first and, for a
-    surface-mount part that has no spot there, on the other side; False when one cannot go."""
+    surface-mount part that has no spot there, on the other side; returns the first item that
+    cannot go, None when all fit."""
     prep = prepared.prep(region)
     x0, y0, x1, y1 = region.bounds
     step = max(1.0, math.sqrt(region.area / FORM_GRID_POINTS))
@@ -775,7 +776,7 @@ def _attempt(
     cand = np.column_stack([gx.ravel(), gy.ravel()])
     cand = cand[[prep.contains(Point(float(a), float(b))) for a, b in cand]]
     if not len(cand):
-        return False
+        return order[0] if order else None
     taken: dict[str, Polygon | None] = {"top": None, "bottom": None}
 
     def put(it: Item, side: str) -> bool:
@@ -822,8 +823,32 @@ def _attempt(
         if flippable and id(it) in flippable and not _through(it):
             if put(it, "bottom" if own == "top" else "top"):
                 continue
-        return False
-    return True
+        return it
+    return None
+
+
+CABLE_ROLES = ("usb_in", "jack", "usb_device", "usb_host")  # a plug enters from outside
+
+
+def _face_the_rim(it: Item, region: Polygon, target: tuple[float, float]) -> tuple[float, float]:
+    """A part a cable plugs into goes to the rim point nearest its target, turned so its mouth
+    faces out. The mouth is the side the body extends past its pads (the courtyard centre lies
+    toward it), which holds for receptacles and jacks alike."""
+    rim = region.exterior
+    d = rim.project(Point(target))
+    p = rim.interpolate(d)
+    a, b = rim.interpolate(d - 0.5), rim.interpolate(d + 0.5)
+    tx, ty = b.x - a.x, b.y - a.y
+    n = (ty, -tx) if not region.contains(Point(p.x + ty, p.y - tx)) else (-ty, tx)
+    best = (-math.inf, it.rot)
+    for rot in (0.0, 90.0, 180.0, 270.0):
+        it.rot = rot
+        body = it.world(it.local_poly()).centroid
+        pads = it.world(it.local_poly("pads")).centroid
+        score = (body.x - pads.x) * n[0] + (body.y - pads.y) * n[1]
+        best = max(best, (score, rot))
+    it.rot = best[1]
+    return (p.x, p.y)
 
 
 def place_in_form(
@@ -844,9 +869,14 @@ def place_in_form(
     hub = (centre.x, centre.y)
     targets: dict[int, tuple[float, float]] = {}
     gaps: dict[int, float] = {}
-    first: list[Item] = [it for it in on_board if id(it) in anchored]
+    rim: dict[int, tuple[float, float]] = {}
+    for it in on_board:
+        if it.role in CABLE_ROLES and it.fp is not None:
+            t = anchored.get(id(it))
+            rim[id(it)] = _face_the_rim(it, region, (t[0], t[1]) if t else hub)
+    first: list[Item] = [it for it in on_board if id(it) in anchored or id(it) in rim]
     first.sort(key=lambda it: -_area(it))
-    rest = [it for it in on_board if id(it) not in anchored]
+    rest = [it for it in on_board if id(it) not in anchored and id(it) not in rim]
     if mcu is not None and mcu in rest:
         rest.remove(mcu)
         rest.insert(0, mcu)
@@ -862,10 +892,17 @@ def place_in_form(
             it.side = "bottom" if tgt[2] == "back" else "top"
         else:
             targets[id(it)] = hub
+        if id(it) in rim:
+            targets[id(it)] = rim[id(it)]
         gaps[id(it)] = PASSIVE_GAP if it.meta.get("near") is not None else PART_GAP
     # unanchored surface-mount parts may use the back of the board
-    flippable = {id(it) for it in on_board if id(it) not in anchored and it is not mcu}
-    ok = _attempt_with_follow(order, region, targets, gaps, mcu, set(anchored), flippable)
+    flippable = {
+        id(it) for it in on_board if id(it) not in anchored and id(it) not in rim and it is not mcu
+    }
+    stuck = _attempt_with_follow(
+        order, region, targets, gaps, mcu, set(anchored) | set(rim), flippable
+    )
+    ok = stuck is None
     areas = sorted(((_area(it), it) for it in on_board), key=lambda a: -a[0])
     widest = max(on_board, key=lambda it: max(_extent(it)), default=None)
     pf["fit_report"] = {
@@ -880,12 +917,15 @@ def place_in_form(
         ],
         "widest_mm": round(max(_extent(widest)), 1) if widest is not None else 0.0,
     }
-    if not ok:
+    if stuck is not None:
         r = pf["fit_report"]
         log.append(
             f"FORM_OVERFLOW: the parts do not fit the product silhouette on both board sides "
             f"({len(on_board)} footprints, {r['parts_mm2']} mm2 of footprints against "
-            f"{r['usable_mm2']} mm2 usable per side); the product is never scaled to fit"
+            f"{r['usable_mm2']} mm2 usable per side; first part with no free spot: "
+            f"{stuck.label or stuck.ref} {'x'.join(f'{v:.1f}' for v in _extent(stuck))} mm"
+            f"{' at its anchor' if id(stuck) in anchored or id(stuck) in rim else ''}); "
+            f"the product is never scaled to fit"
         )
         _attempt_loose(order, region)
         return region
@@ -908,7 +948,7 @@ def _attempt_with_follow(
     mcu: Item | None,
     anchored: set[int],
     flippable: set[int] | None = None,
-) -> bool:
+) -> Item | None:
     """Run _attempt with followers retargeted: a support part at its parent, any other
     unanchored part at the controller, both read when the part is placed (parents come first)."""
     by_id = {id(it): it for it in order}

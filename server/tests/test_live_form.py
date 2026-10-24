@@ -806,3 +806,81 @@ def test_a_routing_timeout_retries_with_relaxed_rules(
     assert seen[1][1] == 50  # fewer passes on the retry
     assert res["routing"]["strategy"] == "wide_rules"
     assert res["routing"]["attempts"][0]["timed_out"] is True
+
+
+def test_a_function_with_no_part_is_composed_from_a_generic_primitive() -> None:
+    fp = "kicadgen:kicad:fp:Connector_JST:JST_PH_B2B-PH-K_1x02_P2.00mm_Vertical"
+
+    class Src:
+        extra: dict[str, Any] = {}
+
+        def search(self, text: str, kind: str | None = None, limit: int = 20) -> list[dict]:
+            if kind == "footprint" and fp.endswith(":" + text):
+                return [{"part_id": fp, "fp_ok": True, "functions": []}]
+            return []
+
+        def add(self, part: dict[str, Any]) -> None:
+            self.extra[part["part_id"]] = part
+
+    r = Resolver(Src())  # type: ignore[arg-type]
+    motor = cp.Need(key="rumble", function_id="actuator.motor", label="ERM rumble motor")
+    part = r.composed(motor)
+    assert part is not None and part["part_id"] == fp
+    assert part["composed"].startswith("wire-to-board")
+    assert part["functions"][0]["function_id"] == "actuator.motor"
+    sensor = cp.Need(key="optic", function_id="sensor.optical", label="optical tracking sensor")
+    assert r.composed(sensor) is None  # a sensor is never faked by a connector
+
+
+def test_an_upright_product_is_stood_up_for_the_hero_view() -> None:
+    import numpy as np
+
+    from bara.live import hero
+
+    # a flat slab, main face toward +z, 100 wide (x) and 60 tall (y)
+    verts = np.array([[-50, -30, 0], [50, -30, 0], [50, 30, 5], [-50, 30, 5]], dtype=float)
+    ((stood, _, _),) = hero.stand_up([(verts, np.zeros((0, 3), dtype=int), (0.5, 0.5, 0.5))])
+    assert np.ptp(stood[:, 2]) == 60  # its top edge is now up
+    assert np.ptp(stood[:, 1]) == 5  # its thickness runs front to back
+    mesh = [(verts, np.zeros((0, 3), dtype=int), (0.0, 0.0, 0.0))]
+
+    def elevation(pose: str) -> float:
+        eye, target = hero.hero_camera(mesh, pose)
+        d = np.subtract(eye, target)
+        return float(d[2] / np.linalg.norm(d))
+
+    assert elevation("upright") < elevation("face_up")  # nearer eye height for a standing face
+
+
+def test_a_cable_connector_sits_on_the_rim_with_its_mouth_out() -> None:
+    """A receptacle with no anchor still goes to the edge, not the middle of the board, turned so
+    the body (which runs past the pads toward the mouth) faces out."""
+    mcu = _item("U1", "mcu", "controller", 12.0)
+    usb = Item(
+        "J1",
+        "usb_in",
+        FootprintInfo(
+            "t",
+            Path("t.pretty"),
+            "J1",
+            [Pad(str(i), "smd", -3 + i, -3.0, 0.6, 1.2, ["F.Cu"]) for i in range(6)],
+            (-4.5, -3.8, 4.5, 4.0),  # body runs to +y: the mouth is at +y
+            None,
+            [],
+        ),
+        0,
+        0,
+        0,
+        "top",
+        meta={"slot_id": "power"},
+    )
+    pf = {"silhouette": [[-40, -25], [40, -25], [40, 25], [-40, 25]], "anchors": []}
+    place_in_form([mcu, usb], mcu, pf, [])
+    region = form_region(pf, 1.0)
+    body = usb.world(usb.local_poly())
+    assert region.exterior.distance(body) < 1.0  # against the edge
+    pads = usb.world(usb.local_poly("pads")).centroid
+    c = body.centroid
+    nearest = region.exterior.interpolate(region.exterior.project(c))
+    out = (nearest.x - pads.x, nearest.y - pads.y)
+    assert (c.x - pads.x) * out[0] + (c.y - pads.y) * out[1] > 0  # mouth toward that edge

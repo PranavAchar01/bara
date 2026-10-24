@@ -37,6 +37,43 @@ _MISSES: dict[tuple[str, str], float] = {}
 
 Cli = Callable[[str, str, float], tuple[int, str]]
 
+# Composed parts: when no single part is found, a function is met from generic KiCad
+# primitives. Keyed by component vocabulary in the block's words, never by device. Each entry
+# is (pattern, recipe name, [("sym" | "fp", exact KiCad name), ...]) tried in order.
+RECIPES: tuple[tuple[str, str, tuple[tuple[str, str], ...]], ...] = (
+    (r"\b(fuse|polyfuse|overcurrent)\b", "SMD fuse", (("fp", "Fuse_1206_3216Metric"),)),
+    (
+        r"\b(esd|tvs|transient|surge)\b",
+        "TVS protection array",
+        (("sym", "USBLC6-2SC6"), ("sym", "SP0503BAHT"), ("sym", "TVS0500DRV")),
+    ),
+    (
+        r"\b(iec|c14|c8|mains (inlet|input)|power inlet)\b",
+        "IEC mains inlet",
+        (("fp", "Conn_C14_Receptacle_RightAngle_Schurter_DD21.01xx"),),
+    ),
+    (
+        r"\b(encoder|scroll wheel|rotary)\b",
+        "rotary encoder",
+        (("fp", "RotaryEncoder_Alps_EC11E-Switch_Vertical_H20mm"),),
+    ),
+    (r"\b(buzzer|beeper|piezo)\b", "buzzer", (("fp", "Buzzer_12x9.5RM7.6"),)),
+    (
+        # an off-board electromechanical load is wired to the board, as real products do
+        r"\b(motor|rumble|vibration|haptic|erm|lra|fan|pump|solenoid|speaker|led strip)\b",
+        "wire-to-board connector for an off-board load",
+        (("fp", "JST_PH_B2B-PH-K_1x02_P2.00mm_Vertical"),),
+    ),
+)
+
+
+def recipe_for(need: Need) -> tuple[str, tuple[tuple[str, str], ...]] | None:
+    words = f"{need.label} {need.requirement}".lower()
+    for pattern, name, steps in RECIPES:
+        if re.search(pattern, words):
+            return name, steps
+    return None
+
 
 def slug(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", str(text).lower()).strip("_")
@@ -184,6 +221,33 @@ class Resolver:
                     continue
                 if slug(q) in slug(p.get("name") or p.get("display_name") or ""):
                     return self._accept(p, need)
+        return None
+
+    def composed(self, need: Need) -> dict[str, Any] | None:
+        """The last resort before a required need fails: a generic KiCad primitive that meets
+        the function (RECIPES), tagged so the audit chain shows it was composed."""
+        found = recipe_for(need)
+        search = getattr(self.source, "search", None)
+        if found is None or search is None:
+            return None
+        name, steps = found
+        for kind, exact in steps:
+            try:
+                hits = search(exact, kind="symbol" if kind == "sym" else "footprint", limit=10)
+            except Exception:
+                log.exception("recipe search failed for %r", exact)
+                continue
+            for p in hits:
+                if not p["part_id"].startswith("kicadgen:") or not p.get("fp_ok"):
+                    continue
+                if p["part_id"] in self.rejected or not p["part_id"].endswith(":" + exact):
+                    continue
+                part = self._accept(p, need)
+                part["composed"] = name
+                return part
+        self.notes[need.key] = (
+            self.notes.get(need.key, "") + f"; recipe {name!r}: no usable KiCad primitive"
+        ).lstrip("; ")
         return None
 
     def _accept(self, part: dict[str, Any], need: Need) -> dict[str, Any]:

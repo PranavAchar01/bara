@@ -697,7 +697,9 @@ class LiveRunner:
         verdict: dict[str, Any] | None = None
         note = "no form" if product is None else "nothing to render"
         if product is not None and meshes:
-            eye, target = hero.hero_camera(meshes)
+            if product.rest_pose == "upright":
+                meshes = hero.stand_up(meshes)
+            eye, target = hero.hero_camera(meshes, product.rest_pose)
             png = await asyncio.to_thread(hero.render, meshes, eye, target)
             out = root / "cache" / "hero"
             out.mkdir(parents=True, exist_ok=True)
