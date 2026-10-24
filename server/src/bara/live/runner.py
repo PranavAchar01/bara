@@ -599,6 +599,7 @@ class LiveRunner:
         """Render the hero view and ask whether it reads as the requested device. Returns the
         reviewer's critique when it does not (and this is not already the repair pass)."""
         product = getattr(run, "product_form", None)
+        touch_slots = list((getattr(run, "touch_slots", None)) or [])
         st = self._stage(run, "render", "Checking that it looks like the device")
         recs = [(rec, False) for rec in run.state["enclosures"]] + [
             (rec, True) for rec in run.state["boards"]
@@ -619,6 +620,21 @@ class LiveRunner:
                     plain = await asyncio.to_thread(hero.plain_copy, path, root / "cache" / "hero")
                     if plain is not None:
                         meshes += await asyncio.to_thread(hero.load_glb, plain, 1000.0, pose)
+        # the parts a person sees or touches, seated where the build puts them (never exploded)
+        for part in run.state["parts"]:
+            pl = part.get("placement") or {}
+            if pl.get("mode") == "layout" or part.get("side") not in ("none", None):
+                continue
+            pose = hero.pose_matrix(pl.get("position_mm") or [0, 0, 0], pl.get("rotation_deg"))
+            for a in part.get("assets", []):
+                if a.get("kind") != "glb" or not a.get("url"):
+                    continue
+                path = root / a["url"].removeprefix("/assets/")
+                if path.is_file() and part.get("slot_id") in set(touch_slots):
+                    plain = await asyncio.to_thread(hero.plain_copy, path, root / "cache" / "hero")
+                    if plain is not None:
+                        meshes += await asyncio.to_thread(hero.load_glb, plain, 1000.0, pose)
+                    break
         verdict: dict[str, Any] | None = None
         note = "no form" if product is None else "nothing to render"
         if product is not None and meshes:
@@ -706,6 +722,7 @@ class LiveRunner:
             "form": brief.get("form"),
             "touch_slots": [t.slot_id for t in self._touches(result)],
         }
+        run.touch_slots = gb["touch_slots"]  # type: ignore[attr-defined]
         product = await self.form_stage(run, result, st)
         if product is not None:
             gb["product_form"] = product.json()
