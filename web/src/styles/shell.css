@@ -506,3 +506,15 @@
   color: var(--warn);
 }
 
+/* header model line when the build ran on the backup model */
+.file-model.switched {
+  color: var(--warn);
+}
+.file-model.switched s {
+  color: var(--ink-faint);
+}
+.file-why {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+}
