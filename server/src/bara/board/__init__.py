@@ -11,15 +11,18 @@ Frames: layout and KiCad use y down. Everything returned is in build space (SPEC
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import json
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 from shapely.geometry import Point, Polygon
 
 from bara.config import load_settings
+from bara.geometry import glbopt
 
 from . import kicad as K
 from . import registry as R
@@ -159,6 +162,18 @@ def _cache_key(kicad_input: dict, passes: int) -> str:
     return hashlib.sha256(blob.encode()).hexdigest()[:24]
 
 
+@contextmanager
+def _key_lock(path: Path) -> Iterator[None]:
+    """Exclusive lock across threads and processes (flock on a lock file)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a") as fh:
+        fcntl.flock(fh, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(fh, fcntl.LOCK_UN)
+
+
 def _route_one(
     plan: BoardPlan,
     work_root: Path,
@@ -174,92 +189,104 @@ def _route_one(
     work = work_root / key
     result_path = work / "result.json"
     glb = glb_root / f"{key}.glb"
-    if result_path.exists() and glb.exists():
-        cached = json.loads(result_path.read_text())
-        cached["cache_hit"] = True
-        progress(f"{plan.name}: cached board {key}", 1.0)
-        return cached
-    work.mkdir(parents=True, exist_ok=True)
-    pcb = work / "main.kicad_pcb"
-    dsn = work / "main.dsn"
-    ses = work / "main.ses"
-    for stale in (pcb, dsn, ses):
-        stale.unlink(missing_ok=True)
-    plan_data = K.plan_json(plan, pcb, dsn)
-    plan_path = work / "plan.json"
-    plan_path.write_text(json.dumps(plan_data, indent=1))
-    (work / "fp-lib-table").write_text(_fp_lib_table(plan_data))
-    timings: dict[str, float] = {}
-
-    attempts: list[dict] = []
-    deadline = time.monotonic() + route_timeout_s
-    drc: dict = {}
-    route: dict = {}
-    for i, (strategy, extra) in enumerate(K.ROUTE_STRATEGIES):
-        remaining = deadline - time.monotonic()
-        if i and remaining < 10:
-            break
+    # Identical boards from concurrent builds share this key, work dir and GLB path. Without
+    # the lock their kicad-cli runs interleave into one corrupt GLB that then stays cached.
+    with _key_lock(work_root / f"{key}.lock"):
+        if result_path.exists() and glb.exists():
+            cached = json.loads(result_path.read_text())
+            if not glbopt.is_valid(glb) and (work / "main.kicad_pcb").exists():
+                # Routing is cached and fine; only the GLB is damaged: export it again.
+                progress(f"{plan.name}: re-exporting damaged GLB {key}", 0.85)
+                ox, oy = K.KICAD_OFFSET
+                K.export_glb(
+                    work / "main.kicad_pcb", glb, (origin_plan[0] + ox, origin_plan[1] + oy)
+                )
+            cached["cache_hit"] = True
+            progress(f"{plan.name}: cached board {key}", 1.0)
+            return cached
+        work.mkdir(parents=True, exist_ok=True)
+        pcb = work / "main.kicad_pcb"
+        dsn = work / "main.dsn"
+        ses = work / "main.ses"
         for stale in (pcb, dsn, ses):
             stale.unlink(missing_ok=True)
-        progress(f"{plan.name}: writing KiCad board", 0.1)
-        t = time.monotonic()
-        K.build_pcb(plan_path)
-        timings["kicad_build_s"] = round(time.monotonic() - t, 2)
+        plan_data = K.plan_json(plan, pcb, dsn)
+        plan_path = work / "plan.json"
+        plan_path.write_text(json.dumps(plan_data, indent=1))
+        (work / "fp-lib-table").write_text(_fp_lib_table(plan_data))
+        timings: dict[str, float] = {}
 
-        progress(
-            f"{plan.name}: autorouting with Freerouting {K.FREEROUTING_VERSION} ({strategy})",
-            0.25,
-        )
-        route = K.freeroute(dsn, ses, remaining, passes=passes, extra=extra)
-        timings["route_s"] = round(timings.get("route_s", 0.0) + route["seconds"], 2)
+        attempts: list[dict] = []
+        deadline = time.monotonic() + route_timeout_s
+        drc: dict = {}
+        route: dict = {}
+        for i, (strategy, extra) in enumerate(K.ROUTE_STRATEGIES):
+            remaining = deadline - time.monotonic()
+            if i and remaining < 10:
+                break
+            for stale in (pcb, dsn, ses):
+                stale.unlink(missing_ok=True)
+            progress(f"{plan.name}: writing KiCad board", 0.1)
+            t = time.monotonic()
+            K.build_pcb(plan_path)
+            timings["kicad_build_s"] = round(time.monotonic() - t, 2)
 
-        progress(f"{plan.name}: importing routes", 0.7)
-        t = time.monotonic()
-        K.import_ses(pcb, ses)
-        timings["ses_import_s"] = round(time.monotonic() - t, 2)
+            progress(
+                f"{plan.name}: autorouting with Freerouting {K.FREEROUTING_VERSION} ({strategy})",
+                0.25,
+            )
+            route = K.freeroute(dsn, ses, remaining, passes=passes, extra=extra)
+            timings["route_s"] = round(timings.get("route_s", 0.0) + route["seconds"], 2)
 
-        progress(f"{plan.name}: DRC", 0.75)
+            progress(f"{plan.name}: importing routes", 0.7)
+            t = time.monotonic()
+            K.import_ses(pcb, ses)
+            timings["ses_import_s"] = round(time.monotonic() - t, 2)
+
+            progress(f"{plan.name}: DRC", 0.75)
+            t = time.monotonic()
+            drc = K.run_drc(pcb)
+            timings["drc_s"] = round(time.monotonic() - t, 2)
+            attempts.append(
+                {
+                    "strategy": strategy,
+                    "route_s": route["seconds"],
+                    "passes": route.get("passes"),
+                    "errors": drc["errors"],
+                    "unconnected": drc["unconnected"],
+                }
+            )
+            if drc["errors"] == 0 and drc["unconnected"] == 0:
+                break
+            progress(
+                f"{plan.name}: {drc['unconnected']} unconnected after {strategy}, retrying", 0.3
+            )
+
+        progress(f"{plan.name}: exporting GLB", 0.85)
         t = time.monotonic()
-        drc = K.run_drc(pcb)
-        timings["drc_s"] = round(time.monotonic() - t, 2)
-        attempts.append(
-            {
-                "strategy": strategy,
-                "route_s": route["seconds"],
+        ox, oy = K.KICAD_OFFSET
+        K.export_glb(pcb, glb, (origin_plan[0] + ox, origin_plan[1] + oy))
+        timings["glb_s"] = round(time.monotonic() - t, 2)
+        timings["total_s"] = round(time.monotonic() - t0, 2)
+
+        result = {
+            "key": key,
+            "kicad_pcb": str(pcb),
+            "glb_path": str(glb),
+            "drc": drc,
+            "routing": {
+                **K.count_routing(pcb),
+                "router_unrouted": route.get("unrouted"),
                 "passes": route.get("passes"),
-                "errors": drc["errors"],
-                "unconnected": drc["unconnected"],
-            }
-        )
-        if drc["errors"] == 0 and drc["unconnected"] == 0:
-            break
-        progress(f"{plan.name}: {drc['unconnected']} unconnected after {strategy}, retrying", 0.3)
-
-    progress(f"{plan.name}: exporting GLB", 0.85)
-    t = time.monotonic()
-    ox, oy = K.KICAD_OFFSET
-    K.export_glb(pcb, glb, (origin_plan[0] + ox, origin_plan[1] + oy))
-    timings["glb_s"] = round(time.monotonic() - t, 2)
-    timings["total_s"] = round(time.monotonic() - t0, 2)
-
-    result = {
-        "key": key,
-        "kicad_pcb": str(pcb),
-        "glb_path": str(glb),
-        "drc": drc,
-        "routing": {
-            **K.count_routing(pcb),
-            "router_unrouted": route.get("unrouted"),
-            "passes": route.get("passes"),
-            "unrouted_nets": drc.get("unconnected_nets", []),
-            "strategy": attempts[-1]["strategy"],
-            "attempts": attempts,
-        },
-        "timings": timings,
-        "cache_hit": False,
-    }
-    result_path.write_text(json.dumps(result, indent=1))
-    return result
+                "unrouted_nets": drc.get("unconnected_nets", []),
+                "strategy": attempts[-1]["strategy"],
+                "attempts": attempts,
+            },
+            "timings": timings,
+            "cache_hit": False,
+        }
+        result_path.write_text(json.dumps(result, indent=1))
+        return result
 
 
 # ---------------------------------------------------------------- records
