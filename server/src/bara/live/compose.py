@@ -89,6 +89,19 @@ COMPAT_PARAMS = ("family", "stem", "form_factor", "chemistry")
 DRIVER_CATEGORY = re.compile(
     r"lcsc\.com/product-detail/[^/_]*(Driver|Controller|Interface|Bridge)", re.I
 )
+# a panel is glass on a ribbon or a module board, never sold in a chip package
+IC_PACKAGE = re.compile(
+    r"^(SOIC|SOP|SSOP|TSSOP|MSOP|QFN|VQFN|WQFN|DFN|QFP|LQFP|TQFP|BGA|LGA|SOT|TSOT|SC-?70|WLCSP)",
+    re.I,
+)
+
+
+def is_chip(part: dict[str, Any]) -> bool:
+    """A part whose datasheet category or package says it is an IC, whatever it was tagged."""
+    package = str((part.get("facets") or {}).get("package") or "")
+    return bool(
+        DRIVER_CATEGORY.search(str(part.get("datasheet") or "")) or IC_PACKAGE.match(package)
+    )
 
 
 def _model_from_footprint(part: dict[str, Any], assets: list[dict[str, Any]]) -> None:
@@ -1315,8 +1328,8 @@ class Composer:
         """Parts that meet the block's key numbers (size, connector standard, rating). The ones
         that do not are rejected for good, so the next lookup moves on."""
         if slot.function_id.startswith("display.") and slot.function_id != "display.indicator_led":
-            chips = [p for p in parts if DRIVER_CATEGORY.search(str(p.get("datasheet") or ""))]
-            for p in chips:  # a panel's driver chip is not the panel
+            chips = [p for p in parts if is_chip(p)]
+            for p in chips:  # a panel's driver, serializer or bridge chip is not the panel
                 self.resolver.rejected.add(p["part_id"])
             parts = [p for p in parts if p not in chips]
         need = slot.need

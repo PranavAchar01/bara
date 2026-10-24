@@ -73,3 +73,30 @@ def test_the_form_is_told_each_control_part_real_size() -> None:
     assert _footprint_size({}) is None
     text = fm._prompt("a handheld", [fm.Touch("scr", "Screen", "display.tft", 1, (), size)], [], "")
     assert "each 50 x 70 mm" in text
+
+
+def test_a_chip_package_is_never_the_panel() -> None:
+    from bara.live.compose import is_chip
+
+    assert is_chip({"facets": {"package": "TSSOP-56"}, "datasheet": ""})
+    assert not is_chip({"facets": {"package": "Module"}, "datasheet": "TFT LCD module"})
+
+
+def test_case_anchors_follow_the_board_record_frame() -> None:
+    """A y-up record (build space) takes form anchors as they are; a KiCad y-down one mirrors
+    them. Mixing the two put a handheld's screen hole by its controls and its D-pad up top."""
+    from bara.geometry.shell import sites_from_anchors
+
+    screen = [{"name": "Main screen", "mount": "front", "pattern": "single",
+               "centre": [0, 33], "count": 1}]  # fmt: skip
+    assert sites_from_anchors(screen, [], y_down=False)[0].y == 33
+    assert sites_from_anchors(screen, [], y_down=True)[0].y == -33
+
+
+def test_a_speaker_gets_sound_slots_and_a_named_led_stays_a_light() -> None:
+    from bara.geometry.shell import classify
+
+    assert classify({"name": "Speaker grille", "purpose": "sound out"}) == "grille"
+    assert (
+        classify({"name": "Status LEDs", "purpose": "charge state next to the display"}) == "light"
+    )
