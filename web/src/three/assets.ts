@@ -26,6 +26,22 @@ export interface LoadedModel {
   /** All meshes merged (position + normal only), for hulls and outlines. */
   merged: THREE.BufferGeometry | null;
   bbox: THREE.Box3;
+  /** Board models: one box per footprint node (refdes), in build space, for hover. */
+  footprints: FootprintBox[];
+}
+
+export interface FootprintBox {
+  ref: string;
+  box: THREE.Box3;
+}
+
+/** KiCad reference designators (SW3, U1, USB-UART1, LED3A); not OpenCASCADE labels. */
+const REFDES = /^[A-Z][A-Za-z0-9]*([_-][A-Za-z0-9]+)*\d+[A-Za-z]?$/;
+
+/** Nearest refdes-named node at or above `o`, the footprint a mesh belongs to. */
+function footprintOf(o: THREE.Object3D | null): string | null {
+  for (let n = o; n; n = n.parent) if (REFDES.test(n.name)) return n.name;
+  return null;
 }
 
 const cache = new Map<string, Promise<LoadedModel | null>>();
@@ -229,6 +245,7 @@ function convert(scene: THREE.Object3D, board: boolean): LoadedModel {
   root.updateMatrixWorld(true);
   const byMat = new Map<THREE.Material, THREE.BufferGeometry[]>();
   const all: THREE.BufferGeometry[] = [];
+  const fpBoxes = new Map<string, THREE.Box3>();
   root.traverse((o) => {
     const mesh = o as THREE.Mesh;
     if (!mesh.isMesh) return;
@@ -262,6 +279,13 @@ function convert(scene: THREE.Object3D, board: boolean): LoadedModel {
       const plain = g.clone();
       if (plain.attributes.uv) plain.deleteAttribute("uv");
       all.push(plain);
+      const ref = board ? footprintOf(mesh) : null;
+      if (ref) {
+        plain.computeBoundingBox();
+        const b = fpBoxes.get(ref) ?? new THREE.Box3();
+        if (plain.boundingBox) b.union(plain.boundingBox);
+        fpBoxes.set(ref, b);
+      }
     }
   });
   const groups: MeshGroup[] = [];
@@ -282,7 +306,8 @@ function convert(scene: THREE.Object3D, board: boolean): LoadedModel {
     merged.computeBoundingBox();
     if (merged.boundingBox) bbox.copy(merged.boundingBox);
   }
-  return { root, groups, merged, bbox };
+  const footprints = [...fpBoxes].map(([ref, box]) => ({ ref, box }));
+  return { root, groups, merged, bbox, footprints };
 }
 
 /** `board`: a kicad-cli board export, whose layers get the KiCad board look. */
