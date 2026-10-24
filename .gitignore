@@ -12,3 +12,5 @@ server/data/cache/
 e2e/logs/
 e2e/screenshots/
 .vercel
+server/data/assets/cache/
+server/data/assets/parts/*.glb
