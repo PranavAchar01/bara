@@ -676,8 +676,8 @@ def _button(out: Features, s: Site, body: Body, seat: float, zmax: float, clear:
     out.cuts.append(_cyl(r_h + cham, zc, zmax + 4, s.x, s.y))
     rc = r_h - 0.5
     z0 = max(seat + 0.3, zc - 1.4)
-    prof = [(0.0, z0), (rc, z0), (rc, zc + 0.5), *_arc((rc - 0.8, zc + 0.5), 0.8, 0, 90, 4),
-            (0.0, zc + 1.3)]  # fmt: skip
+    prof = [(0.0, z0), (rc, z0), (rc, zc + 1.4), *_arc((rc - 0.8, zc + 1.4), 0.8, 0, 90, 4),
+            (0.0, zc + 2.2)]  # fmt: skip
     out.caps.append(_revolve(prof, s.x, s.y, 48))
     out.cutouts.append(_cut("button", s.x, s.y, zc, 2 * r_h, "circle"))
 

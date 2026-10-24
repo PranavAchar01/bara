@@ -240,7 +240,8 @@ def render(
         flip = (nrm * to_eye).sum(axis=1) < 0
         nrm[flip] *= -1
         shade = 0.38 + 0.52 * np.clip(nrm @ key, 0, 1) + 0.1 * np.clip(nrm @ -fwd, 0, 1)
-        base = np.array(rgb) * 255.0
+        # dark materials (graphite keys, glass) lifted so their shape reads on a grey ground
+        base = (0.22 + 0.78 * np.array(rgb)) * 255.0
         for t in range(len(tris)):
             a, b, c = tris[t]
             if not (ok[a] and ok[b] and ok[c]) or ln[t] < 1e-9:
