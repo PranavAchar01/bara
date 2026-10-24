@@ -119,7 +119,8 @@ def test_parts_snap_to_anchors_inside_the_inset_silhouette() -> None:
     region = form_region(pf, pf.get("scale", 1.0))
     assert outline.equals(region) or outline.area == pytest.approx(region.area, rel=0.3)
     for it in [mcu, *keys, cap]:
-        assert outline.buffer(0.01).contains(it.footprint_poly()), it.ref
+        # courtyards stay clear of the outline by the copper-to-edge clearance
+        assert outline.buffer(-0.45).contains(it.footprint_poly()), it.ref
     # keys sit near the anchor (board y is flipped, the row is horizontal so x is enough)
     xs = [k.centre()[0] for k in keys]
     assert min(xs) > 10.0 and max(xs) < 50.0

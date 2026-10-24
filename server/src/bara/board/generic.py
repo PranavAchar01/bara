@@ -31,6 +31,7 @@ from .layout import BoardPlan, Item, _assign_gpio, _search
 from .libs import FootprintInfo, find_footprint, footprint_ref, symbol_pins
 
 PART_GAP = 1.2  # courtyard to courtyard between packed parts
+EDGE_COPPER_MM = 0.5  # widest board-edge clearance kicad.py rules ask (0.45 mm)
 PASSIVE_GAP = 0.6
 BOARD_MARGIN = 2.0
 CORNER_R = 2.0
@@ -770,6 +771,8 @@ def _attempt(
     """Put each item at the free spot nearest its target, on its own side first and, for a
     surface-mount part that has no spot there, on the other side; returns the first item that
     cannot go, None when all fit."""
+    # a courtyard may not reach the outline: its pads need the copper-to-edge clearance
+    region = region.buffer(-EDGE_COPPER_MM, join_style="mitre")
     prep = prepared.prep(region)
     x0, y0, x1, y1 = region.bounds
     step = max(1.0, math.sqrt(region.area / FORM_GRID_POINTS))
