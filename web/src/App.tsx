@@ -16,6 +16,7 @@ import { BotLab } from "./bot/BotLab";
 import { CanvasTabs } from "./components/CanvasTabs";
 import { startCanvasPersist } from "./state/canvases";
 import { AgentStage } from "./bot/AgentStage";
+import { ThoughtTrace } from "./bot/ThoughtTrace";
 import { Explainer } from "./bot/Explainer";
 import { CandidateFlyby } from "./bot/CandidateFlyby";
 
@@ -132,6 +133,7 @@ function Workspace() {
       {overlay === "connect" && <ConnectDialog />}
       {overlay === "addpart" && <AddPartPicker />}
       <AgentStage />
+      <ThoughtTrace />
       <CandidateFlyby />
       <Explainer />
     </main>
