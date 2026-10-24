@@ -29,6 +29,19 @@ His words: "keep going all night until the engine works and any prompt can actua
 - 10-23 22:00 iter 5: blank-board fix committed 24f1093 (mask opacity cap, gold pads, bottom view, floor hidden on bottom). The keyboard circuit lives on B.Cu. Ran his 27-device list live (suite1): 22 done, 2 mains out_of_scope, 1 timeout (glasses), 2 empty DONE (gamecube, touchpad). Every BOM is far below the Etch tile bar: no core-function part (GNSS, Pi, amp, DAC, sensor, modem), x1 lines left ungrouped, and some wrong picks. Dispatched to compose-complete: completeness invariant, missing-part fetch, grouping, HLK mains, never an empty DONE. Next: rerun into suite2 after it merges.
 - 10-23 22:20 ROOT CAUSE 2 (his push: "fix the intelligence, don't patch every device"): the engine builds inside out. generic.py packs parts around the MCU and the outline is the packed hull plus a margin; case.py wraps a box around that; nothing models the product's form or where hands touch it. Result: controller = 197x79 slab with buttons in rows. Fix: FORM stage (silhouette + thickness + interaction anchors, grounded on references) -> board = silhouette inset, user-facing parts on anchors -> case from silhouette -> BOM from function blocks that must all resolve -> vision identity judge with one repair. No device-name branches. Comparison image: scratchpad/ref/controller-compare.jpg.
 
+## Goal 2026-10-24 ~15:00 PT (his /goal, near-verbatim)
+"get the expansion view, like picking certain stuff, to be really good; voice agent sound really good, responsive, and fast (best OpenAI voice); actual size of the piece scales to the view, much smaller, not intimidating; a really good landing page with the agent playing a huge part, moving around in the live agent; click the agent to see its thoughts (better than the side panel); create new canvases: 'add a mouse to the keyboard' creates a mouse next to it; intelligence choosing the camera layout (keyboard + mouse = flat view side by side, or oriented top-down); KiCad's own circuit evaluation and benchmarking (ERC/DRC); a complete simulation mode: load the firmware and play it live (game on a handheld; keyboard = flat view, press a key and a K shows on a terminal); sync with Nithin's GitHub work; keep going autonomously."
+Split (avoid Nithin's files while his branches are open):
+- G1 exploded-view picking (web/src/three/explode.ts, focus.tsx) [main]
+- G2 voice: best OpenAI voice + streaming latency (Nithin's voice-openai has verse; tune after it lands) [after merge]
+- G3 scale-to-view: model framed small, real-size cue (web/src/three/fit.ts, stage.ts) [main]
+- G4 landing + agent on stage (Nithin: figma-design-in-code / agent-on-stage) [review after merge]
+- G5 click the agent -> thought bubble (web/src/bot) [main, coordinate]
+- G6 multi-device canvas: "add a mouse to the keyboard" = second device build in the same scene + camera layout intelligence (server runner + web layout.ts; Nithin's canvas-tabs = separate tabs) [main]
+- G7 KiCad ERC/DRC + bench via kicad-cli on every generated board, reported as checks [main, server]
+- G8 simulation mode: firmware-driven device sim; keyboard -> terminal echo, handheld -> playable screen [main, web + server]
+Status lines are appended in the Log below.
+
 ## Engine issue ledger (2026-10-23 ~23:30 PT, his ask: "take every issue and change the engine itself to make sure this applies to all builds")
 Every row is fixed by changing one generic mechanism. No device-name branches, part lists or constants outside tests. A row closes only when the full 27-prompt suite shows the failure class gone.
 

@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 
 from shapely.geometry import Polygon
 
+from bara.board.evaluate import evaluate as evaluate_board
 from bara.live import adapters as A
 from bara.live import archetype, completeness, hero, open_designs, websearch
 from bara.live import blocks as blocks_mod
@@ -1255,6 +1256,14 @@ class LiveRunner:
                 pos, rot = report.board_pose()
                 spec_board["position_mm"] = [round(v, 3) for v in pos]
                 spec_board["rotation_deg"] = [round(v, 3) for v in rot]
+            evaluation = evaluate_board(
+                spec_board["board_id"],
+                spec_board.get("nets", []),
+                entry.get("drc") or {},
+                entry.get("routing") or {},
+                entry.get("timings") or {},
+            )
+            spec_board["evaluation"] = evaluation["summary"]
             spec_board["revision"] = 1
             st.emit("board.updated", {"board": spec_board})
             seated = _seat_on_footprints(spec_board, run.state["parts"])
@@ -1295,6 +1304,7 @@ class LiveRunner:
                     "stage": "board",
                 }
             )
+            results.extend(evaluation["checks"])
         st.emit("check.result", {"results": results})
         failed = any(r["status"] == "fail" for r in results)
         t = board.get("timings") or {}
