@@ -248,15 +248,23 @@ def to_b64(png: bytes) -> str:
     return base64.b64encode(png).decode()
 
 
+def stand_up(meshes: list[Mesh]) -> list[Mesh]:
+    """Build space has the main face toward +z; an upright product stands with that face toward
+    the viewer (-y) and its top (+y) up, so rotate +90 degrees about x."""
+    rot = np.array([[1.0, 0.0, 0.0], [0.0, 0.0, -1.0], [0.0, 1.0, 0.0]])
+    return [(verts @ rot.T, tris, rgb) for verts, tris, rgb in meshes]
+
+
 def hero_camera(
-    meshes: list[Mesh],
+    meshes: list[Mesh], rest_pose: str = "face_up"
 ) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
-    """Eye and target that frame every mesh from the front-top-left, like the viewer's hero."""
+    """Eye and target that frame every mesh from the front-top-left, like the viewer's hero.
+    An upright product (already stood up) is seen from nearer eye height."""
     pts = np.vstack([m[0] for m in meshes]) if meshes else np.zeros((1, 3))
     lo, hi = pts.min(axis=0), pts.max(axis=0)
     centre = (lo + hi) / 2
     radius = float(np.linalg.norm(hi - lo)) / 2 or 50.0
-    direction = np.array([-0.35, -0.8, 0.62])
+    direction = np.array([-0.35, -0.8, 0.62 if rest_pose == "face_up" else 0.3])
     direction /= np.linalg.norm(direction)
     dist = radius / np.sin(np.radians(17.5)) * 1.08
     eye = centre + direction * dist

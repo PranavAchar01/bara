@@ -28,6 +28,7 @@ from bara.live.ask import ask_json
 ARCHETYPES = Path(__file__).resolve().parents[3] / "data/archetypes.json"
 PATTERNS = ["single", "row", "column", "grid", "diamond", "ring"]
 MOUNTS = ["front", "back", "edge"]
+REST_POSES = ["face_up", "upright"]
 SIZE_TOLERANCE = 0.35  # silhouette vs the model's own cited real dimensions
 MIN_SIDE_MM, MAX_SIDE_MM = 12.0, 900.0
 MAX_ASPECT = 14.0
@@ -58,6 +59,9 @@ Rules:
   where a hand rests (thumbs on the front, fingers on the back or top edge), ports on an edge,
   a screen filling its bay. Positions must be inside the silhouette.
 - silhouette_description: two sentences a person could use to recognise the outline.
+- rest_pose: how the product sits in use. face_up when it lies on a surface or in a hand
+  with that face toward the sky (phone, keyboard, remote, scale); upright when it stands with
+  that face toward the person (monitor, speaker, clock, router on its stand).
 - Use only slot_id values from the list."""
 
 
@@ -82,6 +86,7 @@ class Form:
     problems: list[str] = field(default_factory=list)
     repaired: bool = False
     scale: float = 1.0
+    rest_pose: str = "face_up"  # REST_POSES: upright stands with the main face toward the person
 
     @property
     def polygon(self) -> Polygon:
@@ -103,6 +108,7 @@ class Form:
             "description": self.description,
             "size_mm": list(self.size_mm),
             "repaired": self.repaired,
+            "rest_pose": self.rest_pose,
         }
 
     def summary(self) -> str:
@@ -156,6 +162,7 @@ def schema(slot_ids: list[str]) -> dict[str, Any]:
             "thickness_mm",
             "edge_thickness_mm",
             "silhouette_description",
+            "rest_pose",
             "anchors",
         ],
         "properties": {
@@ -175,6 +182,7 @@ def schema(slot_ids: list[str]) -> dict[str, Any]:
             "thickness_mm": {"type": "number"},
             "edge_thickness_mm": {"type": "number"},
             "silhouette_description": {"type": "string"},
+            "rest_pose": {"type": "string", "enum": REST_POSES},
             "anchors": {"type": "array", "items": anchor},
         },
     }
@@ -268,6 +276,7 @@ def build(data: dict[str, Any]) -> Form | None:
         anchors=list(data.get("anchors") or []),
         reference=dict(data.get("reference") or {}),
         description=str(data.get("silhouette_description") or ""),
+        rest_pose=data["rest_pose"] if data.get("rest_pose") in REST_POSES else "face_up",
     )
     return form
 

@@ -830,3 +830,23 @@ def test_a_function_with_no_part_is_composed_from_a_generic_primitive() -> None:
     assert part["functions"][0]["function_id"] == "actuator.motor"
     sensor = cp.Need(key="optic", function_id="sensor.optical", label="optical tracking sensor")
     assert r.composed(sensor) is None  # a sensor is never faked by a connector
+
+
+def test_an_upright_product_is_stood_up_for_the_hero_view() -> None:
+    import numpy as np
+
+    from bara.live import hero
+
+    # a flat slab, main face toward +z, 100 wide (x) and 60 tall (y)
+    verts = np.array([[-50, -30, 0], [50, -30, 0], [50, 30, 5], [-50, 30, 5]], dtype=float)
+    ((stood, _, _),) = hero.stand_up([(verts, np.zeros((0, 3), dtype=int), (0.5, 0.5, 0.5))])
+    assert np.ptp(stood[:, 2]) == 60  # its top edge is now up
+    assert np.ptp(stood[:, 1]) == 5  # its thickness runs front to back
+    mesh = [(verts, np.zeros((0, 3), dtype=int), (0.0, 0.0, 0.0))]
+
+    def elevation(pose: str) -> float:
+        eye, target = hero.hero_camera(mesh, pose)
+        d = np.subtract(eye, target)
+        return float(d[2] / np.linalg.norm(d))
+
+    assert elevation("upright") < elevation("face_up")  # nearer eye height for a standing face
