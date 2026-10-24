@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { select, useApp, type CodeTab, type RightTab } from "../state/store";
 import { ClarifyCard, DecisionTrace, ReuseCard, SpecCard, StageTimeline } from "./LeftColumn";
+import { PanelToolbar } from "./TopBar";
 import { applyEdit } from "../net/client";
 import type { Board, BuildPart, CheckResult, Connection, FirmwareFile } from "../spec/types";
 import { Badge, Chip, Dot, Empty, Panel, ProvenanceBadge } from "../ui/common";
@@ -42,6 +43,7 @@ export function RightColumn() {
   }, [checks]);
   return (
     <div className="rightcol">
+      <PanelToolbar />
       <nav className="tabs" role="tablist">
         {TABS.map((t) => (
           <button

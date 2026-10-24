@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useApp } from "./state/store";
-import { ConnectionBanner, TopBar } from "./components/TopBar";
+import { ConnectionBanner, FileHeader, TopBar } from "./components/TopBar";
 import { ExampleChips, PromptBar } from "./components/PromptBar";
 import { StepPlayer } from "./components/LeftColumn";
 import { EditStatus, EventLog, FailureCard, LatencyHUD, Toast, WarningBanner } from "./components/Status";
@@ -65,6 +65,7 @@ function Workspace() {
   return (
     <main className="workspace">
       <aside className="leftcol" aria-label="Layers">
+        <FileHeader />
         <StepPlayer />
         <PartsList />
       </aside>
@@ -97,7 +98,7 @@ export function App() {
   const screen = useApp((s) => s.screen);
   return (
     <div className="app">
-      <TopBar />
+      {screen === "home" && <TopBar />}
       <ConnectionBanner />
       {screen === "home" ? <Home /> : <Workspace />}
       <EventLog />

@@ -41,6 +41,89 @@
   white-space: nowrap;
 }
 
+/* left panel file header: Bara / prompt, build id + status, connection · model */
+.file-header {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 12px 16px 10px;
+}
+.file-title {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+.file-title .brand {
+  font-size: 20px;
+  flex: none;
+}
+.file-header .sep {
+  color: var(--ink-faint);
+}
+.file-prompt {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-2);
+}
+.file-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-2);
+}
+.file-model {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.conn-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--tone);
+  flex: none;
+}
+.status-pill.st-running {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.step-player {
+  border-top: 1px solid var(--line);
+}
+
+/* Primary buttons are ink (Figma Button/Primary); blue stays for selection and live state. */
+.btn.primary {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
+}
+.btn.primary:hover:not(:disabled) {
+  background: #000;
+}
+
+/* right panel toolbar: Home, then Export as the one primary action */
+.panel-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 52px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--line);
+  flex: none;
+}
+.panel-toolbar .spacer {
+  flex: 1;
+}
+.panel-toolbar .menu-list {
+  right: 0;
+  left: auto;
+}
+
 /* Layers header: title and Add part on one line, the count under the title */
 .leftcol .panel-h {
   flex-wrap: wrap;

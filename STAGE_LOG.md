@@ -121,6 +121,22 @@ Branch `figma-design-in-code`, pushed after each step so the backend work can co
 
 **Minutes:** about 25. **Rating:** 4/5.
 
+### 21:24 · Top bar into the panel headers
+
+**Tools:** Figma frame 02 (left header "Build meta", right toolbar) as the reference; Claude Code split the existing `TopBar` into two components that reuse its pieces.
+
+**What moved:**
+- Left panel header (`FileHeader`): **Bara / prompt**, then **build id + status pill** (+ mock), then **connection dot · model**, with provider and fallback in the hover title. This is the live-site information the coverage audit found missing from the first Figma pass, now in the real app.
+- Right panel toolbar (`PanelToolbar`): Home, then **Export** as the one primary action. The Export menu and its seven formats are unchanged.
+- The top bar now shows only on Home, so the workspace canvas runs the full window height.
+- Primary buttons are ink, as in the Figma Button component; blue is kept for selection and live state.
+
+**Checked:** typecheck, lint, 45 tests; mock build renders both headers.
+
+**Friction:** none worth noting; the top bar was already split into small pieces.
+
+**Minutes:** about 10. **Rating:** 5/5.
+
 ## Before and after
 
 | Change | Before | After |
