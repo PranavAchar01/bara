@@ -135,6 +135,31 @@ def test_overflow_never_scales_the_form() -> None:
     assert "scale" not in pf or pf["scale"] == 1.0
 
 
+def test_through_hole_part_takes_only_its_lead_hull_from_the_other_side() -> None:
+    # a 24 x 24 module whose leads run along one edge leaves the rest of the back free
+    module = _item("M1", "module", "x", 24.0)
+    module.fp.pads[:] = [
+        Pad(str(i), "thru_hole", -11.0, i * 2.54 - 10, 1.7, 1.7, ["*.Cu"]) for i in range(8)
+    ]
+    smd = [_item(f"U{i}", "ic", "x", 10.0) for i in range(2)]
+    pf = {"silhouette": [[-20, -20], [20, -20], [20, 20], [-20, 20]], "anchors": []}
+    log: list[str] = []
+    place_in_form([module, *smd], None, pf, log)
+    assert pf["fit_report"]["ok"], log
+    assert {u.side for u in smd} == {"bottom"} or any(u.side == "bottom" for u in smd)
+
+
+def test_overflow_report_carries_the_numbers_the_form_is_redrawn_with() -> None:
+    from bara.live.form import fit_note
+
+    parts = [_item(f"U{i}", "ic", "x", 20.0) for i in range(40)]
+    pf = {"silhouette": [list(p) for p in PILL], "anchors": []}
+    place_in_form(parts, None, pf, [])
+    rep = pf["fit_report"]
+    assert rep["ok"] is False and rep["parts_mm2"] > rep["usable_mm2"] > 0
+    assert str(rep["parts_mm2"]) in fit_note(rep) and "Redraw the SAME product" in fit_note(rep)
+
+
 def test_inputs_become_a_diode_matrix_when_gpio_runs_short() -> None:
     from bara.board.generic import _matrix_inputs
 
@@ -195,6 +220,60 @@ def test_blocks_become_one_need_per_identity_with_a_count() -> None:
     assert [n.count for n in keys] == [8]
     assert len(keys[0].groups) == 3
     assert all(n.touch for n in keys)
+
+
+def test_same_function_blocks_merge_even_when_named_differently_but_ics_do_not() -> None:
+    spec: dict[str, Any] = {"functions": []}
+    blocks = {
+        "device_class": "gadget",
+        "mains_input": False,
+        "portable": True,
+        "avg_current_ma": 40,
+        "shell_g": 20,
+        "blocks": [
+            block("input.button", "Play", 1, search_terms=["TS-1187A"]),
+            block("input.button", "Menu", 2, search_terms=["tactile switch"]),
+            block("component.ic", "DAC", 1, search_terms=["PCM5102A"]),
+            block("component.ic", "Amp", 1, search_terms=["TPA6132A2"]),
+        ],
+    }
+    out = cp.apply(spec, {}, None, blocks)
+    buttons = [n for n in out.needs.values() if n.function_id == "input.button"]
+    ics = [n for n in out.needs.values() if n.function_id == "component.ic"]
+    assert [n.count for n in buttons] == [3] and set(buttons[0].terms) >= {"TS-1187A"}
+    assert len(ics) == 2
+
+
+def test_block_audit_adds_the_missing_links_of_a_chain(monkeypatch: Any) -> None:
+    import asyncio
+
+    from bara.live import blocks as bl
+
+    calls: list[str] = []
+
+    async def fake_ask(system: str, user: str, schema: Any, **kw: Any) -> Any:
+        calls.append(kw["name"])
+        if kw["name"] == "blocks":
+            return {
+                "device_class": "player",
+                "mains_input": False,
+                "portable": True,
+                "avg_current_ma": 40,
+                "shell_g": 30,
+                "blocks": [block("output.speaker", "Speaker", 1, search_terms=["CMR-1206S"])],
+            }, ""
+        if kw["name"] == "block_audit":
+            assert "Speaker" in user
+            return {
+                "missing": [block("component.ic", "Audio amplifier", 1, search_terms=["PAM8403"])]
+            }, ""
+        return {"blocks": []}, ""
+
+    monkeypatch.setattr(bl, "ask_json", fake_ask)
+    data, _ = asyncio.run(bl.derive("a player", ["output.speaker", "component.ic"]))
+    assert data is not None
+    assert [b["label"] for b in data["blocks"]] == ["Speaker", "Audio amplifier"]
+    assert calls[:2] == ["blocks", "block_audit"]
 
 
 def test_every_device_gets_a_controller_and_a_power_path() -> None:
@@ -273,6 +352,102 @@ def test_missing_part_is_fetched_cached_and_misses_are_remembered(tmp_path: Path
     miss = cp.Need("z", "sense.motion", "Other", terms=("NOPE9",))
     r2 = Resolver(Overlay(Source()), cli=cli, fetched_path=path)
     assert r2.fetch(miss) is None and "NOPE9" in r2.notes["z"]
+
+
+def test_unresolved_block_is_retried_with_relaxed_names(monkeypatch: Any) -> None:
+    import asyncio
+
+    from bara.live import compose as cmp
+
+    seen: list[str] = []
+
+    class FakeResolver:
+        rejected: set[str] = set()
+        notes: dict[str, str] = {}
+
+        def generated(self, need: Any) -> Any:
+            seen.append("gen:" + ",".join(need.kicad))
+            return (
+                {"part_id": "kicadgen:ok", "display_name": "ok"} if "Family" in need.kicad else None
+            )
+
+        def fetch(self, need: Any) -> Any:
+            return None
+
+    async def fake_ask(system: str, user: str, schema: Any, **kw: Any) -> Any:
+        assert "Already tried: BAD1" in user
+        return {"search_terms": [], "kicad_names": ["Family"]}, ""
+
+    monkeypatch.setattr(cmp, "ask_json", fake_ask)
+    comp = object.__new__(cmp.Composer)
+    comp.resolver = FakeResolver()  # type: ignore[assignment]
+    comp.extra, comp.fetched = {}, []
+    comp.next_warning = lambda prefix: prefix + "1"  # type: ignore[method-assign]
+    comp.vet = lambda slot, parts: asyncio.sleep(0, parts)  # type: ignore[method-assign]
+    need = cp.Need("lcd", "display.lcd", "LCD", terms=("BAD1",), kicad=("Nope",))
+    slot = cmp.Slot("lcd", "LCD", "display.lcd", "required", 1, [], need=need)
+    asyncio.run(comp.resolve_missing(slot, lambda *a, **k: None))
+    assert comp.extra["lcd"][0]["part_id"] == "kicadgen:ok"
+    assert seen == ["gen:Nope", "gen:Nope,Family"]
+
+
+def test_optional_slot_without_a_part_is_dropped_not_failed() -> None:
+    from bara.live import compose as cmp
+
+    rows = {
+        c["check_key"]: c
+        for c in (
+            cmp.slot_check(cmp.Slot("mount", "Mount", "mech.mount", "optional", 1, [])),
+            cmp.slot_check(cmp.Slot("mcu", "MCU", "component.ic", "critical", 2, [])),
+        )
+        if c is not None
+    }
+    assert rows["slot.optional_missing:mount"]["status"] == "unknown"
+    assert "left out" in rows["slot.optional_missing:mount"]["message"]
+    assert rows["slot.critical_filled:mcu"]["status"] == "fail"
+
+
+def test_drc_errors_from_tight_copper_get_one_wide_rules_pass(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    from types import SimpleNamespace
+
+    import bara.board as B
+    from bara.board import kicad as K
+
+    seen: list[float] = []
+    state = {"rules": K.RULES}
+
+    def build(plan_path: Path) -> None:
+        state["rules"] = json.loads(plan_path.read_text())["rules"]
+        plan_path.with_name("main.kicad_pcb").write_text(str(state["rules"]["clearance_mm"]))
+
+    def drc(board: Path) -> dict[str, Any]:
+        wide = state["rules"]["clearance_mm"] > K.RULES["clearance_mm"]
+        seen.append(state["rules"]["clearance_mm"])
+        errors = 0 if wide else 2
+        return {
+            "errors": errors,
+            "warnings": 0,
+            "unconnected": 0,
+            "unconnected_nets": [],
+            "by_type": {"error:clearance": errors} if errors else {},
+        }
+
+    monkeypatch.setattr(K, "plan_json", lambda plan, pcb, dsn: {"rules": K.RULES, "footprints": []})
+    monkeypatch.setattr(K, "build_pcb", build)
+    monkeypatch.setattr(K, "freeroute", lambda *a, **k: {"seconds": 0.1, "passes": 1})
+    monkeypatch.setattr(K, "import_ses", lambda *a: None)
+    monkeypatch.setattr(K, "run_drc", drc)
+    monkeypatch.setattr(K, "export_glb", lambda *a, **k: None)
+    monkeypatch.setattr(K, "count_routing", lambda pcb: {"tracks": 1})
+    res = B._route_one(
+        SimpleNamespace(name="b"), tmp_path / "w", tmp_path / "g", (0.0, 0.0), 600.0, 5,
+        lambda *a, **k: None,
+    )  # fmt: skip
+    assert res["drc"]["errors"] == 0
+    assert res["routing"]["strategy"] == "wide_rules"
+    assert seen[-1] == K.WIDE_RULES["clearance_mm"] and len(seen) == len(K.ROUTE_STRATEGIES) + 1
 
 
 # ---------------------------------------------------------------- hero renderer

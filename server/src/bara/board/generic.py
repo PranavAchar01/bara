@@ -494,6 +494,11 @@ def _area(it: Item) -> float:
     return it.footprint_poly().area
 
 
+def _extent(it: Item) -> tuple[float, float]:
+    x0, y0, x1, y1 = it.footprint_poly().bounds
+    return (x1 - x0, y1 - y0)
+
+
 def _centre(blocked: list[Polygon]) -> tuple[float, float]:
     if not blocked:
         return 0.0, 0.0
@@ -645,8 +650,22 @@ def _anchor_targets(
 
 
 def _through(it: Item) -> bool:
-    """A part with leads through the board occupies both sides."""
-    return it.fp is not None and any(p.kind in ("thru_hole", "np_thru_hole") for p in it.fp.pads)
+    """A part with soldered leads through the board reaches the other side."""
+    return it.fp is not None and any(p.kind == "thru_hole" for p in it.fp.pads)
+
+
+def _shadow(it: Item) -> Polygon | None:
+    """What a through-hole part takes from the opposite side: the hull of its lead pads, not its
+    body (which sits on its own side), so small parts can sit under a display or module."""
+    if it.fp is None:
+        return None
+    pads = [p for p in it.fp.pads if p.kind in ("thru_hole", "np_thru_hole")]
+    if not pads:
+        return None
+    hull = unary_union(
+        [box(p.x - p.w / 2, p.y - p.h / 2, p.x + p.w / 2, p.y + p.h / 2) for p in pads]
+    ).convex_hull
+    return it.world(hull)
 
 
 def _attempt(
@@ -671,23 +690,38 @@ def _attempt(
     def put(it: Item, side: str) -> bool:
         it.side = side
         it.x = it.y = 0.0
-        base = it.footprint_poly()
-        c0 = base.centroid
+        rot0 = it.rot
+        turns = (0.0, 90.0) if flippable and id(it) in flippable else (0.0,)
+        other = "bottom" if side == "top" else "top"
+        gap = gaps[id(it)]
         tx, ty = targets[id(it)]
         idx = np.argsort(np.hypot(cand[:, 0] - tx, cand[:, 1] - ty))[:FORM_TRIES]
-        gap = gaps[id(it)]
-        sides = ("top", "bottom") if _through(it) else (side,)
-        for i in idx:
-            dx, dy = float(cand[i, 0] - c0.x), float(cand[i, 1] - c0.y)
-            poly = affinity.translate(base, dx, dy)
-            if not prep.contains(poly):
-                continue
-            if any(taken[sd] is not None and taken[sd].distance(poly) < gap for sd in sides):
-                continue
-            it.x, it.y = dx, dy
-            for sd in sides:
-                taken[sd] = poly if taken[sd] is None else taken[sd].union(poly)
-            return True
+        for turn in turns:
+            it.rot = rot0 + turn
+            it.x = it.y = 0.0
+            base = it.footprint_poly()
+            c0 = base.centroid
+            shade = _shadow(it) if _through(it) else None
+            for i in idx:
+                dx, dy = float(cand[i, 0] - c0.x), float(cand[i, 1] - c0.y)
+                poly = affinity.translate(base, dx, dy)
+                if not prep.contains(poly):
+                    continue
+                under = affinity.translate(shade, dx, dy) if shade is not None else None
+                if taken[side] is not None and taken[side].distance(poly) < gap:
+                    continue
+                if (
+                    under is not None
+                    and taken[other] is not None
+                    and taken[other].distance(under) < gap
+                ):
+                    continue
+                it.x, it.y = dx, dy
+                taken[side] = poly if taken[side] is None else taken[side].union(poly)
+                if under is not None:
+                    taken[other] = under if taken[other] is None else taken[other].union(under)
+                return True
+        it.rot = rot0
         return False
 
     for it in order:
@@ -740,10 +774,27 @@ def place_in_form(
         gaps[id(it)] = PASSIVE_GAP if it.meta.get("near") is not None else PART_GAP
     # unanchored surface-mount parts may use the back of the board
     flippable = {id(it) for it in on_board if id(it) not in anchored and it is not mcu}
-    if not _attempt_with_follow(order, region, targets, gaps, mcu, set(anchored), flippable):
+    ok = _attempt_with_follow(order, region, targets, gaps, mcu, set(anchored), flippable)
+    areas = sorted(((_area(it), it) for it in on_board), key=lambda a: -a[0])
+    widest = max(on_board, key=lambda it: max(_extent(it)), default=None)
+    pf["fit_report"] = {
+        "ok": ok,
+        "footprints": len(on_board),
+        "silhouette_mm2": round(Polygon([(x, y) for x, y in pf["silhouette"]]).area),
+        "usable_mm2": round(region.area),
+        "parts_mm2": round(sum(a for a, _ in areas)),
+        "largest": [
+            {"part": it.label or it.ref, "mm": [round(v, 1) for v in _extent(it)]}
+            for _, it in areas[:3]
+        ],
+        "widest_mm": round(max(_extent(widest)), 1) if widest is not None else 0.0,
+    }
+    if not ok:
+        r = pf["fit_report"]
         log.append(
             f"FORM_OVERFLOW: the parts do not fit the product silhouette on both board sides "
-            f"({len(on_board)} footprints); the product is never scaled to fit"
+            f"({len(on_board)} footprints, {r['parts_mm2']} mm2 of footprints against "
+            f"{r['usable_mm2']} mm2 usable per side); the product is never scaled to fit"
         )
         _attempt_loose(order, region)
         return region
