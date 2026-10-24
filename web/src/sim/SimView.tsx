@@ -17,6 +17,7 @@ import { SimMachine, describe, legend, type SimSnapshot } from "./machine";
 import { codeToKeyName, keyInfo } from "./keys";
 import { drawOled } from "./oled";
 import { closeSim, useSim } from "./simStore";
+import { SimDemo } from "./SimDemo";
 import { setActiveMachine } from "./api";
 import "./sim.css";
 
@@ -94,6 +95,7 @@ function SimRunning(props: { build: Build; machine: SimMachine; onReset: () => v
             {snap.mods.length > 0 && <span className="sim-chip accent">{snap.mods.join(" + ")}</span>}
           </div>
           {snap.flash && <FlashCard snap={snap} />}
+          <SimDemo />
           <div className="sim-hint small">
             {machine.device.kind === "keyboard" ? "Click keys on the board or type on your keyboard. Drag to orbit." : "Change the room with the sliders; the firmware reads it on its own schedule."} Esc exits.
           </div>
