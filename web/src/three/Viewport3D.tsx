@@ -23,6 +23,7 @@ import { LabelOverlay, LabelProjector, labelOpacity } from "./labels";
 import { defaultColor, ghost, presetFor, presetMaterial, tinted } from "./materials";
 import { registerAnchor, stage, stageBox } from "./stage";
 import { StudioEnvironment, StudioFloor, studioPalette, type StudioPalette } from "./studio";
+import { DemandDriver, StudioPost, postEnabled } from "./post";
 
 const DEG = Math.PI / 180;
 
@@ -578,6 +579,7 @@ function CameraRig() {
     }
     const a = anim.current;
     const ctl = controls as unknown as OrbitLike | null;
+    stage.animating = !!a;
     if (!a) return;
     a.t = Math.min(1, a.t + dt / 0.9);
     const k = 1 - Math.pow(1 - a.t, 3);
@@ -689,7 +691,7 @@ export function labelRows(build: Build | null): LabelRowData[] {
   return [...rows.values()];
 }
 
-function SceneContents(props: { gizmoMode: "translate" | "rotate"; theme: Theme; palette: StudioPalette }) {
+function SceneContents(props: { gizmoMode: "translate" | "rotate"; theme: Theme; palette: StudioPalette; post: boolean }) {
   const { theme } = props;
   const build = useApp((s) => s.build);
   const placeDone = useApp((s) => s.view.placeDone);
@@ -743,7 +745,7 @@ function SceneContents(props: { gizmoMode: "translate" | "rotate"; theme: Theme;
   const revision = `${build?.build_id ?? ""}:${build?.revision ?? 0}:${parts.length}:${toggles.case}:${toggles.board}:${toggles.keycaps}`;
   return (
     <>
-      <StudioEnvironment palette={props.palette} />
+      <StudioEnvironment palette={props.palette} post={props.post} />
       <StudioFloor palette={props.palette} revision={revision} />
       <ExplodeDriver />
       <group ref={rootRef}>
@@ -783,6 +785,8 @@ function SceneContents(props: { gizmoMode: "translate" | "rotate"; theme: Theme;
       <MoveGizmo mode={props.gizmoMode} />
       <CameraRig />
       <LabelProjector />
+      <DemandDriver />
+      {props.post && <StudioPost dark={props.palette.dark} />}
     </>
   );
 }
@@ -796,6 +800,7 @@ export function Viewport3D() {
   const theme = useTheme();
   const palette = useMemo(() => studioPalette(theme.dark), [theme.dark]);
   const [gizmoMode, setGizmoMode] = useState<"translate" | "rotate">("translate");
+  const post = useMemo(postEnabled, []);
   const overlayRows = useMemo(
     () => rows.map((r) => ({ key: r.key, title: `${r.title} x${r.quantity}`, detail: r.detail, sub: r.sub, generated: r.generated })),
     [rows],
@@ -804,14 +809,15 @@ export function Viewport3D() {
     <div className="viewport" style={{ background: palette.background }}>
       <Canvas
         dpr={[1, 2]}
+        frameloop="demand"
         shadows
         camera={{ up: [0, 0, 1], position: [-120, -380, 260], near: 1, far: 10000, fov: 32 }}
         onPointerMissed={(e) => {
           if (e.type === "click") select(null);
         }}
-        gl={{ antialias: true, preserveDrawingBuffer: true, powerPreference: "high-performance" }}
+        gl={{ antialias: !post, preserveDrawingBuffer: true, powerPreference: "high-performance" }}
       >
-        <SceneContents gizmoMode={gizmoMode} theme={theme} palette={palette} />
+        <SceneContents gizmoMode={gizmoMode} theme={theme} palette={palette} post={post} />
         <OrbitControls makeDefault enableDamping dampingFactor={0.12} />
       </Canvas>
       {hasParts && <LabelOverlay rows={overlayRows} color={theme.text} muted={theme.muted} line={theme.line} accent={theme.dark ? "#7BC08F" : "#2E7D46"} />}
