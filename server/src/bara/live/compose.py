@@ -1066,14 +1066,15 @@ class Composer:
 
     async def run(self, emit: Emit, progress: Callable[[str, float | None], None]) -> ComposeResult:
         n_slots = len(self.slots)
+        # every block's spec check at once: each is independent of the picks that follow
+        ahead = [s for s in self.slots if s.need is not None and s.need.requirement]
+        await asyncio.gather(*(self.vet(s, self.base(s)) for s in ahead))
         for step, slot in enumerate(self.slots, start=1):
             cover = self.covering_slot(slot)
             if cover is not None:
                 self.mark_covered(slot, cover, step, emit)
                 continue
             slot.state = "narrowing"
-            if slot.need is not None and slot.need.requirement:
-                await self.vet(slot, self.base(slot))
             if slot.need is not None and not self.base(slot):
                 await self.resolve_missing(slot, emit)
             if slot.need is not None and slot.criticality != "optional" and not self.base(slot):
@@ -1290,6 +1291,7 @@ class Composer:
             f"Product block: {need.label}\nRequirement: {need.requirement}\nCandidates:\n{lines}",
             schema,
             name="spec_check",
+            fast=True,
             timeout_s=40,
         )
         if data is None:
@@ -1368,6 +1370,7 @@ class Composer:
             f"Why they failed: {why or 'no match'}",
             schema,
             name="relax_names",
+            fast=True,
             timeout_s=45,
         )
         if data is None:
