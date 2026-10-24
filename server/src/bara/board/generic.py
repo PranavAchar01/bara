@@ -105,11 +105,13 @@ def _role(record: dict[str, Any]) -> str:
 
 
 def _footprint(record: dict[str, Any]) -> FootprintInfo | None:
-    ref = record.get("footprint")
+    ref = str(record.get("footprint") or "")
     if not ref:
         return None
+    if ref.count(":") == 2:  # generated KiCad parts name the source too: kicad:Lib:Footprint
+        ref = ref.split(":", 1)[1]
     try:
-        return find_footprint(str(ref))
+        return find_footprint(ref)
     except Exception:  # a footprint file the parser cannot read is treated as missing
         return None
 
