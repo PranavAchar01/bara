@@ -18,7 +18,7 @@ from typing import Any
 import httpx
 from jsonschema import Draft202012Validator
 
-from bara.llm import CEREBRAS_URL, LlmResult
+from bara.llm import CEREBRAS_URL, LlmResult, anthropic_headers
 
 log = logging.getLogger(__name__)
 
@@ -73,7 +73,9 @@ async def _anthropic(
 ) -> dict[str, Any]:
     from anthropic import AsyncAnthropic
 
-    client = AsyncAnthropic(api_key=key, timeout=t, max_retries=0)
+    client = AsyncAnthropic(
+        api_key=key, timeout=t, max_retries=0, default_headers=anthropic_headers()
+    )
     try:
         response = await client.messages.create(
             model=model,

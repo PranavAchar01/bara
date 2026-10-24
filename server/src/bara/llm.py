@@ -131,7 +131,9 @@ async def _anthropic(
 ) -> dict[str, Any]:
     from anthropic import AsyncAnthropic
 
-    client = AsyncAnthropic(api_key=key, timeout=timeout_s, max_retries=0)
+    client = AsyncAnthropic(
+        api_key=key, timeout=timeout_s, max_retries=0, default_headers=anthropic_headers()
+    )
     try:
         response = await client.messages.create(
             model=model,
@@ -151,6 +153,12 @@ async def _anthropic(
     if text is None:
         raise ValueError("no text block in the classify response")
     return _validate(schema, json.loads(text))
+
+
+def anthropic_headers() -> dict[str, str]:
+    """A user-scoped key names its workspace on every request (ANTHROPIC_WORKSPACE_ID)."""
+    ws = os.environ.get("ANTHROPIC_WORKSPACE_ID")
+    return {"anthropic-workspace-id": ws} if ws else {}
 
 
 def providers_configured() -> dict[str, bool]:
