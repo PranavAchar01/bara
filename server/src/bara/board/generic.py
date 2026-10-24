@@ -92,8 +92,8 @@ def _role(record: dict[str, Any]) -> str:
     primary = primary or (fns[0] if fns else "")
     if primary == "compute.mcu":
         return "mcu"
-    if primary.startswith("display."):
-        return "screen"
+    if primary.startswith("display.") and primary != "display.indicator_led":
+        return "screen"  # an indicator LED is a light, not a panel the case frames
     if primary == "power.battery":
         return "battery"
     if primary == "power.regulator":

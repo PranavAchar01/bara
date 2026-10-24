@@ -76,6 +76,7 @@ ROLE_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
     ("knob", ("knob",)),
     ("trackball", ("trackball", "ball")),
     ("encoder", ("rotary_encoder", "encoder", "ec11", "ec12")),
+    ("indicator_led", ("indicator_led",)),
     ("screen", ("oled", "display", "lcd", "ssd1306", "screen", "epaper", "tft")),
     ("sensor", ("pmw", "paw3", "optical_sensor")),
     ("battery", ("battery", "lipo", "li-po", "18650", "cr2032")),
@@ -528,7 +529,7 @@ def mesh_part(
 
 
 OWN_HOLE_ROLES = ("trackball", "sensor")
-OPENING_ROLES = ("switch", "keycap", "encoder", "knob", "screen")
+OPENING_ROLES = ("switch", "keycap", "encoder", "knob", "screen", "indicator_led")
 
 
 def _hidden(f: Feature) -> bool:
@@ -772,6 +773,11 @@ def enclose_report(
         elif f.role == "screen":
             holes_cs.append(_rect_cs(f.x, f.y, f.w, f.d, f.rot_deg))
             openings["screens"].append(f.ref)
+        elif f.role == "indicator_led":
+            # a round light hole: the LED shows through the skin, nothing frames it
+            r = max(f.w, f.d) / 2 + H["part_opening_clearance_mm"]
+            holes_cs.append(_circle_cs(f.x, f.y, r))
+            openings.setdefault("lights", []).append({"ref": f.ref, "r": r})
         elif f.touch and f.role not in ("usb", "mcu", "battery"):
             # finger-sized, soft-cornered: a bare switch footprint is far smaller than the
             # button a person presses
