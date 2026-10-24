@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shlex
 import shutil
 import struct
@@ -54,6 +55,58 @@ def is_valid(path: Path) -> bool:
         return False
 
 
+# KiCad reference designators (SW3, U1, SW_RST1, LED3A); the viewer uses the same pattern.
+REFDES = re.compile(r"^[A-Z][A-Za-z0-9]*([_-][A-Za-z0-9]+)*\d+[A-Za-z]?$")
+
+
+def name_footprint_meshes(src: Path, dst: Path) -> bool:
+    """kicad-cli names a node per footprint (SW3, U1). Under it sit the footprint's 3D model
+    meshes, named by OpenCASCADE labels (=>[0:1:1:3]) or, for STEP assemblies, by their own
+    part names (main:1, Shell:1). Give every mesh under a footprint the footprint's name and
+    drop the other names, so join keeps one node per footprint (the viewer hovers by it) and
+    merges the rest. Rewrites the JSON chunk only. False when nothing was renamed."""
+    data = src.read_bytes()
+    (jlen,) = struct.unpack_from("<I", data, 12)
+    doc = json.loads(data[20 : 20 + jlen])
+    nodes = doc.get("nodes", [])
+    meshes = doc.get("meshes", [])
+    renamed = 0
+
+    def walk(i: int, owner: str | None) -> None:
+        nonlocal renamed
+        node = nodes[i]
+        name = node.get("name") or ""
+        # The outermost refdes is the footprint; refdes-looking names inside its model
+        # (SW_Cherry_MX_PCB_cp_36) are STEP part names and lose their name like any other.
+        if owner is None and REFDES.match(name):
+            owner = name
+        elif owner:
+            if "mesh" in node:
+                node["name"] = owner
+                renamed += 1
+            else:
+                node.pop("name", None)
+        if owner and "mesh" in node:
+            # three.js names a multi-primitive mesh's children after the glTF mesh, so the
+            # STEP part name must go there too.
+            meshes[node["mesh"]].pop("name", None)
+        elif name.startswith("=>"):
+            node.pop("name", None)
+        for c in node.get("children", []):
+            walk(c, owner)
+
+    for root in doc["scenes"][doc.get("scene", 0)]["nodes"]:
+        walk(root, None)
+    if not renamed:
+        return False
+    js = json.dumps(doc, separators=(",", ":")).encode()
+    js += b" " * (-len(js) % 4)
+    rest = data[20 + jlen :]
+    body = struct.pack("<II", len(js), 0x4E4F534A) + js + rest
+    dst.write_bytes(struct.pack("<III", 0x46546C67, 2, 12 + len(body)) + body)
+    return True
+
+
 def enabled() -> bool:
     return os.environ.get("BARA_GLB_COMPRESS", "1") != "0"
 
@@ -87,8 +140,13 @@ def compress(
     if not enabled():
         shutil.copyfile(raw, out)
         return raw
+    src = raw
+    if keep_named:
+        named = work / f"{out.stem}.named.glb"
+        if name_footprint_meshes(raw, named):
+            src = named
     joined = _gt(
-        ["join", str(raw), str(plain), "--keepNamed", "true" if keep_named else "false"], timeout
+        ["join", str(src), str(plain), "--keepNamed", "true" if keep_named else "false"], timeout
     )
     if not joined or not plain.exists():
         shutil.copyfile(raw, out)
@@ -116,4 +174,4 @@ def compress(
     return plain
 
 
-__all__ = ["compress", "enabled", "is_valid"]
+__all__ = ["compress", "enabled", "is_valid", "name_footprint_meshes"]
