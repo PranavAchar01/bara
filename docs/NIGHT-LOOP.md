@@ -111,3 +111,8 @@ Web: bara-merge agent merges Nithin's figma-design-in-code / agent-board-3d / fi
 - bab0c6b: case.py desk-facing (bottom, no trackball) sensors get a pocket plus a floor window; validate.py knobs fit as discs; `_drop_slivers` also drops pieces under 2% of the largest (islands ringed by openings); compose.py `twin_slot`: two catch-all ("other") blocks that land on one part share it. Saved mouse + controller cases now pass every check.
 - e181d0c: generic.py packs inside the outline inset 0.5 mm, so pads keep the copper-to-edge clearance (ProMicro pad 12 at 0.03 mm, SKQG pads at 0.25 mm before). Note: the commit also carried 616 new fetched part sources (fetched/src, tracked by design).
 - Tests: geometry_case + case_shell + live_form + board_layout 87 passed; ruff clean. Suite restarted on e181d0c (server 57475, suite 57509). Open: identity (mouse, mp3), shell surface, lit displays.
+
+### 05:50-06:00 iter
+- Suite on e181d0c: CONTROLLER PASSES every required check (281 s). Monitor: "internal speakers" unresolved. Mouse: sensor + lens unresolved, identity fail. Cause for both: the spec check (vet) rejected the closest real part for good (PMW3360 vs a 26000 DPI line), and the other MPNs are not on LCSC.
+- 0564b0a: compose.py `take_closest`: a required block with no candidate left takes the first part vet turned down, with a "falls short" warning. Test added; live_form 42 passed, ruff clean.
+- Suite restarted on 0564b0a (server 84898, suite 84920).
