@@ -81,9 +81,9 @@ def load_settings() -> Settings:
         event_log_keep=max(1, _int_env("BARA_EVENT_LOG_KEEP", 5000)),
         msg_id_ttl_s=max(1, _int_env("BARA_MSG_ID_TTL_S", 600)),
         clarify_timeout_ms=clarify_timeout,
-        llm_timeout_s=max(0.1, _float_env("BARA_LLM_TIMEOUT_S", 5.0)),
+        llm_timeout_s=max(0.1, _float_env("BARA_LLM_TIMEOUT_S", 60.0)),
         cerebras_model=os.environ.get("BARA_CEREBRAS_MODEL", "llama-3.3-70b"),
-        anthropic_model=os.environ.get("BARA_ANTHROPIC_MODEL", "claude-haiku-5-5"),
+        anthropic_model=os.environ.get("BARA_ANTHROPIC_MODEL", "claude-sonnet-5-5"),
         mock=os.environ.get("BARA_MOCK", "1") not in ("0", "false", "no"),
         access_token=os.environ.get("BARA_ACCESS_TOKEN") or None,
     )

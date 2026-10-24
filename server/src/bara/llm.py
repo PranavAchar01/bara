@@ -1,8 +1,9 @@
 """Stage 1 classify call: Cerebras first, Anthropic second, enum-constrained JSON.
 
 Keys come from the environment only (CEREBRAS_API_KEY, ANTHROPIC_API_KEY). Every call has
-a hard deadline (BARA_LLM_TIMEOUT_S, default 5 s). The result is validated locally against
-the same schema the model was constrained with; any failure moves to the next provider.
+a hard deadline (BARA_LLM_TIMEOUT_S, default 60 s, room for a high-effort answer). The
+result is validated locally against the same schema the model was constrained with; any
+failure moves to the next provider.
 """
 
 from __future__ import annotations
@@ -134,10 +135,13 @@ async def _anthropic(
     try:
         response = await client.messages.create(
             model=model,
-            max_tokens=1024,
+            max_tokens=16000,
             system=SYSTEM_PROMPT,
             messages=[{"role": "user", "content": prompt}],
-            output_config={"format": {"type": "json_schema", "schema": schema}},
+            output_config={
+                "effort": "high",
+                "format": {"type": "json_schema", "schema": schema},
+            },
         )
     finally:
         await client.close()

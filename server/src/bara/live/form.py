@@ -407,6 +407,7 @@ async def derive(
     previous: Form | None = None,
     critique: str = "",
     fit: dict | None = None,
+    photos: list[bytes] | None = None,
 ) -> tuple[Form | None, str]:
     """Ask for the form, check it, and make one repair pass. A form that still fails keeps its
     problems on the object so the caller can fail loudly."""
@@ -429,11 +430,17 @@ async def derive(
             + "\nEarlier silhouette: "
             + json.dumps([[round(x), round(y)] for x, y in previous.silhouette])
         )
+    if photos:
+        note += (
+            f"\nThe {len(photos)} attached image(s) are photos of real products found by a web "
+            "search for this request. Match their silhouette, proportions, corner shapes and "
+            "where each control sits; ignore anything in them that is not the product."
+        )
     form: Form | None = previous
     for attempt in (0, 1):
         data, why = await ask_json(
             SYSTEM, _prompt(prompt, touches, refs, note), sch, name="form", timeout_s=90,
-            max_tokens=6000,
+            max_tokens=6000, images=photos,
         )  # fmt: skip
         if data is None:
             return form, why

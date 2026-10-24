@@ -77,10 +77,13 @@ async def _anthropic(
     try:
         response = await client.messages.create(
             model=model,
-            max_tokens=2048,
+            max_tokens=16000,
             system=system,
             messages=[{"role": "user", "content": prompt}],
-            output_config={"format": {"type": "json_schema", "schema": _for_anthropic(schema)}},
+            output_config={
+                "effort": "high",
+                "format": {"type": "json_schema", "schema": _for_anthropic(schema)},
+            },
         )
     finally:
         await client.close()

@@ -1,6 +1,6 @@
 // Finding the build engine from the deployed site. The engine runs on Pranav's Mac behind a tunnel
-// whose URL changes; /api/engine (a Vercel function) hands that URL out only to a caller holding
-// the access key, and the engine checks the same key on every request.
+// whose URL changes; /api/engine (a Vercel function) hands that URL out. The engine is open to
+// anyone with the site; a key is sent only when one was entered (an engine started with one).
 import { readServer, withToken } from "./mode";
 
 export type EngineState = "local" | "checking" | "live" | "offline" | "locked";
@@ -19,10 +19,9 @@ function timeout(ms: number): AbortSignal | undefined {
 }
 
 export async function discoverEngine(key: string | null, fetchFn: Fetch = fetch): Promise<Discovery> {
-  if (!key) return { state: "locked", detail: "Enter the access key to reach the engine." };
   let url: string | null;
   try {
-    const res = await fetchFn("/api/engine", { headers: { "x-bara-token": key }, cache: "no-store", signal: timeout(PROBE_MS) });
+    const res = await fetchFn("/api/engine", { headers: key ? { "x-bara-token": key } : {}, cache: "no-store", signal: timeout(PROBE_MS) });
     if (res.status === 401) return { state: "locked", detail: "That access key was not accepted." };
     if (!res.ok) return { state: "offline", detail: "No engine is published right now." };
     url = readServer(((await res.json()) as { url?: string }).url);

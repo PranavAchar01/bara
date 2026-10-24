@@ -17,10 +17,11 @@ from typing import Any
 from jsonschema import Draft202012Validator
 
 from bara.live.llm_json import _for_anthropic
+from bara.live.websearch import media_type
 
 log = logging.getLogger(__name__)
 DEFAULT_MODEL = "claude-sonnet-5-5"
-FAST_MODEL = "claude-haiku-5-5"
+FAST_MODEL = "claude-sonnet-5-5"  # part picks need the same judgment as the reasoning stages
 # answers by question: the same question (prompt, schema, images, model) is answered once
 CACHE = Path(__file__).resolve().parents[3] / "data/cache/llm"
 
@@ -70,7 +71,7 @@ async def ask_json(
             "type": "image",
             "source": {
                 "type": "base64",
-                "media_type": "image/png",
+                "media_type": media_type(img) or "image/png",
                 "data": base64.b64encode(img).decode(),
             },
         }
@@ -88,7 +89,8 @@ async def ask_json(
                     system=system,
                     messages=[{"role": "user", "content": content}],
                     output_config={
-                        "format": {"type": "json_schema", "schema": _for_anthropic(schema)}
+                        "effort": "high",
+                        "format": {"type": "json_schema", "schema": _for_anthropic(schema)},
                     },
                 ),
                 timeout=timeout_s,

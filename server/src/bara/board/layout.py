@@ -226,6 +226,13 @@ class Item:
             parts.append(Point(*self.centre()).buffer(r, 64))
         return unary_union(parts)
 
+    def keepout_poly(self) -> Polygon | None:
+        """Footprint rule areas that bar every other footprint from both faces, in board coords:
+        a part on the far side under a module's antenna fails DRC as surely as one beside it."""
+        if self.fp is None or not self.fp.keepouts:
+            return None
+        return self.world(unary_union([Polygon(ring) for ring in self.fp.keepouts]))
+
     def cutout_poly(self) -> Polygon | None:
         """A hole the footprint cuts in the board (its own Edge.Cuts), in board coords."""
         if self.fp is None or self.fp.cutout is None:
@@ -241,6 +248,9 @@ class Item:
             parts.append(self.world(self.local_poly()))
         if self.fp.courtyard_back and self.side == "top":
             parts.append(self.world(self.local_poly("back")))
+        keep = self.keepout_poly()
+        if keep is not None:
+            parts.append(keep)
         for p in self.fp.pads:
             on_back = any(layer.startswith(("B.", "*.")) for layer in p.layers)
             if on_back or self.side == "bottom":

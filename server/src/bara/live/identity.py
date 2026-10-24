@@ -37,7 +37,11 @@ SCHEMA: dict[str, Any] = {
 
 
 async def judge(
-    request: str, description: str, reference: dict[str, Any], png: bytes
+    request: str,
+    description: str,
+    reference: dict[str, Any],
+    png: bytes,
+    photos: list[bytes] | None = None,
 ) -> tuple[dict[str, Any] | None, str]:
     text = (
         f"Requested device: {request}\n"
@@ -45,10 +49,22 @@ async def judge(
         f"({reference.get('width_mm', '?')} x {reference.get('height_mm', '?')} x "
         f"{reference.get('thickness_mm', '?')} mm)\n"
         f"Intended silhouette: {description}\n"
-        "The image is the generated device from the front, above and to the left."
+        "The last image is the generated device from the front, above and to the left."
+        + (
+            f" The {len(photos)} image(s) before it are web photos of the real product, for "
+            "comparison; judge the generated device against them."
+            if photos
+            else ""
+        )
     )
     return await ask_json(
-        SYSTEM, text, SCHEMA, name="identity", timeout_s=75, max_tokens=1500, images=[png]
+        SYSTEM,
+        text,
+        SCHEMA,
+        name="identity",
+        timeout_s=75,
+        max_tokens=1500,
+        images=[*(photos or []), png],
     )
 
 
