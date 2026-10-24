@@ -18,7 +18,7 @@ export interface LogEntry {
   raw: string;
 }
 
-export type Overlay = "inspector" | "swap" | "resize" | "connect" | "addpart" | null;
+export type Overlay = "inspector" | "swap" | "resize" | "connect" | "addpart" | "focus" | null;
 /** Right panel tabs, as in the Figma layout: Design (what), Build (how it was decided), Code (wiring, board, firmware). */
 export type RightTab = "design" | "build" | "code";
 export type CodeTab = "connections" | "board" | "firmware";
@@ -58,6 +58,8 @@ export interface AppState {
   inspectPartId: string | null;
   /** Instance with the MoveGizmo attached (C20). */
   moving: string | null;
+  /** Part pulled out of the build into focus: its label key (one per catalog part, the case, the board). */
+  focusKey: string | null;
   hoverConnection: string | null;
   explode: number;
   preset: ViewPreset;
@@ -96,6 +98,7 @@ export const useApp = create<AppState>(() => ({
   selection: null,
   inspectPartId: null,
   moving: null,
+  focusKey: null,
   hoverConnection: null,
   explode: 0,
   preset: "scene",
@@ -127,6 +130,11 @@ export function select(instanceId: string | null): void {
     inspectPartId: null,
     overlay: instanceId ? (s.overlay === "swap" && s.selection === instanceId ? "swap" : "inspector") : null,
   }));
+}
+
+/** Pulls one part out into focus (null puts it back); the right column shows the agent card. */
+export function focusPart(key: string | null): void {
+  useApp.setState((s) => ({ focusKey: key, overlay: key ? "focus" : s.overlay === "focus" ? null : s.overlay }));
 }
 
 export function setView(preset: ViewPreset): void {
