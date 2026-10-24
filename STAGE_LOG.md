@@ -361,6 +361,25 @@ The coverage audit of the live site found three places where the UI said two con
 
 **Minutes:** about 50. **Rating:** 4/5.
 
+### Landing C: inspired by the manual, and the agent made exact
+
+**Feedback:** "some of the orientation like a LEGO manual, not the entire thing"; and the agent in Figma didn't have the site's shape.
+
+**Agent:**
+- The Figma Agent component had a 40×32 warm-gradient squircle body.
+- The site's BaraBot is an ink stadium: 88×62 units with fully round ends, two 13×19 rounded eyes, 25 apart.
+- All nine variants were rebuilt from the site's own numbers with `use_figma`, and each state now maps to a site mood: listening, asking, working, thinking, worried, happy, sad, offline. That covers the stadium body, lids, the happy cheeks, tilt and eye scale.
+- Every screen that uses the component updated with it. The hand-drawn eyes in the landing concepts were swapped for instances.
+
+**Landing C (recommended):** the clean Bara site with only a few manual cues.
+- The prompt is step "1", in a square field with the agent inside.
+- The hero drawing has drop arrows between layers and part counts (61×, 1×).
+- "How it builds" is four numbered steps, each with small part-count chips and a build-up thumbnail.
+- "Your builds" is a plain card grid with a quiet "No. 014".
+- No box art, set numbers or manual-blue pages; A and B stay on the page as references.
+
+**Minutes:** about 35. **Rating:** 4/5.
+
 ## Before and after
 
 | Change | Before | After |
