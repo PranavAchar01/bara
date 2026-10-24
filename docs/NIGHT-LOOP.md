@@ -116,3 +116,9 @@ Web: bara-merge agent merges Nithin's figma-design-in-code / agent-board-3d / fi
 - Suite on e181d0c: CONTROLLER PASSES every required check (281 s). Monitor: "internal speakers" unresolved. Mouse: sensor + lens unresolved, identity fail. Cause for both: the spec check (vet) rejected the closest real part for good (PMW3360 vs a 26000 DPI line), and the other MPNs are not on LCSC.
 - 0564b0a: compose.py `take_closest`: a required block with no candidate left takes the first part vet turned down, with a "falls short" warning. Test added; live_form 42 passed, ruff clean.
 - Suite restarted on 0564b0a (server 84898, suite 84920).
+
+### 06:17-06:35 iter
+- Suite on 0564b0a: CONTROLLER PASS (297 s), MONITOR PASS (718 s). Mouse FAIL: identity ("wavy, peanut-like outline"), board.drc 8 errors + 1 unconnected.
+- Mouse DRC root cause: every asymmetric bottom-side footprint sat half a turn from its plan. KiCad stores a flipped footprint mirrored in y, and SetOrientationDegrees(rot) dropped the 180 deg that makes it the packer's x mirror (layout.Item.world). SW4 (bottom) landed on J_M8.
+- f853f67: kicad_script adds 180 deg for bottom parts. New tests/test_kicad_flip.py runs real pcbnew at 0/90/30 deg: 3 passed with the fix, 3 failed without. The board cache key hashes the script, so boards rebuild.
+- Suite restarted on f853f67 (server 15812, suite 15876).
