@@ -46,7 +46,11 @@ LIVE_BUDGET_MS = {
     "firmware": 30_000,
     "render": 45_000,
 }
-SHORT_PROMPT_WORDS = 6  # up to this many words the prompt is searched as typed
+SHORT_PROMPT_WORDS = 6  # a longer product phrase is a description, not a name
+# where the product's name ends and the tweaks begin
+PRODUCT_END = re.compile(
+    r"[,;:(]|\s(?:with|that|which|where|using|in|for|but|so|to|and|without)\s", re.IGNORECASE
+)
 # the ask around the product name ("create a", "can you make me an") is not part of it
 REQUEST_LEAD = re.compile(
     r"^(?:(?:please|can|could|you|i|want|would|like|need|to|me|us|"
@@ -199,11 +203,14 @@ def _seat_on_footprints(board: dict[str, Any], parts: list[dict[str, Any]]) -> l
 
 
 def _product_name(run: BuildRun, brief: dict[str, Any]) -> str:
-    """What to search the web for. A short prompt is the product's own name ("a game boy"); the
-    brief generalises it ("handheld game console") and a search then finds lanterns."""
+    """The product the prompt names, as typed: the request words in front and the tweaks after
+    it ("with", "that", a comma) cut off. "create a gameboy with a backlit screen" is "gameboy".
+    The brief's device ("handheld game console") is generic, and a search for it finds lanterns."""
     product = REQUEST_LEAD.sub("", run.prompt.strip())
-    if len(product.split()) <= SHORT_PROMPT_WORDS:
-        return product or run.prompt
+    product = PRODUCT_END.split(product, maxsplit=1)[0].strip(" .!?")
+    product = re.sub(r"^(?:a|an|the|my|some)\s+", "", product, flags=re.IGNORECASE)
+    if product and len(product.split()) <= SHORT_PROMPT_WORDS:
+        return product
     return str(brief.get("device") or "") or run.prompt
 
 

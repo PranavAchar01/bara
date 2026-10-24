@@ -55,5 +55,7 @@ def test_product_name_drops_the_request_words():
 
     assert name("create a gameboy") == "gameboy"
     assert name("can you make me a desk lamp") == "desk lamp"
-    assert name("a game boy") == "a game boy"
+    assert name("a game boy") == "game boy"
     assert name("designer lamp") == "designer lamp"
+    assert name("create a gameboy with a backlit screen") == "gameboy"
+    assert name("a split keyboard with 42 keys, choc switches") == "split keyboard"
