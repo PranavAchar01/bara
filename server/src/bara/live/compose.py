@@ -445,7 +445,9 @@ class Composer:
                     )
                 )
             for fid in [f["function_id"] for f in self.spec.get("functions", [])]:
-                if fid.startswith("comms.") and not any(f.facet == "wireless" for f in filters):
+                radio = fid.startswith("comms.") and "usb" not in fid
+                offered = any(fid in part_functions(c) for c in cands)
+                if radio and offered and not any(f.facet == "wireless" for f in filters):
                     filters.append(
                         Filter(
                             "function",
@@ -852,6 +854,10 @@ class Composer:
                 )
             if idx is None:
                 slot.state = "none"
+                if not cands and slot.function_id not in SLOT_KINDS:
+                    # nothing in the catalog serves this function at all: an extra the brief
+                    # asked for (feet, a strap), not part of the electrical build
+                    slot.criticality = "optional"
                 why = "; ".join(f"{f['label']} left {f['count_after']}" for f in applied)
                 reason = (
                     f"No {slot.label.lower()} in the catalog"
@@ -869,7 +875,7 @@ class Composer:
                             "chosen_part_id": None,
                             "chosen_short_id": None,
                             "survivors": 0,
-                            "reason": reason[:280],
+                            "reason": reason[:240],
                             "model": None,
                             "propagated": [],
                         }
@@ -911,7 +917,7 @@ class Composer:
                             "chosen_part_id": part["part_id"],
                             "chosen_short_id": f"C{idx + 1}" if idx < MAX_SURVIVORS else None,
                             "survivors": len(ranked),
-                            "reason": reason[:280],
+                            "reason": reason[:240],
                             "model": model,
                             "propagated": self.propagated(slot),
                         }
@@ -1008,7 +1014,7 @@ class Composer:
                     "chosen_part_id": None,
                     "chosen_short_id": None,
                     "survivors": 0,
-                    "reason": reason[:280],
+                    "reason": reason[:240],
                     "model": None,
                     "propagated": [],
                 }

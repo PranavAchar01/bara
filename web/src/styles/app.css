@@ -915,38 +915,6 @@ select {
   border-color: var(--fail);
   color: var(--fail);
 }
-/* A board still routing or loading: a quiet pill with a moving dot. */
-.vp-board-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--muted);
-}
-.vp-board-status::before {
-  content: "";
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
-  animation: vp-pulse 1.2s ease-in-out infinite;
-}
-@keyframes vp-pulse {
-  0%, 100% { opacity: 0.25; }
-  50% { opacity: 1; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .vp-board-status::before { animation: none; }
-}
-/* Footprint under the pointer: refdes, part, then the KiCad footprint name. */
-.vp-footprint b {
-  font-weight: 600;
-}
-.vp-footprint-lib {
-  margin-left: 6px;
-  color: var(--muted);
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 10px;
-}
 .vp-toolbar {
   position: absolute;
   left: 50%;

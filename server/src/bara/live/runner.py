@@ -307,7 +307,7 @@ class LiveRunner:
                 "design": None,
                 "considered": top,
                 "unmet_hard": [],
-                "reason": reason[:300],
+                "reason": reason[:240],
             },
         )
         st.done()
@@ -351,47 +351,13 @@ class LiveRunner:
     ) -> dict[str, Any] | None:
         slots = {s.slot_id: s for s in result.slots}
         if plan is None:
-            st = self._stage(run, "place", "Placing parts")
-            record = A.parts_board(result.parts, self.catalog.parts)
-            ctx["records"] = [record]
-            ctx["on_board"] = {p["instance_id"] for p in record["placements"]}
-            moves = []
-            for p in record["placements"]:
-                if p["instance_id"] in {m["instance_id"] for m in moves}:
-                    continue
-                moves.append(
-                    {
-                        "instance_id": p["instance_id"],
-                        "placement": {
-                            "mode": "single",
-                            "position_mm": [round(p["x_mm"], 2), 0.0, 1.6],
-                            "rotation_deg": [0.0, 0.0, 0.0],
-                            "explode_offset_mm": [0.0, 0.0, 12.0],
-                            "source": "solver",
-                            "locked": False,
-                        },
-                    }
-                )
-            if moves:
-                st.emit("placement.updated", {"placements": moves})
-            st.done(message="Parts laid out in a row on a carrier; no KiCad planner for this.")
-            return None
+            return await self._place_generic(run, result, ctx)
 
         st = self._stage(run, "place", "Placing parts on a KiCad board")
         ctrl = slots.get("controller")
         mcu_label = (ctrl.chosen or {}).get("display_name") if ctrl else None
         bb = A.board_brief(brief, mcu_label)
-
-        def planned(record: dict[str, Any]) -> None:
-            # The board appears (outline and footprints, pending) before routing and the GLB
-            # export, which take most of this stage.
-            preview = copy.deepcopy(record)
-            side = preview.get("side") or "none"
-            fake = {"boards": [{"side": side, "placements": preview.get("footprints") or []}]}
-            self._map_board_ids(preview, self._instance_map(fake, result), run, side)
-            st.emit("board.updated", {"board": preview})
-
-        board, err = await A.run_board(bb, result.parts, run.build_id, st.progress, on_plan=planned)
+        board, err = await A.run_board(bb, result.parts, run.build_id, st.progress)
         if board is None:
             self._warn(run, "place", "w_board", "other", "warning", f"No KiCad board: {err}")
             # The case still follows the key grid: one plain outline per half, no routing.
@@ -410,14 +376,20 @@ class LiveRunner:
             side = entry.get("side") or "none"
             lid = {"left": "lay_l", "right": "lay_r"}.get(side, "lay_main")
             keys = [
-                {"x": p["x_mm"], "y": p["y_mm"], "rot": p["rot_deg"]}
+                {"x": p["x_mm"], "y": p["y_mm"], "rot": p["rot_deg"], "matrix": p.get("matrix")}
                 for p in entry["placements"]
                 if p["role"] == "switch"
             ]
             half = next((h for h in plan.halves if h.side == side), plan.halves[0])
             if keys:
+                # the board's electrical matrix is the one firmware must scan
                 for k, src in zip(keys, half.keys, strict=False):
-                    k["matrix"] = src.get("matrix")
+                    if k["matrix"] is None:
+                        k["matrix"] = src.get("matrix")
+                    src["matrix"] = k["matrix"]
+                budget = entry.get("pin_budget") or {}
+                if budget.get("rows") and budget.get("cols"):
+                    half.elec_matrix = (int(budget["rows"]), int(budget["cols"]))
                 name = f"{plan.key_count} key {plan.style} (KiCad)" + (
                     f" {side}" if side != "none" else ""
                 )
@@ -434,6 +406,70 @@ class LiveRunner:
         knobs = {i.instance_id for i in slots["knob"].instances} if "knob" in slots else set()
         ctx["on_board"] = set(ctx["moves"]) - knobs
         st.done()
+        return board
+
+    async def _place_generic(
+        self, run: BuildRun, result: ComposeResult, ctx: dict[str, Any]
+    ) -> dict[str, Any] | None:
+        """Any device: the chosen parts' own KiCad footprints on one routed board."""
+        st = self._stage(run, "place", "Placing parts on a KiCad board")
+        parts = []
+        for p in result.parts:
+            try:
+                record = self.source.get_part(p["part_id"])
+            except Exception:  # a part the source no longer has stays off the board
+                record = {}
+            parts.append({**p, "record": record})
+        board, err = await A.run_board({"generic": True}, parts, run.build_id, st.progress)
+        if board is None or not any(
+            pl.get("for_instance_id") for e in board["boards"] for pl in e["placements"]
+        ):
+            err = err or "no chosen part has a KiCad footprint"
+            self._warn(run, "place", "w_board", "other", "warning", f"No KiCad board: {err}")
+            record = A.parts_board(result.parts, self.catalog.parts)
+            ctx["records"] = [record]
+            ctx["on_board"] = {p["instance_id"] for p in record["placements"]}
+            ctx["board_err"] = err
+            st.done("degraded", f"No KiCad board ({err}); parts laid out on a plain carrier.")
+            return None
+        entry = board["boards"][0]
+        ctx["records"] = [A.geometry_board(entry)]
+        t = float(entry.get("thickness_mm") or 1.6)
+        moves: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for pl in entry["placements"]:
+            iid = pl.get("for_instance_id")
+            if not iid or iid in seen:
+                continue
+            seen.add(iid)
+            pos = list(pl["placement"]["position_mm"])
+            pos[2] = t + pos[2] if pos[2] >= 0 else pos[2] - 3.0
+            moves.append(
+                {
+                    "instance_id": iid,
+                    "placement": {
+                        "mode": "single",
+                        "position_mm": [round(v, 3) for v in pos],
+                        "rotation_deg": [round(v, 3) for v in pl["placement"]["rotation_deg"]],
+                        "explode_offset_mm": [0.0, 0.0, 15.0 if pos[2] >= 0 else -15.0],
+                        "source": "solver",
+                        "locked": False,
+                    },
+                }
+            )
+        if moves:
+            st.emit("placement.updated", {"placements": moves})
+        ctx["moves"] = {m["instance_id"]: m for m in moves}
+        ctx["on_board"] = set(ctx["moves"])
+        drc = entry.get("drc") or {}
+        n_fp = sum(1 for pl in entry["placements"] if pl.get("on_pcb"))
+        st.done(
+            message=(
+                f"{n_fp} footprints on a {entry['board']['size_mm'][0]:.0f} x "
+                f"{entry['board']['size_mm'][1]:.0f} mm board; DRC {drc.get('errors', '?')} "
+                f"errors, {drc.get('unconnected', '?')} unconnected"
+            )[:200]
+        )
         return board
 
     def _controller_check(
@@ -595,7 +631,7 @@ class LiveRunner:
             if ctx.get("board_err"):
                 st.done("failed", f"No KiCad board: {ctx['board_err']}")
             else:
-                st.done("skipped", "KiCad board generation covers keyboards; this build has none.")
+                st.done("skipped", "No KiCad board for this build.")
             return
         reports = ctx.get("reports") or {}
         id_map = self._instance_map(board, result)
@@ -603,7 +639,8 @@ class LiveRunner:
         for entry in board["boards"]:
             spec_board = copy.deepcopy(entry["board"])
             side = spec_board.get("side") or "none"
-            self._map_board_ids(spec_board, id_map, run, side)
+            mine = [p["instance_id"] for p in run.state["parts"] if p.get("side") in (side, "none")]
+            spec_board["for_instance_ids"] = mine
             for net in spec_board.get("nets", []):
                 for m in net.get("members", []):
                     m["instance_id"] = id_map.get(m["instance_id"], m["instance_id"])
@@ -656,20 +693,6 @@ class LiveRunner:
             "ok" if not failed else "degraded", "DRC or routing left issues" if failed else None
         )
 
-    @staticmethod
-    def _map_board_ids(
-        spec_board: dict[str, Any], id_map: dict[str, str], run: BuildRun, side: str
-    ) -> None:
-        """Board-local instance ids -> the build's, on for_instance_ids and footprints.
-        A footprint with no build part (diodes, sockets) keeps instance_id null."""
-        live = {p["instance_id"] for p in run.state["parts"]}
-        spec_board["for_instance_ids"] = [
-            p["instance_id"] for p in run.state["parts"] if p.get("side") in (side, "none")
-        ]
-        for fp in spec_board.get("footprints") or []:
-            mapped = id_map.get(fp.get("instance_id") or "")
-            fp["instance_id"] = mapped if mapped in live else None
-
     def _instance_map(self, board: dict[str, Any], result: ComposeResult) -> dict[str, str]:
         out: dict[str, str] = {}
         slots = {s.slot_id: s for s in result.slots}
@@ -677,6 +700,9 @@ class LiveRunner:
             side = entry.get("side") or "none"
             by_role: dict[str, list[str]] = {}
             for p in entry["placements"]:
+                if p.get("for_instance_id"):
+                    out[p["instance_id"]] = p["for_instance_id"]
+                    continue
                 by_role.setdefault(p["role"], []).append(p["instance_id"])
             for role, sid in {**ROLE_SLOT, "switch": "switches"}.items():
                 slot = slots.get(sid)

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import shutil
 import struct
 from pathlib import Path
@@ -79,26 +78,3 @@ def test_compress_joins_and_meshopts(tmp_path: Path) -> None:
     assert "EXT_meshopt_compression" in doc.get("extensionsUsed", [])
     # Two materials stay two materials: no palette merge.
     assert len(doc["materials"]) == 2
-
-
-def test_footprint_names_move_onto_meshes(tmp_path: Path) -> None:
-    # kicad-cli layout: a refdes node over an OpenCASCADE-labelled mesh, plus an unnamed layer.
-    data = _cube_glb()
-    (jlen,) = struct.unpack_from("<I", data, 12)
-    doc = json.loads(data[20 : 20 + jlen])
-    doc["nodes"] = [
-        {"name": "SW3", "children": [1]},
-        {"name": "=>[0:1:1:3]", "mesh": 0},
-        {"name": "=>[0:1:1:5]", "mesh": 1},
-    ]
-    doc["scenes"] = [{"nodes": [0, 2]}]
-    js = json.dumps(doc).encode()
-    js += b" " * (-len(js) % 4)
-    body = struct.pack("<II", len(js), 0x4E4F534A) + js + data[20 + jlen :]
-    src = tmp_path / "kicad.glb"
-    src.write_bytes(struct.pack("<III", 0x46546C67, 2, 12 + len(body)) + body)
-    dst = tmp_path / "named.glb"
-    assert glbopt.name_footprint_meshes(src, dst)
-    assert glbopt.is_valid(dst)
-    names = [n.get("name") for n in read_glb(dst.read_bytes())["nodes"]]
-    assert names == ["SW3", "SW3", None]

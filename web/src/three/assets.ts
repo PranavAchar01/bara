@@ -1,12 +1,14 @@
 // GLB loading (SPEC 3.2): one load per URL, converted once to build space
 // (scale 1000, then +90 deg about X). Meshes are merged per material so a
 // part keeps the PBR materials its GLB carries (KiCad copper, mask, silk,
-// component bodies) and still draws as a few instanced meshes. Failures
-// resolve to null so the caller draws the bbox placeholder; one bad asset
-// never blocks the scene.
+// component bodies) and still draws as a few instanced meshes. Each mesh also
+// remembers which top-level component it came from (for a KiCad board: one
+// footprint), so the viewer can lift a board's components with their parts.
+// Failures resolve to null so the caller draws the bbox placeholder; one bad
+// asset never blocks the scene.
 import { useEffect, useState } from "react";
 import * as THREE from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { GLTFLoader, type GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { AssetRef } from "../spec/types";
@@ -18,30 +20,28 @@ export interface MeshGroup {
   weight: number;
 }
 
+/** One top-level node of the GLB (for a KiCad board: one footprint, or the board itself). */
+export interface Component {
+  name: string;
+  /** Build-space box of this component. */
+  bbox: THREE.Box3;
+}
+
+export interface Piece {
+  component: number;
+  geometry: THREE.BufferGeometry;
+  material: THREE.MeshStandardMaterial;
+}
+
 export interface LoadedModel {
-  /** Root already converted to build space (mm, Z up). */
-  root: THREE.Object3D;
   /** One merged geometry per material, in build space, for instancing. */
   groups: MeshGroup[];
   /** All meshes merged (position + normal only), for hulls and outlines. */
   merged: THREE.BufferGeometry | null;
   bbox: THREE.Box3;
-  /** Board models: one box per footprint node (refdes), in build space, for hover. */
-  footprints: FootprintBox[];
-}
-
-export interface FootprintBox {
-  ref: string;
-  box: THREE.Box3;
-}
-
-/** KiCad reference designators (SW3, U1, USB-UART1, LED3A); not OpenCASCADE labels. */
-const REFDES = /^[A-Z][A-Za-z0-9]*([_-][A-Za-z0-9]+)*\d+[A-Za-z]?$/;
-
-/** Nearest refdes-named node at or above `o`, the footprint a mesh belongs to. */
-function footprintOf(o: THREE.Object3D | null): string | null {
-  for (let n = o; n; n = n.parent) if (REFDES.test(n.name)) return n.name;
-  return null;
+  components: Component[];
+  /** Per-mesh pieces, kept so a subset of components can be regrouped. */
+  pieces: Piece[];
 }
 
 const cache = new Map<string, Promise<LoadedModel | null>>();
@@ -127,10 +127,12 @@ function boardMaterial(src: THREE.MeshStandardMaterial): THREE.MeshStandardMater
  * across palette cells. Nearly opaque layers become opaque: translucent
  * meshes sort badly and look washed out.
  */
-function partMaterial(src: THREE.Material): THREE.MeshStandardMaterial {
+function partMaterial(src: THREE.Material, factorsGiven: boolean): THREE.MeshStandardMaterial {
   const m: THREE.MeshStandardMaterial = (src as THREE.MeshStandardMaterial).isMeshStandardMaterial
     ? (src as THREE.MeshStandardMaterial).clone()
     : new THREE.MeshStandardMaterial({ color: (src as THREE.MeshBasicMaterial).color ?? new THREE.Color("#8a8f94"), roughness: 0.55 });
+  // No factors in the file: glTF's default (metallic 1) is not a statement that the body is metal.
+  if (!factorsGiven && !m.metalnessMap) m.metalness = 0;
   if (m.map) {
     m.map.magFilter = THREE.NearestFilter;
     m.map.minFilter = THREE.NearestFilter;
@@ -197,22 +199,100 @@ function flatPaletteColor(tex: THREE.Texture, g: THREE.BufferGeometry): THREE.Co
   return first < 0 ? null : new THREE.Color().setHex(first, THREE.SRGBColorSpace);
 }
 
-function studioMaterial(src: THREE.Material, board: boolean, g: THREE.BufferGeometry): THREE.MeshStandardMaterial {
+function studioMaterial(src: THREE.Material, board: boolean, palette: THREE.Color | null, factorsGiven: boolean): THREE.MeshStandardMaterial {
   let std = src as THREE.MeshStandardMaterial;
-  if (board && std.isMeshStandardMaterial && std.map) {
+  if (palette) {
     // A palette material holding one board layer (mask, silk, FR4): back to a flat colour and drawn as that layer.
-    const c = flatPaletteColor(std.map, g);
-    if (c) {
-      std = std.clone();
-      std.map = null;
-      std.color.copy(c);
-      return boardMaterial(std);
-    }
+    std = std.clone();
+    std.map = null;
+    std.color.copy(palette);
+    return boardMaterial(std);
   }
   // A board GLB's component bodies come from STEP models and are drawn as parts.
   if (board && std.isMeshStandardMaterial && !std.map && boardLayer(std) !== "body") return boardMaterial(std);
   if (board && std.isMeshStandardMaterial && !std.map && /fr4|substrate|core|board/i.test(std.name)) return boardMaterial(std);
-  return partMaterial(std);
+  return partMaterial(std, factorsGiven);
+}
+
+interface GltfMaterialJson {
+  pbrMetallicRoughness?: { metallicFactor?: number; roughnessFactor?: number };
+}
+
+function factorsInFile(gltf: GLTF, mat: THREE.Material): boolean {
+  const idx = (gltf.parser.associations.get(mat) as { materials?: number } | undefined)?.materials;
+  if (idx === undefined) return true;
+  const pbr = (gltf.parser.json as { materials?: GltfMaterialJson[] }).materials?.[idx]?.pbrMetallicRoughness;
+  return pbr?.metallicFactor !== undefined || pbr?.roughnessFactor !== undefined;
+}
+
+/**
+ * Some exporters write normals that point into the solid while the winding
+ * faces out; lit from inside, the part renders near black. When most stored
+ * normals disagree with the face winding, flip them.
+ */
+function fixInvertedNormals(g: THREE.BufferGeometry): void {
+  const pos = g.attributes.position as THREE.BufferAttribute;
+  const nor = g.attributes.normal as THREE.BufferAttribute | undefined;
+  if (!nor) return;
+  const idx = g.index;
+  const tris = Math.floor((idx ? idx.count : pos.count) / 3);
+  const step = Math.max(1, Math.floor(tris / 2000));
+  const a = new THREE.Vector3();
+  const b = new THREE.Vector3();
+  const c = new THREE.Vector3();
+  const n = new THREE.Vector3();
+  let flipped = 0;
+  let total = 0;
+  for (let t = 0; t < tris; t += step) {
+    const i0 = idx ? idx.getX(t * 3) : t * 3;
+    a.fromBufferAttribute(pos, i0);
+    b.fromBufferAttribute(pos, idx ? idx.getX(t * 3 + 1) : t * 3 + 1);
+    c.fromBufferAttribute(pos, idx ? idx.getX(t * 3 + 2) : t * 3 + 2);
+    const face = c.sub(b).cross(a.sub(b));
+    if (face.lengthSq() < 1e-12) continue;
+    total++;
+    if (face.dot(n.fromBufferAttribute(nor, i0)) < 0) flipped++;
+  }
+  if (total < 4 || flipped / total < 0.75) return;
+  const arr = nor.array as Float32Array;
+  for (let i = 0; i < arr.length; i++) arr[i] = -arr[i];
+  nor.needsUpdate = true;
+}
+
+/** The node whose children are the model's components (skips single-child wrappers). */
+function componentRoot(scene: THREE.Object3D): THREE.Object3D {
+  let n = scene;
+  while (n.children.length === 1 && !(n as THREE.Mesh).isMesh) n = n.children[0];
+  return n;
+}
+
+/** Regroup pieces per material (all pieces, or only those whose component passes `keep`). */
+export function groupPieces(pieces: Piece[], keep?: (component: number) => boolean): MeshGroup[] {
+  const byMat = new Map<THREE.MeshStandardMaterial, THREE.BufferGeometry[]>();
+  for (const p of pieces) {
+    if (keep && !keep(p.component)) continue;
+    const list = byMat.get(p.material) ?? [];
+    list.push(p.geometry);
+    byMat.set(p.material, list);
+  }
+  const groups: MeshGroup[] = [];
+  for (const [material, list] of byMat) {
+    let src = list;
+    // Mixed uv presence inside one material: drop uv so the merge succeeds.
+    if (list.some((g) => !g.attributes.uv) && list.some((g) => g.attributes.uv))
+      src = list.map((g) => {
+        if (!g.attributes.uv) return g;
+        const c = g.clone();
+        c.deleteAttribute("uv");
+        return c;
+      });
+    const geometry = src.length === 1 ? src[0] : mergeGeometries(sameIndexing(src), false);
+    if (!geometry) continue;
+    groups.push({ geometry, material, weight: geometry.attributes.position.count });
+  }
+  // Opaque first, translucent last, so translucent layers sort over the rest.
+  groups.sort((a, b) => Number(a.material.transparent) - Number(b.material.transparent));
+  return groups;
 }
 
 /**
@@ -237,18 +317,29 @@ function sameIndexing(list: THREE.BufferGeometry[]): THREE.BufferGeometry[] {
   return list.map((g) => (g.index ? g.toNonIndexed() : g));
 }
 
-function convert(scene: THREE.Object3D, board: boolean): LoadedModel {
+function convert(gltf: GLTF, board: boolean): LoadedModel {
+  const scene = gltf.scene;
   const root = new THREE.Group();
   scene.scale.setScalar(1000);
   scene.rotation.set(Math.PI / 2, 0, 0);
   root.add(scene);
   root.updateMatrixWorld(true);
-  const byMat = new Map<THREE.Material, THREE.BufferGeometry[]>();
+  const compRoot = componentRoot(scene);
+  const compIndex = new Map<THREE.Object3D, number>();
+  const components: Component[] = compRoot.children.map((c, i) => {
+    compIndex.set(c, i);
+    return { name: c.name, bbox: new THREE.Box3() };
+  });
+  // One studio material per source material, or per (palette material, colour) for palette-baked boards.
+  const matCache = new Map<string, THREE.MeshStandardMaterial>();
+  const pieces: Piece[] = [];
   const all: THREE.BufferGeometry[] = [];
-  const fpBoxes = new Map<string, THREE.Box3>();
   root.traverse((o) => {
     const mesh = o as THREE.Mesh;
     if (!mesh.isMesh) return;
+    let anc: THREE.Object3D | null = mesh;
+    while (anc && !compIndex.has(anc)) anc = anc.parent;
+    const component = anc ? (compIndex.get(anc) as number) : -1;
     const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
     const src = mesh.geometry;
     const parts: { g: THREE.BufferGeometry; mat: THREE.Material }[] = [];
@@ -258,9 +349,9 @@ function convert(scene: THREE.Object3D, board: boolean): LoadedModel {
       for (const gr of src.groups) {
         const g = new THREE.BufferGeometry();
         for (const name of Object.keys(flat.attributes)) {
-          const a = flat.attributes[name] as THREE.BufferAttribute;
-          const arr = (a.array as Float32Array).slice(gr.start * a.itemSize, (gr.start + gr.count) * a.itemSize);
-          g.setAttribute(name, new THREE.BufferAttribute(arr, a.itemSize, a.normalized));
+          const at = flat.attributes[name] as THREE.BufferAttribute;
+          const arr = (at.array as Float32Array).slice(gr.start * at.itemSize, (gr.start + gr.count) * at.itemSize);
+          g.setAttribute(name, new THREE.BufferAttribute(arr, at.itemSize, at.normalized));
         }
         parts.push({ g, mat: mats[gr.materialIndex ?? 0] ?? mats[0] });
       }
@@ -270,44 +361,33 @@ function convert(scene: THREE.Object3D, board: boolean): LoadedModel {
     for (const { g, mat } of parts) {
       floatAttributes(g);
       g.applyMatrix4(mesh.matrixWorld);
-      const keepUv = !!(mat as THREE.MeshStandardMaterial).map && !!g.attributes.uv;
+      const std = mat as THREE.MeshStandardMaterial;
+      const palette = board && std.isMeshStandardMaterial && std.map && g.attributes.uv ? flatPaletteColor(std.map, g) : null;
+      const key = `${mat.uuid}:${palette ? palette.getHexString() : ""}`;
+      let material = matCache.get(key);
+      if (!material) {
+        material = studioMaterial(mat, board, palette, factorsInFile(gltf, mat));
+        matCache.set(key, material);
+      }
+      const keepUv = !!material.map && !!g.attributes.uv;
       for (const name of Object.keys(g.attributes)) if (name !== "position" && name !== "normal" && !(keepUv && name === "uv")) g.deleteAttribute(name);
       if (!g.attributes.normal) g.computeVertexNormals();
-      const list = byMat.get(mat) ?? [];
-      list.push(g);
-      byMat.set(mat, list);
+      fixInvertedNormals(g);
+      pieces.push({ component, geometry: g, material });
+      g.computeBoundingBox();
+      if (component >= 0 && g.boundingBox) components[component].bbox.union(g.boundingBox);
       const plain = g.clone();
       if (plain.attributes.uv) plain.deleteAttribute("uv");
       all.push(plain);
-      const ref = board ? footprintOf(mesh) : null;
-      if (ref) {
-        plain.computeBoundingBox();
-        const b = fpBoxes.get(ref) ?? new THREE.Box3();
-        if (plain.boundingBox) b.union(plain.boundingBox);
-        fpBoxes.set(ref, b);
-      }
     }
   });
-  const groups: MeshGroup[] = [];
-  for (const [mat, list] of byMat) {
-    // Mixed uv presence inside one material: drop uv so the merge succeeds.
-    if (list.some((g) => !g.attributes.uv)) for (const g of list) if (g.attributes.uv) g.deleteAttribute("uv");
-    const geometry = list.length === 1 ? list[0] : mergeGeometries(sameIndexing(list), false);
-    if (!geometry) continue;
-    const material = studioMaterial(mat, board, geometry);
-    if (!material.map && geometry.attributes.uv) geometry.deleteAttribute("uv");
-    groups.push({ geometry, material, weight: geometry.attributes.position.count });
-  }
-  // Opaque first, translucent last, so translucent layers sort over the rest.
-  groups.sort((a, b) => Number(a.material.transparent) - Number(b.material.transparent));
   const merged = all.length ? mergeGeometries(sameIndexing(all), false) : null;
   const bbox = new THREE.Box3();
   if (merged) {
     merged.computeBoundingBox();
     if (merged.boundingBox) bbox.copy(merged.boundingBox);
   }
-  const footprints = [...fpBoxes].map(([ref, box]) => ({ ref, box }));
-  return { root, groups, merged, bbox, footprints };
+  return { groups: groupPieces(pieces), merged, bbox, components, pieces };
 }
 
 /** `board`: a kicad-cli board export, whose layers get the KiCad board look. */
@@ -317,7 +397,7 @@ export function loadModel(url: string, board = false): Promise<LoadedModel | nul
   if (!p) {
     p = loader
       .loadAsync(url)
-      .then((gltf) => convert(gltf.scene, board))
+      .then((gltf) => convert(gltf, board))
       .catch(() => null);
     cache.set(key, p);
   }

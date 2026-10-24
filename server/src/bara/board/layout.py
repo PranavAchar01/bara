@@ -455,6 +455,17 @@ def _search(
 # ---------------------------------------------------------------- controller + budget
 
 
+def matrix_dims(n: int) -> tuple[int, int]:
+    """Fewest-pin electrical matrix for n switches: smallest rows + cols with rows * cols >= n,
+    the squarest one on a tie."""
+    best = (n, 1)
+    for cols in range(1, max(n, 1) + 1):
+        rows = math.ceil(n / cols)
+        if (rows + cols, abs(rows - cols)) < (best[0] + best[1], abs(best[0] - best[1])):
+            best = (rows, cols)
+    return best
+
+
 def controller_gpio(ctrl: dict) -> tuple[list[str], dict[str, str]]:
     """GPIO pad numbers on the module's edge rows, and the full pad->symbol-name map."""
     fp = footprint_ref(ctrl["footprint"])
@@ -468,24 +479,27 @@ def controller_gpio(ctrl: dict) -> tuple[list[str], dict[str, str]]:
 
 
 def pick_controller(need: int, b: Brief, log: list[str]) -> tuple[dict, dict]:
+    """The brief's controller when it has the GPIO, else the smallest one that does."""
     cands = [c for c in R.CONTROLLERS if c["wireless"] or not b.wireless]
-    if b.mcu_hint:
-        hinted = [c for c in cands if any(w in c["label"].lower() for w in b.mcu_hint.split())]
-        if hinted:
-            cands = hinted + [c for c in cands if c not in hinted]
-    first = cands[0]
-    for c in cands:
-        gpio, _ = controller_gpio(c)
-        if len(gpio) >= need:
-            if c is not first:
-                log.append(
-                    f"MCU pin budget: {need} GPIO needed, {first['label']} has "
-                    f"{len(controller_gpio(first)[0])}, upgraded to {c['label']} ({len(gpio)})"
-                )
-            else:
-                log.append(f"MCU pin budget: {need} GPIO needed, {c['label']} has {len(gpio)}")
-            return c, {"needed": need, "available": len(gpio), "controller": c["id"]}
-    raise RuntimeError(f"no controller has {need} GPIO")
+    gpio = {c["id"]: len(controller_gpio(c)[0]) for c in cands}
+    words = b.mcu_hint.lower().split()
+    hinted = [c for c in cands if any(w in c["label"].lower() for w in words)]
+    first = hinted[0] if hinted else cands[0]
+    if gpio[first["id"]] >= need:
+        log.append(
+            f"pin budget: {need} GPIO needed, {first['label']} has {gpio[first['id']]}: "
+            "kept the brief's pick"
+        )
+        return first, {"needed": need, "available": gpio[first["id"]], "controller": first["id"]}
+    fits = sorted((gpio[c["id"]], i, c) for i, c in enumerate(cands) if gpio[c["id"]] >= need)
+    if not fits:
+        raise RuntimeError(f"no controller has {need} GPIO")
+    n, _, ctrl = fits[0]
+    log.append(
+        f"pin budget: {need} GPIO needed; {first['label']} has {gpio[first['id']]} -> "
+        f"{ctrl['label']} ({n} GPIO)"
+    )
+    return ctrl, {"needed": need, "available": n, "controller": ctrl["id"]}
 
 
 # ---------------------------------------------------------------- one keyboard half
@@ -570,21 +584,24 @@ def plan_keyboard_board(name: str, n_keys: int, b: Brief, log: list[str]) -> lis
         else key_cloud
     )
 
-    # matrix: physical rows (+ thumb row) x columns; encoder pushes fill free slots
-    grid_rows = max(k.row for k in keys if not k.thumb) + 1
-    grid_cols = max(k.col for k in keys if not k.thumb) + 1
-    n_rows = grid_rows + (1 if any(k.thumb for k in keys) else 0)
-    used = {(k.row, k.col) for k in keys}
+    # matrix: the smallest rows x cols grid for the keys (fewest pins), keys filled in
+    # reading order; encoder pushes take the grid's spare cells, then an extra column
     knobs = [f for f in feats if f.kind == "knob"]
     screens = [f for f in feats if f.kind == "screen"]
     balls = [f for f in feats if f.kind == "trackball"]
-    free = [(r, c) for r in range(n_rows) for c in range(grid_cols) if (r, c) not in used]
-    n_cols = grid_cols
+    n_rows, n_cols = matrix_dims(len(keys))
+    for i, it in enumerate(it for it in items if it.role == "switch"):
+        it.meta["matrix"] = divmod(i, n_cols)
+    free = [divmod(i, n_cols) for i in range(len(keys), n_rows * n_cols)]
     while len(free) < len(knobs):
         free += [(r, n_cols) for r in range(n_rows)]
         n_cols += 1
     knob_slots = free[: len(knobs)]
     gpio_need = n_rows + n_cols + 2 * len(knobs) + 2 * bool(screens) + 5 * len(balls)
+    log.append(
+        f"matrix {n_rows}x{n_cols} for {len(keys)} keys"
+        + (f" + {len(knobs)} encoder push" if knobs else "")
+    )
     ctrl, budget = pick_controller(gpio_need, b, log)
     budget.update(
         {
@@ -759,8 +776,17 @@ def plan_keyboard_board(name: str, n_keys: int, b: Brief, log: list[str]) -> lis
         blocked_bottom.append(d.footprint_poly())
         knob_diodes.append(d)
 
-    # battery cell under the board (off-PCB part; keeps clear of everything on the underside)
+    # battery cell under the board (off-PCB part; keeps clear of everything on the underside,
+    # including the trackball sensor boards that hang under each ball)
     if b.battery:
+        for ball in (it for it in items if it.role == "trackball"):
+            sensor = plan_sensor_board("probe", [])
+            lens = sensor_lens(sensor)
+            blocked_bottom.append(
+                affinity.translate(
+                    box(*sensor.outline.bounds), ball.x - lens.x, ball.y - lens.y
+                ).buffer(SENSOR_BOARD_CLEARANCE, join_style="mitre")
+            )
         w, h = R.BATTERY_CELL["size_mm"]
         cell = Item(
             "BT1",
@@ -798,14 +824,10 @@ def plan_keyboard_board(name: str, n_keys: int, b: Brief, log: list[str]) -> lis
         mcu.pads = {k: v for k, v in mcu.pads.items() if v != "BAT+"}
     diodes = [it for it in items if it.role == "diode"]
     for i, swi in enumerate(switches):
-        r, c = swi.meta["row"], swi.meta["col"]
-        if swi.meta["thumb"]:
-            r = n_rows - 1
-            c = min(c, n_cols - 1)
+        r, c = divmod(i, n_cols)
         knet = f"K{i + 1}"
         swi.pads = {sw["pins"]["col"]: f"COL{c}", sw["pins"]["row_side"]: knet}
         diodes[i].pads = {R.DIODE["pins"]["anode"]: knet, R.DIODE["pins"]["cathode"]: f"ROW{r}"}
-        swi.meta["matrix"] = (r, c)
     for i, enc in enumerate(it for it in items if it.role == "encoder"):
         r, c = knob_slots[i]
         knet = f"KE{i + 1}"
@@ -903,10 +925,13 @@ def _assign_gpio(mcu: Item, gpio: list[str], nets: list[str], items: list[Item])
     for net in nets:
         pts = []
         for it in items:
-            if it.role == "switch" and net.startswith("COL"):
-                pts.append((it.x, it.y)) if f"COL{it.meta.get('col')}" == net else None
-            elif it.role == "switch" and net.startswith("ROW"):
-                pts.append((it.x, it.y)) if f"ROW{it.meta.get('row')}" == net else None
+            if it.role != "switch" or "matrix" not in it.meta:
+                if any(v == net for v in it.pads.values()) and it is not mcu:
+                    pts.append(it.centre())
+                continue
+            r, c = it.meta["matrix"]
+            if net in (f"ROW{r}", f"COL{c}"):
+                pts.append((it.x, it.y))
         centroids[net] = (
             (sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts))
             if pts

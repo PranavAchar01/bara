@@ -80,46 +80,32 @@ async def run_board(
     build_id: str,
     on_progress: Progress,
     heartbeat_s: float = 2.0,
-    on_plan: Callable[[dict[str, Any]], None] | None = None,
 ) -> tuple[dict[str, Any] | None, str | None]:
-    """Run build_board in a worker thread, relaying its progress and, through on_plan, each
-    board laid out (status pending) before routing starts. (result, error)."""
+    """Run build_board in a worker thread, relaying its progress. (result, error)."""
     board, why = board_module()
     if board is None:
         return None, why
     loop = asyncio.get_running_loop()
-    # ("progress", message, fraction) or ("plan", board record, None), in the order sent.
-    queue: asyncio.Queue[tuple[str, Any, float | None]] = asyncio.Queue()
+    queue: asyncio.Queue[tuple[str, float | None]] = asyncio.Queue()
 
     def progress(message: str, fraction: float | None = None) -> None:
-        loop.call_soon_threadsafe(queue.put_nowait, ("progress", str(message), fraction))
-
-    def planned(record: dict[str, Any]) -> None:
-        loop.call_soon_threadsafe(queue.put_nowait, ("plan", record, None))
-
-    def relay(kind: str, payload: Any, fraction: float | None) -> str | None:
-        if kind == "plan":
-            if on_plan is not None:
-                on_plan(payload)
-            return None
-        on_progress(payload, fraction)
-        return payload
+        loop.call_soon_threadsafe(queue.put_nowait, (str(message), fraction))
 
     started = time.monotonic()
     task = asyncio.ensure_future(
-        asyncio.to_thread(
-            board.build_board, brief, parts, build_id=build_id, progress=progress, on_plan=planned
-        )
+        asyncio.to_thread(board.build_board, brief, parts, build_id=build_id, progress=progress)
     )
     last = "Building the KiCad board"
     while not task.done():
         try:
-            item = await asyncio.wait_for(queue.get(), heartbeat_s)
-            last = relay(*item) or last
+            message, fraction = await asyncio.wait_for(queue.get(), heartbeat_s)
+            last = message
+            on_progress(message, fraction)
         except TimeoutError:
             on_progress(f"{last} ({int(time.monotonic() - started)} s)", None)
     while not queue.empty():
-        relay(*queue.get_nowait())
+        message, fraction = queue.get_nowait()
+        on_progress(message, fraction)
     try:
         return task.result(), None
     except Exception as exc:  # KiCad, Freerouting or DRC failed; the stage reports it
