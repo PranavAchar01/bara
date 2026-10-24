@@ -760,17 +760,18 @@ def _through(it: Item) -> bool:
 
 
 def _shadow(it: Item) -> Polygon | None:
-    """What a through-hole part takes from the opposite side: the hull of its lead pads, not its
-    body (which sits on its own side), so small parts can sit under a display or module."""
+    """What a through-hole part takes from the opposite side: its lead pads, not its body (which
+    sits on its own side), so small parts can sit under a display, module or battery holder."""
     if it.fp is None:
         return None
     pads = [p for p in it.fp.pads if p.kind in ("thru_hole", "np_thru_hole")]
     if not pads:
         return None
-    hull = unary_union(
+    leads = unary_union(
         [box(p.x - p.w / 2, p.y - p.h / 2, p.x + p.w / 2, p.y + p.h / 2) for p in pads]
-    ).convex_hull
-    return it.world(hull)
+    )
+    # pads closer than a part can pass between (a header row) read as one strip
+    return it.world(leads.buffer(1.5).buffer(-1.5))
 
 
 def _fine_pitch(it: Item) -> bool:
@@ -793,7 +794,7 @@ def _attempt(
     flippable: set[int] | None = None,
 ) -> Item | None:
     """Put each item at the free spot nearest its target, on its own side first and, for a
-    surface-mount part that has no spot there, on the other side; returns the first item that
+    flippable part that has no spot there, on the other side; returns the first item that
     cannot go, None when all fit."""
     # a courtyard may not reach the outline: its pads need the copper-to-edge clearance
     region = region.buffer(-EDGE_COPPER_MM, join_style="mitre")
@@ -850,7 +851,7 @@ def _attempt(
         own = it.side if it.side in ("top", "bottom") else "top"
         if put(it, own):
             continue
-        if flippable and id(it) in flippable and not _through(it):
+        if flippable and id(it) in flippable:  # a holder or jack mounts on either side
             if put(it, "bottom" if own == "top" else "top"):
                 continue
         return it
@@ -943,7 +944,7 @@ def place_in_form(
         if id(it) in rim:
             targets[id(it)] = rim[id(it)]
         gaps[id(it)] = PASSIVE_GAP if it.meta.get("near") is not None else PART_GAP
-    # unanchored surface-mount parts may use the back of the board
+    # unanchored parts may use the back of the board
     flippable = {
         id(it) for it in on_board if id(it) not in anchored and id(it) not in rim and it is not mcu
     }
