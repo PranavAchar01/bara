@@ -92,21 +92,25 @@ def build_router(svc: Services) -> APIRouter:
     def health() -> JSONResponse:
         keys = providers_configured()
         any_llm = keys["cerebras"] or keys["anthropic"]
+        cerebras = {
+            "provider": "cerebras",
+            "model": svc.settings.cerebras_model,
+            "status": "ok" if keys["cerebras"] else "down",
+        }
+        anthropic = {
+            "provider": "anthropic",
+            "model": svc.settings.anthropic_model,
+            "status": "ok" if keys["anthropic"] else "down",
+        }
+        # name the provider that actually serves calls: without a Cerebras key, Anthropic does
+        primary, fallback = (cerebras, anthropic) if keys["cerebras"] else (anthropic, cerebras)
         return body(
             {
                 "status": "ok" if any_llm else "degraded",
                 "server_version": SERVER_VERSION,
                 "mock": svc.settings.mock,
-                "llm": {
-                    "provider": "cerebras",
-                    "model": svc.settings.cerebras_model,
-                    "status": "ok" if keys["cerebras"] else "down",
-                },
-                "llm_fallback": {
-                    "provider": "anthropic",
-                    "model": svc.settings.anthropic_model,
-                    "status": "ok" if keys["anthropic"] else "down",
-                },
+                "llm": primary,
+                "llm_fallback": fallback,
                 "part_count": len(cat.parts),
                 "design_count": len(cat.designs),
                 "uptime_s": int(time.monotonic() - svc.started),
