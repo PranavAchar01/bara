@@ -741,8 +741,8 @@ def _anchor_targets(
 
 
 def _through(it: Item) -> bool:
-    """A part with soldered leads through the board reaches the other side."""
-    return it.fp is not None and any(p.kind == "thru_hole" for p in it.fp.pads)
+    """A part with leads or locating pegs through the board reaches the other side."""
+    return it.fp is not None and any(p.kind in ("thru_hole", "np_thru_hole") for p in it.fp.pads)
 
 
 def _shadow(it: Item) -> Polygon | None:

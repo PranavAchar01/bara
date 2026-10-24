@@ -164,6 +164,13 @@ def _spans(product: form_mod.Form, size: tuple[float, float]) -> bool:
     )
 
 
+def _extent(product: form_mod.Form) -> tuple[float, float, float]:
+    """Overall width, height and area of the silhouette."""
+    xs = [p[0] for p in product.silhouette]
+    ys = [p[1] for p in product.silhouette]
+    return max(xs) - min(xs), max(ys) - min(ys), Polygon(product.silhouette).area
+
+
 class LiveRunner:
     def __init__(self, engine: Engine, source: PartSource) -> None:
         self.engine = engine
@@ -569,9 +576,25 @@ class LiveRunner:
         st.progress("Designing the product form", 0.0)
         previous = getattr(run, "product_form", None)
         repair = getattr(run, "repair", "")
+        floor = getattr(run, "fit_floor", None)
+        if repair and not fit and floor:  # the parts need this much: change the shape within it
+            repair += (
+                f"\nHard constraint: the parts only fit a form at least {floor[0]:.0f} x "
+                f"{floor[1]:.0f} mm overall with at least {floor[2]:.0f} mm2 of area. Keep every "
+                f"dimension and the area at or above that; change only the shape within it."
+            )
         product, note = await form_mod.derive(
             run.prompt, touches, previous if (repair or fit) else None, repair, fit
         )
+        if repair and not fit and floor and product is not None and previous is not None:
+            w, h, area = _extent(product)
+            if w < 0.98 * floor[0] or h < 0.98 * floor[1] or area < 0.97 * floor[2]:
+                self._warn(
+                    run, "place", "w_floor", "assumption_made", "info",
+                    f"Identity redraw {w:.0f} x {h:.0f} mm is below the fit floor "
+                    f"{floor[0]:.0f} x {floor[1]:.0f} mm; the form that fits was kept.",
+                )  # fmt: skip
+                product = previous
         run.product_form = product  # type: ignore[attr-defined]
         if (repair or fit) and previous is not None and product is not None:
             self._warn(
@@ -770,9 +793,10 @@ class LiveRunner:
             brief["edge_thickness_mm"] = product.edge_thickness_mm
             brief["anchors"] = product.anchors
         board, err = await asyncio.to_thread(A.plan_board, gb, parts, run.build_id)
+        grown = False
         for _ in range(
-            self.FIT_REPAIRS
-        ):  # a form too small for its parts is redrawn with the numbers
+            1 if getattr(run, "repair", "") else self.FIT_REPAIRS
+        ):  # one fit pass after an identity redraw; else a form too small is redrawn with numbers
             report = (gb.get("product_form") or {}).get("fit_report")
             if product is None or board is None or not report or report["ok"]:
                 break
@@ -785,10 +809,19 @@ class LiveRunner:
             if redrawn is None or redrawn.problems:
                 break
             product = redrawn
+            grown = True
             gb["product_form"] = product.json()
             brief["body_thickness_mm"] = product.thickness_mm
             brief["edge_thickness_mm"] = product.edge_thickness_mm
             board, err = await asyncio.to_thread(A.plan_board, gb, parts, run.build_id)
+        report = (gb.get("product_form") or {}).get("fit_report")
+        if product is not None and report and report["ok"]:
+            w, h, area = _extent(product)
+            if not grown:  # no redraw proved a size: the floor is what the footprints need
+                need = report["parts_mm2"] / (1.2 * max(1, report["usable_mm2"]))
+                w, h = max(report["widest_mm"] + 7.0, 0.0), 0.0
+                area *= min(1.0, need)
+            run.fit_floor = (w, h, area)  # type: ignore[attr-defined]
         if product is not None and board is not None:
             self._thicken_to_stack(run, st, brief, board, product)
             self._form_fit_check(run, st, board, product)

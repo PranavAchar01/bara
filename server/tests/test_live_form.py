@@ -588,3 +588,26 @@ def test_body_is_thickened_to_the_real_stack() -> None:
     brief2: dict[str, Any] = {}
     Runner._thicken_to_stack(fake, None, None, brief2, board, SimpleNamespace(thickness_mm=60.0))  # type: ignore[arg-type]
     assert brief2 == {}
+
+
+def test_locating_pegs_keep_the_other_side_clear() -> None:
+    def holder(ref: str) -> Item:
+        fp = FootprintInfo(
+            "t",
+            Path("t.pretty"),
+            ref,
+            [
+                Pad("1", "smd", -8, 0, 1, 1, ["F.Cu"]),
+                Pad("", "np_thru_hole", -3, 3, 1, 1, ["*.Cu"]),
+                Pad("", "np_thru_hole", 3, -3, 1, 1, ["*.Cu"]),
+            ],
+            (-10, -5, 10, 5),
+            None,
+            [],
+        )
+        return Item(ref, "battery", fp, 0.0, 0.0, 0.0, "top")
+
+    a, b = holder("BT1"), holder("BT2")
+    pf = {"silhouette": [(-13, -9), (13, -9), (13, 9), (-13, 9)], "anchors": []}
+    place_in_form([a, b], None, pf, [])
+    assert pf["fit_report"]["ok"] is False  # a hole through one is a hole through the other
