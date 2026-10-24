@@ -500,3 +500,9 @@
 .insp-meta {
   gap: 8px;
 }
+
+/* a finished stage over its budget: the status word turns amber with the time */
+.stage.over .stage-status {
+  color: var(--warn);
+}
+
