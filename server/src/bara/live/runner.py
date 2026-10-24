@@ -381,7 +381,17 @@ class LiveRunner:
         ctrl = slots.get("controller")
         mcu_label = (ctrl.chosen or {}).get("display_name") if ctrl else None
         bb = A.board_brief(brief, mcu_label)
-        board, err = await A.run_board(bb, result.parts, run.build_id, st.progress)
+
+        def planned(record: dict[str, Any]) -> None:
+            # The board appears (outline and footprints, pending) before routing and the GLB
+            # export, which take most of this stage.
+            preview = copy.deepcopy(record)
+            side = preview.get("side") or "none"
+            fake = {"boards": [{"side": side, "placements": preview.get("footprints") or []}]}
+            self._map_board_ids(preview, self._instance_map(fake, result), run, side)
+            st.emit("board.updated", {"board": preview})
+
+        board, err = await A.run_board(bb, result.parts, run.build_id, st.progress, on_plan=planned)
         if board is None:
             self._warn(run, "place", "w_board", "other", "warning", f"No KiCad board: {err}")
             # The case still follows the key grid: one plain outline per half, no routing.
@@ -593,8 +603,7 @@ class LiveRunner:
         for entry in board["boards"]:
             spec_board = copy.deepcopy(entry["board"])
             side = spec_board.get("side") or "none"
-            mine = [p["instance_id"] for p in run.state["parts"] if p.get("side") in (side, "none")]
-            spec_board["for_instance_ids"] = mine
+            self._map_board_ids(spec_board, id_map, run, side)
             for net in spec_board.get("nets", []):
                 for m in net.get("members", []):
                     m["instance_id"] = id_map.get(m["instance_id"], m["instance_id"])
@@ -646,6 +655,20 @@ class LiveRunner:
         st.done(
             "ok" if not failed else "degraded", "DRC or routing left issues" if failed else None
         )
+
+    @staticmethod
+    def _map_board_ids(
+        spec_board: dict[str, Any], id_map: dict[str, str], run: BuildRun, side: str
+    ) -> None:
+        """Board-local instance ids -> the build's, on for_instance_ids and footprints.
+        A footprint with no build part (diodes, sockets) keeps instance_id null."""
+        live = {p["instance_id"] for p in run.state["parts"]}
+        spec_board["for_instance_ids"] = [
+            p["instance_id"] for p in run.state["parts"] if p.get("side") in (side, "none")
+        ]
+        for fp in spec_board.get("footprints") or []:
+            mapped = id_map.get(fp.get("instance_id") or "")
+            fp["instance_id"] = mapped if mapped in live else None
 
     def _instance_map(self, board: dict[str, Any], result: ComposeResult) -> dict[str, str]:
         out: dict[str, str] = {}

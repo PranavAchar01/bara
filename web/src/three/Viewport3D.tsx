@@ -23,6 +23,8 @@ import { LabelOverlay, LabelProjector, labelOpacity } from "./labels";
 import { defaultColor, ghost, presetFor, presetMaterial, tinted } from "./materials";
 import { registerAnchor, stage, stageBox } from "./stage";
 import { StudioEnvironment, StudioFloor, studioPalette, type StudioPalette } from "./studio";
+import { DemandDriver, StudioPost, postEnabled } from "./post";
+import { BoardPlaceholder, BoardStatus, FootprintHover, footprintBoxes } from "./board";
 
 const DEG = Math.PI / 180;
 
@@ -205,6 +207,11 @@ interface PartNodeProps {
   labelKey: string | null;
 }
 
+/** PCBs and FR4 plates are kicad-cli board exports: their layers get the KiCad board look. */
+function isBoardPart(part: BuildPart): boolean {
+  return String(part.card.kind) === "pcb" || /plate_fr4/.test(part.part_id);
+}
+
 function PartNode(props: PartNodeProps) {
   const { part, theme } = props;
   const pose = props.pose;
@@ -213,7 +220,7 @@ function PartNode(props: PartNodeProps) {
     return elementPoses(placement, part.quantity, props.layout);
   }, [pose, part.placement, part.quantity, props.layout]);
   const asset = modelAsset(part.assets, poses.length > 1);
-  const model = useModel(asset?.url ?? null);
+  const model = useModel(asset?.url ?? null, isBoardPart(part));
   const catalog = useCatalogBbox(part.part_id);
   const box = useMemo(
     () => placeholderBox(part, { layouts: props.layouts, boards: props.boards, parts: props.parts, catalogBbox: catalog }),
@@ -227,8 +234,9 @@ function PartNode(props: PartNodeProps) {
   useEffect(() => () => placeholderGeom?.dispose(), [placeholderGeom]);
   const groups = useMemo<MeshGroup[]>(() => {
     if (loaded) {
-      // Keep the GLB's own PBR materials; a single-material part takes the build's colour.
-      if (loaded.groups.length === 1 && part.color?.hex) {
+      // Keep the GLB's own PBR materials; a single flat-colour part takes the build's colour.
+      // A textured one (gltf-transform palette) carries its real colours in the texture, so it keeps them.
+      if (loaded.groups.length === 1 && part.color?.hex && !loaded.groups[0].material.map) {
         const g = loaded.groups[0];
         return [{ ...g, material: tinted(g.material, part.color.hex) }];
       }
@@ -359,27 +367,14 @@ function boardModelUrl(board: Board): string | null {
   return modelAsset(board.assets, false)?.url ?? null;
 }
 
-function BoardNode(props: { board: Board; labelKey: string | null }) {
+function BoardNode(props: { board: Board; labelKey: string | null; parts: BuildPart[]; theme: Theme }) {
   const { board } = props;
-  const model = useModel(boardModelUrl(board));
+  const url = boardModelUrl(board);
+  const model = useModel(url, true);
   const loaded = model.status === "ready" && model.model.groups.length > 0 ? model.model : null;
-  const outline = useMemo(() => {
-    if (loaded) return null;
-    const pts: number[][] = board.outline_mm?.length
-      ? board.outline_mm
-      : board.size_mm
-        ? [
-            [0, 0],
-            [board.size_mm[0], 0],
-            [board.size_mm[0], -board.size_mm[1]],
-            [0, -board.size_mm[1]],
-          ]
-        : [];
-    if (pts.length < 3) return null;
-    const shape = new THREE.Shape(pts.map((p) => new THREE.Vector2(p[0], p[1])));
-    return new THREE.ExtrudeGeometry(shape, { depth: board.thickness_mm ?? 1.6, bevelEnabled: false });
-  }, [loaded, board.outline_mm, board.size_mm, board.thickness_mm]);
-  useEffect(() => () => outline?.dispose(), [outline]);
+  // Routing (pending) or the GLB still on its way: the placeholder breathes and says which.
+  const busy = !loaded && (board.status === "pending" || model.status === "loading");
+  const statusText = board.status === "pending" ? "Routing on KiCad" : model.status === "loading" ? "Loading 3D board" : null;
   const pos = useMemo(() => board.position_mm ?? [0, 0, 0], [board.position_mm]);
   const rot = useMemo(() => board.rotation_deg ?? [0, 0, 0], [board.rotation_deg]);
   const anchorLocal = useMemo(() => {
@@ -388,18 +383,20 @@ function BoardNode(props: { board: Board; labelKey: string | null }) {
     return c.add(new THREE.Vector3(pos[0], pos[1], pos[2]));
   }, [loaded, board.size_mm, pos, rot]);
   const ref = useLayerGroup("pcb", props.labelKey, anchorLocal);
-  const groups: MeshGroup[] = loaded
-    ? loaded.groups
-    : outline
-      ? [{ geometry: outline, material: board.status === "pending" ? ghost(presetMaterial("pcb", "#1F3D2B"), 0.5) : presetMaterial("pcb", "#1F3D2B"), weight: 0 }]
-      : [];
-  if (!groups.length) return null;
+  const boxes = useMemo(() => footprintBoxes(board, loaded), [board, loaded]);
   return (
     <group ref={ref}>
       <group position={[pos[0], pos[1], pos[2]]} rotation={new THREE.Euler(rot[0] * DEG, rot[1] * DEG, rot[2] * DEG, "XYZ")}>
-        {groups.map((g) => (
-          <mesh key={`${g.geometry.uuid}:${g.material.uuid}`} geometry={g.geometry} material={g.material} castShadow />
-        ))}
+        {loaded ? (
+          loaded.groups.map((g) => (
+            // Hover resolves against per-footprint boxes, so the heavy board mesh never raycasts.
+            <mesh key={`${g.geometry.uuid}:${g.material.uuid}`} geometry={g.geometry} material={g.material} castShadow raycast={() => null} />
+          ))
+        ) : (
+          <BoardPlaceholder board={board} busy={busy} />
+        )}
+        <FootprintHover boxes={boxes} parts={props.parts} accent={props.theme.accent} />
+        {busy && statusText && <BoardStatus board={board} text={statusText} />}
       </group>
     </group>
   );
@@ -572,6 +569,7 @@ function CameraRig() {
     }
     const a = anim.current;
     const ctl = controls as unknown as OrbitLike | null;
+    stage.animating = !!a;
     if (!a) return;
     a.t = Math.min(1, a.t + dt / 0.9);
     const k = 1 - Math.pow(1 - a.t, 3);
@@ -683,7 +681,7 @@ export function labelRows(build: Build | null): LabelRowData[] {
   return [...rows.values()];
 }
 
-function SceneContents(props: { gizmoMode: "translate" | "rotate"; theme: Theme; palette: StudioPalette }) {
+function SceneContents(props: { gizmoMode: "translate" | "rotate"; theme: Theme; palette: StudioPalette; post: boolean }) {
   const { theme } = props;
   const build = useApp((s) => s.build);
   const placeDone = useApp((s) => s.view.placeDone);
@@ -737,7 +735,7 @@ function SceneContents(props: { gizmoMode: "translate" | "rotate"; theme: Theme;
   const revision = `${build?.build_id ?? ""}:${build?.revision ?? 0}:${parts.length}:${toggles.case}:${toggles.board}:${toggles.keycaps}`;
   return (
     <>
-      <StudioEnvironment palette={props.palette} />
+      <StudioEnvironment palette={props.palette} post={props.post} />
       <StudioFloor palette={props.palette} revision={revision} />
       <ExplodeDriver />
       <group ref={rootRef}>
@@ -772,17 +770,20 @@ function SceneContents(props: { gizmoMode: "translate" | "rotate"; theme: Theme;
         {toggles.board &&
           boards
             .filter((b) => !b.part_instance_id || hiddenPcbs.has(b.part_instance_id))
-            .map((b, i) => <BoardNode key={b.board_id} board={b} labelKey={i === 0 ? "b:board" : null} />)}
+            .map((b, i) => <BoardNode key={b.board_id} board={b} labelKey={i === 0 ? "b:board" : null} parts={parts} theme={theme} />)}
       </group>
       <MoveGizmo mode={props.gizmoMode} />
       <CameraRig />
       <LabelProjector />
+      <DemandDriver />
+      {props.post && <StudioPost dark={props.palette.dark} />}
     </>
   );
 }
 
 export function Viewport3D() {
-  const hasParts = useApp((s) => (s.build?.parts.length ?? 0) > 0);
+  // A board streamed as pending before any part still counts as something on stage.
+  const hasParts = useApp((s) => (s.build?.parts.length ?? 0) + (s.build?.boards?.length ?? 0) > 0);
   const status = useApp((s) => s.build?.status);
   const missingCount = useApp((s) => (s.build?.parts ?? []).filter((p) => !modelAsset(p.assets, p.quantity > 1)).length);
   const build = useApp((s) => s.build);
@@ -790,6 +791,7 @@ export function Viewport3D() {
   const theme = useTheme();
   const palette = useMemo(() => studioPalette(theme.dark), [theme.dark]);
   const [gizmoMode, setGizmoMode] = useState<"translate" | "rotate">("translate");
+  const post = useMemo(postEnabled, []);
   const overlayRows = useMemo(
     () => rows.map((r) => ({ key: r.key, title: `${r.title} x${r.quantity}`, detail: r.detail, sub: r.sub, generated: r.generated })),
     [rows],
@@ -798,14 +800,15 @@ export function Viewport3D() {
     <div className="viewport" style={{ background: palette.background }}>
       <Canvas
         dpr={[1, 2]}
+        frameloop="demand"
         shadows
         camera={{ up: [0, 0, 1], position: [-120, -380, 260], near: 1, far: 10000, fov: 32 }}
         onPointerMissed={(e) => {
           if (e.type === "click") select(null);
         }}
-        gl={{ antialias: true, preserveDrawingBuffer: true, powerPreference: "high-performance" }}
+        gl={{ antialias: !post, preserveDrawingBuffer: true, powerPreference: "high-performance" }}
       >
-        <SceneContents gizmoMode={gizmoMode} theme={theme} palette={palette} />
+        <SceneContents gizmoMode={gizmoMode} theme={theme} palette={palette} post={post} />
         <OrbitControls makeDefault enableDamping dampingFactor={0.12} />
       </Canvas>
       {hasParts && <LabelOverlay rows={overlayRows} color={theme.text} muted={theme.muted} line={theme.line} accent={theme.dark ? "#7BC08F" : "#2E7D46"} />}
