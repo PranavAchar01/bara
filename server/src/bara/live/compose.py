@@ -528,6 +528,9 @@ class Composer:
                 continue
             if facet not in present or facet in ("split", "key_count"):
                 continue
+            # how the device is powered filters the parts that power it, not a speaker module
+            if facet == "power_source" and not slot.function_id.startswith("power."):
+                continue
             # the screen type names the device's screen; an indicator LED is no screen
             screen = slot.function_id.removeprefix("display.")
             if facet == "display_type" and screen not in DISPLAY_TYPES:
