@@ -1306,8 +1306,11 @@ export function Viewport3D() {
         frameloop="demand"
         camera={{ up: [0, 0, 1], position: [-120, -380, 260], near: 1, far: 10000, fov: 32 }}
         onPointerMissed={(e) => {
-          // in focus a stray click keeps the part out; Esc puts it back
-          if (e.type === "click" && !useApp.getState().focusKey) select(null);
+          // a click on empty space steps back: out of focus first, then clears the selection
+          // (R3F only reports a miss for a click, not for the end of an orbit drag)
+          if (e.type !== "click") return;
+          if (useApp.getState().focusKey) focusPart(null);
+          else select(null);
         }}
         gl={{ antialias: !post, preserveDrawingBuffer: true, powerPreference: "high-performance" }}
       >
