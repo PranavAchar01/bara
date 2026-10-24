@@ -209,6 +209,14 @@ The coverage audit of the live site found three places where the UI said two con
 
 **Not done:** the darker inner wall from the Figma spec; it needs per-face shading in the shader. **Minutes:** about 15. **Rating:** 4/5.
 
+### Labels that follow what you can see
+
+**What moved:** each label anchor now knows which part it sits on. A few times a second, while the camera or the explode moves, a ray from the camera checks whether that part is the first thing it meets. If another part is in the way, the label waits 150 ms, then fades out over 180 ms; turning the model back fades it in. With several anchors per label, the line uses the visible one nearest the label column. Hidden parts are counted under the column ("+6 behind other parts, turn the model to see them"). See-through shells (the assembled case) don't hide what is inside.
+
+**Checked:** typecheck, lint, tests; a real keyboard build pulled apart. ISO and front show all seven labels; from below only the case bottom keeps its label, with the other six counted as behind. Orbiting between the two brings them back.
+
+**Not done:** the Figma rule "hover a Layers row to show its label anyway". **Minutes:** about 20. **Rating:** 4/5.
+
 ## Before and after
 
 | Change | Before | After |

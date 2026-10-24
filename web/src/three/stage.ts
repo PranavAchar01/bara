@@ -8,6 +8,8 @@ export interface LabelAnchor {
   key: string;
   /** Current world-space anchor (follows the explode). */
   world: () => THREE.Vector3;
+  /** The object the anchor sits on: a ray that hits it first means the anchor is in view. */
+  owner?: () => THREE.Object3D | null;
 }
 
 export const stage = {
