@@ -1,0 +1,1854 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://app.invalid/spec/v1/vocab.schema.json",
+  "x-spec-version": "1.1.0",
+  "title": "Closed vocabularies v1",
+  "description": "Function taxonomy, device classes, interface types and interface parameter shapes. Every enum has an unknown fallback (and other where a real but unlisted value exists). Clients map any value they do not know to unknown.",
+  "$defs": {
+    "FunctionId": {
+      "type": "string",
+      "enum": [
+        "compute.mcu",
+        "compute.sbc",
+        "compute.fpga",
+        "comms.ble",
+        "comms.wifi",
+        "comms.lora",
+        "comms.cellular",
+        "comms.nfc",
+        "comms.ir",
+        "comms.zigbee_thread",
+        "comms.ethernet",
+        "comms.can",
+        "comms.rs485",
+        "comms.usb_device",
+        "comms.usb_host",
+        "comms.wired_link",
+        "input.key",
+        "input.key_matrix",
+        "input.button",
+        "input.rotary_encoder",
+        "input.joystick",
+        "input.potentiometer",
+        "input.touch",
+        "input.trackball",
+        "input.toggle_switch",
+        "sense.temperature",
+        "sense.humidity",
+        "sense.pressure",
+        "sense.gas",
+        "sense.co2",
+        "sense.particulate",
+        "sense.light",
+        "sense.color",
+        "sense.uv",
+        "sense.proximity",
+        "sense.distance",
+        "sense.imu",
+        "sense.magnetic",
+        "sense.gnss",
+        "sense.sound",
+        "sense.camera",
+        "sense.current",
+        "sense.weight",
+        "sense.soil_moisture",
+        "sense.heart_rate",
+        "sense.presence",
+        "sense.water_level",
+        "display.oled",
+        "display.lcd_char",
+        "display.tft",
+        "display.memory_lcd",
+        "display.epaper",
+        "display.led_matrix",
+        "display.seven_segment",
+        "display.indicator_led",
+        "output.rgb_led",
+        "output.speaker",
+        "output.buzzer",
+        "output.haptic",
+        "output.motor_dc",
+        "output.motor_servo",
+        "output.motor_stepper",
+        "output.relay",
+        "output.pump",
+        "output.solenoid",
+        "output.heater",
+        "output.fan",
+        "power.battery",
+        "power.coin_cell",
+        "power.charger",
+        "power.regulator",
+        "power.usb_in",
+        "power.solar",
+        "power.switch",
+        "power.fuel_gauge",
+        "power.protection",
+        "storage.sd_card",
+        "storage.flash",
+        "storage.eeprom",
+        "mech.enclosure",
+        "mech.plate",
+        "mech.keycap",
+        "mech.stabilizer",
+        "mech.fastener",
+        "mech.standoff",
+        "mech.foam",
+        "mech.foot",
+        "mech.mount",
+        "mech.chassis",
+        "mech.wheel",
+        "mech.knob",
+        "interconnect.pcb",
+        "interconnect.cable",
+        "interconnect.connector",
+        "interconnect.header",
+        "interconnect.jack",
+        "component.resistor",
+        "component.capacitor",
+        "component.inductor",
+        "component.diode",
+        "component.transistor",
+        "component.ic",
+        "component.crystal",
+        "component.led",
+        "component.other",
+        "other",
+        "unknown"
+      ],
+      "x-search-terms": {
+        "compute.mcu": {
+          "tags": [
+            "mcu",
+            "mcu-board",
+            "rp2040"
+          ],
+          "terms": [
+            "microcontroller"
+          ]
+        },
+        "compute.sbc": {
+          "tags": [
+            "cpu",
+            "board"
+          ],
+          "terms": [
+            "raspberry pi",
+            "single board computer",
+            "compute module",
+            "\\bsbc\\b"
+          ]
+        },
+        "compute.fpga": {
+          "tags": [
+            "fpga",
+            "cpld"
+          ],
+          "terms": [
+            "fpga"
+          ]
+        },
+        "comms.ble": {
+          "tags": [
+            "radio-ble"
+          ],
+          "terms": [
+            "bluetooth",
+            "\\bble\\b",
+            "nrf52"
+          ]
+        },
+        "comms.wifi": {
+          "tags": [
+            "radio-wifi"
+          ],
+          "terms": [
+            "wi-?fi",
+            "esp32",
+            "esp8266",
+            "802\\.11"
+          ]
+        },
+        "comms.lora": {
+          "tags": [
+            "radio-lora"
+          ],
+          "terms": [
+            "lora",
+            "sx127",
+            "sx126"
+          ]
+        },
+        "comms.cellular": {
+          "tags": [
+            "radio-cellular"
+          ],
+          "terms": [
+            "\\blte\\b",
+            "gsm",
+            "cellular",
+            "nb-iot"
+          ]
+        },
+        "comms.nfc": {
+          "tags": [
+            "nfc",
+            "rfid"
+          ],
+          "terms": [
+            "nfc",
+            "rfid"
+          ]
+        },
+        "comms.ir": {
+          "tags": [
+            "ir",
+            "ir-receiver"
+          ],
+          "terms": [
+            "infrared",
+            "ir receiver",
+            "ir led"
+          ]
+        },
+        "comms.zigbee_thread": {
+          "tags": [
+            "radio-zigbee"
+          ],
+          "terms": [
+            "zigbee",
+            "\\bthread\\b",
+            "802\\.15\\.4"
+          ]
+        },
+        "comms.ethernet": {
+          "tags": [
+            "ethernet"
+          ],
+          "terms": [
+            "ethernet",
+            "rj45"
+          ]
+        },
+        "comms.can": {
+          "tags": [
+            "can"
+          ],
+          "terms": [
+            "can transceiver",
+            "can bus"
+          ]
+        },
+        "comms.rs485": {
+          "tags": [
+            "rs485"
+          ],
+          "terms": [
+            "rs-?485"
+          ]
+        },
+        "comms.usb_device": {
+          "tags": [
+            "usb",
+            "usb-c"
+          ],
+          "terms": [
+            "usb"
+          ]
+        },
+        "comms.usb_host": {
+          "tags": [
+            "usb"
+          ],
+          "terms": [
+            "usb host",
+            "usb hub"
+          ]
+        },
+        "comms.wired_link": {
+          "tags": [
+            "uart",
+            "audio-jack",
+            "jst"
+          ],
+          "terms": [
+            "trrs",
+            "uart",
+            "rs-?232"
+          ]
+        },
+        "input.key": {
+          "tags": [
+            "keyswitch"
+          ],
+          "terms": [
+            "keyswitch",
+            "cherry mx",
+            "kailh",
+            "\\bchoc\\b",
+            "key switch"
+          ]
+        },
+        "input.key_matrix": {
+          "tags": [
+            "keyswitch"
+          ],
+          "terms": [
+            "keyswitch",
+            "cherry mx",
+            "kailh",
+            "\\bchoc\\b",
+            "hotswap"
+          ]
+        },
+        "input.button": {
+          "tags": [
+            "button"
+          ],
+          "terms": [
+            "push ?button",
+            "tactile",
+            "sw_push"
+          ]
+        },
+        "input.rotary_encoder": {
+          "tags": [
+            "encoder"
+          ],
+          "terms": [
+            "rotary encoder",
+            "\\bencoder\\b"
+          ]
+        },
+        "input.joystick": {
+          "tags": [
+            "joystick"
+          ],
+          "terms": [
+            "joystick",
+            "thumbstick"
+          ]
+        },
+        "input.potentiometer": {
+          "tags": [
+            "potentiometer"
+          ],
+          "terms": [
+            "potentiometer",
+            "slide pot",
+            "fader"
+          ]
+        },
+        "input.touch": {
+          "tags": [
+            "touch"
+          ],
+          "terms": [
+            "\\btouch\\b",
+            "capacitive sens"
+          ]
+        },
+        "input.trackball": {
+          "tags": [],
+          "terms": [
+            "trackball",
+            "optical sensor",
+            "pmw3360",
+            "pmw3389",
+            "paw3"
+          ]
+        },
+        "input.toggle_switch": {
+          "tags": [
+            "switch"
+          ],
+          "terms": [
+            "toggle",
+            "slide switch",
+            "spdt",
+            "dpdt"
+          ]
+        },
+        "sense.temperature": {
+          "tags": [
+            "temperature",
+            "thermistor"
+          ],
+          "terms": [
+            "temperature"
+          ]
+        },
+        "sense.humidity": {
+          "tags": [
+            "humidity"
+          ],
+          "terms": [
+            "humidity"
+          ]
+        },
+        "sense.pressure": {
+          "tags": [
+            "pressure"
+          ],
+          "terms": [
+            "pressure",
+            "barometr"
+          ]
+        },
+        "sense.gas": {
+          "tags": [
+            "gas"
+          ],
+          "terms": [
+            "gas sensor",
+            "\\bvoc\\b",
+            "air quality"
+          ]
+        },
+        "sense.co2": {
+          "tags": [],
+          "terms": [
+            "co2",
+            "carbon dioxide",
+            "scd4",
+            "scd30",
+            "ndir"
+          ]
+        },
+        "sense.particulate": {
+          "tags": [
+            "particulate"
+          ],
+          "terms": [
+            "particulate",
+            "pm2\\.5",
+            "pms5003",
+            "sps30"
+          ]
+        },
+        "sense.light": {
+          "tags": [
+            "light"
+          ],
+          "terms": [
+            "ambient light",
+            "light sensor",
+            "photodiode",
+            "phototransistor",
+            "\\bldr\\b",
+            "\\blux\\b"
+          ]
+        },
+        "sense.color": {
+          "tags": [
+            "color-sensor"
+          ],
+          "terms": [
+            "color sensor",
+            "colour sensor",
+            "rgb sensor"
+          ]
+        },
+        "sense.uv": {
+          "tags": [],
+          "terms": [
+            "\\buv\\b",
+            "ultraviolet"
+          ]
+        },
+        "sense.proximity": {
+          "tags": [
+            "proximity"
+          ],
+          "terms": [
+            "proximity"
+          ]
+        },
+        "sense.distance": {
+          "tags": [
+            "distance"
+          ],
+          "terms": [
+            "time.of.flight",
+            "\\btof\\b",
+            "ultrasonic",
+            "vl53",
+            "rangefinder",
+            "lidar"
+          ]
+        },
+        "sense.imu": {
+          "tags": [
+            "imu",
+            "accelerometer",
+            "gyroscope"
+          ],
+          "terms": [
+            "accelerometer",
+            "gyroscope",
+            "\\bimu\\b"
+          ]
+        },
+        "sense.magnetic": {
+          "tags": [
+            "magnetic",
+            "hall",
+            "magnetometer",
+            "reed"
+          ],
+          "terms": [
+            "\\bhall\\b",
+            "magnetometer",
+            "reed"
+          ]
+        },
+        "sense.gnss": {
+          "tags": [
+            "gps"
+          ],
+          "terms": [
+            "gps",
+            "gnss"
+          ]
+        },
+        "sense.sound": {
+          "tags": [
+            "mic",
+            "sound"
+          ],
+          "terms": [
+            "microphone",
+            "mems mic"
+          ]
+        },
+        "sense.camera": {
+          "tags": [
+            "camera",
+            "video"
+          ],
+          "terms": [
+            "camera",
+            "image sensor",
+            "ov2640",
+            "ov5640"
+          ]
+        },
+        "sense.current": {
+          "tags": [
+            "current-sense",
+            "energy-meter"
+          ],
+          "terms": [
+            "current sens",
+            "current monitor",
+            "ina2"
+          ]
+        },
+        "sense.weight": {
+          "tags": [
+            "load-cell"
+          ],
+          "terms": [
+            "load cell",
+            "hx711",
+            "\\bweigh"
+          ]
+        },
+        "sense.soil_moisture": {
+          "tags": [
+            "soil"
+          ],
+          "terms": [
+            "soil",
+            "moisture"
+          ]
+        },
+        "sense.heart_rate": {
+          "tags": [
+            "pulse"
+          ],
+          "terms": [
+            "heart rate",
+            "pulse oxim",
+            "max3010"
+          ]
+        },
+        "sense.presence": {
+          "tags": [
+            "proximity"
+          ],
+          "terms": [
+            "\\bpir\\b",
+            "presence",
+            "motion sensor",
+            "mmwave",
+            "\\bradar\\b"
+          ]
+        },
+        "sense.water_level": {
+          "tags": [
+            "water"
+          ],
+          "terms": [
+            "water level",
+            "liquid level",
+            "float switch",
+            "\\bleak\\b"
+          ]
+        },
+        "display.oled": {
+          "tags": [
+            "display-oled"
+          ],
+          "terms": [
+            "oled",
+            "ssd1306",
+            "sh1106",
+            "ssd1351"
+          ]
+        },
+        "display.lcd_char": {
+          "tags": [
+            "display-character",
+            "display-lcd"
+          ],
+          "terms": [
+            "character lcd",
+            "hd44780",
+            "16x2"
+          ]
+        },
+        "display.tft": {
+          "tags": [
+            "display"
+          ],
+          "terms": [
+            "tft",
+            "ili9341",
+            "st7789",
+            "st7735"
+          ]
+        },
+        "display.memory_lcd": {
+          "tags": [],
+          "terms": [
+            "memory lcd",
+            "sharp ls0"
+          ]
+        },
+        "display.epaper": {
+          "tags": [
+            "display-epaper"
+          ],
+          "terms": [
+            "e-?paper",
+            "e-?ink",
+            "\\bepd\\b"
+          ]
+        },
+        "display.led_matrix": {
+          "tags": [
+            "led-matrix"
+          ],
+          "terms": [
+            "led matrix",
+            "dot matrix",
+            "hub75",
+            "max7219"
+          ]
+        },
+        "display.seven_segment": {
+          "tags": [
+            "display-7seg"
+          ],
+          "terms": [
+            "7.segment",
+            "seven.segment"
+          ]
+        },
+        "display.indicator_led": {
+          "tags": [
+            "led"
+          ],
+          "terms": [
+            "\\bled\\b"
+          ]
+        },
+        "output.rgb_led": {
+          "tags": [
+            "rgb-led",
+            "addressable-led"
+          ],
+          "terms": [
+            "ws2812",
+            "sk6812",
+            "apa102",
+            "neopixel",
+            "rgb led"
+          ]
+        },
+        "output.speaker": {
+          "tags": [
+            "audio-amplifier",
+            "sound-out"
+          ],
+          "terms": [
+            "speaker",
+            "class.d",
+            "audio amplifier",
+            "max98357"
+          ]
+        },
+        "output.buzzer": {
+          "tags": [
+            "buzzer"
+          ],
+          "terms": [
+            "buzzer",
+            "piezo",
+            "beeper"
+          ]
+        },
+        "output.haptic": {
+          "tags": [],
+          "terms": [
+            "haptic",
+            "vibration motor",
+            "\\berm\\b",
+            "drv2605"
+          ]
+        },
+        "output.motor_dc": {
+          "tags": [
+            "motor-driver",
+            "motor"
+          ],
+          "terms": [
+            "motor driver",
+            "h.bridge",
+            "dc motor"
+          ]
+        },
+        "output.motor_servo": {
+          "tags": [
+            "servo"
+          ],
+          "terms": [
+            "servo"
+          ]
+        },
+        "output.motor_stepper": {
+          "tags": [
+            "stepper"
+          ],
+          "terms": [
+            "stepper"
+          ]
+        },
+        "output.relay": {
+          "tags": [
+            "relay",
+            "relay-ssr"
+          ],
+          "terms": [
+            "relay"
+          ]
+        },
+        "output.pump": {
+          "tags": [],
+          "terms": [
+            "(?<!charge )(?<!charge-)pump"
+          ]
+        },
+        "output.solenoid": {
+          "tags": [
+            "valve"
+          ],
+          "terms": [
+            "solenoid",
+            "valve"
+          ]
+        },
+        "output.heater": {
+          "tags": [
+            "thermal"
+          ],
+          "terms": [
+            "heater",
+            "heating element",
+            "peltier"
+          ]
+        },
+        "output.fan": {
+          "tags": [
+            "fan"
+          ],
+          "terms": [
+            "\\bfan\\b"
+          ]
+        },
+        "power.battery": {
+          "tags": [
+            "battery",
+            "battery-management"
+          ],
+          "terms": [
+            "battery",
+            "li-?po",
+            "li-?ion",
+            "18650"
+          ]
+        },
+        "power.coin_cell": {
+          "tags": [
+            "coin-cell"
+          ],
+          "terms": [
+            "coin cell",
+            "cr2032"
+          ]
+        },
+        "power.charger": {
+          "tags": [
+            "charger"
+          ],
+          "terms": [
+            "charger",
+            "charge controller"
+          ]
+        },
+        "power.regulator": {
+          "tags": [
+            "regulator",
+            "dc-dc",
+            "power-module"
+          ],
+          "terms": [
+            "regulator",
+            "buck",
+            "boost",
+            "ldo"
+          ]
+        },
+        "power.usb_in": {
+          "tags": [
+            "usb-c",
+            "power-in"
+          ],
+          "terms": [
+            "usb.c",
+            "usb power",
+            "usb receptacle"
+          ]
+        },
+        "power.solar": {
+          "tags": [],
+          "terms": [
+            "solar",
+            "mppt",
+            "photovoltaic"
+          ]
+        },
+        "power.switch": {
+          "tags": [
+            "switch"
+          ],
+          "terms": [
+            "power switch",
+            "load switch",
+            "slide switch"
+          ]
+        },
+        "power.fuel_gauge": {
+          "tags": [
+            "fuel-gauge"
+          ],
+          "terms": [
+            "fuel gauge",
+            "battery monitor"
+          ]
+        },
+        "power.protection": {
+          "tags": [
+            "protection",
+            "fuse",
+            "tvs",
+            "esd"
+          ],
+          "terms": [
+            "protection",
+            "\\bfuse\\b",
+            "\\btvs\\b"
+          ]
+        },
+        "storage.sd_card": {
+          "tags": [
+            "sd-card"
+          ],
+          "terms": [
+            "micro ?sd",
+            "sd card"
+          ]
+        },
+        "storage.flash": {
+          "tags": [
+            "flash"
+          ],
+          "terms": [
+            "\\bflash\\b"
+          ]
+        },
+        "storage.eeprom": {
+          "tags": [
+            "eeprom"
+          ],
+          "terms": [
+            "eeprom"
+          ]
+        },
+        "interconnect.connector": {
+          "tags": [
+            "connector"
+          ],
+          "terms": [
+            "connector"
+          ]
+        },
+        "interconnect.header": {
+          "tags": [
+            "header"
+          ],
+          "terms": [
+            "\\bheader\\b"
+          ]
+        },
+        "interconnect.jack": {
+          "tags": [
+            "audio-jack"
+          ],
+          "terms": [
+            "\\bjack\\b",
+            "barrel"
+          ]
+        },
+        "interconnect.cable": {
+          "tags": [
+            "jst",
+            "terminal-block"
+          ],
+          "terms": [
+            "cable",
+            "\\bwire\\b"
+          ]
+        },
+        "component.resistor": {
+          "tags": [
+            "resistor"
+          ],
+          "terms": [
+            "resistor"
+          ]
+        },
+        "component.capacitor": {
+          "tags": [
+            "capacitor"
+          ],
+          "terms": [
+            "capacitor"
+          ]
+        },
+        "component.inductor": {
+          "tags": [
+            "inductor"
+          ],
+          "terms": [
+            "inductor"
+          ]
+        },
+        "component.diode": {
+          "tags": [
+            "diode"
+          ],
+          "terms": [
+            "diode"
+          ]
+        },
+        "component.transistor": {
+          "tags": [
+            "transistor",
+            "mosfet",
+            "bjt"
+          ],
+          "terms": [
+            "transistor",
+            "mosfet"
+          ]
+        },
+        "component.ic": {
+          "tags": [
+            "logic"
+          ],
+          "terms": []
+        },
+        "component.crystal": {
+          "tags": [
+            "crystal",
+            "oscillator"
+          ],
+          "terms": [
+            "crystal"
+          ]
+        },
+        "component.led": {
+          "tags": [
+            "led"
+          ],
+          "terms": [
+            "\\bled\\b"
+          ]
+        }
+      },
+      "x-search-terms-note": "Retrieval hints per function: part-library tags and case-insensitive regexes over name, descr, kw and family. Used to count library candidates per function (eval/gaps.md). Functions under mech.* and interconnect.pcb come from mechanical sources, not the electrical part library."
+    },
+    "DeviceClass": {
+      "type": "string",
+      "description": "First element of Spec.taxonomy_path.",
+      "enum": [
+        "input_device",
+        "wearable",
+        "handheld",
+        "display_device",
+        "sensor_station",
+        "audio",
+        "robot",
+        "vehicle",
+        "tool",
+        "lighting",
+        "home",
+        "computer",
+        "radio",
+        "instrument",
+        "other",
+        "unknown"
+      ]
+    },
+    "Role": {
+      "type": "string",
+      "description": "provides: the side that offers the resource (supply, bus controller, socket, hole pattern, port). requires: the side that consumes it. A connection joins one provides port to one requires port of the same type.",
+      "enum": [
+        "provides",
+        "requires",
+        "unknown"
+      ]
+    },
+    "InterfaceType": {
+      "type": "string",
+      "enum": [
+        "power_in",
+        "power_out",
+        "gpio",
+        "analog",
+        "i2c",
+        "spi",
+        "uart",
+        "i2s",
+        "usb",
+        "qwiic",
+        "radio",
+        "module_footprint",
+        "switch_socket",
+        "switch_stem",
+        "plate_cutout",
+        "layout",
+        "stabilizer",
+        "mounting_holes",
+        "fastener",
+        "battery",
+        "addressable_led",
+        "motor",
+        "jack",
+        "panel_access",
+        "other",
+        "unknown"
+      ]
+    },
+    "Rail": {
+      "type": "string",
+      "enum": [
+        "3v3",
+        "5v",
+        "vbat",
+        "vin",
+        "vbus",
+        "12v",
+        "other",
+        "unknown"
+      ]
+    },
+    "SwitchFamily": {
+      "type": "string",
+      "enum": [
+        "mx",
+        "choc_v1",
+        "choc_v2",
+        "alps",
+        "gateron_lp",
+        "other",
+        "unknown"
+      ]
+    },
+    "Screw": {
+      "type": "string",
+      "enum": [
+        "m2",
+        "m2_5",
+        "m3",
+        "m4",
+        "other",
+        "unknown"
+      ]
+    },
+    "Face": {
+      "type": "string",
+      "description": "Enclosure wall, named by its outward normal in build space.",
+      "enum": [
+        "pos_x",
+        "neg_x",
+        "pos_y",
+        "neg_y",
+        "pos_z",
+        "neg_z",
+        "any",
+        "unknown"
+      ]
+    },
+    "Params_power_in": {
+      "type": "object",
+      "required": [
+        "v_min_v",
+        "v_max_v"
+      ],
+      "properties": {
+        "rail": {
+          "$ref": "#/$defs/Rail"
+        },
+        "v_min_v": {
+          "type": "number"
+        },
+        "v_max_v": {
+          "type": "number"
+        },
+        "i_typ_a": {
+          "type": "number",
+          "minimum": 0
+        },
+        "i_max_a": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "Params_power_out": {
+      "type": "object",
+      "required": [
+        "v_nom_v",
+        "i_max_a"
+      ],
+      "properties": {
+        "rail": {
+          "$ref": "#/$defs/Rail"
+        },
+        "v_nom_v": {
+          "type": "number"
+        },
+        "v_min_v": {
+          "type": "number"
+        },
+        "v_max_v": {
+          "type": "number"
+        },
+        "i_max_a": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "Params_gpio": {
+      "type": "object",
+      "required": [
+        "count"
+      ],
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "v_logic_v": {
+          "type": "number"
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "digital_in",
+              "digital_out",
+              "pwm",
+              "adc",
+              "interrupt",
+              "touch",
+              "unknown"
+            ]
+          }
+        }
+      }
+    },
+    "Params_analog": {
+      "type": "object",
+      "required": [
+        "count"
+      ],
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "v_min_v": {
+          "type": "number"
+        },
+        "v_max_v": {
+          "type": "number"
+        },
+        "resolution_bits": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "Params_i2c": {
+      "type": "object",
+      "required": [
+        "v_logic_v"
+      ],
+      "properties": {
+        "v_logic_v": {
+          "type": "number"
+        },
+        "addresses": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 127
+          }
+        },
+        "address_options": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 127
+          }
+        },
+        "speed_max_hz": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "Params_spi": {
+      "type": "object",
+      "required": [
+        "v_logic_v"
+      ],
+      "properties": {
+        "v_logic_v": {
+          "type": "number"
+        },
+        "cs_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "speed_max_hz": {
+          "type": "number",
+          "minimum": 0
+        },
+        "mode": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3
+        }
+      }
+    },
+    "Params_uart": {
+      "type": "object",
+      "required": [
+        "v_logic_v"
+      ],
+      "properties": {
+        "v_logic_v": {
+          "type": "number"
+        },
+        "baud_max": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "flow_control": {
+          "type": "boolean"
+        }
+      }
+    },
+    "Params_i2s": {
+      "type": "object",
+      "properties": {
+        "v_logic_v": {
+          "type": "number"
+        },
+        "direction": {
+          "type": "string",
+          "enum": [
+            "in",
+            "out",
+            "both",
+            "unknown"
+          ]
+        }
+      }
+    },
+    "Params_usb": {
+      "type": "object",
+      "required": [
+        "connector"
+      ],
+      "properties": {
+        "connector": {
+          "type": "string",
+          "enum": [
+            "usb_c",
+            "micro_b",
+            "mini_b",
+            "usb_a",
+            "header",
+            "castellated",
+            "other",
+            "unknown"
+          ]
+        },
+        "usb_role": {
+          "type": "string",
+          "enum": [
+            "device",
+            "host",
+            "otg",
+            "power_only",
+            "unknown"
+          ]
+        },
+        "speed": {
+          "type": "string",
+          "enum": [
+            "low",
+            "full",
+            "high",
+            "super",
+            "unknown"
+          ]
+        },
+        "power_v": {
+          "type": "number"
+        }
+      }
+    },
+    "Params_qwiic": {
+      "type": "object",
+      "properties": {
+        "connector": {
+          "type": "string",
+          "enum": [
+            "jst_sh_4",
+            "other",
+            "unknown"
+          ]
+        },
+        "v_logic_v": {
+          "type": "number"
+        },
+        "addresses": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 127
+          }
+        },
+        "passthrough": {
+          "type": "boolean"
+        }
+      }
+    },
+    "Params_radio": {
+      "type": "object",
+      "required": [
+        "protocol"
+      ],
+      "properties": {
+        "protocol": {
+          "type": "string",
+          "enum": [
+            "ble",
+            "wifi",
+            "lora",
+            "esb",
+            "zigbee",
+            "thread",
+            "cellular",
+            "other",
+            "unknown"
+          ]
+        },
+        "link_role": {
+          "type": "string",
+          "enum": [
+            "central",
+            "peripheral",
+            "peer",
+            "unknown"
+          ]
+        }
+      }
+    },
+    "Params_module_footprint": {
+      "type": "object",
+      "required": [
+        "form_factor"
+      ],
+      "properties": {
+        "form_factor": {
+          "type": "string",
+          "enum": [
+            "pro_micro",
+            "elite_c",
+            "feather",
+            "pico",
+            "xiao",
+            "itsybitsy",
+            "qt_py",
+            "arduino_uno",
+            "arduino_nano",
+            "rpi_40pin",
+            "esp32_devkit",
+            "d1_mini",
+            "other",
+            "unknown"
+          ]
+        },
+        "mount": {
+          "type": "string",
+          "enum": [
+            "socketed",
+            "soldered",
+            "castellated",
+            "unknown"
+          ]
+        },
+        "pin_count": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "Params_switch_socket": {
+      "type": "object",
+      "required": [
+        "family"
+      ],
+      "properties": {
+        "family": {
+          "$ref": "#/$defs/SwitchFamily"
+        },
+        "hotswap": {
+          "type": "boolean"
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "pitch_x_mm": {
+          "type": "number"
+        },
+        "pitch_y_mm": {
+          "type": "number"
+        },
+        "led": {
+          "type": "boolean"
+        }
+      }
+    },
+    "Params_switch_stem": {
+      "type": "object",
+      "required": [
+        "stem"
+      ],
+      "properties": {
+        "stem": {
+          "type": "string",
+          "enum": [
+            "mx_cross",
+            "choc_v1",
+            "choc_v2",
+            "alps",
+            "box",
+            "other",
+            "unknown"
+          ]
+        },
+        "family": {
+          "$ref": "#/$defs/SwitchFamily"
+        },
+        "travel_mm": {
+          "type": "number"
+        }
+      }
+    },
+    "Params_plate_cutout": {
+      "type": "object",
+      "required": [
+        "family"
+      ],
+      "properties": {
+        "family": {
+          "$ref": "#/$defs/SwitchFamily"
+        },
+        "cutout_mm": {
+          "type": "number"
+        },
+        "thickness_mm": {
+          "type": "number"
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "Params_layout": {
+      "type": "object",
+      "required": [
+        "layout_id"
+      ],
+      "properties": {
+        "layout_id": {
+          "type": "string"
+        },
+        "key_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "size": {
+          "type": "string",
+          "enum": [
+            "percent_40",
+            "percent_60",
+            "percent_65",
+            "percent_75",
+            "tkl",
+            "full",
+            "split",
+            "ortholinear",
+            "macropad",
+            "other",
+            "unknown"
+          ]
+        }
+      }
+    },
+    "Params_stabilizer": {
+      "type": "object",
+      "properties": {
+        "size_u": {
+          "type": "number"
+        },
+        "mount": {
+          "type": "string",
+          "enum": [
+            "plate",
+            "pcb",
+            "unknown"
+          ]
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "Params_mounting_holes": {
+      "type": "object",
+      "required": [
+        "screw"
+      ],
+      "properties": {
+        "pattern_id": {
+          "type": "string"
+        },
+        "screw": {
+          "$ref": "#/$defs/Screw"
+        },
+        "hole_diameter_mm": {
+          "type": "number"
+        },
+        "holes_mm": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/Vec2"
+          }
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "Params_fastener": {
+      "type": "object",
+      "required": [
+        "thread"
+      ],
+      "properties": {
+        "thread": {
+          "$ref": "#/$defs/Screw"
+        },
+        "length_mm": {
+          "type": "number"
+        },
+        "head": {
+          "type": "string",
+          "enum": [
+            "pan",
+            "button",
+            "flat",
+            "socket",
+            "standoff",
+            "unknown"
+          ]
+        },
+        "standoff_height_mm": {
+          "type": "number"
+        }
+      }
+    },
+    "Params_battery": {
+      "type": "object",
+      "required": [
+        "chemistry",
+        "v_nom_v"
+      ],
+      "properties": {
+        "chemistry": {
+          "type": "string",
+          "enum": [
+            "lipo",
+            "liion",
+            "lifepo4",
+            "alkaline",
+            "nimh",
+            "coin_lithium",
+            "other",
+            "unknown"
+          ]
+        },
+        "connector": {
+          "type": "string",
+          "enum": [
+            "jst_ph_2",
+            "jst_sh_2",
+            "solder",
+            "coin_holder",
+            "other",
+            "unknown"
+          ]
+        },
+        "v_nom_v": {
+          "type": "number"
+        },
+        "capacity_mah": {
+          "type": "number",
+          "minimum": 0
+        },
+        "cells": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "Params_addressable_led": {
+      "type": "object",
+      "required": [
+        "protocol"
+      ],
+      "properties": {
+        "protocol": {
+          "type": "string",
+          "enum": [
+            "ws2812",
+            "sk6812",
+            "apa102",
+            "other",
+            "unknown"
+          ]
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "v_logic_v": {
+          "type": "number"
+        }
+      }
+    },
+    "Params_motor": {
+      "type": "object",
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "dc",
+            "stepper",
+            "servo_pwm",
+            "bldc",
+            "other",
+            "unknown"
+          ]
+        },
+        "v_max_v": {
+          "type": "number"
+        },
+        "i_max_a": {
+          "type": "number",
+          "minimum": 0
+        },
+        "channels": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "Params_jack": {
+      "type": "object",
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "trrs",
+            "trs",
+            "barrel",
+            "rj45",
+            "other",
+            "unknown"
+          ]
+        },
+        "poles": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "use": {
+          "type": "string",
+          "enum": [
+            "split_link",
+            "audio",
+            "power",
+            "data",
+            "unknown"
+          ]
+        }
+      }
+    },
+    "Params_panel_access": {
+      "type": "object",
+      "required": [
+        "feature"
+      ],
+      "properties": {
+        "feature": {
+          "type": "string",
+          "enum": [
+            "usb_c",
+            "usb_micro",
+            "button",
+            "switch",
+            "display_window",
+            "led",
+            "jack",
+            "sd_slot",
+            "vent",
+            "encoder_knob",
+            "other",
+            "unknown"
+          ]
+        },
+        "face": {
+          "$ref": "#/$defs/Face"
+        },
+        "size_mm": {
+          "$ref": "common.schema.json#/$defs/Vec2"
+        },
+        "center_mm": {
+          "$ref": "common.schema.json#/$defs/Vec3"
+        },
+        "shape": {
+          "type": "string",
+          "enum": [
+            "rect",
+            "circle",
+            "slot",
+            "unknown"
+          ]
+        }
+      }
+    },
+    "Params_other": {
+      "type": "object",
+      "description": "Free form. Used for real interfaces not in the v1 list.",
+      "additionalProperties": true
+    },
+    "Params_unknown": {
+      "type": "object",
+      "description": "Free form. Extraction could not type this interface.",
+      "additionalProperties": true
+    },
+    "ClarifyFacet": {
+      "type": "string",
+      "enum": [
+        "primary_function",
+        "which_device",
+        "sensed_quantity",
+        "controlled_output",
+        "power_source",
+        "connectivity",
+        "size",
+        "colour",
+        "layout",
+        "mounting",
+        "display_type",
+        "input_method",
+        "quantity",
+        "enclosure",
+        "other",
+        "unknown"
+      ],
+      "x-blocking": [
+        "primary_function",
+        "which_device",
+        "sensed_quantity",
+        "controlled_output"
+      ],
+      "description": "A facet the user left open. Blocking facets (x-blocking) change which device gets built, so the engine asks (clarify.request). Every other facet has a safe default: the engine assumes it and records an Assumption. See SPEC.md section 8.11."
+    }
+  }
+}

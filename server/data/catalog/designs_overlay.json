@@ -1,0 +1,80 @@
+{
+  "description": "Hand-authored minimal Design records for designs the fixtures name (reuse.decided considered lists) but do not ship as full records. Attributes drive the reuse check and dead-end detection. Licences are not asserted.",
+  "designs": [
+    {
+      "design_id": "planck",
+      "name": "Planck",
+      "aliases": ["planck keyboard"],
+      "summary": "40% ortholinear keyboard.",
+      "device_class": "input_device",
+      "taxonomy_path": ["input_device", "keyboard", "ortholinear"],
+      "functions": ["input.key_matrix", "compute.mcu"],
+      "attributes": {"split": false, "wireless": "none", "switch_family": "mx", "layout_size": "ortholinear", "key_count": 48},
+      "popularity": 0.9,
+      "parts": [],
+      "connections": [],
+      "licence": {"spdx": "NOASSERTION", "commercial_ok": "unknown"},
+      "provenance": {"route": "hand_authored", "verified": "none"}
+    },
+    {
+      "design_id": "bakeneko60",
+      "name": "Bakeneko60",
+      "aliases": ["bakeneko 60", "bakeneko"],
+      "summary": "60% keyboard with an MX PCB.",
+      "device_class": "input_device",
+      "taxonomy_path": ["input_device", "keyboard", "percent_60"],
+      "functions": ["input.key_matrix", "compute.mcu"],
+      "attributes": {"split": false, "wireless": "none", "switch_family": "mx", "layout_size": "percent_60", "key_count": 61},
+      "popularity": 0.7,
+      "parts": [],
+      "connections": [],
+      "licence": {"spdx": "NOASSERTION", "commercial_ok": "unknown"},
+      "provenance": {"route": "hand_authored", "verified": "none"}
+    },
+    {
+      "design_id": "ferris",
+      "name": "Ferris Sweep",
+      "aliases": ["ferris", "sweep"],
+      "summary": "34 key split keyboard for Choc v1 switches.",
+      "device_class": "input_device",
+      "taxonomy_path": ["input_device", "keyboard", "split"],
+      "functions": ["input.key_matrix", "compute.mcu"],
+      "attributes": {"split": true, "wireless": "none", "switch_family": "choc_v1", "layout_size": "split", "key_count": 34},
+      "popularity": 0.55,
+      "parts": [],
+      "connections": [],
+      "licence": {"spdx": "NOASSERTION", "commercial_ok": "unknown"},
+      "provenance": {"route": "hand_authored", "verified": "none"}
+    },
+    {
+      "design_id": "sofle",
+      "name": "Sofle",
+      "aliases": ["sofle keyboard"],
+      "summary": "58 key split keyboard with encoders and OLEDs.",
+      "device_class": "input_device",
+      "taxonomy_path": ["input_device", "keyboard", "split"],
+      "functions": ["input.key_matrix", "compute.mcu", "display.oled"],
+      "attributes": {"split": true, "wireless": "none", "switch_family": "mx", "layout_size": "split", "key_count": 58, "display_type": "oled"},
+      "popularity": 0.74,
+      "parts": [],
+      "connections": [],
+      "licence": {"spdx": "NOASSERTION", "commercial_ok": "unknown"},
+      "provenance": {"route": "hand_authored", "verified": "none"}
+    },
+    {
+      "design_id": "lily58",
+      "name": "Lily58",
+      "aliases": ["lily 58"],
+      "summary": "58 key split keyboard with OLEDs.",
+      "device_class": "input_device",
+      "taxonomy_path": ["input_device", "keyboard", "split"],
+      "functions": ["input.key_matrix", "compute.mcu", "display.oled"],
+      "attributes": {"split": true, "wireless": "none", "switch_family": "mx", "layout_size": "split", "key_count": 58, "display_type": "oled"},
+      "popularity": 0.71,
+      "parts": [],
+      "connections": [],
+      "licence": {"spdx": "NOASSERTION", "commercial_ok": "unknown"},
+      "provenance": {"route": "hand_authored", "verified": "none"}
+    }
+  ]
+}

@@ -1,0 +1,3064 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://app.invalid/spec/v1/ws_server.schema.json",
+  "x-spec-version": "1.1.0",
+  "title": "WebSocket server events",
+  "description": "Every event the server may send. 35 types in v1.",
+  "$defs": {
+    "Suggestion": {
+      "type": "object",
+      "required": [
+        "suggestion_id",
+        "kind",
+        "label"
+      ],
+      "properties": {
+        "suggestion_id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "prompt",
+            "edit",
+            "design",
+            "unknown"
+          ],
+          "description": "prompt: start a new build with prompt. edit: send edit.apply with ops. design: open the design (a new build with force_tier exact)."
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "prompt": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ops": {
+          "oneOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "edit.schema.json#/$defs/EditOp"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "design_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "S_hello": {
+      "type": "object",
+      "description": "First message on every connection.",
+      "x-scope": "connection",
+      "required": [
+        "spec_version",
+        "type",
+        "seq",
+        "build_id",
+        "ts",
+        "payload"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "type": {
+          "const": "hello"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "build_id": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/BuildId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ts": {
+          "$ref": "common.schema.json#/$defs/Timestamp"
+        },
+        "stage": {
+          "$ref": "common.schema.json#/$defs/StageId"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Build revision after this event was applied."
+        },
+        "cause": {
+          "type": "object",
+          "description": "Set on every event caused by a client message (an edit, a cancel).",
+          "properties": {
+            "msg_id": {
+              "$ref": "common.schema.json#/$defs/MsgId"
+            },
+            "edit_id": {
+              "type": "string"
+            }
+          }
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "server_version",
+            "session_id"
+          ],
+          "properties": {
+            "server_version": {
+              "type": "string"
+            },
+            "session_id": {
+              "type": "string"
+            },
+            "mock": {
+              "type": "boolean",
+              "default": false
+            },
+            "limits": {
+              "type": "object",
+              "required": [],
+              "properties": {
+                "max_prompt_chars": {
+                  "type": "integer"
+                },
+                "max_ops_per_edit": {
+                  "type": "integer"
+                },
+                "msg_id_ttl_s": {
+                  "type": "integer"
+                }
+              }
+            },
+            "capabilities": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Optional server features, for example compile, tscircuit."
+            }
+          }
+        }
+      }
+    },
+    "S_ack": {
+      "type": "object",
+      "description": "Answer to every client message except ping.",
+      "x-scope": "connection",
+      "required": [
+        "spec_version",
+        "type",
+        "seq",
+        "build_id",
+        "ts",
+        "payload"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "type": {
+          "const": "ack"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "build_id": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/BuildId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ts": {
+          "$ref": "common.schema.json#/$defs/Timestamp"
+        },
+        "stage": {
+          "$ref": "common.schema.json#/$defs/StageId"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Build revision after this event was applied."
+        },
+        "cause": {
+          "type": "object",
+          "description": "Set on every event caused by a client message (an edit, a cancel).",
+          "properties": {
+            "msg_id": {
+              "$ref": "common.schema.json#/$defs/MsgId"
+            },
+            "edit_id": {
+              "type": "string"
+            }
+          }
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "msg_id",
+            "accepted",
+            "duplicate"
+          ],
+          "properties": {
+            "msg_id": {
+              "$ref": "common.schema.json#/$defs/MsgId"
+            },
+            "accepted": {
+              "type": "boolean"
+            },
+            "duplicate": {
+              "type": "boolean",
+              "description": "true: this msg_id was already processed; nothing was done again."
+            },
+            "build_id": {
+              "oneOf": [
+                {
+                  "$ref": "common.schema.json#/$defs/BuildId"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "edit_id": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Set when the message was edit.apply and accepted."
+            },
+            "error": {
+              "oneOf": [
+                {
+                  "$ref": "error.schema.json"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "S_pong": {
+      "type": "object",
+      "description": "Answer to ping.",
+      "x-scope": "connection",
+      "required": [
+        "spec_version",
+        "type",
+        "seq",
+        "build_id",
+        "ts",
+        "payload"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "type": {
+          "const": "pong"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "build_id": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/BuildId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ts": {
+          "$ref": "common.schema.json#/$defs/Timestamp"
+        },
+        "stage": {
+          "$ref": "common.schema.json#/$defs/StageId"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Build revision after this event was applied."
+        },
+        "cause": {
+          "type": "object",
+          "description": "Set on every event caused by a client message (an edit, a cancel).",
+          "properties": {
+            "msg_id": {
+              "$ref": "common.schema.json#/$defs/MsgId"
+            },
+            "edit_id": {
+              "type": "string"
+            }
+          }
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "msg_id"
+          ],
+          "properties": {
+            "msg_id": {
+              "$ref": "common.schema.json#/$defs/MsgId"
+            },
+            "server_time": {
+              "$ref": "common.schema.json#/$defs/Timestamp"
+            }
+          }
+        }
+      }
+    },
+    "S_error": {
+      "type": "object",
+      "description": "A problem that is not tied to one build result (bad message, resume gap). Build failures use build.failed.",
+      "x-scope": "connection",
+      "required": [
+        "spec_version",
+        "type",
+        "seq",
+        "build_id",
+        "ts",
+        "payload"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "type": {
+          "const": "error"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "build_id": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/BuildId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ts": {
+          "$ref": "common.schema.json#/$defs/Timestamp"
+        },
+        "stage": {
+          "$ref": "common.schema.json#/$defs/StageId"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Build revision after this event was applied."
+        },
+        "cause": {
+          "type": "object",
+          "description": "Set on every event caused by a client message (an edit, a cancel).",
+          "properties": {
+            "msg_id": {
+              "$ref": "common.schema.json#/$defs/MsgId"
+            },
+            "edit_id": {
+              "type": "string"
+            }
+          }
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "error"
+          ],
+          "properties": {
+            "error": {
+              "$ref": "error.schema.json"
+            },
+            "msg_id": {
+              "oneOf": [
+                {
+                  "$ref": "common.schema.json#/$defs/MsgId"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    "S_build_snapshot": {
+      "type": "object",
+      "description": "Full build state. Replace the whole client store for this build, then continue with seq > build.last_seq.",
+      "x-scope": "build",
+      "required": [
+        "spec_version",
+        "type",
+        "seq",
+        "build_id",
+        "ts",
+        "payload"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "type": {
+          "const": "build.snapshot"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Per build, contiguous from 1. 0 for connection scoped events (hello, ack, pong, error without a build)."
+        },
+        "build_id": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/BuildId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ts": {
+          "$ref": "common.schema.json#/$defs/Timestamp"
+        },
+        "stage": {
+          "$ref": "common.schema.json#/$defs/StageId"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Build revision after this event was applied."
+        },
+        "cause": {
+          "type": "object",
+          "description": "Set on every event caused by a client message (an edit, a cancel).",
+          "properties": {
+            "msg_id": {
+              "$ref": "common.schema.json#/$defs/MsgId"
+            },
+            "edit_id": {
+              "type": "string"
+            }
+          }
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "build",
+            "reason"
+          ],
+          "properties": {
+            "build": {
+              "$ref": "build.schema.json"
+            },
+            "reason": {
+              "type": "string",
+              "enum": [
+                "resume_gap",
+                "resume",
+                "late_join",
+                "unknown"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "S_stage_started": {
+      "type": "object",
+      "description": "A pipeline stage began.",
+      "x-scope": "build",
+      "required": [
+        "spec_version",
+        "type",
+        "seq",
+        "build_id",
+        "ts",
+        "payload"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "type": {
+          "const": "stage.started"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Per build, contiguous from 1. 0 for connection scoped events (hello, ack, pong, error without a build)."
+        },
+        "build_id": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/BuildId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ts": {
+          "$ref": "common.schema.json#/$defs/Timestamp"
+        },
+        "stage": {
+          "$ref": "common.schema.json#/$defs/StageId"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Build revision after this event was applied."
+        },
+        "cause": {
+          "type": "object",
+          "description": "Set on every event caused by a client message (an edit, a cancel).",
+          "properties": {
+            "msg_id": {
+              "$ref": "common.schema.json#/$defs/MsgId"
+            },
+            "edit_id": {
+              "type": "string"
+            }
+          }
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "stage"
+          ],
+          "properties": {
+            "stage": {
+              "$ref": "common.schema.json#/$defs/StageId"
+            },
+            "label": {
+              "type": "string"
+            },
+            "budget_ms": {
+              "$ref": "common.schema.json#/$defs/DurationMs"
+            }
+          }
+        }
+      }
+    },
+    "S_stage_progress": {
+      "type": "object",
+      "description": "Optional progress inside a long stage.",
+      "x-scope": "build",
+      "required": [
+        "spec_version",
+        "type",
+        "seq",
+        "build_id",
+        "ts",
+        "payload"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "type": {
+          "const": "stage.progress"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Per build, contiguous from 1. 0 for connection scoped events (hello, ack, pong, error without a build)."
+        },
+        "build_id": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/BuildId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ts": {
+          "$ref": "common.schema.json#/$defs/Timestamp"
+        },
+        "stage": {
+          "$ref": "common.schema.json#/$defs/StageId"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Build revision after this event was applied."
+        },
+        "cause": {
+          "type": "object",
+          "description": "Set on every event caused by a client message (an edit, a cancel).",
+          "properties": {
+            "msg_id": {
+              "$ref": "common.schema.json#/$defs/MsgId"
+            },
+            "edit_id": {
+              "type": "string"
+            }
+          }
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "stage",
+            "message"
+          ],
+          "properties": {
+            "stage": {
+              "$ref": "common.schema.json#/$defs/StageId"
+            },
+            "message": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "fraction": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        }
+      }
+    },
+    "S_stage_completed": {
+      "type": "object",
+      "description": "A stage ended. A skipped stage sends only this event, with status skipped.",
+      "x-scope": "build",
+      "required": [
+        "spec_version",
+        "type",
+        "seq",
+        "build_id",
+        "ts",
+        "payload"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "type": {
+          "const": "stage.completed"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Per build, contiguous from 1. 0 for connection scoped events (hello, ack, pong, error without a build)."
+        },
+        "build_id": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/BuildId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ts": {
+          "$ref": "common.schema.json#/$defs/Timestamp"
+        },
+        "stage": {
+          "$ref": "common.schema.json#/$defs/StageId"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Build revision after this event was applied."
+        },
+        "cause": {
+          "type": "object",
+          "description": "Set on every event caused by a client message (an edit, a cancel).",
+          "properties": {
+            "msg_id": {
+              "$ref": "common.schema.json#/$defs/MsgId"
+            },
+            "edit_id": {
+              "type": "string"
+            }
+          }
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "stage",
+            "status",
+            "duration_ms"
+          ],
+          "properties": {
+            "stage": {
+              "$ref": "common.schema.json#/$defs/StageId"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "ok",
+                "skipped",
+                "degraded",
+                "failed",
+                "needs_input",
+                "unknown"
+              ],
+              "description": "needs_input: classify only; the stage ends without spec.ready and clarify.request follows."
+            },
+            "duration_ms": {
+              "$ref": "common.schema.json#/$defs/DurationMs"
+            },
+            "message": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "S_clarify_request": {
+      "type": "object",
+      "description": "The engine asks instead of guessing. Sent right after stage.completed classify (needs_input) with no stage open. The build waits (status awaiting_input) until clarify.resolved.",
+      "x-scope": "build",
+      "required": [
+        "spec_version",
+        "type",
+        "seq",
+        "build_id",
+        "ts",
+        "payload"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "type": {
+          "const": "clarify.request"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Per build, contiguous from 1. 0 for connection scoped events (hello, ack, pong, error without a build)."
+        },
+        "build_id": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/BuildId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ts": {
+          "$ref": "common.schema.json#/$defs/Timestamp"
+        },
+        "stage": {
+          "$ref": "common.schema.json#/$defs/StageId"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Build revision after this event was applied."
+        },
+        "cause": {
+          "type": "object",
+          "description": "Set on every event caused by a client message (an edit, a cancel).",
+          "properties": {
+            "msg_id": {
+              "$ref": "common.schema.json#/$defs/MsgId"
+            },
+            "edit_id": {
+              "type": "string"
+            }
+          }
+        },
+        "payload": {
+          "$ref": "spec.schema.json#/$defs/ClarifyQuestion"
+        }
+      }
+    },
+    "S_clarify_resolved": {
+      "type": "object",
+      "description": "Closes the open question: answered, skipped (best guess with stated assumptions) or timed out. Classify then restarts with the answer folded in.",
+      "x-scope": "build",
+      "required": [
+        "spec_version",
+        "type",
+        "seq",
+        "build_id",
+        "ts",
+        "payload"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "type": {
+          "const": "clarify.resolved"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Per build, contiguous from 1. 0 for connection scoped events (hello, ack, pong, error without a build)."
+        },
+        "build_id": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/BuildId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ts": {
+          "$ref": "common.schema.json#/$defs/Timestamp"
+        },
+        "stage": {
+          "$ref": "common.schema.json#/$defs/StageId"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Build revision after this event was applied."
+        },
+        "cause": {
+          "type": "object",
+          "description": "Set on every event caused by a client message (an edit, a cancel).",
+          "properties": {
+            "msg_id": {
+              "$ref": "common.schema.json#/$defs/MsgId"
+            },
+            "edit_id": {
+              "type": "string"
+            }
+          }
+        },
+        "payload": {
+          "$ref": "spec.schema.json#/$defs/ClarifyResolution"
+        }
+      }
+    },
+    "S_spec_ready": {
+      "type": "object",
+      "description": "Classify result.",
+      "x-scope": "build",
+      "required": [
+        "spec_version",
+        "type",
+        "seq",
+        "build_id",
+        "ts",
+        "payload"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "type": {
+          "const": "spec.ready"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Per build, contiguous from 1. 0 for connection scoped events (hello, ack, pong, error without a build)."
+        },
+        "build_id": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/BuildId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ts": {
+          "$ref": "common.schema.json#/$defs/Timestamp"
+        },
+        "stage": {
+          "$ref": "common.schema.json#/$defs/StageId"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Build revision after this event was applied."
+        },
+        "cause": {
+          "type": "object",
+          "description": "Set on every event caused by a client message (an edit, a cancel).",
+          "properties": {
+            "msg_id": {
+              "$ref": "common.schema.json#/$defs/MsgId"
+            },
+            "edit_id": {
+              "type": "string"
+            }
+          }
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "spec"
+          ],
+          "properties": {
+            "spec": {
+              "$ref": "spec.schema.json"
+            }
+          }
+        }
+      }
+    },
+    "S_reuse_decided": {
+      "type": "object",
+      "description": "Reuse tier decision.",
+      "x-scope": "build",
+      "required": [
+        "spec_version",
+        "type",
+        "seq",
+        "build_id",
+        "ts",
+        "payload"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "type": {
+          "const": "reuse.decided"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Per build, contiguous from 1. 0 for connection scoped events (hello, ack, pong, error without a build)."
+        },
+        "build_id": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/BuildId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ts": {
+          "$ref": "common.schema.json#/$defs/Timestamp"
+        },
+        "stage": {
+          "$ref": "common.schema.json#/$defs/StageId"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Build revision after this event was applied."
+        },
+        "cause": {
+          "type": "object",
+          "description": "Set on every event caused by a client message (an edit, a cancel).",
+          "properties": {
+            "msg_id": {
+              "$ref": "common.schema.json#/$defs/MsgId"
+            },
+            "edit_id": {
+              "type": "string"
+            }
+          }
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "tier",
+            "design_id",
+            "considered",
+            "unmet_hard",
+            "reason"
+          ],
+          "properties": {
+            "tier": {
+              "$ref": "common.schema.json#/$defs/Tier"
+            },
+            "design_id": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Design used as is (exact), with changes (substitute), or as skeleton (compose). null: compose from nothing."
+            },
+            "design": {
+              "oneOf": [
+                {
+                  "$ref": "design.schema.json#/$defs/DesignCard"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "considered": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "design_id",
+                  "name",
+                  "tier"
+                ],
+                "properties": {
+                  "design_id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "tier": {
+                    "$ref": "common.schema.json#/$defs/Tier"
+                  },
+                  "score": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "unmet": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "req_ids of the Spec this design does not meet."
+                  }
+                }
+              },
+              "maxItems": 5
+            },
+            "unmet_hard": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "req_ids of hard requirements the chosen design does not meet. Non empty means compose."
+            },
+            "reason": {
+              "type": "string",
+              "maxLength": 240
+            }
+          }
+        }
+      }
+    },
+    "S_slots_ready": {
+      "type": "object",
+      "description": "All slots for the build, in decision order.",
+      "x-scope": "build",
+      "required": [
+        "spec_version",
+        "type",
+        "seq",
+        "build_id",
+        "ts",
+        "payload"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "type": {
+          "const": "slots.ready"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Per build, contiguous from 1. 0 for connection scoped events (hello, ack, pong, error without a build)."
+        },
+        "build_id": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/BuildId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ts": {
+          "$ref": "common.schema.json#/$defs/Timestamp"
+        },
+        "stage": {
+          "$ref": "common.schema.json#/$defs/StageId"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Build revision after this event was applied."
+        },
+        "cause": {
+          "type": "object",
+          "description": "Set on every event caused by a client message (an edit, a cancel).",
+          "properties": {
+            "msg_id": {
+              "$ref": "common.schema.json#/$defs/MsgId"
+            },
+            "edit_id": {
+              "type": "string"
+            }
+          }
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "slots"
+          ],
+          "properties": {
+            "slots": {
+              "type": "array",
+              "items": {
+                "$ref": "slot.schema.json#/$defs/Slot"
+              }
+            }
+          }
+        }
+      }
+    },
+    "S_slot_updated": {
+      "type": "object",
+      "description": "Full slot object after a change of state or counts. Replaces the slot with the same slot_id.",
+      "x-scope": "build",
+      "required": [
+        "spec_version",
+        "type",
+        "seq",
+        "build_id",
+        "ts",
+        "payload"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "type": {
+          "const": "slot.updated"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Per build, contiguous from 1. 0 for connection scoped events (hello, ack, pong, error without a build)."
+        },
+        "build_id": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/BuildId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ts": {
+          "$ref": "common.schema.json#/$defs/Timestamp"
+        },
+        "stage": {
+          "$ref": "common.schema.json#/$defs/StageId"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Build revision after this event was applied."
+        },
+        "cause": {
+          "type": "object",
+          "description": "Set on every event caused by a client message (an edit, a cancel).",
+          "properties": {
+            "msg_id": {
+              "$ref": "common.schema.json#/$defs/MsgId"
+            },
+            "edit_id": {
+              "type": "string"
+            }
+          }
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "slot"
+          ],
+          "properties": {
+            "slot": {
+              "$ref": "slot.schema.json#/$defs/Slot"
+            }
+          }
+        }
+      }
+    },
+    "S_candidates_ready": {
+      "type": "object",
+      "description": "Filtering result for one slot at one step.",
+      "x-scope": "build",
+      "required": [
+        "spec_version",
+        "type",
+        "seq",
+        "build_id",
+        "ts",
+        "payload"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "type": {
+          "const": "candidates.ready"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Per build, contiguous from 1. 0 for connection scoped events (hello, ack, pong, error without a build)."
+        },
+        "build_id": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/BuildId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ts": {
+          "$ref": "common.schema.json#/$defs/Timestamp"
+        },
+        "stage": {
+          "$ref": "common.schema.json#/$defs/StageId"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Build revision after this event was applied."
+        },
+        "cause": {
+          "type": "object",
+          "description": "Set on every event caused by a client message (an edit, a cancel).",
+          "properties": {
+            "msg_id": {
+              "$ref": "common.schema.json#/$defs/MsgId"
+            },
+            "edit_id": {
+              "type": "string"
+            }
+          }
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "slot_id",
+            "step",
+            "filters",
+            "count_before",
+            "count_after",
+            "survivors"
+          ],
+          "properties": {
+            "slot_id": {
+              "type": "string"
+            },
+            "step": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "filters": {
+              "type": "array",
+              "items": {
+                "$ref": "slot.schema.json#/$defs/Filter"
+              }
+            },
+            "count_before": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "count_after": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "survivors": {
+              "type": "array",
+              "items": {
+                "$ref": "slot.schema.json#/$defs/Candidate"
+              },
+              "maxItems": 8,
+              "description": "Top survivors, at most 8, as shown to the model (C1..C8)."
+            }
+          }
+        }
+      }
+    },
+    "S_decision_made": {
+      "type": "object",
+      "description": "A slot was decided.",
+      "x-scope": "build",
+      "required": [
+        "spec_version",
+        "type",
+        "seq",
+        "build_id",
+        "ts",
+        "payload"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "type": {
+          "const": "decision.made"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Per build, contiguous from 1. 0 for connection scoped events (hello, ack, pong, error without a build)."
+        },
+        "build_id": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/BuildId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ts": {
+          "$ref": "common.schema.json#/$defs/Timestamp"
+        },
+        "stage": {
+          "$ref": "common.schema.json#/$defs/StageId"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Build revision after this event was applied."
+        },
+        "cause": {
+          "type": "object",
+          "description": "Set on every event caused by a client message (an edit, a cancel).",
+          "properties": {
+            "msg_id": {
+              "$ref": "common.schema.json#/$defs/MsgId"
+            },
+            "edit_id": {
+              "type": "string"
+            }
+          }
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "decision"
+          ],
+          "properties": {
+            "decision": {
+              "$ref": "slot.schema.json#/$defs/Decision"
+            }
+          }
+        }
+      }
+    },
+    "S_decision_reverted": {
+      "type": "object",
+      "description": "Backtracking undid an earlier decision. The slot returns to narrowing; parts it added are removed by separate part.removed events.",
+      "x-scope": "build",
+      "required": [
+        "spec_version",
+        "type",
+        "seq",
+        "build_id",
+        "ts",
+        "payload"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "type": {
+          "const": "decision.reverted"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Per build, contiguous from 1. 0 for connection scoped events (hello, ack, pong, error without a build)."
+        },
+        "build_id": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/BuildId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ts": {
+          "$ref": "common.schema.json#/$defs/Timestamp"
+        },
+        "stage": {
+          "$ref": "common.schema.json#/$defs/StageId"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Build revision after this event was applied."
+        },
+        "cause": {
+          "type": "object",
+          "description": "Set on every event caused by a client message (an edit, a cancel).",
+          "properties": {
+            "msg_id": {
+              "$ref": "common.schema.json#/$defs/MsgId"
+            },
+            "edit_id": {
+              "type": "string"
+            }
+          }
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "decision_id",
+            "slot_id",
+            "reason"
+          ],
+          "properties": {
+            "decision_id": {
+              "type": "string"
+            },
+            "slot_id": {
+              "type": "string"
+            },
+            "reason": {
+              "type": "string",
+              "maxLength": 240
+            }
+          }
+        }
+      }
+    },
+    "S_layout_added": {
+      "type": "object",
+      "description": "A key layout. Sent before any part that places on it.",
+      "x-scope": "build",
+      "required": [
+        "spec_version",
+        "type",
+        "seq",
+        "build_id",
+        "ts",
+        "payload"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "type": {
+          "const": "layout.added"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Per build, contiguous from 1. 0 for connection scoped events (hello, ack, pong, error without a build)."
+        },
+        "build_id": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/BuildId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ts": {
+          "$ref": "common.schema.json#/$defs/Timestamp"
+        },
+        "stage": {
+          "$ref": "common.schema.json#/$defs/StageId"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Build revision after this event was applied."
+        },
+        "cause": {
+          "type": "object",
+          "description": "Set on every event caused by a client message (an edit, a cancel).",
+          "properties": {
+            "msg_id": {
+              "$ref": "common.schema.json#/$defs/MsgId"
+            },
+            "edit_id": {
+              "type": "string"
+            }
+          }
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "layout"
+          ],
+          "properties": {
+            "layout": {
+              "$ref": "build.schema.json#/$defs/Layout"
+            }
+          }
+        }
+      }
+    },
+    "S_part_added": {
+      "type": "object",
+      "description": "A new instance.",
+      "x-scope": "build",
+      "required": [
+        "spec_version",
+        "type",
+        "seq",
+        "build_id",
+        "ts",
+        "payload"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "type": {
+          "const": "part.added"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Per build, contiguous from 1. 0 for connection scoped events (hello, ack, pong, error without a build)."
+        },
+        "build_id": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/BuildId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ts": {
+          "$ref": "common.schema.json#/$defs/Timestamp"
+        },
+        "stage": {
+          "$ref": "common.schema.json#/$defs/StageId"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Build revision after this event was applied."
+        },
+        "cause": {
+          "type": "object",
+          "description": "Set on every event caused by a client message (an edit, a cancel).",
+          "properties": {
+            "msg_id": {
+              "$ref": "common.schema.json#/$defs/MsgId"
+            },
+            "edit_id": {
+              "type": "string"
+            }
+          }
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "part"
+          ],
+          "properties": {
+            "part": {
+              "$ref": "build.schema.json#/$defs/BuildPart"
+            }
+          }
+        }
+      }
+    },
+    "S_part_updated": {
+      "type": "object",
+      "description": "Full instance after any change (swap, recolor, status). Replace by instance_id.",
+      "x-scope": "build",
+      "required": [
+        "spec_version",
+        "type",
+        "seq",
+        "build_id",
+        "ts",
+        "payload"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "type": {
+          "const": "part.updated"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Per build, contiguous from 1. 0 for connection scoped events (hello, ack, pong, error without a build)."
+        },
+        "build_id": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/BuildId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ts": {
+          "$ref": "common.schema.json#/$defs/Timestamp"
+        },
+        "stage": {
+          "$ref": "common.schema.json#/$defs/StageId"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Build revision after this event was applied."
+        },
+        "cause": {
+          "type": "object",
+          "description": "Set on every event caused by a client message (an edit, a cancel).",
+          "properties": {
+            "msg_id": {
+              "$ref": "common.schema.json#/$defs/MsgId"
+            },
+            "edit_id": {
+              "type": "string"
+            }
+          }
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "part"
+          ],
+          "properties": {
+            "part": {
+              "$ref": "build.schema.json#/$defs/BuildPart"
+            }
+          }
+        }
+      }
+    },
+    "S_part_removed": {
+      "type": "object",
+      "description": "Instance removed. Its connections were removed by earlier connection.removed events.",
+      "x-scope": "build",
+      "required": [
+        "spec_version",
+        "type",
+        "seq",
+        "build_id",
+        "ts",
+        "payload"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "type": {
+          "const": "part.removed"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Per build, contiguous from 1. 0 for connection scoped events (hello, ack, pong, error without a build)."
+        },
+        "build_id": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/BuildId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ts": {
+          "$ref": "common.schema.json#/$defs/Timestamp"
+        },
+        "stage": {
+          "$ref": "common.schema.json#/$defs/StageId"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Build revision after this event was applied."
+        },
+        "cause": {
+          "type": "object",
+          "description": "Set on every event caused by a client message (an edit, a cancel).",
+          "properties": {
+            "msg_id": {
+              "$ref": "common.schema.json#/$defs/MsgId"
+            },
+            "edit_id": {
+              "type": "string"
+            }
+          }
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "instance_id"
+          ],
+          "properties": {
+            "instance_id": {
+              "$ref": "common.schema.json#/$defs/InstanceId"
+            },
+            "reason": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "S_connection_added": {
+      "type": "object",
+      "description": "A new connection.",
+      "x-scope": "build",
+      "required": [
+        "spec_version",
+        "type",
+        "seq",
+        "build_id",
+        "ts",
+        "payload"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "type": {
+          "const": "connection.added"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Per build, contiguous from 1. 0 for connection scoped events (hello, ack, pong, error without a build)."
+        },
+        "build_id": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/BuildId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ts": {
+          "$ref": "common.schema.json#/$defs/Timestamp"
+        },
+        "stage": {
+          "$ref": "common.schema.json#/$defs/StageId"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Build revision after this event was applied."
+        },
+        "cause": {
+          "type": "object",
+          "description": "Set on every event caused by a client message (an edit, a cancel).",
+          "properties": {
+            "msg_id": {
+              "$ref": "common.schema.json#/$defs/MsgId"
+            },
+            "edit_id": {
+              "type": "string"
+            }
+          }
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "connection"
+          ],
+          "properties": {
+            "connection": {
+              "$ref": "build.schema.json#/$defs/Connection"
+            }
+          }
+        }
+      }
+    },
+    "S_connection_removed": {
+      "type": "object",
+      "description": "Connection removed.",
+      "x-scope": "build",
+      "required": [
+        "spec_version",
+        "type",
+        "seq",
+        "build_id",
+        "ts",
+        "payload"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "type": {
+          "const": "connection.removed"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Per build, contiguous from 1. 0 for connection scoped events (hello, ack, pong, error without a build)."
+        },
+        "build_id": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/BuildId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ts": {
+          "$ref": "common.schema.json#/$defs/Timestamp"
+        },
+        "stage": {
+          "$ref": "common.schema.json#/$defs/StageId"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Build revision after this event was applied."
+        },
+        "cause": {
+          "type": "object",
+          "description": "Set on every event caused by a client message (an edit, a cancel).",
+          "properties": {
+            "msg_id": {
+              "$ref": "common.schema.json#/$defs/MsgId"
+            },
+            "edit_id": {
+              "type": "string"
+            }
+          }
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "connection_id"
+          ],
+          "properties": {
+            "connection_id": {
+              "type": "string"
+            },
+            "reason": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "S_placement_updated": {
+      "type": "object",
+      "description": "New poses for some or all instances (solver run or move edit). Replace placement by instance_id; others are unchanged.",
+      "x-scope": "build",
+      "required": [
+        "spec_version",
+        "type",
+        "seq",
+        "build_id",
+        "ts",
+        "payload"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "type": {
+          "const": "placement.updated"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Per build, contiguous from 1. 0 for connection scoped events (hello, ack, pong, error without a build)."
+        },
+        "build_id": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/BuildId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ts": {
+          "$ref": "common.schema.json#/$defs/Timestamp"
+        },
+        "stage": {
+          "$ref": "common.schema.json#/$defs/StageId"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Build revision after this event was applied."
+        },
+        "cause": {
+          "type": "object",
+          "description": "Set on every event caused by a client message (an edit, a cancel).",
+          "properties": {
+            "msg_id": {
+              "$ref": "common.schema.json#/$defs/MsgId"
+            },
+            "edit_id": {
+              "type": "string"
+            }
+          }
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "placements"
+          ],
+          "properties": {
+            "placements": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "instance_id",
+                  "placement"
+                ],
+                "properties": {
+                  "instance_id": {
+                    "$ref": "common.schema.json#/$defs/InstanceId"
+                  },
+                  "placement": {
+                    "$ref": "build.schema.json#/$defs/Placement"
+                  }
+                }
+              }
+            },
+            "assembly_bbox_mm": {
+              "$ref": "common.schema.json#/$defs/BBox"
+            },
+            "solver": {
+              "type": "object",
+              "required": [
+                "status"
+              ],
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "optimal",
+                    "feasible",
+                    "fallback",
+                    "skipped",
+                    "unknown"
+                  ]
+                },
+                "duration_ms": {
+                  "$ref": "common.schema.json#/$defs/DurationMs"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "S_enclosure_updated": {
+      "type": "object",
+      "description": "Full enclosure. Replace by enclosure_id.",
+      "x-scope": "build",
+      "required": [
+        "spec_version",
+        "type",
+        "seq",
+        "build_id",
+        "ts",
+        "payload"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "type": {
+          "const": "enclosure.updated"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Per build, contiguous from 1. 0 for connection scoped events (hello, ack, pong, error without a build)."
+        },
+        "build_id": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/BuildId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ts": {
+          "$ref": "common.schema.json#/$defs/Timestamp"
+        },
+        "stage": {
+          "$ref": "common.schema.json#/$defs/StageId"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Build revision after this event was applied."
+        },
+        "cause": {
+          "type": "object",
+          "description": "Set on every event caused by a client message (an edit, a cancel).",
+          "properties": {
+            "msg_id": {
+              "$ref": "common.schema.json#/$defs/MsgId"
+            },
+            "edit_id": {
+              "type": "string"
+            }
+          }
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "enclosure"
+          ],
+          "properties": {
+            "enclosure": {
+              "$ref": "build.schema.json#/$defs/Enclosure"
+            }
+          }
+        }
+      }
+    },
+    "S_board_updated": {
+      "type": "object",
+      "description": "Full board. Replace by board_id.",
+      "x-scope": "build",
+      "required": [
+        "spec_version",
+        "type",
+        "seq",
+        "build_id",
+        "ts",
+        "payload"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "type": {
+          "const": "board.updated"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Per build, contiguous from 1. 0 for connection scoped events (hello, ack, pong, error without a build)."
+        },
+        "build_id": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/BuildId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ts": {
+          "$ref": "common.schema.json#/$defs/Timestamp"
+        },
+        "stage": {
+          "$ref": "common.schema.json#/$defs/StageId"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Build revision after this event was applied."
+        },
+        "cause": {
+          "type": "object",
+          "description": "Set on every event caused by a client message (an edit, a cancel).",
+          "properties": {
+            "msg_id": {
+              "$ref": "common.schema.json#/$defs/MsgId"
+            },
+            "edit_id": {
+              "type": "string"
+            }
+          }
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "board"
+          ],
+          "properties": {
+            "board": {
+              "$ref": "build.schema.json#/$defs/Board"
+            }
+          }
+        }
+      }
+    },
+    "S_firmware_ready": {
+      "type": "object",
+      "description": "Full firmware object. May repeat (compile status changes) and may arrive after build.done.",
+      "x-scope": "build",
+      "required": [
+        "spec_version",
+        "type",
+        "seq",
+        "build_id",
+        "ts",
+        "payload"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "type": {
+          "const": "firmware.ready"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Per build, contiguous from 1. 0 for connection scoped events (hello, ack, pong, error without a build)."
+        },
+        "build_id": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/BuildId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ts": {
+          "$ref": "common.schema.json#/$defs/Timestamp"
+        },
+        "stage": {
+          "$ref": "common.schema.json#/$defs/StageId"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Build revision after this event was applied."
+        },
+        "cause": {
+          "type": "object",
+          "description": "Set on every event caused by a client message (an edit, a cancel).",
+          "properties": {
+            "msg_id": {
+              "$ref": "common.schema.json#/$defs/MsgId"
+            },
+            "edit_id": {
+              "type": "string"
+            }
+          }
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "firmware"
+          ],
+          "properties": {
+            "firmware": {
+              "$ref": "build.schema.json#/$defs/Firmware"
+            }
+          }
+        }
+      }
+    },
+    "S_firmware_progress": {
+      "type": "object",
+      "description": "Live compile progress (firmware.mode compiled only). Optional, may repeat and may arrive after build.done; the final state always comes in firmware.ready.",
+      "x-scope": "build",
+      "required": [
+        "spec_version",
+        "type",
+        "seq",
+        "build_id",
+        "ts",
+        "payload"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "type": {
+          "const": "firmware.progress"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Per build, contiguous from 1. 0 for connection scoped events (hello, ack, pong, error without a build)."
+        },
+        "build_id": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/BuildId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ts": {
+          "$ref": "common.schema.json#/$defs/Timestamp"
+        },
+        "stage": {
+          "$ref": "common.schema.json#/$defs/StageId"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Build revision after this event was applied."
+        },
+        "cause": {
+          "type": "object",
+          "description": "Set on every event caused by a client message (an edit, a cancel).",
+          "properties": {
+            "msg_id": {
+              "$ref": "common.schema.json#/$defs/MsgId"
+            },
+            "edit_id": {
+              "type": "string"
+            }
+          }
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "firmware_id",
+            "phase"
+          ],
+          "properties": {
+            "firmware_id": {
+              "type": "string",
+              "pattern": "^fw_[a-z0-9_]{1,63}$"
+            },
+            "phase": {
+              "type": "string",
+              "enum": [
+                "queued",
+                "fetching",
+                "compiling",
+                "linking",
+                "packaging",
+                "unknown"
+              ]
+            },
+            "fraction": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 1
+            },
+            "target_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "message": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "maxLength": 120
+            }
+          }
+        }
+      }
+    },
+    "S_scene_ready": {
+      "type": "object",
+      "description": "Camera, bounding box and asset preload list. Sent once all parts of the first full assembly exist.",
+      "x-scope": "build",
+      "required": [
+        "spec_version",
+        "type",
+        "seq",
+        "build_id",
+        "ts",
+        "payload"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "type": {
+          "const": "scene.ready"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Per build, contiguous from 1. 0 for connection scoped events (hello, ack, pong, error without a build)."
+        },
+        "build_id": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/BuildId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ts": {
+          "$ref": "common.schema.json#/$defs/Timestamp"
+        },
+        "stage": {
+          "$ref": "common.schema.json#/$defs/StageId"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Build revision after this event was applied."
+        },
+        "cause": {
+          "type": "object",
+          "description": "Set on every event caused by a client message (an edit, a cancel).",
+          "properties": {
+            "msg_id": {
+              "$ref": "common.schema.json#/$defs/MsgId"
+            },
+            "edit_id": {
+              "type": "string"
+            }
+          }
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "scene"
+          ],
+          "properties": {
+            "scene": {
+              "$ref": "build.schema.json#/$defs/Scene"
+            }
+          }
+        }
+      }
+    },
+    "S_check_result": {
+      "type": "object",
+      "description": "One or more check results. Replace by check_key.",
+      "x-scope": "build",
+      "required": [
+        "spec_version",
+        "type",
+        "seq",
+        "build_id",
+        "ts",
+        "payload"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "type": {
+          "const": "check.result"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Per build, contiguous from 1. 0 for connection scoped events (hello, ack, pong, error without a build)."
+        },
+        "build_id": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/BuildId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ts": {
+          "$ref": "common.schema.json#/$defs/Timestamp"
+        },
+        "stage": {
+          "$ref": "common.schema.json#/$defs/StageId"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Build revision after this event was applied."
+        },
+        "cause": {
+          "type": "object",
+          "description": "Set on every event caused by a client message (an edit, a cancel).",
+          "properties": {
+            "msg_id": {
+              "$ref": "common.schema.json#/$defs/MsgId"
+            },
+            "edit_id": {
+              "type": "string"
+            }
+          }
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "results"
+          ],
+          "properties": {
+            "results": {
+              "type": "array",
+              "items": {
+                "$ref": "check.schema.json"
+              },
+              "minItems": 1
+            }
+          }
+        }
+      }
+    },
+    "S_warning": {
+      "type": "object",
+      "description": "A non fatal problem. Append; warning_id is unique per build.",
+      "x-scope": "build",
+      "required": [
+        "spec_version",
+        "type",
+        "seq",
+        "build_id",
+        "ts",
+        "payload"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "type": {
+          "const": "warning"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Per build, contiguous from 1. 0 for connection scoped events (hello, ack, pong, error without a build)."
+        },
+        "build_id": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/BuildId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ts": {
+          "$ref": "common.schema.json#/$defs/Timestamp"
+        },
+        "stage": {
+          "$ref": "common.schema.json#/$defs/StageId"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Build revision after this event was applied."
+        },
+        "cause": {
+          "type": "object",
+          "description": "Set on every event caused by a client message (an edit, a cancel).",
+          "properties": {
+            "msg_id": {
+              "$ref": "common.schema.json#/$defs/MsgId"
+            },
+            "edit_id": {
+              "type": "string"
+            }
+          }
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "warning"
+          ],
+          "properties": {
+            "warning": {
+              "$ref": "build.schema.json#/$defs/Warning"
+            }
+          }
+        }
+      }
+    },
+    "S_build_done": {
+      "type": "object",
+      "description": "Terminal: the build finished. Exactly one of build.done or build.failed per build.",
+      "x-scope": "build",
+      "required": [
+        "spec_version",
+        "type",
+        "seq",
+        "build_id",
+        "ts",
+        "payload"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "type": {
+          "const": "build.done"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Per build, contiguous from 1. 0 for connection scoped events (hello, ack, pong, error without a build)."
+        },
+        "build_id": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/BuildId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ts": {
+          "$ref": "common.schema.json#/$defs/Timestamp"
+        },
+        "stage": {
+          "$ref": "common.schema.json#/$defs/StageId"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Build revision after this event was applied."
+        },
+        "cause": {
+          "type": "object",
+          "description": "Set on every event caused by a client message (an edit, a cancel).",
+          "properties": {
+            "msg_id": {
+              "$ref": "common.schema.json#/$defs/MsgId"
+            },
+            "edit_id": {
+              "type": "string"
+            }
+          }
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "summary",
+            "timings_ms"
+          ],
+          "properties": {
+            "summary": {
+              "type": "object",
+              "required": [
+                "part_count",
+                "instance_count",
+                "connection_count",
+                "checks"
+              ],
+              "properties": {
+                "part_count": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Physical items (sum of quantity)."
+                },
+                "instance_count": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "connection_count": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "warning_count": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "checks": {
+                  "type": "object",
+                  "required": [
+                    "pass",
+                    "fail",
+                    "unknown"
+                  ],
+                  "properties": {
+                    "pass": {
+                      "type": "integer"
+                    },
+                    "fail": {
+                      "type": "integer"
+                    },
+                    "unknown": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            },
+            "timings_ms": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "common.schema.json#/$defs/DurationMs"
+              }
+            },
+            "total_ms": {
+              "$ref": "common.schema.json#/$defs/DurationMs"
+            }
+          }
+        }
+      }
+    },
+    "S_build_failed": {
+      "type": "object",
+      "description": "Terminal: the build could not finish.",
+      "x-scope": "build",
+      "required": [
+        "spec_version",
+        "type",
+        "seq",
+        "build_id",
+        "ts",
+        "payload"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "type": {
+          "const": "build.failed"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Per build, contiguous from 1. 0 for connection scoped events (hello, ack, pong, error without a build)."
+        },
+        "build_id": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/BuildId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ts": {
+          "$ref": "common.schema.json#/$defs/Timestamp"
+        },
+        "stage": {
+          "$ref": "common.schema.json#/$defs/StageId"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Build revision after this event was applied."
+        },
+        "cause": {
+          "type": "object",
+          "description": "Set on every event caused by a client message (an edit, a cancel).",
+          "properties": {
+            "msg_id": {
+              "$ref": "common.schema.json#/$defs/MsgId"
+            },
+            "edit_id": {
+              "type": "string"
+            }
+          }
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "error"
+          ],
+          "properties": {
+            "error": {
+              "$ref": "error.schema.json"
+            },
+            "conflict": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "required": [
+                    "slot_id",
+                    "minimal_conflict",
+                    "explanation"
+                  ],
+                  "properties": {
+                    "slot_id": {
+                      "type": "string"
+                    },
+                    "minimal_conflict": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "spec.schema.json#/$defs/Requirement"
+                      },
+                      "minItems": 1,
+                      "description": "Smallest set of requirements that together leave the slot empty."
+                    },
+                    "explanation": {
+                      "type": "string",
+                      "maxLength": 300
+                    }
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "suggestions": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Suggestion"
+              },
+              "maxItems": 4
+            }
+          }
+        }
+      }
+    },
+    "S_edit_applied": {
+      "type": "object",
+      "description": "All ops of an edit succeeded. Sent after every granular event of that edit.",
+      "x-scope": "build",
+      "required": [
+        "spec_version",
+        "type",
+        "seq",
+        "build_id",
+        "ts",
+        "payload"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "type": {
+          "const": "edit.applied"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Per build, contiguous from 1. 0 for connection scoped events (hello, ack, pong, error without a build)."
+        },
+        "build_id": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/BuildId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ts": {
+          "$ref": "common.schema.json#/$defs/Timestamp"
+        },
+        "stage": {
+          "$ref": "common.schema.json#/$defs/StageId"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Build revision after this event was applied."
+        },
+        "cause": {
+          "type": "object",
+          "description": "Set on every event caused by a client message (an edit, a cancel).",
+          "properties": {
+            "msg_id": {
+              "$ref": "common.schema.json#/$defs/MsgId"
+            },
+            "edit_id": {
+              "type": "string"
+            }
+          }
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "edit_id",
+            "msg_id",
+            "ops",
+            "revision",
+            "duration_ms"
+          ],
+          "properties": {
+            "edit_id": {
+              "type": "string"
+            },
+            "msg_id": {
+              "$ref": "common.schema.json#/$defs/MsgId"
+            },
+            "ops": {
+              "type": "array",
+              "items": {
+                "$ref": "edit.schema.json#/$defs/EditOp"
+              },
+              "minItems": 1
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "duration_ms": {
+              "$ref": "common.schema.json#/$defs/DurationMs"
+            }
+          }
+        }
+      }
+    },
+    "S_edit_rejected": {
+      "type": "object",
+      "description": "The edit changed nothing.",
+      "x-scope": "build",
+      "required": [
+        "spec_version",
+        "type",
+        "seq",
+        "build_id",
+        "ts",
+        "payload"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "type": {
+          "const": "edit.rejected"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Per build, contiguous from 1. 0 for connection scoped events (hello, ack, pong, error without a build)."
+        },
+        "build_id": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/BuildId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ts": {
+          "$ref": "common.schema.json#/$defs/Timestamp"
+        },
+        "stage": {
+          "$ref": "common.schema.json#/$defs/StageId"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Build revision after this event was applied."
+        },
+        "cause": {
+          "type": "object",
+          "description": "Set on every event caused by a client message (an edit, a cancel).",
+          "properties": {
+            "msg_id": {
+              "$ref": "common.schema.json#/$defs/MsgId"
+            },
+            "edit_id": {
+              "type": "string"
+            }
+          }
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "edit_id",
+            "msg_id",
+            "error"
+          ],
+          "properties": {
+            "edit_id": {
+              "type": "string"
+            },
+            "msg_id": {
+              "$ref": "common.schema.json#/$defs/MsgId"
+            },
+            "error": {
+              "$ref": "error.schema.json"
+            },
+            "failed_checks": {
+              "type": "array",
+              "items": {
+                "$ref": "check.schema.json"
+              }
+            },
+            "suggestions": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Suggestion"
+              },
+              "maxItems": 4
+            }
+          }
+        }
+      }
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/S_hello"
+    },
+    {
+      "$ref": "#/$defs/S_ack"
+    },
+    {
+      "$ref": "#/$defs/S_pong"
+    },
+    {
+      "$ref": "#/$defs/S_error"
+    },
+    {
+      "$ref": "#/$defs/S_build_snapshot"
+    },
+    {
+      "$ref": "#/$defs/S_stage_started"
+    },
+    {
+      "$ref": "#/$defs/S_stage_progress"
+    },
+    {
+      "$ref": "#/$defs/S_stage_completed"
+    },
+    {
+      "$ref": "#/$defs/S_clarify_request"
+    },
+    {
+      "$ref": "#/$defs/S_clarify_resolved"
+    },
+    {
+      "$ref": "#/$defs/S_spec_ready"
+    },
+    {
+      "$ref": "#/$defs/S_reuse_decided"
+    },
+    {
+      "$ref": "#/$defs/S_slots_ready"
+    },
+    {
+      "$ref": "#/$defs/S_slot_updated"
+    },
+    {
+      "$ref": "#/$defs/S_candidates_ready"
+    },
+    {
+      "$ref": "#/$defs/S_decision_made"
+    },
+    {
+      "$ref": "#/$defs/S_decision_reverted"
+    },
+    {
+      "$ref": "#/$defs/S_layout_added"
+    },
+    {
+      "$ref": "#/$defs/S_part_added"
+    },
+    {
+      "$ref": "#/$defs/S_part_updated"
+    },
+    {
+      "$ref": "#/$defs/S_part_removed"
+    },
+    {
+      "$ref": "#/$defs/S_connection_added"
+    },
+    {
+      "$ref": "#/$defs/S_connection_removed"
+    },
+    {
+      "$ref": "#/$defs/S_placement_updated"
+    },
+    {
+      "$ref": "#/$defs/S_enclosure_updated"
+    },
+    {
+      "$ref": "#/$defs/S_board_updated"
+    },
+    {
+      "$ref": "#/$defs/S_firmware_ready"
+    },
+    {
+      "$ref": "#/$defs/S_firmware_progress"
+    },
+    {
+      "$ref": "#/$defs/S_scene_ready"
+    },
+    {
+      "$ref": "#/$defs/S_check_result"
+    },
+    {
+      "$ref": "#/$defs/S_warning"
+    },
+    {
+      "$ref": "#/$defs/S_build_done"
+    },
+    {
+      "$ref": "#/$defs/S_build_failed"
+    },
+    {
+      "$ref": "#/$defs/S_edit_applied"
+    },
+    {
+      "$ref": "#/$defs/S_edit_rejected"
+    }
+  ]
+}

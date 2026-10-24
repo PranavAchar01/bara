@@ -1,0 +1,304 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://app.invalid/spec/v1/slot.schema.json",
+  "x-spec-version": "1.1.0",
+  "title": "Slot, candidates and decisions",
+  "description": "A slot is one place in the device that one part fills (controller, display, switches). The compose stage fills slots most constraining first; every pick prunes candidates in all other slots. These records drive the decision trace view.",
+  "type": "object",
+  "$ref": "#/$defs/Slot",
+  "$defs": {
+    "SlotState": {
+      "type": "string",
+      "description": "pending: not yet considered. narrowing: filters are being applied. decided: a part is chosen. none: optional slot left empty on purpose. dead_end: zero survivors (critical: build fails unless backtracking finds a way).",
+      "enum": [
+        "pending",
+        "narrowing",
+        "decided",
+        "none",
+        "dead_end",
+        "unknown"
+      ]
+    },
+    "Slot": {
+      "type": "object",
+      "required": [
+        "slot_id",
+        "label",
+        "function_id",
+        "criticality",
+        "state"
+      ],
+      "properties": {
+        "slot_id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,63}$"
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "function_id": {
+          "$ref": "vocab.schema.json#/$defs/FunctionId"
+        },
+        "criticality": {
+          "$ref": "common.schema.json#/$defs/Criticality"
+        },
+        "quantity": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1
+        },
+        "side": {
+          "$ref": "common.schema.json#/$defs/Side"
+        },
+        "order": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "Decision order. 0 is decided first (most constraining)."
+        },
+        "state": {
+          "$ref": "#/$defs/SlotState"
+        },
+        "candidates_total": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "Parts matching the slot function before any filter."
+        },
+        "candidates_left": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "chosen_part_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "instance_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/InstanceId"
+          },
+          "description": "Instances that fill this slot once decided."
+        },
+        "from_design": {
+          "type": "boolean",
+          "default": false,
+          "description": "true when the slot was filled from the reused or skeleton design."
+        }
+      }
+    },
+    "Filter": {
+      "type": "object",
+      "required": [
+        "facet",
+        "op",
+        "value",
+        "reason"
+      ],
+      "properties": {
+        "facet": {
+          "$ref": "common.schema.json#/$defs/Slug"
+        },
+        "op": {
+          "type": "string",
+          "enum": [
+            "eq",
+            "neq",
+            "in",
+            "lte",
+            "gte",
+            "range",
+            "has",
+            "unknown"
+          ]
+        },
+        "value": {},
+        "reason": {
+          "type": "string",
+          "description": "requirement: from the Spec. propagated: implied by an earlier pick. compatibility: needed to mate with an already chosen part. licence: commercial_only option. relaxed: a soft filter that was dropped (count_after then grows).",
+          "enum": [
+            "requirement",
+            "propagated",
+            "compatibility",
+            "licence",
+            "relaxed",
+            "unknown"
+          ]
+        },
+        "from_slot_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "For propagated and compatibility filters: the slot whose pick caused it."
+        },
+        "req_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "count_before": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "count_after": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "label": {
+          "type": "string",
+          "description": "Chip text, for example Pro Micro footprint."
+        }
+      }
+    },
+    "Candidate": {
+      "type": "object",
+      "required": [
+        "short_id",
+        "card"
+      ],
+      "properties": {
+        "short_id": {
+          "type": "string",
+          "pattern": "^C[0-9]{1,2}$",
+          "description": "C1..C8, the enum value the model answers with."
+        },
+        "card": {
+          "$ref": "part.schema.json#/$defs/PartCard"
+        },
+        "score": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "is_default": {
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "Decision": {
+      "type": "object",
+      "required": [
+        "decision_id",
+        "slot_id",
+        "method",
+        "chosen_part_id",
+        "reason"
+      ],
+      "properties": {
+        "decision_id": {
+          "type": "string"
+        },
+        "slot_id": {
+          "type": "string"
+        },
+        "step": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "method": {
+          "type": "string",
+          "description": "design: taken from the reused or skeleton design. only_survivor: one candidate left. default: a clear default (popularity prior), no model call. model_pick: the LLM picked among survivors by enum. solver: CP-SAT repair chose it. user: an edit. none: optional slot left empty.",
+          "enum": [
+            "design",
+            "only_survivor",
+            "default",
+            "model_pick",
+            "solver",
+            "user",
+            "none",
+            "unknown"
+          ]
+        },
+        "chosen_part_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "null when method is none."
+        },
+        "chosen_short_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "survivors": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 240
+        },
+        "model": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "provider": {
+              "type": "string",
+              "description": "LLM provider that served the call: cerebras (primary), anthropic (backup), openai (offline evaluation only)."
+            },
+            "model": {
+              "type": "string"
+            },
+            "latency_ms": {
+              "$ref": "common.schema.json#/$defs/DurationMs"
+            },
+            "cached": {
+              "type": "boolean"
+            },
+            "fallback": {
+              "type": "boolean",
+              "description": "true when the backup provider answered."
+            }
+          }
+        },
+        "propagated": {
+          "type": "array",
+          "description": "Effect of this pick on other slots.",
+          "items": {
+            "type": "object",
+            "required": [
+              "slot_id",
+              "count_before",
+              "count_after"
+            ],
+            "properties": {
+              "slot_id": {
+                "type": "string"
+              },
+              "count_before": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "count_after": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "constraint": {
+                "type": "string",
+                "description": "Short human text, for example needs a 3.7 V LiPo."
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

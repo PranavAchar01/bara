@@ -1,0 +1,212 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://app.invalid/spec/v1/provenance.schema.json",
+  "x-spec-version": "1.1.0",
+  "title": "Licence and provenance",
+  "$defs": {
+    "Licence": {
+      "type": "object",
+      "description": "Licence of one part or design, stored per part (not per project).",
+      "required": [
+        "spdx",
+        "commercial_ok"
+      ],
+      "properties": {
+        "spdx": {
+          "type": "string",
+          "description": "SPDX id, NOASSERTION, or LicenseRef-<name>."
+        },
+        "name": {
+          "type": "string"
+        },
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uri"
+        },
+        "commercial_ok": {
+          "$ref": "common.schema.json#/$defs/TriState"
+        },
+        "copyleft": {
+          "$ref": "common.schema.json#/$defs/TriState"
+        },
+        "attribution_required": {
+          "$ref": "common.schema.json#/$defs/TriState"
+        },
+        "attribution": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Exact attribution text to show in the BOM and export."
+        },
+        "notes": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "Extractor": {
+      "type": "string",
+      "enum": [
+        "kicad_parse",
+        "occ_geometry",
+        "fritzing",
+        "qmk_info",
+        "datasheet",
+        "llm",
+        "human",
+        "design_import",
+        "unknown"
+      ]
+    },
+    "Verified": {
+      "type": "string",
+      "description": "geometry: checked against STEP or footprint geometry. human: checked by a person. datasheet: copied from an official datasheet. third_party: from a non official source; shown as a warning. none: unchecked.",
+      "enum": [
+        "geometry",
+        "human",
+        "datasheet",
+        "third_party",
+        "none",
+        "unknown"
+      ]
+    },
+    "FieldSource": {
+      "type": "object",
+      "required": [
+        "extractor",
+        "verified"
+      ],
+      "properties": {
+        "extractor": {
+          "$ref": "#/$defs/Extractor"
+        },
+        "verified": {
+          "$ref": "#/$defs/Verified"
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "source_url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "Provenance": {
+      "type": "object",
+      "description": "Superset of the Etch provenance record. The first block of fields is Etch's, unchanged; the second block is new.",
+      "properties": {
+        "route": {
+          "type": "string",
+          "description": "Etch: how the record entered the library."
+        },
+        "licence": {
+          "type": "string",
+          "description": "Etch: free text licence line. The structured licence is Part.licence."
+        },
+        "copyleft": {
+          "type": "boolean",
+          "description": "Etch."
+        },
+        "symbol_url": {
+          "type": "string",
+          "description": "Etch."
+        },
+        "source_url": {
+          "type": "string",
+          "description": "Etch."
+        },
+        "model_url": {
+          "type": "string",
+          "description": "Etch."
+        },
+        "version": {
+          "type": "string",
+          "description": "Etch."
+        },
+        "url": {
+          "type": "string",
+          "description": "Etch."
+        },
+        "commit": {
+          "type": "string",
+          "description": "Etch."
+        },
+        "licence_flag": {
+          "type": [
+            "string",
+            "boolean",
+            "null"
+          ],
+          "description": "Etch."
+        },
+        "attribution": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Etch."
+        },
+        "attribution_required": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "description": "Etch."
+        },
+        "model_note": {
+          "type": "string",
+          "description": "Etch."
+        },
+        "symbol": {
+          "type": "string",
+          "description": "Etch."
+        },
+        "extractor": {
+          "$ref": "#/$defs/Extractor"
+        },
+        "verified": {
+          "$ref": "#/$defs/Verified"
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "dims_source_url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sha256": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "retrieved_at": {
+          "$ref": "common.schema.json#/$defs/Timestamp"
+        },
+        "field_sources": {
+          "type": "object",
+          "description": "Per field provenance keyed by a JSON pointer into the part, for example /mechanical/bbox_mm. Geometry derived numbers must never be overwritten by llm values.",
+          "additionalProperties": {
+            "$ref": "#/$defs/FieldSource"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,627 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://app.invalid/spec/v1/rest.schema.json",
+  "x-spec-version": "1.1.0",
+  "title": "REST bodies",
+  "description": "Request and response bodies for /v1 endpoints. Every non 2xx response body is ErrorResponse.",
+  "$defs": {
+    "ErrorResponse": {
+      "type": "object",
+      "required": [
+        "spec_version",
+        "error"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "error": {
+          "$ref": "error.schema.json"
+        }
+      }
+    },
+    "Health": {
+      "type": "object",
+      "required": [
+        "spec_version",
+        "status",
+        "server_version"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "ok",
+            "degraded",
+            "down",
+            "unknown"
+          ]
+        },
+        "server_version": {
+          "type": "string"
+        },
+        "mock": {
+          "type": "boolean"
+        },
+        "llm": {
+          "type": "object",
+          "required": [
+            "status"
+          ],
+          "properties": {
+            "provider": {
+              "type": "string"
+            },
+            "model": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "ok",
+                "degraded",
+                "down",
+                "unknown"
+              ]
+            }
+          }
+        },
+        "llm_fallback": {
+          "type": "object",
+          "required": [
+            "status"
+          ],
+          "properties": {
+            "provider": {
+              "type": "string"
+            },
+            "model": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "ok",
+                "degraded",
+                "down",
+                "unknown"
+              ]
+            }
+          },
+          "description": "Backup provider (anthropic) used when the primary fails or times out."
+        },
+        "part_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "design_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "uptime_s": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "PartsPage": {
+      "type": "object",
+      "required": [
+        "spec_version",
+        "items",
+        "next_cursor",
+        "total"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "part.schema.json#/$defs/PartCard"
+          }
+        },
+        "next_cursor": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "PartResponse": {
+      "type": "object",
+      "required": [
+        "spec_version",
+        "part"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "part": {
+          "$ref": "part.schema.json"
+        }
+      }
+    },
+    "Facets": {
+      "type": "object",
+      "required": [
+        "spec_version",
+        "facets"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "facets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "facet",
+              "label",
+              "value_type"
+            ],
+            "properties": {
+              "facet": {
+                "$ref": "common.schema.json#/$defs/Slug"
+              },
+              "label": {
+                "type": "string"
+              },
+              "value_type": {
+                "type": "string",
+                "enum": [
+                  "enum",
+                  "number",
+                  "bool",
+                  "string",
+                  "unknown"
+                ]
+              },
+              "unit": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "values": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "value"
+                  ],
+                  "properties": {
+                    "value": {},
+                    "label": {
+                      "type": "string"
+                    },
+                    "count": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                }
+              },
+              "min": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "max": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "applies_to": {
+                "type": "array",
+                "items": {
+                  "$ref": "vocab.schema.json#/$defs/FunctionId"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Vocab": {
+      "type": "object",
+      "required": [
+        "spec_version",
+        "functions",
+        "interface_types",
+        "device_classes",
+        "stages",
+        "check_rules",
+        "warning_codes",
+        "error_codes"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "functions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "label"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "group": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "interface_types": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "label"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "group": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "device_classes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "label"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "group": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "stages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "label"
+            ],
+            "properties": {
+              "id": {
+                "$ref": "common.schema.json#/$defs/StageId"
+              },
+              "label": {
+                "type": "string"
+              },
+              "budget_ms": {
+                "$ref": "common.schema.json#/$defs/DurationMs"
+              }
+            }
+          }
+        },
+        "check_rules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "label"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "severity": {
+                "$ref": "common.schema.json#/$defs/Severity"
+              }
+            }
+          }
+        },
+        "warning_codes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "label"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "group": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "error_codes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "label"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "group": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "DesignsPage": {
+      "type": "object",
+      "required": [
+        "spec_version",
+        "items",
+        "next_cursor",
+        "total"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "design.schema.json#/$defs/DesignCard"
+          }
+        },
+        "next_cursor": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "DesignResponse": {
+      "type": "object",
+      "required": [
+        "spec_version",
+        "design"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "design": {
+          "$ref": "design.schema.json"
+        }
+      }
+    },
+    "CreateBuildRequest": {
+      "type": "object",
+      "required": [
+        "prompt"
+      ],
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "options": {
+          "$ref": "ws_client.schema.json#/$defs/BuildOptions"
+        }
+      }
+    },
+    "CreateBuildResponse": {
+      "type": "object",
+      "required": [
+        "spec_version",
+        "build_id",
+        "ws_url",
+        "events_url"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "build_id": {
+          "$ref": "common.schema.json#/$defs/BuildId"
+        },
+        "ws_url": {
+          "type": "string",
+          "description": "Connect and send build.resume with last_seq 0."
+        },
+        "events_url": {
+          "type": "string"
+        }
+      }
+    },
+    "BuildResponse": {
+      "type": "object",
+      "required": [
+        "spec_version",
+        "build"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "build": {
+          "$ref": "build.schema.json"
+        }
+      }
+    },
+    "EventsPage": {
+      "type": "object",
+      "required": [
+        "spec_version",
+        "build_id",
+        "events",
+        "next_after_seq",
+        "complete"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "build_id": {
+          "$ref": "common.schema.json#/$defs/BuildId"
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "$ref": "ws_server.schema.json"
+          }
+        },
+        "next_after_seq": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "complete": {
+          "type": "boolean",
+          "description": "true when the terminal event is included and no later events exist yet."
+        }
+      }
+    },
+    "Alternatives": {
+      "type": "object",
+      "required": [
+        "spec_version",
+        "build_id",
+        "slot_id",
+        "current_part_id",
+        "items"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "build_id": {
+          "$ref": "common.schema.json#/$defs/BuildId"
+        },
+        "slot_id": {
+          "type": "string"
+        },
+        "instance_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "current_part_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "card",
+              "compatible"
+            ],
+            "properties": {
+              "card": {
+                "$ref": "part.schema.json#/$defs/PartCard"
+              },
+              "compatible": {
+                "type": "boolean",
+                "description": "false: swapping would fail the listed checks (edit.rejected)."
+              },
+              "failed_checks": {
+                "type": "array",
+                "items": {
+                  "$ref": "check.schema.json"
+                }
+              },
+              "deltas": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "label"
+                  ],
+                  "properties": {
+                    "label": {
+                      "type": "string"
+                    },
+                    "from": {},
+                    "to": {}
+                  }
+                },
+                "maxItems": 4
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

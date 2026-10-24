@@ -1,0 +1,269 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://app.invalid/spec/v1/edit.schema.json",
+  "x-spec-version": "1.1.0",
+  "title": "EditOp",
+  "description": "One typed change to a build. edit.apply carries a list of ops applied atomically: all succeed or none do. Unknown op names are rejected with E_INVALID_EDIT, never ignored.",
+  "type": "object",
+  "$ref": "#/$defs/EditOp",
+  "$defs": {
+    "EditOp": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/SwapPart"
+        },
+        {
+          "$ref": "#/$defs/Connect"
+        },
+        {
+          "$ref": "#/$defs/Disconnect"
+        },
+        {
+          "$ref": "#/$defs/Recolor"
+        },
+        {
+          "$ref": "#/$defs/Move"
+        },
+        {
+          "$ref": "#/$defs/Resize"
+        },
+        {
+          "$ref": "#/$defs/AddPart"
+        },
+        {
+          "$ref": "#/$defs/RemovePart"
+        }
+      ]
+    },
+    "OpName": {
+      "type": "string",
+      "enum": [
+        "swap_part",
+        "connect",
+        "disconnect",
+        "recolor",
+        "move",
+        "resize",
+        "add_part",
+        "remove_part"
+      ]
+    },
+    "SwapPart": {
+      "type": "object",
+      "description": "Replace the part of an instance. instance_id stays the same; connections are re-resolved; enclosure rebuilds if geometry changed.",
+      "required": [
+        "op",
+        "instance_id",
+        "part_id"
+      ],
+      "properties": {
+        "op": {
+          "const": "swap_part"
+        },
+        "instance_id": {
+          "$ref": "common.schema.json#/$defs/InstanceId"
+        },
+        "part_id": {
+          "$ref": "common.schema.json#/$defs/Id"
+        }
+      }
+    },
+    "Connect": {
+      "type": "object",
+      "required": [
+        "op",
+        "from",
+        "to"
+      ],
+      "properties": {
+        "op": {
+          "const": "connect"
+        },
+        "from": {
+          "$ref": "common.schema.json#/$defs/PortRef"
+        },
+        "to": {
+          "$ref": "common.schema.json#/$defs/PortRef"
+        }
+      }
+    },
+    "Disconnect": {
+      "type": "object",
+      "required": [
+        "op",
+        "connection_id"
+      ],
+      "properties": {
+        "op": {
+          "const": "disconnect"
+        },
+        "connection_id": {
+          "type": "string"
+        }
+      }
+    },
+    "Recolor": {
+      "type": "object",
+      "description": "Exactly one of instance_id or enclosure_id.",
+      "required": [
+        "op",
+        "color"
+      ],
+      "properties": {
+        "op": {
+          "const": "recolor"
+        },
+        "instance_id": {
+          "$ref": "common.schema.json#/$defs/InstanceId"
+        },
+        "enclosure_id": {
+          "type": "string"
+        },
+        "color": {
+          "$ref": "common.schema.json#/$defs/Color"
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "instance_id"
+          ]
+        },
+        {
+          "required": [
+            "enclosure_id"
+          ]
+        }
+      ]
+    },
+    "Move": {
+      "type": "object",
+      "description": "Set or nudge a pose. index targets one element of an arrayed instance. lock true keeps the pose fixed in later solver runs.",
+      "required": [
+        "op",
+        "instance_id",
+        "mode"
+      ],
+      "properties": {
+        "op": {
+          "const": "move"
+        },
+        "instance_id": {
+          "$ref": "common.schema.json#/$defs/InstanceId"
+        },
+        "index": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "position_mm": {
+          "$ref": "common.schema.json#/$defs/Vec3"
+        },
+        "rotation_deg": {
+          "$ref": "common.schema.json#/$defs/Vec3"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "absolute",
+            "delta"
+          ]
+        },
+        "lock": {
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
+    "Resize": {
+      "type": "object",
+      "description": "Change parameters of a generated enclosure or a board. Only keys present change.",
+      "required": [
+        "op",
+        "target",
+        "params"
+      ],
+      "properties": {
+        "op": {
+          "const": "resize"
+        },
+        "target": {
+          "type": "object",
+          "properties": {
+            "enclosure_id": {
+              "type": "string"
+            },
+            "board_id": {
+              "type": "string"
+            }
+          },
+          "oneOf": [
+            {
+              "required": [
+                "enclosure_id"
+              ]
+            },
+            {
+              "required": [
+                "board_id"
+              ]
+            }
+          ]
+        },
+        "params": {
+          "type": "object",
+          "description": "Enclosure: any key of Enclosure.params. Board: size_mm, thickness_mm.",
+          "additionalProperties": true
+        }
+      }
+    },
+    "AddPart": {
+      "type": "object",
+      "description": "Add a new instance. The server picks instance_id, placement and connections, and reports them as part.added and connection.added.",
+      "required": [
+        "op",
+        "part_id"
+      ],
+      "properties": {
+        "op": {
+          "const": "add_part"
+        },
+        "part_id": {
+          "$ref": "common.schema.json#/$defs/Id"
+        },
+        "slot_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "quantity": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1
+        },
+        "side": {
+          "$ref": "common.schema.json#/$defs/Side"
+        }
+      }
+    },
+    "RemovePart": {
+      "type": "object",
+      "description": "Remove an instance and its connections. Removing the only part of a critical slot is rejected with E_CRITICAL_PART_MISSING.",
+      "required": [
+        "op",
+        "instance_id"
+      ],
+      "properties": {
+        "op": {
+          "const": "remove_part"
+        },
+        "instance_id": {
+          "$ref": "common.schema.json#/$defs/InstanceId"
+        }
+      }
+    }
+  }
+}

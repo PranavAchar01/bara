@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://app.invalid/spec/v1/check.schema.json",
+  "x-spec-version": "1.1.0",
+  "title": "CheckResult",
+  "description": "Result of one deterministic rule applied to one subject. check_key identifies the (rule, subject) pair; a newer result with the same check_key replaces the older one in the client store. rule_id is an open string so new rules never break clients; v1 rule ids are listed in SPEC.md section 6.1.",
+  "type": "object",
+  "required": [
+    "check_key",
+    "rule_id",
+    "status",
+    "severity",
+    "message"
+  ],
+  "properties": {
+    "check_key": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "rule_id plus subject, for example elec.i2c.address_clash:u_oled_l."
+    },
+    "rule_id": {
+      "type": "string",
+      "pattern": "^[a-z]+(\\.[a-z0-9_]+){1,3}$"
+    },
+    "status": {
+      "$ref": "common.schema.json#/$defs/CheckStatus"
+    },
+    "severity": {
+      "$ref": "common.schema.json#/$defs/Severity",
+      "description": "How bad a fail would be. A pass keeps the severity of the rule."
+    },
+    "message": {
+      "type": "string",
+      "maxLength": 300
+    },
+    "subjects": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/Subject"
+      }
+    },
+    "measured": {
+      "type": [
+        "number",
+        "string",
+        "boolean",
+        "null"
+      ]
+    },
+    "limit": {
+      "type": [
+        "number",
+        "string",
+        "boolean",
+        "null"
+      ]
+    },
+    "unit": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "fix_hint": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 200
+    },
+    "stage": {
+      "$ref": "common.schema.json#/$defs/StageId"
+    },
+    "duration_ms": {
+      "$ref": "common.schema.json#/$defs/DurationMs"
+    }
+  }
+}

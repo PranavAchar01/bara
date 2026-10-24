@@ -1,0 +1,368 @@
+{
+  "fixture": "edit_swap_switches",
+  "spec_version": "1.1.0",
+  "kind": "stream",
+  "description": "Edit: swap both switch arrays from Gateron Yellow to Cherry MX2A Brown (same MX family). Starts from exact_keyboard.",
+  "requires_fixture": "exact_keyboard",
+  "steps": [
+    {
+      "dir": "client",
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "edit.apply",
+        "msg_id": "m_edit_swap_01",
+        "ts": "2026-10-24T20:00:20.267Z",
+        "payload": {
+          "build_id": "b_exact001A",
+          "base_revision": 1,
+          "ops": [
+            {
+              "op": "swap_part",
+              "instance_id": "u_sw_l",
+              "part_id": "sw:cherry_mx2a_brown"
+            },
+            {
+              "op": "swap_part",
+              "instance_id": "u_sw_r",
+              "part_id": "sw:cherry_mx2a_brown"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 4,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "ack",
+        "seq": 0,
+        "build_id": "b_exact001A",
+        "ts": "2026-10-24T20:00:20.271Z",
+        "payload": {
+          "msg_id": "m_edit_swap_01",
+          "accepted": true,
+          "duplicate": false,
+          "build_id": "b_exact001A",
+          "edit_id": "ed_1",
+          "error": null
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 2,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "stage.started",
+        "seq": 63,
+        "build_id": "b_exact001A",
+        "ts": "2026-10-24T20:00:20.273Z",
+        "stage": "edit",
+        "cause": {
+          "msg_id": "m_edit_swap_01",
+          "edit_id": "ed_1"
+        },
+        "payload": {
+          "stage": "edit",
+          "label": "Swapping switches",
+          "budget_ms": 50
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 6,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "part.updated",
+        "seq": 64,
+        "build_id": "b_exact001A",
+        "ts": "2026-10-24T20:00:20.279Z",
+        "stage": "edit",
+        "revision": 2,
+        "cause": {
+          "msg_id": "m_edit_swap_01",
+          "edit_id": "ed_1"
+        },
+        "payload": {
+          "part": {
+            "instance_id": "u_sw_l",
+            "part_id": "sw:cherry_mx2a_brown",
+            "slot_id": "switches",
+            "label": "Switches left",
+            "quantity": 21,
+            "side": "left",
+            "color": null,
+            "placement": {
+              "mode": "layout",
+              "position_mm": [
+                -132.0,
+                40.0,
+                1.6
+              ],
+              "rotation_deg": [
+                0,
+                0,
+                0
+              ],
+              "explode_offset_mm": [
+                0,
+                0,
+                35.0
+              ],
+              "source": "design",
+              "locked": false,
+              "layout_id": "lay_corne_l"
+            },
+            "card": {
+              "part_id": "sw:cherry_mx2a_brown",
+              "display_name": "Cherry MX2A Brown",
+              "kind": "component",
+              "primary_function": "input.key",
+              "summary": "Tactile MX switch, 55 gf.",
+              "key_specs": [
+                {
+                  "label": "Family",
+                  "value": "MX",
+                  "unit": null
+                },
+                {
+                  "label": "Type",
+                  "value": "tactile",
+                  "unit": null
+                },
+                {
+                  "label": "Force",
+                  "value": 55,
+                  "unit": "gf"
+                }
+              ],
+              "thumbnail_url": "/assets/parts/cherry_mx2a_brown.png",
+              "licence_spdx": "CC-BY-4.0",
+              "commercial_ok": "yes",
+              "verified": "geometry",
+              "source_url": null
+            },
+            "assets": [
+              {
+                "asset_id": "a_cherry_mx2a_brown_glb",
+                "kind": "glb",
+                "role": "model",
+                "url": "/assets/parts/cherry_mx2a_brown.glb",
+                "status": "ready"
+              },
+              {
+                "asset_id": "a_cherry_mx2a_brown_png",
+                "kind": "png",
+                "role": "thumbnail",
+                "url": "/assets/parts/cherry_mx2a_brown.png",
+                "status": "ready"
+              }
+            ],
+            "origin": "user",
+            "status": "ok"
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 6,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "part.updated",
+        "seq": 65,
+        "build_id": "b_exact001A",
+        "ts": "2026-10-24T20:00:20.285Z",
+        "stage": "edit",
+        "revision": 2,
+        "cause": {
+          "msg_id": "m_edit_swap_01",
+          "edit_id": "ed_1"
+        },
+        "payload": {
+          "part": {
+            "instance_id": "u_sw_r",
+            "part_id": "sw:cherry_mx2a_brown",
+            "slot_id": "switches",
+            "label": "Switches right",
+            "quantity": 21,
+            "side": "right",
+            "color": null,
+            "placement": {
+              "mode": "layout",
+              "position_mm": [
+                20.0,
+                40.0,
+                1.6
+              ],
+              "rotation_deg": [
+                0,
+                0,
+                0
+              ],
+              "explode_offset_mm": [
+                0,
+                0,
+                35.0
+              ],
+              "source": "design",
+              "locked": false,
+              "layout_id": "lay_corne_r"
+            },
+            "card": {
+              "part_id": "sw:cherry_mx2a_brown",
+              "display_name": "Cherry MX2A Brown",
+              "kind": "component",
+              "primary_function": "input.key",
+              "summary": "Tactile MX switch, 55 gf.",
+              "key_specs": [
+                {
+                  "label": "Family",
+                  "value": "MX",
+                  "unit": null
+                },
+                {
+                  "label": "Type",
+                  "value": "tactile",
+                  "unit": null
+                },
+                {
+                  "label": "Force",
+                  "value": 55,
+                  "unit": "gf"
+                }
+              ],
+              "thumbnail_url": "/assets/parts/cherry_mx2a_brown.png",
+              "licence_spdx": "CC-BY-4.0",
+              "commercial_ok": "yes",
+              "verified": "geometry",
+              "source_url": null
+            },
+            "assets": [
+              {
+                "asset_id": "a_cherry_mx2a_brown_glb",
+                "kind": "glb",
+                "role": "model",
+                "url": "/assets/parts/cherry_mx2a_brown.glb",
+                "status": "ready"
+              },
+              {
+                "asset_id": "a_cherry_mx2a_brown_png",
+                "kind": "png",
+                "role": "thumbnail",
+                "url": "/assets/parts/cherry_mx2a_brown.png",
+                "status": "ready"
+              }
+            ],
+            "origin": "user",
+            "status": "ok"
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 3,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "check.result",
+        "seq": 66,
+        "build_id": "b_exact001A",
+        "ts": "2026-10-24T20:00:20.288Z",
+        "stage": "edit",
+        "revision": 2,
+        "cause": {
+          "msg_id": "m_edit_swap_01",
+          "edit_id": "ed_1"
+        },
+        "payload": {
+          "results": [
+            {
+              "check_key": "mech.switch.family_match:u_sw_l",
+              "rule_id": "mech.switch.family_match",
+              "status": "pass",
+              "severity": "critical",
+              "message": "MX switches on MX hotswap sockets.",
+              "subjects": [
+                {
+                  "instance_id": "u_sw_l"
+                }
+              ],
+              "stage": "edit"
+            },
+            {
+              "check_key": "mech.switch.family_match:u_sw_r",
+              "rule_id": "mech.switch.family_match",
+              "status": "pass",
+              "severity": "critical",
+              "message": "MX switches on MX hotswap sockets.",
+              "subjects": [
+                {
+                  "instance_id": "u_sw_r"
+                }
+              ],
+              "stage": "edit"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 5,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "stage.completed",
+        "seq": 67,
+        "build_id": "b_exact001A",
+        "ts": "2026-10-24T20:00:20.293Z",
+        "stage": "edit",
+        "cause": {
+          "msg_id": "m_edit_swap_01",
+          "edit_id": "ed_1"
+        },
+        "payload": {
+          "stage": "edit",
+          "status": "ok",
+          "duration_ms": 20
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 2,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "edit.applied",
+        "seq": 68,
+        "build_id": "b_exact001A",
+        "ts": "2026-10-24T20:00:20.295Z",
+        "revision": 2,
+        "cause": {
+          "msg_id": "m_edit_swap_01",
+          "edit_id": "ed_1"
+        },
+        "payload": {
+          "edit_id": "ed_1",
+          "msg_id": "m_edit_swap_01",
+          "ops": [
+            {
+              "op": "swap_part",
+              "instance_id": "u_sw_l",
+              "part_id": "sw:cherry_mx2a_brown"
+            },
+            {
+              "op": "swap_part",
+              "instance_id": "u_sw_r",
+              "part_id": "sw:cherry_mx2a_brown"
+            }
+          ],
+          "revision": 2,
+          "duration_ms": 21
+        }
+      }
+    }
+  ]
+}

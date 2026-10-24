@@ -1,0 +1,33 @@
+{
+  "fixture": "health",
+  "spec_version": "1.1.0",
+  "kind": "rest",
+  "description": "Server health.",
+  "body_def": "Health",
+  "request": {
+    "method": "GET",
+    "path": "/v1/health"
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "spec_version": "1.1.0",
+      "status": "ok",
+      "server_version": "0.1.0",
+      "mock": false,
+      "llm": {
+        "provider": "cerebras",
+        "model": "llama-4-scout",
+        "status": "ok"
+      },
+      "llm_fallback": {
+        "provider": "anthropic",
+        "model": "claude-haiku-5-5",
+        "status": "ok"
+      },
+      "part_count": 39451,
+      "design_count": 120,
+      "uptime_s": 5400
+    }
+  }
+}

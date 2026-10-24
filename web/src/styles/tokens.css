@@ -1,0 +1,95 @@
+/* Design tokens. One accent; status colours per SPEC 11.4. */
+:root {
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  --bg: #f4f4f1;
+  --surface: #ffffff;
+  --surface-2: #fafaf8;
+  --sunken: #ecece8;
+  --line: #e1e1dc;
+  --line-strong: #c9c9c2;
+  --text: #1b1d1f;
+  --text-2: #4a4e52;
+  --muted: #7a7f84;
+  --accent: #2f55d4;
+  --accent-soft: #e7ecfb;
+  --accent-text: #ffffff;
+
+  --ok: #2e7d4f;
+  --ok-soft: #e4f2e9;
+  --warn: #a8690f;
+  --warn-soft: #faf0dc;
+  --fail: #c2362f;
+  --fail-soft: #fbe7e5;
+  --info: #7d838a;
+  --info-soft: #eeefef;
+
+  --viewport-bg: #ededea;
+  --grid-line: #d9d9d3;
+
+  --radius: 6px;
+  --radius-sm: 4px;
+  --shadow: 0 1px 2px rgb(20 20 20 / 6%), 0 4px 16px rgb(20 20 20 / 6%);
+  --shadow-pop: 0 2px 6px rgb(20 20 20 / 10%), 0 12px 32px rgb(20 20 20 / 12%);
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111315;
+    --surface: #181b1e;
+    --surface-2: #1d2024;
+    --sunken: #0d0f10;
+    --line: #2a2e33;
+    --line-strong: #3a3f45;
+    --text: #e7e9eb;
+    --text-2: #b9bec3;
+    --muted: #8a9198;
+    --accent: #7b96f2;
+    --accent-soft: #222b45;
+    --accent-text: #0d1020;
+    --ok: #5cb57f;
+    --ok-soft: #17291f;
+    --warn: #d9a043;
+    --warn-soft: #2e2413;
+    --fail: #e8675f;
+    --fail-soft: #34191a;
+    --info: #98a0a8;
+    --info-soft: #23272b;
+    --viewport-bg: #16191c;
+    --grid-line: #262a2f;
+    --shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 4px 16px rgb(0 0 0 / 30%);
+    --shadow-pop: 0 2px 6px rgb(0 0 0 / 50%), 0 12px 32px rgb(0 0 0 / 40%);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #111315;
+  --surface: #181b1e;
+  --surface-2: #1d2024;
+  --sunken: #0d0f10;
+  --line: #2a2e33;
+  --line-strong: #3a3f45;
+  --text: #e7e9eb;
+  --text-2: #b9bec3;
+  --muted: #8a9198;
+  --accent: #7b96f2;
+  --accent-soft: #222b45;
+  --accent-text: #0d1020;
+  --ok: #5cb57f;
+  --ok-soft: #17291f;
+  --warn: #d9a043;
+  --warn-soft: #2e2413;
+  --fail: #e8675f;
+  --fail-soft: #34191a;
+  --info: #98a0a8;
+  --info-soft: #23272b;
+  --viewport-bg: #16191c;
+  --grid-line: #262a2f;
+  --shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 4px 16px rgb(0 0 0 / 30%);
+  --shadow-pop: 0 2px 6px rgb(0 0 0 / 50%), 0 12px 32px rgb(0 0 0 / 40%);
+  color-scheme: dark;
+}

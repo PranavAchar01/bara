@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://app.invalid/spec/v1/asset.schema.json",
+  "x-spec-version": "1.1.0",
+  "title": "AssetRef",
+  "description": "Reference to a static file served by the backend under /assets/. Paths are content addressed and immutable, so the client may cache forever. GLB files are standard glTF 2.0 (meters, Y up); the viewer maps them to build space with one fixed transform: scale 1000, rotate +90 deg about X.",
+  "type": "object",
+  "required": [
+    "asset_id",
+    "kind",
+    "url"
+  ],
+  "properties": {
+    "asset_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "glb",
+        "png",
+        "svg",
+        "stl",
+        "3mf",
+        "step",
+        "kicad_pcb",
+        "gerber_zip",
+        "firmware_src_zip",
+        "firmware_bin",
+        "uf2",
+        "bom_csv",
+        "log",
+        "zip",
+        "json",
+        "unknown"
+      ]
+    },
+    "role": {
+      "type": "string",
+      "description": "What the file is for. model is the full detail GLB, model_lod1 the decimated one, thumbnail a square PNG (256 px), render a large PNG placeholder of the assembled object.",
+      "enum": [
+        "model",
+        "model_lod1",
+        "thumbnail",
+        "render",
+        "export",
+        "source",
+        "binary",
+        "log",
+        "unknown"
+      ]
+    },
+    "url": {
+      "type": "string",
+      "description": "Path relative to the server origin, beginning with /assets/, for example /assets/parts/3f9a2c/model.glb. Absolute https URLs are allowed for mock mode.",
+      "pattern": "^(/assets/|https://)"
+    },
+    "content_type": {
+      "type": "string"
+    },
+    "bytes": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "sha256": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "status": {
+      "type": "string",
+      "description": "ready: fetchable now. pending: will be produced; a later event carries the ready ref. missing: will not exist; show the placeholder.",
+      "enum": [
+        "ready",
+        "pending",
+        "missing",
+        "unknown"
+      ],
+      "default": "ready"
+    },
+    "nodes": {
+      "type": "array",
+      "description": "GLB node names that are addressable (for recolor and highlight).",
+      "items": {
+        "type": "string"
+      }
+    },
+    "origin": {
+      "type": "string",
+      "enum": [
+        "design",
+        "generated",
+        "catalog",
+        "unknown"
+      ],
+      "description": "design: a file from the open design repo. generated: produced by this build (case, autorouted board, compiled binary). catalog: a part library file."
+    }
+  }
+}

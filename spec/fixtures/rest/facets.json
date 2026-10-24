@@ -1,0 +1,93 @@
+{
+  "fixture": "facets",
+  "spec_version": "1.1.0",
+  "kind": "rest",
+  "description": "Facets the classifier may emit and the catalog can filter on (excerpt).",
+  "body_def": "Facets",
+  "request": {
+    "method": "GET",
+    "path": "/v1/facets"
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "spec_version": "1.1.0",
+      "facets": [
+        {
+          "facet": "switch_family",
+          "label": "Switch family",
+          "value_type": "enum",
+          "unit": null,
+          "values": [
+            {
+              "value": "mx",
+              "label": "MX",
+              "count": 112
+            },
+            {
+              "value": "choc_v1",
+              "label": "Choc v1",
+              "count": 31
+            }
+          ],
+          "applies_to": [
+            "input.key",
+            "interconnect.pcb",
+            "mech.keycap"
+          ]
+        },
+        {
+          "facet": "layout_size",
+          "label": "Layout",
+          "value_type": "enum",
+          "unit": null,
+          "values": [
+            {
+              "value": "percent_60",
+              "label": "60%",
+              "count": 7
+            },
+            {
+              "value": "split",
+              "label": "Split",
+              "count": 22
+            }
+          ],
+          "applies_to": [
+            "interconnect.pcb"
+          ]
+        },
+        {
+          "facet": "wireless",
+          "label": "Wireless",
+          "value_type": "enum",
+          "unit": null,
+          "values": [
+            {
+              "value": "ble",
+              "label": "BLE",
+              "count": 40
+            },
+            {
+              "value": "none",
+              "label": "None",
+              "count": 174
+            }
+          ],
+          "applies_to": [
+            "compute.mcu"
+          ]
+        },
+        {
+          "facet": "max_width_mm",
+          "label": "Width",
+          "value_type": "number",
+          "unit": "mm",
+          "min": 2.0,
+          "max": 400.0,
+          "applies_to": []
+        }
+      ]
+    }
+  }
+}

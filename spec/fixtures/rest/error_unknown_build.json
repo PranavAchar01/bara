@@ -1,0 +1,22 @@
+{
+  "fixture": "error_unknown_build",
+  "spec_version": "1.1.0",
+  "kind": "rest",
+  "description": "Every non 2xx body is ErrorResponse.",
+  "body_def": "ErrorResponse",
+  "request": {
+    "method": "GET",
+    "path": "/v1/builds/b_missing00"
+  },
+  "response": {
+    "status": 404,
+    "body": {
+      "spec_version": "1.1.0",
+      "error": {
+        "code": "E_UNKNOWN_BUILD",
+        "message": "No build b_missing00.",
+        "retryable": false
+      }
+    }
+  }
+}

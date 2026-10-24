@@ -1,0 +1,458 @@
+{
+  "fixture": "events_failed",
+  "spec_version": "1.1.0",
+  "kind": "rest",
+  "description": "Event log replay over REST.",
+  "body_def": "EventsPage",
+  "request": {
+    "method": "GET",
+    "path": "/v1/builds/b_fail0001A/events",
+    "query": {
+      "after_seq": "0"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "spec_version": "1.1.0",
+      "build_id": "b_fail0001A",
+      "events": [
+        {
+          "spec_version": "1.1.0",
+          "type": "stage.started",
+          "seq": 1,
+          "build_id": "b_fail0001A",
+          "ts": "2026-10-24T20:00:00.033Z",
+          "stage": "classify",
+          "payload": {
+            "stage": "classify",
+            "label": "Understanding the request",
+            "budget_ms": 50
+          }
+        },
+        {
+          "spec_version": "1.1.0",
+          "type": "spec.ready",
+          "seq": 2,
+          "build_id": "b_fail0001A",
+          "ts": "2026-10-24T20:00:00.041Z",
+          "stage": "classify",
+          "payload": {
+            "spec": {
+              "spec_id": "sp_fail01",
+              "prompt": "a 60% keyboard with Choc switches",
+              "normalized_prompt": "60% keyboard choc switches",
+              "device_class": "input_device",
+              "taxonomy_path": [
+                "input_device",
+                "keyboard",
+                "percent_60"
+              ],
+              "functions": [
+                {
+                  "function_id": "input.key_matrix",
+                  "required": true,
+                  "count": 1,
+                  "source": "explicit"
+                },
+                {
+                  "function_id": "compute.mcu",
+                  "required": true,
+                  "count": 1,
+                  "source": "default"
+                }
+              ],
+              "hard_requirements": [
+                {
+                  "req_id": "r1",
+                  "facet": "layout_size",
+                  "op": "eq",
+                  "value": "percent_60",
+                  "unit": null,
+                  "source": "explicit",
+                  "text_span": [
+                    2,
+                    5
+                  ],
+                  "label": "60% layout"
+                },
+                {
+                  "req_id": "r2",
+                  "facet": "switch_family",
+                  "op": "eq",
+                  "value": "choc_v1",
+                  "unit": null,
+                  "source": "explicit",
+                  "text_span": [
+                    20,
+                    24
+                  ],
+                  "label": "Choc switches"
+                }
+              ],
+              "soft_requirements": [],
+              "leftover_text": null,
+              "classifier": {
+                "stage": "rules",
+                "confidence": 0.95,
+                "margin": 0.5,
+                "model": null,
+                "latency_ms": 3
+              }
+            }
+          }
+        },
+        {
+          "spec_version": "1.1.0",
+          "type": "stage.completed",
+          "seq": 3,
+          "build_id": "b_fail0001A",
+          "ts": "2026-10-24T20:00:00.046Z",
+          "stage": "classify",
+          "payload": {
+            "stage": "classify",
+            "status": "ok",
+            "duration_ms": 13
+          }
+        },
+        {
+          "spec_version": "1.1.0",
+          "type": "stage.started",
+          "seq": 4,
+          "build_id": "b_fail0001A",
+          "ts": "2026-10-24T20:00:00.051Z",
+          "stage": "reuse",
+          "payload": {
+            "stage": "reuse",
+            "label": "Looking for an existing open design",
+            "budget_ms": 30
+          }
+        },
+        {
+          "spec_version": "1.1.0",
+          "type": "reuse.decided",
+          "seq": 5,
+          "build_id": "b_fail0001A",
+          "ts": "2026-10-24T20:00:00.061Z",
+          "stage": "reuse",
+          "payload": {
+            "tier": "compose",
+            "design_id": null,
+            "design": null,
+            "considered": [
+              {
+                "design_id": "bakeneko60",
+                "name": "Bakeneko60",
+                "tier": "compose",
+                "score": 0.7,
+                "unmet": [
+                  "r2"
+                ]
+              },
+              {
+                "design_id": "ferris",
+                "name": "Ferris Sweep",
+                "tier": "compose",
+                "score": 0.55,
+                "unmet": [
+                  "r1"
+                ]
+              }
+            ],
+            "unmet_hard": [
+              "r1",
+              "r2"
+            ],
+            "reason": "No design is both 60% and Choc. Composing from parts."
+          }
+        },
+        {
+          "spec_version": "1.1.0",
+          "type": "stage.completed",
+          "seq": 6,
+          "build_id": "b_fail0001A",
+          "ts": "2026-10-24T20:00:00.066Z",
+          "stage": "reuse",
+          "payload": {
+            "stage": "reuse",
+            "status": "ok",
+            "duration_ms": 15
+          }
+        },
+        {
+          "spec_version": "1.1.0",
+          "type": "stage.started",
+          "seq": 7,
+          "build_id": "b_fail0001A",
+          "ts": "2026-10-24T20:00:00.071Z",
+          "stage": "compose",
+          "payload": {
+            "stage": "compose",
+            "label": "Choosing parts",
+            "budget_ms": 1500
+          }
+        },
+        {
+          "spec_version": "1.1.0",
+          "type": "slots.ready",
+          "seq": 8,
+          "build_id": "b_fail0001A",
+          "ts": "2026-10-24T20:00:00.081Z",
+          "stage": "compose",
+          "payload": {
+            "slots": [
+              {
+                "slot_id": "pcb",
+                "label": "PCB",
+                "function_id": "interconnect.pcb",
+                "criticality": "critical",
+                "quantity": 1,
+                "side": "none",
+                "order": 0,
+                "state": "pending",
+                "candidates_total": 41,
+                "candidates_left": 41,
+                "chosen_part_id": null,
+                "instance_ids": [],
+                "from_design": false
+              },
+              {
+                "slot_id": "controller",
+                "label": "Controller",
+                "function_id": "compute.mcu",
+                "criticality": "critical",
+                "quantity": 1,
+                "side": "none",
+                "order": 1,
+                "state": "pending",
+                "candidates_total": 214,
+                "candidates_left": 214,
+                "chosen_part_id": null,
+                "instance_ids": [],
+                "from_design": false
+              },
+              {
+                "slot_id": "switches",
+                "label": "Switches",
+                "function_id": "input.key",
+                "criticality": "critical",
+                "quantity": 61,
+                "side": "none",
+                "order": 2,
+                "state": "pending",
+                "candidates_total": 160,
+                "candidates_left": 160,
+                "chosen_part_id": null,
+                "instance_ids": [],
+                "from_design": false
+              }
+            ]
+          }
+        },
+        {
+          "spec_version": "1.1.0",
+          "type": "slot.updated",
+          "seq": 9,
+          "build_id": "b_fail0001A",
+          "ts": "2026-10-24T20:00:00.084Z",
+          "stage": "compose",
+          "payload": {
+            "slot": {
+              "slot_id": "pcb",
+              "label": "PCB",
+              "function_id": "interconnect.pcb",
+              "criticality": "critical",
+              "quantity": 1,
+              "side": "none",
+              "order": 0,
+              "state": "narrowing",
+              "candidates_total": 41,
+              "candidates_left": 41,
+              "chosen_part_id": null,
+              "instance_ids": [],
+              "from_design": false
+            }
+          }
+        },
+        {
+          "spec_version": "1.1.0",
+          "type": "candidates.ready",
+          "seq": 10,
+          "build_id": "b_fail0001A",
+          "ts": "2026-10-24T20:00:00.109Z",
+          "stage": "compose",
+          "payload": {
+            "slot_id": "pcb",
+            "step": 0,
+            "filters": [
+              {
+                "facet": "layout_size",
+                "op": "eq",
+                "value": "percent_60",
+                "reason": "requirement",
+                "from_slot_id": null,
+                "req_id": "r1",
+                "count_before": 41,
+                "count_after": 7,
+                "label": "60% layout"
+              },
+              {
+                "facet": "switch_family",
+                "op": "eq",
+                "value": "choc_v1",
+                "reason": "requirement",
+                "from_slot_id": null,
+                "req_id": "r2",
+                "count_before": 7,
+                "count_after": 0,
+                "label": "Choc v1 sockets"
+              }
+            ],
+            "count_before": 41,
+            "count_after": 0,
+            "survivors": []
+          }
+        },
+        {
+          "spec_version": "1.1.0",
+          "type": "slot.updated",
+          "seq": 11,
+          "build_id": "b_fail0001A",
+          "ts": "2026-10-24T20:00:00.112Z",
+          "stage": "compose",
+          "payload": {
+            "slot": {
+              "slot_id": "pcb",
+              "label": "PCB",
+              "function_id": "interconnect.pcb",
+              "criticality": "critical",
+              "quantity": 1,
+              "side": "none",
+              "order": 0,
+              "state": "dead_end",
+              "candidates_total": 41,
+              "candidates_left": 0,
+              "chosen_part_id": null,
+              "instance_ids": [],
+              "from_design": false
+            }
+          }
+        },
+        {
+          "spec_version": "1.1.0",
+          "type": "check.result",
+          "seq": 12,
+          "build_id": "b_fail0001A",
+          "ts": "2026-10-24T20:00:00.115Z",
+          "stage": "compose",
+          "payload": {
+            "results": [
+              {
+                "check_key": "slot.critical_filled:pcb",
+                "rule_id": "slot.critical_filled",
+                "status": "fail",
+                "severity": "critical",
+                "message": "No PCB in the catalog is both 60% and Choc v1.",
+                "subjects": [
+                  {
+                    "slot_id": "pcb"
+                  }
+                ],
+                "stage": "compose"
+              }
+            ]
+          }
+        },
+        {
+          "spec_version": "1.1.0",
+          "type": "stage.completed",
+          "seq": 13,
+          "build_id": "b_fail0001A",
+          "ts": "2026-10-24T20:00:00.120Z",
+          "stage": "compose",
+          "payload": {
+            "stage": "compose",
+            "status": "failed",
+            "duration_ms": 49,
+            "message": "Critical slot PCB has no candidates."
+          }
+        },
+        {
+          "spec_version": "1.1.0",
+          "type": "build.failed",
+          "seq": 14,
+          "build_id": "b_fail0001A",
+          "ts": "2026-10-24T20:00:00.123Z",
+          "payload": {
+            "error": {
+              "code": "E_CRITICAL_PART_MISSING",
+              "message": "No PCB in the catalog is both 60% and Choc v1.",
+              "retryable": false,
+              "stage": "compose",
+              "subjects": [
+                {
+                  "slot_id": "pcb"
+                }
+              ],
+              "details": {
+                "slot_id": "pcb"
+              }
+            },
+            "conflict": {
+              "slot_id": "pcb",
+              "minimal_conflict": [
+                {
+                  "req_id": "r1",
+                  "facet": "layout_size",
+                  "op": "eq",
+                  "value": "percent_60",
+                  "unit": null,
+                  "source": "explicit",
+                  "text_span": [
+                    2,
+                    5
+                  ],
+                  "label": "60% layout"
+                },
+                {
+                  "req_id": "r2",
+                  "facet": "switch_family",
+                  "op": "eq",
+                  "value": "choc_v1",
+                  "unit": null,
+                  "source": "explicit",
+                  "text_span": [
+                    20,
+                    24
+                  ],
+                  "label": "Choc switches"
+                }
+              ],
+              "explanation": "7 PCBs are 60% and 12 take Choc v1 switches, but none is both."
+            },
+            "suggestions": [
+              {
+                "suggestion_id": "sg1",
+                "kind": "prompt",
+                "label": "60% keyboard with MX switches (Bakeneko60)",
+                "prompt": "a 60% keyboard with MX switches",
+                "ops": null,
+                "design_id": "bakeneko60"
+              },
+              {
+                "suggestion_id": "sg2",
+                "kind": "prompt",
+                "label": "Choc split keyboard (Ferris Sweep)",
+                "prompt": "a split keyboard with Choc switches",
+                "ops": null,
+                "design_id": "ferris"
+              }
+            ]
+          }
+        }
+      ],
+      "next_after_seq": 14,
+      "complete": true
+    }
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "description": "Per-connection mechanical rules checked on edits and in the swap drawer. Each rule compares one interface param on the requires end (measured) with the provides end (limit) of one connection type. report: always = a passing result is sent in check.result after a swap; if_tracked = only when the build already tracks that check_key. Templates take {measured}, {limit} (facet labels), {measured_word}, {part}, {owner}, {design}, {form}, {kind}. delta_labels renames a PartCard key_spec label when the swap drawer lists what changes.",
+  "connection_rules": [
+    {
+      "rule_id": "mech.switch.family_match",
+      "connection_type": "switch_socket",
+      "param": "family",
+      "facet": "switch_family",
+      "pass": "{measured} switches on {limit} hotswap sockets.",
+      "fail_short": "{measured} switches do not fit {limit} hotswap sockets.",
+      "fail_long": "{measured} switches do not fit the {design}'s {limit} hotswap sockets.",
+      "error": "{part} does not fit the {owner}'s {limit} sockets.",
+      "fix_hint": "Pick an {limit} switch, or start a {measured_word} build.",
+      "report": "always",
+      "suggest_label": "Build a {measured_word} {form} {kind}",
+      "suggest_prompt": "a {form} {kind} with {measured_word} switches"
+    },
+    {
+      "rule_id": "mech.keycap.stem_match",
+      "connection_type": "switch_stem",
+      "param": "stem",
+      "facet": "stem",
+      "pass": "Keycap stems match the switch stems.",
+      "fail_short": "{measured} keycap stems do not fit {limit} switch stems.",
+      "fail_long": "{measured} keycap stems do not fit {limit} switch stems.",
+      "error": "{part} does not fit the {owner}'s {limit} stems.",
+      "fix_hint": "Pick keycaps with a {limit} stem.",
+      "report": "if_tracked"
+    }
+  ],
+  "slot_rule": {
+    "rule_id": "slot.critical_filled",
+    "error": "Removing {part} leaves the critical {slot} slot empty.",
+    "fix_hint": "Swap it for another part instead of removing it."
+  },
+  "delta_labels": {
+    "Type": "Feel"
+  }
+}

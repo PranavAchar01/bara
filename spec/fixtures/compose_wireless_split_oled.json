@@ -1,0 +1,5698 @@
+{
+  "fixture": "compose_wireless_split_oled",
+  "spec_version": "1.1.0",
+  "kind": "stream",
+  "description": "Compose tier: Corne skeleton, wireless parts chosen slot by slot, optional foam missing, late firmware compile.",
+  "match_prompts": [
+    "a wireless split keyboard with an OLED",
+    "wireless split keyboard with oled"
+  ],
+  "requires_fixture": null,
+  "steps": [
+    {
+      "dir": "server",
+      "delay_ms": 20,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "hello",
+        "seq": 0,
+        "build_id": null,
+        "ts": "2026-10-24T20:00:00.020Z",
+        "payload": {
+          "server_version": "0.1.0",
+          "session_id": "s_demo01",
+          "mock": true,
+          "limits": {
+            "max_prompt_chars": 2000,
+            "max_ops_per_edit": 20,
+            "msg_id_ttl_s": 600
+          },
+          "capabilities": [
+            "compile",
+            "solver"
+          ]
+        }
+      }
+    },
+    {
+      "dir": "client",
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "build.start",
+        "msg_id": "m_compose_start_01",
+        "ts": "2026-10-24T20:00:00.020Z",
+        "payload": {
+          "prompt": "a wireless split keyboard with an OLED",
+          "options": {
+            "force_tier": null,
+            "commercial_only": false,
+            "seed": 7
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 8,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "ack",
+        "seq": 0,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.028Z",
+        "payload": {
+          "msg_id": "m_compose_start_01",
+          "accepted": true,
+          "duplicate": false,
+          "build_id": "b_compose01A",
+          "edit_id": null,
+          "error": null
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 5,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "stage.started",
+        "seq": 1,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.033Z",
+        "stage": "classify",
+        "payload": {
+          "stage": "classify",
+          "label": "Understanding the request",
+          "budget_ms": 50
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 30,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "spec.ready",
+        "seq": 2,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.063Z",
+        "stage": "classify",
+        "payload": {
+          "spec": {
+            "spec_id": "sp_compose01",
+            "prompt": "a wireless split keyboard with an OLED",
+            "normalized_prompt": "wireless split keyboard oled",
+            "device_class": "input_device",
+            "taxonomy_path": [
+              "input_device",
+              "keyboard",
+              "split"
+            ],
+            "functions": [
+              {
+                "function_id": "input.key_matrix",
+                "required": true,
+                "count": 1,
+                "source": "explicit"
+              },
+              {
+                "function_id": "compute.mcu",
+                "required": true,
+                "count": 2,
+                "source": "implicit"
+              },
+              {
+                "function_id": "comms.ble",
+                "required": true,
+                "count": 1,
+                "source": "explicit"
+              },
+              {
+                "function_id": "power.battery",
+                "required": true,
+                "count": 2,
+                "source": "implicit"
+              },
+              {
+                "function_id": "display.oled",
+                "required": true,
+                "count": 1,
+                "source": "explicit"
+              },
+              {
+                "function_id": "mech.keycap",
+                "required": true,
+                "count": 1,
+                "source": "default"
+              },
+              {
+                "function_id": "mech.foam",
+                "required": false,
+                "count": 1,
+                "source": "default"
+              }
+            ],
+            "hard_requirements": [
+              {
+                "req_id": "r1",
+                "facet": "wireless",
+                "op": "eq",
+                "value": "ble",
+                "unit": null,
+                "source": "explicit",
+                "text_span": [
+                  2,
+                  10
+                ],
+                "label": "Wireless (BLE)"
+              },
+              {
+                "req_id": "r2",
+                "facet": "split",
+                "op": "eq",
+                "value": true,
+                "unit": null,
+                "source": "explicit",
+                "text_span": [
+                  11,
+                  16
+                ],
+                "label": "Split"
+              },
+              {
+                "req_id": "r3",
+                "facet": "display_type",
+                "op": "eq",
+                "value": "oled",
+                "unit": null,
+                "source": "explicit",
+                "text_span": [
+                  34,
+                  38
+                ],
+                "label": "OLED display"
+              },
+              {
+                "req_id": "r4",
+                "facet": "power_source",
+                "op": "eq",
+                "value": "battery",
+                "unit": null,
+                "source": "implicit",
+                "text_span": null,
+                "label": "Battery powered"
+              }
+            ],
+            "soft_requirements": [
+              {
+                "req_id": "r5",
+                "facet": "switch_family",
+                "op": "eq",
+                "value": "mx",
+                "unit": null,
+                "source": "default",
+                "text_span": null,
+                "label": "MX switches"
+              }
+            ],
+            "leftover_text": null,
+            "classifier": {
+              "stage": "rules",
+              "confidence": 0.97,
+              "margin": 0.61,
+              "model": null,
+              "provider": null,
+              "latency_ms": 4
+            },
+            "scope": "in_scope",
+            "assumptions": [],
+            "ambiguity": {
+              "needs_clarify": false,
+              "missing_facets": []
+            }
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 5,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "stage.completed",
+        "seq": 3,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.068Z",
+        "stage": "classify",
+        "payload": {
+          "stage": "classify",
+          "status": "ok",
+          "duration_ms": 35
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 5,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "stage.started",
+        "seq": 4,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.073Z",
+        "stage": "reuse",
+        "payload": {
+          "stage": "reuse",
+          "label": "Looking for an existing open design",
+          "budget_ms": 30
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 18,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "reuse.decided",
+        "seq": 5,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.091Z",
+        "stage": "reuse",
+        "payload": {
+          "tier": "compose",
+          "design_id": "corne",
+          "design": {
+            "design_id": "corne",
+            "name": "Corne (crkbd)",
+            "summary": "42 key column staggered split keyboard.",
+            "device_class": "input_device",
+            "thumbnail_url": "/assets/designs/corne.png",
+            "repo_url": "https://github.com/foostan/crkbd",
+            "licence_spdx": "MIT",
+            "commercial_ok": "yes",
+            "key_specs": [
+              {
+                "label": "Keys",
+                "value": 42,
+                "unit": null
+              },
+              {
+                "label": "Switches",
+                "value": "MX",
+                "unit": null
+              }
+            ]
+          },
+          "considered": [
+            {
+              "design_id": "corne",
+              "name": "Corne (crkbd)",
+              "tier": "compose",
+              "score": 0.82,
+              "unmet": [
+                "r1",
+                "r4"
+              ]
+            },
+            {
+              "design_id": "sofle",
+              "name": "Sofle",
+              "tier": "compose",
+              "score": 0.74,
+              "unmet": [
+                "r1",
+                "r4"
+              ]
+            },
+            {
+              "design_id": "lily58",
+              "name": "Lily58",
+              "tier": "compose",
+              "score": 0.71,
+              "unmet": [
+                "r1",
+                "r4"
+              ]
+            }
+          ],
+          "unmet_hard": [
+            "r1",
+            "r4"
+          ],
+          "reason": "Corne matches split and OLED but is wired. Keeping its PCB, layout and plate as the skeleton and composing the wireless parts."
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 5,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "stage.completed",
+        "seq": 6,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.096Z",
+        "stage": "reuse",
+        "payload": {
+          "stage": "reuse",
+          "status": "ok",
+          "duration_ms": 23
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 5,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "stage.started",
+        "seq": 7,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.101Z",
+        "stage": "compose",
+        "payload": {
+          "stage": "compose",
+          "label": "Choosing parts",
+          "budget_ms": 1500
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 20,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "slots.ready",
+        "seq": 8,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.121Z",
+        "stage": "compose",
+        "payload": {
+          "slots": [
+            {
+              "slot_id": "pcb",
+              "label": "PCB",
+              "function_id": "interconnect.pcb",
+              "criticality": "critical",
+              "quantity": 2,
+              "side": "none",
+              "order": 0,
+              "state": "decided",
+              "candidates_total": null,
+              "candidates_left": null,
+              "chosen_part_id": "pcb:corne_v3_l",
+              "instance_ids": [],
+              "from_design": true
+            },
+            {
+              "slot_id": "controller",
+              "label": "Controller",
+              "function_id": "compute.mcu",
+              "criticality": "critical",
+              "quantity": 2,
+              "side": "none",
+              "order": 1,
+              "state": "pending",
+              "candidates_total": 214,
+              "candidates_left": 214,
+              "chosen_part_id": null,
+              "instance_ids": [],
+              "from_design": false
+            },
+            {
+              "slot_id": "battery",
+              "label": "Battery",
+              "function_id": "power.battery",
+              "criticality": "critical",
+              "quantity": 2,
+              "side": "none",
+              "order": 2,
+              "state": "pending",
+              "candidates_total": 48,
+              "candidates_left": 48,
+              "chosen_part_id": null,
+              "instance_ids": [],
+              "from_design": false
+            },
+            {
+              "slot_id": "display",
+              "label": "Display",
+              "function_id": "display.oled",
+              "criticality": "critical",
+              "quantity": 2,
+              "side": "none",
+              "order": 3,
+              "state": "pending",
+              "candidates_total": 37,
+              "candidates_left": 37,
+              "chosen_part_id": null,
+              "instance_ids": [],
+              "from_design": false
+            },
+            {
+              "slot_id": "switches",
+              "label": "Switches",
+              "function_id": "input.key",
+              "criticality": "critical",
+              "quantity": 42,
+              "side": "none",
+              "order": 4,
+              "state": "pending",
+              "candidates_total": 160,
+              "candidates_left": 160,
+              "chosen_part_id": null,
+              "instance_ids": [],
+              "from_design": false
+            },
+            {
+              "slot_id": "keycaps",
+              "label": "Keycaps",
+              "function_id": "mech.keycap",
+              "criticality": "critical",
+              "quantity": 42,
+              "side": "none",
+              "order": 5,
+              "state": "pending",
+              "candidates_total": 25,
+              "candidates_left": 25,
+              "chosen_part_id": null,
+              "instance_ids": [],
+              "from_design": false
+            },
+            {
+              "slot_id": "plate",
+              "label": "Plate",
+              "function_id": "mech.plate",
+              "criticality": "optional",
+              "quantity": 2,
+              "side": "none",
+              "order": 6,
+              "state": "decided",
+              "candidates_total": null,
+              "candidates_left": null,
+              "chosen_part_id": "mech:corne_plate_fr4_l",
+              "instance_ids": [],
+              "from_design": true
+            },
+            {
+              "slot_id": "foam",
+              "label": "Case foam",
+              "function_id": "mech.foam",
+              "criticality": "optional",
+              "quantity": 2,
+              "side": "none",
+              "order": 7,
+              "state": "pending",
+              "candidates_total": 3,
+              "candidates_left": 3,
+              "chosen_part_id": null,
+              "instance_ids": [],
+              "from_design": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 5,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "layout.added",
+        "seq": 9,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.126Z",
+        "stage": "compose",
+        "payload": {
+          "layout": {
+            "layout_id": "lay_corne_l",
+            "name": "Corne 3x6+3 left",
+            "pitch_x_mm": 19.05,
+            "pitch_y_mm": 19.05,
+            "keys": [
+              {
+                "i": 0,
+                "x_u": 0.0,
+                "y_u": 0.375,
+                "matrix": [
+                  0,
+                  0
+                ]
+              },
+              {
+                "i": 1,
+                "x_u": 1.0,
+                "y_u": 0.375,
+                "matrix": [
+                  0,
+                  1
+                ]
+              },
+              {
+                "i": 2,
+                "x_u": 2.0,
+                "y_u": 0.125,
+                "matrix": [
+                  0,
+                  2
+                ]
+              },
+              {
+                "i": 3,
+                "x_u": 3.0,
+                "y_u": 0.0,
+                "matrix": [
+                  0,
+                  3
+                ]
+              },
+              {
+                "i": 4,
+                "x_u": 4.0,
+                "y_u": 0.125,
+                "matrix": [
+                  0,
+                  4
+                ]
+              },
+              {
+                "i": 5,
+                "x_u": 5.0,
+                "y_u": 0.25,
+                "matrix": [
+                  0,
+                  5
+                ]
+              },
+              {
+                "i": 6,
+                "x_u": 0.0,
+                "y_u": 1.375,
+                "matrix": [
+                  1,
+                  0
+                ]
+              },
+              {
+                "i": 7,
+                "x_u": 1.0,
+                "y_u": 1.375,
+                "matrix": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "i": 8,
+                "x_u": 2.0,
+                "y_u": 1.125,
+                "matrix": [
+                  1,
+                  2
+                ]
+              },
+              {
+                "i": 9,
+                "x_u": 3.0,
+                "y_u": 1.0,
+                "matrix": [
+                  1,
+                  3
+                ]
+              },
+              {
+                "i": 10,
+                "x_u": 4.0,
+                "y_u": 1.125,
+                "matrix": [
+                  1,
+                  4
+                ]
+              },
+              {
+                "i": 11,
+                "x_u": 5.0,
+                "y_u": 1.25,
+                "matrix": [
+                  1,
+                  5
+                ]
+              },
+              {
+                "i": 12,
+                "x_u": 0.0,
+                "y_u": 2.375,
+                "matrix": [
+                  2,
+                  0
+                ]
+              },
+              {
+                "i": 13,
+                "x_u": 1.0,
+                "y_u": 2.375,
+                "matrix": [
+                  2,
+                  1
+                ]
+              },
+              {
+                "i": 14,
+                "x_u": 2.0,
+                "y_u": 2.125,
+                "matrix": [
+                  2,
+                  2
+                ]
+              },
+              {
+                "i": 15,
+                "x_u": 3.0,
+                "y_u": 2.0,
+                "matrix": [
+                  2,
+                  3
+                ]
+              },
+              {
+                "i": 16,
+                "x_u": 4.0,
+                "y_u": 2.125,
+                "matrix": [
+                  2,
+                  4
+                ]
+              },
+              {
+                "i": 17,
+                "x_u": 5.0,
+                "y_u": 2.25,
+                "matrix": [
+                  2,
+                  5
+                ]
+              },
+              {
+                "i": 18,
+                "x_u": 3.5,
+                "y_u": 3.3,
+                "r_deg": 0,
+                "rx_u": 4.0,
+                "ry_u": 3.8,
+                "matrix": [
+                  3,
+                  3
+                ]
+              },
+              {
+                "i": 19,
+                "x_u": 4.5,
+                "y_u": 3.4,
+                "r_deg": 0,
+                "rx_u": 5.0,
+                "ry_u": 3.9,
+                "matrix": [
+                  3,
+                  4
+                ]
+              },
+              {
+                "i": 20,
+                "x_u": 5.6,
+                "y_u": 3.6,
+                "r_deg": 15,
+                "rx_u": 6.1,
+                "ry_u": 4.1,
+                "matrix": [
+                  3,
+                  5
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 5,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "layout.added",
+        "seq": 10,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.131Z",
+        "stage": "compose",
+        "payload": {
+          "layout": {
+            "layout_id": "lay_corne_r",
+            "name": "Corne 3x6+3 right",
+            "pitch_x_mm": 19.05,
+            "pitch_y_mm": 19.05,
+            "keys": [
+              {
+                "i": 0,
+                "x_u": 6.0,
+                "y_u": 0.375,
+                "matrix": [
+                  4,
+                  0
+                ]
+              },
+              {
+                "i": 1,
+                "x_u": 5.0,
+                "y_u": 0.375,
+                "matrix": [
+                  4,
+                  1
+                ]
+              },
+              {
+                "i": 2,
+                "x_u": 4.0,
+                "y_u": 0.125,
+                "matrix": [
+                  4,
+                  2
+                ]
+              },
+              {
+                "i": 3,
+                "x_u": 3.0,
+                "y_u": 0.0,
+                "matrix": [
+                  4,
+                  3
+                ]
+              },
+              {
+                "i": 4,
+                "x_u": 2.0,
+                "y_u": 0.125,
+                "matrix": [
+                  4,
+                  4
+                ]
+              },
+              {
+                "i": 5,
+                "x_u": 1.0,
+                "y_u": 0.25,
+                "matrix": [
+                  4,
+                  5
+                ]
+              },
+              {
+                "i": 6,
+                "x_u": 6.0,
+                "y_u": 1.375,
+                "matrix": [
+                  5,
+                  0
+                ]
+              },
+              {
+                "i": 7,
+                "x_u": 5.0,
+                "y_u": 1.375,
+                "matrix": [
+                  5,
+                  1
+                ]
+              },
+              {
+                "i": 8,
+                "x_u": 4.0,
+                "y_u": 1.125,
+                "matrix": [
+                  5,
+                  2
+                ]
+              },
+              {
+                "i": 9,
+                "x_u": 3.0,
+                "y_u": 1.0,
+                "matrix": [
+                  5,
+                  3
+                ]
+              },
+              {
+                "i": 10,
+                "x_u": 2.0,
+                "y_u": 1.125,
+                "matrix": [
+                  5,
+                  4
+                ]
+              },
+              {
+                "i": 11,
+                "x_u": 1.0,
+                "y_u": 1.25,
+                "matrix": [
+                  5,
+                  5
+                ]
+              },
+              {
+                "i": 12,
+                "x_u": 6.0,
+                "y_u": 2.375,
+                "matrix": [
+                  6,
+                  0
+                ]
+              },
+              {
+                "i": 13,
+                "x_u": 5.0,
+                "y_u": 2.375,
+                "matrix": [
+                  6,
+                  1
+                ]
+              },
+              {
+                "i": 14,
+                "x_u": 4.0,
+                "y_u": 2.125,
+                "matrix": [
+                  6,
+                  2
+                ]
+              },
+              {
+                "i": 15,
+                "x_u": 3.0,
+                "y_u": 2.0,
+                "matrix": [
+                  6,
+                  3
+                ]
+              },
+              {
+                "i": 16,
+                "x_u": 2.0,
+                "y_u": 2.125,
+                "matrix": [
+                  6,
+                  4
+                ]
+              },
+              {
+                "i": 17,
+                "x_u": 1.0,
+                "y_u": 2.25,
+                "matrix": [
+                  6,
+                  5
+                ]
+              },
+              {
+                "i": 18,
+                "x_u": 3.5,
+                "y_u": 3.3,
+                "r_deg": 0,
+                "rx_u": 4.0,
+                "ry_u": 3.8,
+                "matrix": [
+                  7,
+                  3
+                ]
+              },
+              {
+                "i": 19,
+                "x_u": 2.5,
+                "y_u": 3.4,
+                "r_deg": 0,
+                "rx_u": 3.0,
+                "ry_u": 3.9,
+                "matrix": [
+                  7,
+                  4
+                ]
+              },
+              {
+                "i": 20,
+                "x_u": 1.4,
+                "y_u": 3.6,
+                "r_deg": -15,
+                "rx_u": 1.9,
+                "ry_u": 4.1,
+                "matrix": [
+                  7,
+                  5
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 6,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "decision.made",
+        "seq": 11,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.137Z",
+        "stage": "compose",
+        "payload": {
+          "decision": {
+            "decision_id": "d1",
+            "slot_id": "pcb",
+            "step": 0,
+            "method": "design",
+            "chosen_part_id": "pcb:corne_v3_l",
+            "chosen_short_id": null,
+            "survivors": 1,
+            "reason": "Kept from the Corne skeleton.",
+            "model": null,
+            "propagated": [
+              {
+                "slot_id": "controller",
+                "count_before": 214,
+                "count_after": 31,
+                "constraint": "must fit the Pro Micro footprint"
+              },
+              {
+                "slot_id": "switches",
+                "count_before": 160,
+                "count_after": 112,
+                "constraint": "MX hotswap sockets"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 8,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "part.added",
+        "seq": 12,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.145Z",
+        "stage": "compose",
+        "payload": {
+          "part": {
+            "instance_id": "u_pcb_l",
+            "part_id": "pcb:corne_v3_l",
+            "slot_id": "pcb",
+            "label": "PCB left",
+            "quantity": 1,
+            "side": "left",
+            "color": null,
+            "placement": {
+              "mode": "single",
+              "position_mm": [
+                -132.0,
+                40.0,
+                0.0
+              ],
+              "rotation_deg": [
+                0,
+                0,
+                0
+              ],
+              "explode_offset_mm": [
+                0,
+                0,
+                0.0
+              ],
+              "source": "solver",
+              "locked": false
+            },
+            "card": {
+              "part_id": "pcb:corne_v3_l",
+              "display_name": "Corne v3 PCB (left)",
+              "kind": "pcb",
+              "primary_function": "interconnect.pcb",
+              "summary": "Left half PCB of the Corne, 3x6+3, MX hotswap, Pro Micro footprint.",
+              "key_specs": [
+                {
+                  "label": "Keys",
+                  "value": 21,
+                  "unit": null
+                },
+                {
+                  "label": "Switches",
+                  "value": "MX hotswap",
+                  "unit": null
+                },
+                {
+                  "label": "Controller",
+                  "value": "Pro Micro",
+                  "unit": null
+                }
+              ],
+              "thumbnail_url": "/assets/parts/corne_v3_l.png",
+              "licence_spdx": "MIT",
+              "commercial_ok": "yes",
+              "verified": "geometry",
+              "source_url": "https://github.com/foostan/crkbd"
+            },
+            "assets": [
+              {
+                "asset_id": "a_corne_v3_l_glb",
+                "kind": "glb",
+                "role": "model",
+                "url": "/assets/parts/corne_v3_l.glb",
+                "status": "ready"
+              },
+              {
+                "asset_id": "a_corne_v3_l_png",
+                "kind": "png",
+                "role": "thumbnail",
+                "url": "/assets/parts/corne_v3_l.png",
+                "status": "ready"
+              }
+            ],
+            "origin": "design",
+            "status": "ok"
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 8,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "part.added",
+        "seq": 13,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.153Z",
+        "stage": "compose",
+        "payload": {
+          "part": {
+            "instance_id": "u_pcb_r",
+            "part_id": "pcb:corne_v3_r",
+            "slot_id": "pcb",
+            "label": "PCB right",
+            "quantity": 1,
+            "side": "right",
+            "color": null,
+            "placement": {
+              "mode": "single",
+              "position_mm": [
+                20.0,
+                40.0,
+                0.0
+              ],
+              "rotation_deg": [
+                0,
+                0,
+                0
+              ],
+              "explode_offset_mm": [
+                0,
+                0,
+                0.0
+              ],
+              "source": "solver",
+              "locked": false
+            },
+            "card": {
+              "part_id": "pcb:corne_v3_r",
+              "display_name": "Corne v3 PCB (right)",
+              "kind": "pcb",
+              "primary_function": "interconnect.pcb",
+              "summary": "Right half PCB of the Corne, 3x6+3, MX hotswap, Pro Micro footprint.",
+              "key_specs": [
+                {
+                  "label": "Keys",
+                  "value": 21,
+                  "unit": null
+                },
+                {
+                  "label": "Switches",
+                  "value": "MX hotswap",
+                  "unit": null
+                },
+                {
+                  "label": "Controller",
+                  "value": "Pro Micro",
+                  "unit": null
+                }
+              ],
+              "thumbnail_url": "/assets/parts/corne_v3_r.png",
+              "licence_spdx": "MIT",
+              "commercial_ok": "yes",
+              "verified": "geometry",
+              "source_url": "https://github.com/foostan/crkbd"
+            },
+            "assets": [
+              {
+                "asset_id": "a_corne_v3_r_glb",
+                "kind": "glb",
+                "role": "model",
+                "url": "/assets/parts/corne_v3_r.glb",
+                "status": "ready"
+              },
+              {
+                "asset_id": "a_corne_v3_r_png",
+                "kind": "png",
+                "role": "thumbnail",
+                "url": "/assets/parts/corne_v3_r.png",
+                "status": "ready"
+              }
+            ],
+            "origin": "design",
+            "status": "ok"
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 4,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "slot.updated",
+        "seq": 14,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.157Z",
+        "stage": "compose",
+        "payload": {
+          "slot": {
+            "slot_id": "pcb",
+            "label": "PCB",
+            "function_id": "interconnect.pcb",
+            "criticality": "critical",
+            "quantity": 2,
+            "side": "none",
+            "order": 0,
+            "state": "decided",
+            "candidates_total": null,
+            "candidates_left": null,
+            "chosen_part_id": "pcb:corne_v3_l",
+            "instance_ids": [
+              "u_pcb_l",
+              "u_pcb_r"
+            ],
+            "from_design": true
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 4,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "decision.made",
+        "seq": 15,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.161Z",
+        "stage": "compose",
+        "payload": {
+          "decision": {
+            "decision_id": "d2",
+            "slot_id": "plate",
+            "step": 0,
+            "method": "design",
+            "chosen_part_id": "mech:corne_plate_fr4_l",
+            "chosen_short_id": null,
+            "survivors": 1,
+            "reason": "Kept from the Corne skeleton.",
+            "model": null,
+            "propagated": []
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 8,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "part.added",
+        "seq": 16,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.169Z",
+        "stage": "compose",
+        "payload": {
+          "part": {
+            "instance_id": "u_plate_l",
+            "part_id": "mech:corne_plate_fr4_l",
+            "slot_id": "plate",
+            "label": "Plate left",
+            "quantity": 1,
+            "side": "left",
+            "color": null,
+            "placement": {
+              "mode": "single",
+              "position_mm": [
+                -132.0,
+                40.0,
+                5.0
+              ],
+              "rotation_deg": [
+                0,
+                0,
+                0
+              ],
+              "explode_offset_mm": [
+                0,
+                0,
+                20.0
+              ],
+              "source": "solver",
+              "locked": false
+            },
+            "card": {
+              "part_id": "mech:corne_plate_fr4_l",
+              "display_name": "Corne switch plate (left)",
+              "kind": "mechanical",
+              "primary_function": "mech.plate",
+              "summary": "1.5 mm FR4 plate for the Corne left half.",
+              "key_specs": [
+                {
+                  "label": "Thickness",
+                  "value": 1.5,
+                  "unit": "mm"
+                }
+              ],
+              "thumbnail_url": "/assets/parts/corne_plate_fr4_l.png",
+              "licence_spdx": "MIT",
+              "commercial_ok": "yes",
+              "verified": "geometry",
+              "source_url": "https://github.com/foostan/crkbd"
+            },
+            "assets": [
+              {
+                "asset_id": "a_corne_plate_fr4_l_glb",
+                "kind": "glb",
+                "role": "model",
+                "url": "/assets/parts/corne_plate_fr4_l.glb",
+                "status": "ready"
+              },
+              {
+                "asset_id": "a_corne_plate_fr4_l_png",
+                "kind": "png",
+                "role": "thumbnail",
+                "url": "/assets/parts/corne_plate_fr4_l.png",
+                "status": "ready"
+              }
+            ],
+            "origin": "design",
+            "status": "ok"
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 8,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "part.added",
+        "seq": 17,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.177Z",
+        "stage": "compose",
+        "payload": {
+          "part": {
+            "instance_id": "u_plate_r",
+            "part_id": "mech:corne_plate_fr4_r",
+            "slot_id": "plate",
+            "label": "Plate right",
+            "quantity": 1,
+            "side": "right",
+            "color": null,
+            "placement": {
+              "mode": "single",
+              "position_mm": [
+                20.0,
+                40.0,
+                5.0
+              ],
+              "rotation_deg": [
+                0,
+                0,
+                0
+              ],
+              "explode_offset_mm": [
+                0,
+                0,
+                20.0
+              ],
+              "source": "solver",
+              "locked": false
+            },
+            "card": {
+              "part_id": "mech:corne_plate_fr4_r",
+              "display_name": "Corne switch plate (right)",
+              "kind": "mechanical",
+              "primary_function": "mech.plate",
+              "summary": "1.5 mm FR4 plate for the Corne right half.",
+              "key_specs": [
+                {
+                  "label": "Thickness",
+                  "value": 1.5,
+                  "unit": "mm"
+                }
+              ],
+              "thumbnail_url": "/assets/parts/corne_plate_fr4_r.png",
+              "licence_spdx": "MIT",
+              "commercial_ok": "yes",
+              "verified": "geometry",
+              "source_url": "https://github.com/foostan/crkbd"
+            },
+            "assets": [
+              {
+                "asset_id": "a_corne_plate_fr4_r_glb",
+                "kind": "glb",
+                "role": "model",
+                "url": "/assets/parts/corne_plate_fr4_r.glb",
+                "status": "ready"
+              },
+              {
+                "asset_id": "a_corne_plate_fr4_r_png",
+                "kind": "png",
+                "role": "thumbnail",
+                "url": "/assets/parts/corne_plate_fr4_r.png",
+                "status": "ready"
+              }
+            ],
+            "origin": "design",
+            "status": "ok"
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 4,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "slot.updated",
+        "seq": 18,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.181Z",
+        "stage": "compose",
+        "payload": {
+          "slot": {
+            "slot_id": "plate",
+            "label": "Plate",
+            "function_id": "mech.plate",
+            "criticality": "optional",
+            "quantity": 2,
+            "side": "none",
+            "order": 6,
+            "state": "decided",
+            "candidates_total": null,
+            "candidates_left": null,
+            "chosen_part_id": "mech:corne_plate_fr4_l",
+            "instance_ids": [
+              "u_plate_l",
+              "u_plate_r"
+            ],
+            "from_design": true
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 4,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "slot.updated",
+        "seq": 19,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.185Z",
+        "stage": "compose",
+        "payload": {
+          "slot": {
+            "slot_id": "controller",
+            "label": "Controller",
+            "function_id": "compute.mcu",
+            "criticality": "critical",
+            "quantity": 2,
+            "side": "none",
+            "order": 1,
+            "state": "narrowing",
+            "candidates_total": 214,
+            "candidates_left": 214,
+            "chosen_part_id": null,
+            "instance_ids": [],
+            "from_design": false
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 120,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "candidates.ready",
+        "seq": 20,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.305Z",
+        "stage": "compose",
+        "payload": {
+          "slot_id": "controller",
+          "step": 1,
+          "filters": [
+            {
+              "facet": "module_footprint",
+              "op": "eq",
+              "value": "pro_micro",
+              "reason": "compatibility",
+              "from_slot_id": "pcb",
+              "req_id": null,
+              "count_before": 214,
+              "count_after": 31,
+              "label": "Pro Micro footprint"
+            },
+            {
+              "facet": "wireless",
+              "op": "eq",
+              "value": "ble",
+              "reason": "requirement",
+              "from_slot_id": null,
+              "req_id": "r1",
+              "count_before": 31,
+              "count_after": 6,
+              "label": "BLE"
+            },
+            {
+              "facet": "power_source",
+              "op": "has",
+              "value": "battery",
+              "reason": "requirement",
+              "from_slot_id": null,
+              "req_id": "r4",
+              "count_before": 6,
+              "count_after": 4,
+              "label": "Runs on battery"
+            }
+          ],
+          "count_before": 214,
+          "count_after": 4,
+          "survivors": [
+            {
+              "short_id": "C1",
+              "card": {
+                "part_id": "mod:nice_nano_v2",
+                "display_name": "nice!nano v2",
+                "kind": "module",
+                "primary_function": "compute.mcu",
+                "summary": "nRF52840 BLE controller in Pro Micro form factor with LiPo charger.",
+                "key_specs": [
+                  {
+                    "label": "MCU",
+                    "value": "nRF52840",
+                    "unit": null
+                  },
+                  {
+                    "label": "Radio",
+                    "value": "BLE 5",
+                    "unit": null
+                  },
+                  {
+                    "label": "Logic",
+                    "value": 3.3,
+                    "unit": "V"
+                  },
+                  {
+                    "label": "USB",
+                    "value": "USB C",
+                    "unit": null
+                  }
+                ],
+                "thumbnail_url": "/assets/parts/nice_nano_v2.png",
+                "licence_spdx": "NOASSERTION",
+                "commercial_ok": "unknown",
+                "verified": "third_party",
+                "source_url": "https://nicekeyboards.com/nice-nano"
+              },
+              "score": 0.91,
+              "is_default": true
+            },
+            {
+              "short_id": "C2",
+              "card": {
+                "part_id": "mod:supermini_nrf52840",
+                "display_name": "SuperMini nRF52840",
+                "kind": "module",
+                "primary_function": "compute.mcu",
+                "summary": "Low cost nRF52840 board, Pro Micro footprint.",
+                "key_specs": [
+                  {
+                    "label": "MCU",
+                    "value": "nRF52840",
+                    "unit": null
+                  },
+                  {
+                    "label": "Radio",
+                    "value": "BLE 5",
+                    "unit": null
+                  },
+                  {
+                    "label": "Logic",
+                    "value": 3.3,
+                    "unit": "V"
+                  }
+                ],
+                "thumbnail_url": "/assets/parts/supermini_nrf52840.png",
+                "licence_spdx": "NOASSERTION",
+                "commercial_ok": "unknown",
+                "verified": "none",
+                "source_url": null
+              },
+              "score": 0.77,
+              "is_default": false
+            },
+            {
+              "short_id": "C3",
+              "card": {
+                "part_id": "mod:bluemicro840",
+                "display_name": "BlueMicro840",
+                "kind": "module",
+                "primary_function": "compute.mcu",
+                "summary": "Open hardware nRF52840 controller, Pro Micro footprint.",
+                "key_specs": [
+                  {
+                    "label": "MCU",
+                    "value": "nRF52840",
+                    "unit": null
+                  },
+                  {
+                    "label": "Radio",
+                    "value": "BLE 5",
+                    "unit": null
+                  },
+                  {
+                    "label": "Logic",
+                    "value": 3.3,
+                    "unit": "V"
+                  }
+                ],
+                "thumbnail_url": "/assets/parts/bluemicro840.png",
+                "licence_spdx": "MIT",
+                "commercial_ok": "yes",
+                "verified": "geometry",
+                "source_url": "https://github.com/jpconstantineau/BlueMicro840"
+              },
+              "score": 0.74,
+              "is_default": false
+            },
+            {
+              "short_id": "C4",
+              "card": {
+                "part_id": "mod:puchi_ble",
+                "display_name": "Puchi-BLE",
+                "kind": "module",
+                "primary_function": "compute.mcu",
+                "summary": "nRF52840 controller with castellated Pro Micro pinout.",
+                "key_specs": [
+                  {
+                    "label": "MCU",
+                    "value": "nRF52840",
+                    "unit": null
+                  },
+                  {
+                    "label": "Radio",
+                    "value": "BLE 5",
+                    "unit": null
+                  },
+                  {
+                    "label": "Logic",
+                    "value": 3.3,
+                    "unit": "V"
+                  }
+                ],
+                "thumbnail_url": "/assets/parts/puchi_ble.png",
+                "licence_spdx": "NOASSERTION",
+                "commercial_ok": "unknown",
+                "verified": "none",
+                "source_url": null
+              },
+              "score": 0.62,
+              "is_default": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 4,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "slot.updated",
+        "seq": 21,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.309Z",
+        "stage": "compose",
+        "payload": {
+          "slot": {
+            "slot_id": "controller",
+            "label": "Controller",
+            "function_id": "compute.mcu",
+            "criticality": "critical",
+            "quantity": 2,
+            "side": "none",
+            "order": 1,
+            "state": "narrowing",
+            "candidates_total": 214,
+            "candidates_left": 4,
+            "chosen_part_id": null,
+            "instance_ids": [],
+            "from_design": false
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 340,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "decision.made",
+        "seq": 22,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.649Z",
+        "stage": "compose",
+        "payload": {
+          "decision": {
+            "decision_id": "d3",
+            "slot_id": "controller",
+            "step": 1,
+            "method": "model_pick",
+            "chosen_part_id": "mod:nice_nano_v2",
+            "chosen_short_id": "C1",
+            "survivors": 4,
+            "reason": "Most used BLE controller in Corne builds, has an on board LiPo charger and ZMK support.",
+            "model": {
+              "provider": "cerebras",
+              "model": "llama-4-scout",
+              "latency_ms": 310,
+              "cached": false,
+              "fallback": false
+            },
+            "propagated": [
+              {
+                "slot_id": "battery",
+                "count_before": 48,
+                "count_after": 9,
+                "constraint": "3.7 V LiPo on a JST PH 2.0 lead"
+              },
+              {
+                "slot_id": "display",
+                "count_before": 37,
+                "count_after": 12,
+                "constraint": "3.3 V logic I2C"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 8,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "part.added",
+        "seq": 23,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.657Z",
+        "stage": "compose",
+        "payload": {
+          "part": {
+            "instance_id": "u_mcu_l",
+            "part_id": "mod:nice_nano_v2",
+            "slot_id": "controller",
+            "label": "Controller left",
+            "quantity": 1,
+            "side": "left",
+            "color": null,
+            "placement": {
+              "mode": "single",
+              "position_mm": [
+                -14.0,
+                28.0,
+                6.0
+              ],
+              "rotation_deg": [
+                0,
+                0,
+                0
+              ],
+              "explode_offset_mm": [
+                0,
+                0,
+                15.0
+              ],
+              "source": "solver",
+              "locked": false
+            },
+            "card": {
+              "part_id": "mod:nice_nano_v2",
+              "display_name": "nice!nano v2",
+              "kind": "module",
+              "primary_function": "compute.mcu",
+              "summary": "nRF52840 BLE controller in Pro Micro form factor with LiPo charger.",
+              "key_specs": [
+                {
+                  "label": "MCU",
+                  "value": "nRF52840",
+                  "unit": null
+                },
+                {
+                  "label": "Radio",
+                  "value": "BLE 5",
+                  "unit": null
+                },
+                {
+                  "label": "Logic",
+                  "value": 3.3,
+                  "unit": "V"
+                },
+                {
+                  "label": "USB",
+                  "value": "USB C",
+                  "unit": null
+                }
+              ],
+              "thumbnail_url": "/assets/parts/nice_nano_v2.png",
+              "licence_spdx": "NOASSERTION",
+              "commercial_ok": "unknown",
+              "verified": "third_party",
+              "source_url": "https://nicekeyboards.com/nice-nano"
+            },
+            "assets": [
+              {
+                "asset_id": "a_nice_nano_v2_glb",
+                "kind": "glb",
+                "role": "model",
+                "url": "/assets/parts/nice_nano_v2.glb",
+                "status": "ready"
+              },
+              {
+                "asset_id": "a_nice_nano_v2_png",
+                "kind": "png",
+                "role": "thumbnail",
+                "url": "/assets/parts/nice_nano_v2.png",
+                "status": "ready"
+              }
+            ],
+            "origin": "compose",
+            "status": "ok"
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 8,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "part.added",
+        "seq": 24,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.665Z",
+        "stage": "compose",
+        "payload": {
+          "part": {
+            "instance_id": "u_mcu_r",
+            "part_id": "mod:nice_nano_v2",
+            "slot_id": "controller",
+            "label": "Controller right",
+            "quantity": 1,
+            "side": "right",
+            "color": null,
+            "placement": {
+              "mode": "single",
+              "position_mm": [
+                14.0,
+                28.0,
+                6.0
+              ],
+              "rotation_deg": [
+                0,
+                0,
+                0
+              ],
+              "explode_offset_mm": [
+                0,
+                0,
+                15.0
+              ],
+              "source": "solver",
+              "locked": false
+            },
+            "card": {
+              "part_id": "mod:nice_nano_v2",
+              "display_name": "nice!nano v2",
+              "kind": "module",
+              "primary_function": "compute.mcu",
+              "summary": "nRF52840 BLE controller in Pro Micro form factor with LiPo charger.",
+              "key_specs": [
+                {
+                  "label": "MCU",
+                  "value": "nRF52840",
+                  "unit": null
+                },
+                {
+                  "label": "Radio",
+                  "value": "BLE 5",
+                  "unit": null
+                },
+                {
+                  "label": "Logic",
+                  "value": 3.3,
+                  "unit": "V"
+                },
+                {
+                  "label": "USB",
+                  "value": "USB C",
+                  "unit": null
+                }
+              ],
+              "thumbnail_url": "/assets/parts/nice_nano_v2.png",
+              "licence_spdx": "NOASSERTION",
+              "commercial_ok": "unknown",
+              "verified": "third_party",
+              "source_url": "https://nicekeyboards.com/nice-nano"
+            },
+            "assets": [
+              {
+                "asset_id": "a_nice_nano_v2_glb",
+                "kind": "glb",
+                "role": "model",
+                "url": "/assets/parts/nice_nano_v2.glb",
+                "status": "ready"
+              },
+              {
+                "asset_id": "a_nice_nano_v2_png",
+                "kind": "png",
+                "role": "thumbnail",
+                "url": "/assets/parts/nice_nano_v2.png",
+                "status": "ready"
+              }
+            ],
+            "origin": "compose",
+            "status": "ok"
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 4,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "slot.updated",
+        "seq": 25,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.669Z",
+        "stage": "compose",
+        "payload": {
+          "slot": {
+            "slot_id": "controller",
+            "label": "Controller",
+            "function_id": "compute.mcu",
+            "criticality": "critical",
+            "quantity": 2,
+            "side": "none",
+            "order": 1,
+            "state": "decided",
+            "candidates_total": 214,
+            "candidates_left": 1,
+            "chosen_part_id": "mod:nice_nano_v2",
+            "instance_ids": [
+              "u_mcu_l",
+              "u_mcu_r"
+            ],
+            "from_design": false
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 4,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "connection.added",
+        "seq": 26,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.673Z",
+        "stage": "compose",
+        "payload": {
+          "connection": {
+            "connection_id": "c_mcu_pcb_l",
+            "type": "module_footprint",
+            "kind": "mechanical",
+            "from": {
+              "instance_id": "u_pcb_l",
+              "interface_id": "mcu_socket",
+              "index": null
+            },
+            "to": {
+              "instance_id": "u_mcu_l",
+              "interface_id": "footprint",
+              "index": null
+            },
+            "via_instance_id": null,
+            "nets": [],
+            "resolved": {},
+            "origin": "compose",
+            "status": "ok",
+            "label": "Socketed on the PCB"
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 4,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "connection.added",
+        "seq": 27,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.677Z",
+        "stage": "compose",
+        "payload": {
+          "connection": {
+            "connection_id": "c_mcu_pcb_r",
+            "type": "module_footprint",
+            "kind": "mechanical",
+            "from": {
+              "instance_id": "u_pcb_r",
+              "interface_id": "mcu_socket",
+              "index": null
+            },
+            "to": {
+              "instance_id": "u_mcu_r",
+              "interface_id": "footprint",
+              "index": null
+            },
+            "via_instance_id": null,
+            "nets": [],
+            "resolved": {},
+            "origin": "compose",
+            "status": "ok",
+            "label": "Socketed on the PCB"
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 4,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "connection.added",
+        "seq": 28,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.681Z",
+        "stage": "compose",
+        "payload": {
+          "connection": {
+            "connection_id": "c_link",
+            "type": "radio",
+            "kind": "wireless",
+            "from": {
+              "instance_id": "u_mcu_l",
+              "interface_id": "ble",
+              "index": null
+            },
+            "to": {
+              "instance_id": "u_mcu_r",
+              "interface_id": "ble",
+              "index": null
+            },
+            "via_instance_id": null,
+            "nets": [],
+            "resolved": {
+              "protocol": "ble",
+              "central": "u_mcu_l"
+            },
+            "origin": "compose",
+            "status": "ok",
+            "label": "Halves paired over BLE"
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 3,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "warning",
+        "seq": 29,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.684Z",
+        "stage": "compose",
+        "payload": {
+          "warning": {
+            "warning_id": "w1",
+            "code": "licence_unknown",
+            "severity": "warning",
+            "message": "nice!nano v2 has no declared hardware licence. Fine for a personal build; check before selling.",
+            "subjects": [
+              {
+                "part_id": "mod:nice_nano_v2",
+                "instance_id": "u_mcu_l"
+              }
+            ],
+            "stage": "compose"
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 3,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "check.result",
+        "seq": 30,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.687Z",
+        "stage": "compose",
+        "payload": {
+          "results": [
+            {
+              "check_key": "lic.commercial_ok:u_mcu_l",
+              "rule_id": "lic.commercial_ok",
+              "status": "unknown",
+              "severity": "warning",
+              "message": "Licence NOASSERTION: commercial use not confirmed.",
+              "subjects": [
+                {
+                  "instance_id": "u_mcu_l"
+                }
+              ],
+              "stage": "compose"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 4,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "slot.updated",
+        "seq": 31,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.691Z",
+        "stage": "compose",
+        "payload": {
+          "slot": {
+            "slot_id": "battery",
+            "label": "Battery",
+            "function_id": "power.battery",
+            "criticality": "critical",
+            "quantity": 2,
+            "side": "none",
+            "order": 2,
+            "state": "narrowing",
+            "candidates_total": 48,
+            "candidates_left": 9,
+            "chosen_part_id": null,
+            "instance_ids": [],
+            "from_design": false
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 40,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "candidates.ready",
+        "seq": 32,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.731Z",
+        "stage": "compose",
+        "payload": {
+          "slot_id": "battery",
+          "step": 2,
+          "filters": [
+            {
+              "facet": "chemistry",
+              "op": "eq",
+              "value": "lipo",
+              "reason": "propagated",
+              "from_slot_id": "controller",
+              "req_id": null,
+              "count_before": 48,
+              "count_after": 9,
+              "label": "LiPo, JST PH 2.0"
+            },
+            {
+              "facet": "max_width_mm",
+              "op": "lte",
+              "value": 32,
+              "reason": "compatibility",
+              "from_slot_id": "pcb",
+              "req_id": null,
+              "count_before": 9,
+              "count_after": 2,
+              "label": "Fits under the controller"
+            }
+          ],
+          "count_before": 48,
+          "count_after": 2,
+          "survivors": [
+            {
+              "short_id": "C1",
+              "card": {
+                "part_id": "bat:lipo_301230_110",
+                "display_name": "LiPo 301230, 110 mAh",
+                "kind": "component",
+                "primary_function": "power.battery",
+                "summary": "Single cell 3.7 V LiPo with JST PH 2.0 lead.",
+                "key_specs": [
+                  {
+                    "label": "Capacity",
+                    "value": 110,
+                    "unit": "mAh"
+                  },
+                  {
+                    "label": "Voltage",
+                    "value": 3.7,
+                    "unit": "V"
+                  },
+                  {
+                    "label": "Size",
+                    "value": "30 x 12 x 3",
+                    "unit": "mm"
+                  }
+                ],
+                "thumbnail_url": "/assets/parts/lipo_301230_110.png",
+                "licence_spdx": "NOASSERTION",
+                "commercial_ok": "unknown",
+                "verified": "datasheet",
+                "source_url": null
+              },
+              "score": 0.88,
+              "is_default": true
+            },
+            {
+              "short_id": "C2",
+              "card": {
+                "part_id": "bat:lipo_401230_150",
+                "display_name": "LiPo 401230, 150 mAh",
+                "kind": "component",
+                "primary_function": "power.battery",
+                "summary": "Single cell 3.7 V LiPo, 4 mm thick.",
+                "key_specs": [
+                  {
+                    "label": "Capacity",
+                    "value": 150,
+                    "unit": "mAh"
+                  },
+                  {
+                    "label": "Voltage",
+                    "value": 3.7,
+                    "unit": "V"
+                  },
+                  {
+                    "label": "Size",
+                    "value": "30 x 12 x 4",
+                    "unit": "mm"
+                  }
+                ],
+                "thumbnail_url": "/assets/parts/lipo_401230_150.png",
+                "licence_spdx": "NOASSERTION",
+                "commercial_ok": "unknown",
+                "verified": "datasheet",
+                "source_url": null
+              },
+              "score": 0.71,
+              "is_default": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 6,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "decision.made",
+        "seq": 33,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.737Z",
+        "stage": "compose",
+        "payload": {
+          "decision": {
+            "decision_id": "d4",
+            "slot_id": "battery",
+            "step": 2,
+            "method": "default",
+            "chosen_part_id": "bat:lipo_301230_110",
+            "chosen_short_id": "C1",
+            "survivors": 2,
+            "reason": "Most used battery with nice!nano in Corne builds; 3 mm keeps the case thin.",
+            "model": null,
+            "propagated": []
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 8,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "part.added",
+        "seq": 34,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.745Z",
+        "stage": "compose",
+        "payload": {
+          "part": {
+            "instance_id": "u_bat_l",
+            "part_id": "bat:lipo_301230_110",
+            "slot_id": "battery",
+            "label": "Battery left",
+            "quantity": 1,
+            "side": "left",
+            "color": null,
+            "placement": {
+              "mode": "single",
+              "position_mm": [
+                -111.0,
+                24.0,
+                -4.5
+              ],
+              "rotation_deg": [
+                0,
+                0,
+                0
+              ],
+              "explode_offset_mm": [
+                0,
+                0,
+                -15.0
+              ],
+              "source": "solver",
+              "locked": false
+            },
+            "card": {
+              "part_id": "bat:lipo_301230_110",
+              "display_name": "LiPo 301230, 110 mAh",
+              "kind": "component",
+              "primary_function": "power.battery",
+              "summary": "Single cell 3.7 V LiPo with JST PH 2.0 lead.",
+              "key_specs": [
+                {
+                  "label": "Capacity",
+                  "value": 110,
+                  "unit": "mAh"
+                },
+                {
+                  "label": "Voltage",
+                  "value": 3.7,
+                  "unit": "V"
+                },
+                {
+                  "label": "Size",
+                  "value": "30 x 12 x 3",
+                  "unit": "mm"
+                }
+              ],
+              "thumbnail_url": "/assets/parts/lipo_301230_110.png",
+              "licence_spdx": "NOASSERTION",
+              "commercial_ok": "unknown",
+              "verified": "datasheet",
+              "source_url": null
+            },
+            "assets": [
+              {
+                "asset_id": "a_lipo_301230_110_glb",
+                "kind": "glb",
+                "role": "model",
+                "url": "/assets/parts/lipo_301230_110.glb",
+                "status": "ready"
+              },
+              {
+                "asset_id": "a_lipo_301230_110_png",
+                "kind": "png",
+                "role": "thumbnail",
+                "url": "/assets/parts/lipo_301230_110.png",
+                "status": "ready"
+              }
+            ],
+            "origin": "compose",
+            "status": "ok"
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 8,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "part.added",
+        "seq": 35,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.753Z",
+        "stage": "compose",
+        "payload": {
+          "part": {
+            "instance_id": "u_bat_r",
+            "part_id": "bat:lipo_301230_110",
+            "slot_id": "battery",
+            "label": "Battery right",
+            "quantity": 1,
+            "side": "right",
+            "color": null,
+            "placement": {
+              "mode": "single",
+              "position_mm": [
+                111.0,
+                24.0,
+                -4.5
+              ],
+              "rotation_deg": [
+                0,
+                0,
+                0
+              ],
+              "explode_offset_mm": [
+                0,
+                0,
+                -15.0
+              ],
+              "source": "solver",
+              "locked": false
+            },
+            "card": {
+              "part_id": "bat:lipo_301230_110",
+              "display_name": "LiPo 301230, 110 mAh",
+              "kind": "component",
+              "primary_function": "power.battery",
+              "summary": "Single cell 3.7 V LiPo with JST PH 2.0 lead.",
+              "key_specs": [
+                {
+                  "label": "Capacity",
+                  "value": 110,
+                  "unit": "mAh"
+                },
+                {
+                  "label": "Voltage",
+                  "value": 3.7,
+                  "unit": "V"
+                },
+                {
+                  "label": "Size",
+                  "value": "30 x 12 x 3",
+                  "unit": "mm"
+                }
+              ],
+              "thumbnail_url": "/assets/parts/lipo_301230_110.png",
+              "licence_spdx": "NOASSERTION",
+              "commercial_ok": "unknown",
+              "verified": "datasheet",
+              "source_url": null
+            },
+            "assets": [
+              {
+                "asset_id": "a_lipo_301230_110_glb",
+                "kind": "glb",
+                "role": "model",
+                "url": "/assets/parts/lipo_301230_110.glb",
+                "status": "ready"
+              },
+              {
+                "asset_id": "a_lipo_301230_110_png",
+                "kind": "png",
+                "role": "thumbnail",
+                "url": "/assets/parts/lipo_301230_110.png",
+                "status": "ready"
+              }
+            ],
+            "origin": "compose",
+            "status": "ok"
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 4,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "slot.updated",
+        "seq": 36,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.757Z",
+        "stage": "compose",
+        "payload": {
+          "slot": {
+            "slot_id": "battery",
+            "label": "Battery",
+            "function_id": "power.battery",
+            "criticality": "critical",
+            "quantity": 2,
+            "side": "none",
+            "order": 2,
+            "state": "decided",
+            "candidates_total": 48,
+            "candidates_left": 1,
+            "chosen_part_id": "bat:lipo_301230_110",
+            "instance_ids": [
+              "u_bat_l",
+              "u_bat_r"
+            ],
+            "from_design": false
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 4,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "connection.added",
+        "seq": 37,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.761Z",
+        "stage": "compose",
+        "payload": {
+          "connection": {
+            "connection_id": "c_bat_l",
+            "type": "battery",
+            "kind": "electrical",
+            "from": {
+              "instance_id": "u_bat_l",
+              "interface_id": "lead",
+              "index": null
+            },
+            "to": {
+              "instance_id": "u_mcu_l",
+              "interface_id": "bat",
+              "index": null
+            },
+            "via_instance_id": null,
+            "nets": [
+              {
+                "signal": "BAT+",
+                "from_pin": "1",
+                "to_pin": "B+"
+              },
+              {
+                "signal": "GND",
+                "from_pin": "2",
+                "to_pin": "B-"
+              }
+            ],
+            "resolved": {
+              "v_nom_v": 3.7
+            },
+            "origin": "compose",
+            "status": "ok",
+            "label": "JST PH 2.0"
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 4,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "connection.added",
+        "seq": 38,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.765Z",
+        "stage": "compose",
+        "payload": {
+          "connection": {
+            "connection_id": "c_bat_r",
+            "type": "battery",
+            "kind": "electrical",
+            "from": {
+              "instance_id": "u_bat_r",
+              "interface_id": "lead",
+              "index": null
+            },
+            "to": {
+              "instance_id": "u_mcu_r",
+              "interface_id": "bat",
+              "index": null
+            },
+            "via_instance_id": null,
+            "nets": [
+              {
+                "signal": "BAT+",
+                "from_pin": "1",
+                "to_pin": "B+"
+              },
+              {
+                "signal": "GND",
+                "from_pin": "2",
+                "to_pin": "B-"
+              }
+            ],
+            "resolved": {
+              "v_nom_v": 3.7
+            },
+            "origin": "compose",
+            "status": "ok",
+            "label": "JST PH 2.0"
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 3,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "check.result",
+        "seq": 39,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.768Z",
+        "stage": "compose",
+        "payload": {
+          "results": [
+            {
+              "check_key": "elec.battery.charger_present:u_mcu_l",
+              "rule_id": "elec.battery.charger_present",
+              "status": "pass",
+              "severity": "error",
+              "message": "nice!nano charges the LiPo on board.",
+              "subjects": [
+                {
+                  "instance_id": "u_mcu_l"
+                },
+                {
+                  "instance_id": "u_bat_l"
+                }
+              ],
+              "stage": "compose"
+            },
+            {
+              "check_key": "elec.power.voltage_range:c_bat_l",
+              "rule_id": "elec.power.voltage_range",
+              "status": "pass",
+              "severity": "critical",
+              "message": "3.7 V battery within controller input 3.0 to 4.2 V.",
+              "subjects": [
+                {
+                  "connection_id": "c_bat_l"
+                }
+              ],
+              "measured": 3.7,
+              "limit": "3.0..4.2",
+              "unit": "V",
+              "stage": "compose"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 4,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "slot.updated",
+        "seq": 40,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.772Z",
+        "stage": "compose",
+        "payload": {
+          "slot": {
+            "slot_id": "display",
+            "label": "Display",
+            "function_id": "display.oled",
+            "criticality": "critical",
+            "quantity": 2,
+            "side": "none",
+            "order": 3,
+            "state": "narrowing",
+            "candidates_total": 37,
+            "candidates_left": 12,
+            "chosen_part_id": null,
+            "instance_ids": [],
+            "from_design": false
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 40,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "candidates.ready",
+        "seq": 41,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.812Z",
+        "stage": "compose",
+        "payload": {
+          "slot_id": "display",
+          "step": 3,
+          "filters": [
+            {
+              "facet": "display_type",
+              "op": "eq",
+              "value": "oled",
+              "reason": "requirement",
+              "from_slot_id": null,
+              "req_id": "r3",
+              "count_before": 37,
+              "count_after": 14,
+              "label": "OLED"
+            },
+            {
+              "facet": "v_logic_v",
+              "op": "eq",
+              "value": 3.3,
+              "reason": "propagated",
+              "from_slot_id": "controller",
+              "req_id": null,
+              "count_before": 14,
+              "count_after": 12,
+              "label": "3.3 V logic"
+            },
+            {
+              "facet": "max_width_mm",
+              "op": "lte",
+              "value": 38,
+              "reason": "compatibility",
+              "from_slot_id": "pcb",
+              "req_id": null,
+              "count_before": 12,
+              "count_after": 2,
+              "label": "Fits the OLED header area"
+            }
+          ],
+          "count_before": 37,
+          "count_after": 2,
+          "survivors": [
+            {
+              "short_id": "C1",
+              "card": {
+                "part_id": "disp:ssd1306_128x32",
+                "display_name": "SSD1306 OLED 128x32 (I2C)",
+                "kind": "module",
+                "primary_function": "display.oled",
+                "summary": "0.91 in monochrome OLED on a 4 pin I2C header.",
+                "key_specs": [
+                  {
+                    "label": "Resolution",
+                    "value": "128x32",
+                    "unit": null
+                  },
+                  {
+                    "label": "Bus",
+                    "value": "I2C 0x3C",
+                    "unit": null
+                  },
+                  {
+                    "label": "Logic",
+                    "value": "3.3 to 5",
+                    "unit": "V"
+                  }
+                ],
+                "thumbnail_url": "/assets/parts/ssd1306_128x32.png",
+                "licence_spdx": "NOASSERTION",
+                "commercial_ok": "unknown",
+                "verified": "third_party",
+                "source_url": null
+              },
+              "score": 0.93,
+              "is_default": true
+            },
+            {
+              "short_id": "C2",
+              "card": {
+                "part_id": "disp:sh1106_128x64",
+                "display_name": "SH1106 OLED 128x64 (I2C)",
+                "kind": "module",
+                "primary_function": "display.oled",
+                "summary": "1.3 in monochrome OLED, I2C.",
+                "key_specs": [
+                  {
+                    "label": "Resolution",
+                    "value": "128x64",
+                    "unit": null
+                  },
+                  {
+                    "label": "Bus",
+                    "value": "I2C 0x3C",
+                    "unit": null
+                  },
+                  {
+                    "label": "Width",
+                    "value": 35.4,
+                    "unit": "mm"
+                  }
+                ],
+                "thumbnail_url": "/assets/parts/sh1106_128x64.png",
+                "licence_spdx": "NOASSERTION",
+                "commercial_ok": "unknown",
+                "verified": "third_party",
+                "source_url": null
+              },
+              "score": 0.58,
+              "is_default": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 6,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "decision.made",
+        "seq": 42,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.818Z",
+        "stage": "compose",
+        "payload": {
+          "decision": {
+            "decision_id": "d5",
+            "slot_id": "display",
+            "step": 3,
+            "method": "default",
+            "chosen_part_id": "disp:ssd1306_128x32",
+            "chosen_short_id": "C1",
+            "survivors": 2,
+            "reason": "The Corne OLED header is made for the 128x32 module.",
+            "model": null,
+            "propagated": []
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 8,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "part.added",
+        "seq": 43,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.826Z",
+        "stage": "compose",
+        "payload": {
+          "part": {
+            "instance_id": "u_oled_l",
+            "part_id": "disp:ssd1306_128x32",
+            "slot_id": "display",
+            "label": "OLED left",
+            "quantity": 1,
+            "side": "left",
+            "color": null,
+            "placement": {
+              "mode": "single",
+              "position_mm": [
+                -14.0,
+                28.0,
+                12.0
+              ],
+              "rotation_deg": [
+                0,
+                0,
+                0
+              ],
+              "explode_offset_mm": [
+                0,
+                0,
+                30.0
+              ],
+              "source": "solver",
+              "locked": false
+            },
+            "card": {
+              "part_id": "disp:ssd1306_128x32",
+              "display_name": "SSD1306 OLED 128x32 (I2C)",
+              "kind": "module",
+              "primary_function": "display.oled",
+              "summary": "0.91 in monochrome OLED on a 4 pin I2C header.",
+              "key_specs": [
+                {
+                  "label": "Resolution",
+                  "value": "128x32",
+                  "unit": null
+                },
+                {
+                  "label": "Bus",
+                  "value": "I2C 0x3C",
+                  "unit": null
+                },
+                {
+                  "label": "Logic",
+                  "value": "3.3 to 5",
+                  "unit": "V"
+                }
+              ],
+              "thumbnail_url": "/assets/parts/ssd1306_128x32.png",
+              "licence_spdx": "NOASSERTION",
+              "commercial_ok": "unknown",
+              "verified": "third_party",
+              "source_url": null
+            },
+            "assets": [
+              {
+                "asset_id": "a_ssd1306_128x32_glb",
+                "kind": "glb",
+                "role": "model",
+                "url": "/assets/parts/ssd1306_128x32.glb",
+                "status": "ready"
+              },
+              {
+                "asset_id": "a_ssd1306_128x32_png",
+                "kind": "png",
+                "role": "thumbnail",
+                "url": "/assets/parts/ssd1306_128x32.png",
+                "status": "ready"
+              }
+            ],
+            "origin": "compose",
+            "status": "ok"
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 8,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "part.added",
+        "seq": 44,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.834Z",
+        "stage": "compose",
+        "payload": {
+          "part": {
+            "instance_id": "u_oled_r",
+            "part_id": "disp:ssd1306_128x32",
+            "slot_id": "display",
+            "label": "OLED right",
+            "quantity": 1,
+            "side": "right",
+            "color": null,
+            "placement": {
+              "mode": "single",
+              "position_mm": [
+                14.0,
+                28.0,
+                12.0
+              ],
+              "rotation_deg": [
+                0,
+                0,
+                0
+              ],
+              "explode_offset_mm": [
+                0,
+                0,
+                30.0
+              ],
+              "source": "solver",
+              "locked": false
+            },
+            "card": {
+              "part_id": "disp:ssd1306_128x32",
+              "display_name": "SSD1306 OLED 128x32 (I2C)",
+              "kind": "module",
+              "primary_function": "display.oled",
+              "summary": "0.91 in monochrome OLED on a 4 pin I2C header.",
+              "key_specs": [
+                {
+                  "label": "Resolution",
+                  "value": "128x32",
+                  "unit": null
+                },
+                {
+                  "label": "Bus",
+                  "value": "I2C 0x3C",
+                  "unit": null
+                },
+                {
+                  "label": "Logic",
+                  "value": "3.3 to 5",
+                  "unit": "V"
+                }
+              ],
+              "thumbnail_url": "/assets/parts/ssd1306_128x32.png",
+              "licence_spdx": "NOASSERTION",
+              "commercial_ok": "unknown",
+              "verified": "third_party",
+              "source_url": null
+            },
+            "assets": [
+              {
+                "asset_id": "a_ssd1306_128x32_glb",
+                "kind": "glb",
+                "role": "model",
+                "url": "/assets/parts/ssd1306_128x32.glb",
+                "status": "ready"
+              },
+              {
+                "asset_id": "a_ssd1306_128x32_png",
+                "kind": "png",
+                "role": "thumbnail",
+                "url": "/assets/parts/ssd1306_128x32.png",
+                "status": "ready"
+              }
+            ],
+            "origin": "compose",
+            "status": "ok"
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 4,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "slot.updated",
+        "seq": 45,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.838Z",
+        "stage": "compose",
+        "payload": {
+          "slot": {
+            "slot_id": "display",
+            "label": "Display",
+            "function_id": "display.oled",
+            "criticality": "critical",
+            "quantity": 2,
+            "side": "none",
+            "order": 3,
+            "state": "decided",
+            "candidates_total": 37,
+            "candidates_left": 1,
+            "chosen_part_id": "disp:ssd1306_128x32",
+            "instance_ids": [
+              "u_oled_l",
+              "u_oled_r"
+            ],
+            "from_design": false
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 4,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "connection.added",
+        "seq": 46,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.842Z",
+        "stage": "compose",
+        "payload": {
+          "connection": {
+            "connection_id": "c_oled_l",
+            "type": "i2c",
+            "kind": "electrical",
+            "from": {
+              "instance_id": "u_mcu_l",
+              "interface_id": "i2c0",
+              "index": null
+            },
+            "to": {
+              "instance_id": "u_oled_l",
+              "interface_id": "i2c",
+              "index": null
+            },
+            "via_instance_id": "u_pcb_l",
+            "nets": [
+              {
+                "signal": "SDA",
+                "from_pin": "P0.17",
+                "to_pin": "SDA"
+              },
+              {
+                "signal": "SCL",
+                "from_pin": "P0.20",
+                "to_pin": "SCL"
+              },
+              {
+                "signal": "VCC",
+                "from_pin": "VCC",
+                "to_pin": "VCC"
+              },
+              {
+                "signal": "GND",
+                "from_pin": "GND",
+                "to_pin": "GND"
+              }
+            ],
+            "resolved": {
+              "address": 60,
+              "v_logic_v": 3.3
+            },
+            "origin": "compose",
+            "status": "ok",
+            "label": "I2C 0x3C"
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 4,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "connection.added",
+        "seq": 47,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.846Z",
+        "stage": "compose",
+        "payload": {
+          "connection": {
+            "connection_id": "c_oled_r",
+            "type": "i2c",
+            "kind": "electrical",
+            "from": {
+              "instance_id": "u_mcu_r",
+              "interface_id": "i2c0",
+              "index": null
+            },
+            "to": {
+              "instance_id": "u_oled_r",
+              "interface_id": "i2c",
+              "index": null
+            },
+            "via_instance_id": "u_pcb_r",
+            "nets": [
+              {
+                "signal": "SDA",
+                "from_pin": "P0.17",
+                "to_pin": "SDA"
+              },
+              {
+                "signal": "SCL",
+                "from_pin": "P0.20",
+                "to_pin": "SCL"
+              },
+              {
+                "signal": "VCC",
+                "from_pin": "VCC",
+                "to_pin": "VCC"
+              },
+              {
+                "signal": "GND",
+                "from_pin": "GND",
+                "to_pin": "GND"
+              }
+            ],
+            "resolved": {
+              "address": 60,
+              "v_logic_v": 3.3
+            },
+            "origin": "compose",
+            "status": "ok",
+            "label": "I2C 0x3C"
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 3,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "check.result",
+        "seq": 48,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.849Z",
+        "stage": "compose",
+        "payload": {
+          "results": [
+            {
+              "check_key": "elec.i2c.address_clash:u_mcu_l",
+              "rule_id": "elec.i2c.address_clash",
+              "status": "pass",
+              "severity": "error",
+              "message": "One device on the bus (0x3C).",
+              "subjects": [
+                {
+                  "instance_id": "u_mcu_l",
+                  "interface_id": "i2c0"
+                }
+              ],
+              "stage": "compose"
+            },
+            {
+              "check_key": "elec.logic.level_mismatch:c_oled_l",
+              "rule_id": "elec.logic.level_mismatch",
+              "status": "pass",
+              "severity": "error",
+              "message": "Both sides 3.3 V.",
+              "subjects": [
+                {
+                  "connection_id": "c_oled_l"
+                }
+              ],
+              "measured": 3.3,
+              "limit": 3.3,
+              "unit": "V",
+              "stage": "compose"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 4,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "slot.updated",
+        "seq": 49,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.853Z",
+        "stage": "compose",
+        "payload": {
+          "slot": {
+            "slot_id": "switches",
+            "label": "Switches",
+            "function_id": "input.key",
+            "criticality": "critical",
+            "quantity": 42,
+            "side": "none",
+            "order": 4,
+            "state": "narrowing",
+            "candidates_total": 160,
+            "candidates_left": 112,
+            "chosen_part_id": null,
+            "instance_ids": [],
+            "from_design": false
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 30,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "candidates.ready",
+        "seq": 50,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.883Z",
+        "stage": "compose",
+        "payload": {
+          "slot_id": "switches",
+          "step": 4,
+          "filters": [
+            {
+              "facet": "switch_family",
+              "op": "eq",
+              "value": "mx",
+              "reason": "compatibility",
+              "from_slot_id": "pcb",
+              "req_id": "r5",
+              "count_before": 160,
+              "count_after": 112,
+              "label": "MX hotswap"
+            }
+          ],
+          "count_before": 160,
+          "count_after": 112,
+          "survivors": [
+            {
+              "short_id": "C1",
+              "card": {
+                "part_id": "sw:gateron_yellow_mx",
+                "display_name": "Gateron Yellow (MX)",
+                "kind": "component",
+                "primary_function": "input.key",
+                "summary": "Linear MX style switch, 50 gf.",
+                "key_specs": [
+                  {
+                    "label": "Family",
+                    "value": "MX",
+                    "unit": null
+                  },
+                  {
+                    "label": "Type",
+                    "value": "linear",
+                    "unit": null
+                  },
+                  {
+                    "label": "Force",
+                    "value": 50,
+                    "unit": "gf"
+                  }
+                ],
+                "thumbnail_url": "/assets/parts/gateron_yellow_mx.png",
+                "licence_spdx": "CC-BY-4.0",
+                "commercial_ok": "yes",
+                "verified": "geometry",
+                "source_url": null
+              },
+              "score": 0.9,
+              "is_default": true
+            },
+            {
+              "short_id": "C2",
+              "card": {
+                "part_id": "sw:cherry_mx2a_brown",
+                "display_name": "Cherry MX2A Brown",
+                "kind": "component",
+                "primary_function": "input.key",
+                "summary": "Tactile MX switch, 55 gf.",
+                "key_specs": [
+                  {
+                    "label": "Family",
+                    "value": "MX",
+                    "unit": null
+                  },
+                  {
+                    "label": "Type",
+                    "value": "tactile",
+                    "unit": null
+                  },
+                  {
+                    "label": "Force",
+                    "value": 55,
+                    "unit": "gf"
+                  }
+                ],
+                "thumbnail_url": "/assets/parts/cherry_mx2a_brown.png",
+                "licence_spdx": "CC-BY-4.0",
+                "commercial_ok": "yes",
+                "verified": "geometry",
+                "source_url": null
+              },
+              "score": 0.84,
+              "is_default": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 6,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "decision.made",
+        "seq": 51,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.889Z",
+        "stage": "compose",
+        "payload": {
+          "decision": {
+            "decision_id": "d6",
+            "slot_id": "switches",
+            "step": 4,
+            "method": "default",
+            "chosen_part_id": "sw:gateron_yellow_mx",
+            "chosen_short_id": "C1",
+            "survivors": 112,
+            "reason": "No switch feel requested; most common linear MX switch.",
+            "model": null,
+            "propagated": [
+              {
+                "slot_id": "keycaps",
+                "count_before": 25,
+                "count_after": 18,
+                "constraint": "MX cross stem"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 8,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "part.added",
+        "seq": 52,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.897Z",
+        "stage": "compose",
+        "payload": {
+          "part": {
+            "instance_id": "u_sw_l",
+            "part_id": "sw:gateron_yellow_mx",
+            "slot_id": "switches",
+            "label": "Switches left",
+            "quantity": 21,
+            "side": "left",
+            "color": null,
+            "placement": {
+              "mode": "layout",
+              "position_mm": [
+                -132.0,
+                40.0,
+                1.6
+              ],
+              "rotation_deg": [
+                0,
+                0,
+                0
+              ],
+              "explode_offset_mm": [
+                0,
+                0,
+                35.0
+              ],
+              "source": "solver",
+              "locked": false,
+              "layout_id": "lay_corne_l"
+            },
+            "card": {
+              "part_id": "sw:gateron_yellow_mx",
+              "display_name": "Gateron Yellow (MX)",
+              "kind": "component",
+              "primary_function": "input.key",
+              "summary": "Linear MX style switch, 50 gf.",
+              "key_specs": [
+                {
+                  "label": "Family",
+                  "value": "MX",
+                  "unit": null
+                },
+                {
+                  "label": "Type",
+                  "value": "linear",
+                  "unit": null
+                },
+                {
+                  "label": "Force",
+                  "value": 50,
+                  "unit": "gf"
+                }
+              ],
+              "thumbnail_url": "/assets/parts/gateron_yellow_mx.png",
+              "licence_spdx": "CC-BY-4.0",
+              "commercial_ok": "yes",
+              "verified": "geometry",
+              "source_url": null
+            },
+            "assets": [
+              {
+                "asset_id": "a_gateron_yellow_mx_glb",
+                "kind": "glb",
+                "role": "model",
+                "url": "/assets/parts/gateron_yellow_mx.glb",
+                "status": "ready"
+              },
+              {
+                "asset_id": "a_gateron_yellow_mx_png",
+                "kind": "png",
+                "role": "thumbnail",
+                "url": "/assets/parts/gateron_yellow_mx.png",
+                "status": "ready"
+              }
+            ],
+            "origin": "compose",
+            "status": "ok"
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 8,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "part.added",
+        "seq": 53,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.905Z",
+        "stage": "compose",
+        "payload": {
+          "part": {
+            "instance_id": "u_sw_r",
+            "part_id": "sw:gateron_yellow_mx",
+            "slot_id": "switches",
+            "label": "Switches right",
+            "quantity": 21,
+            "side": "right",
+            "color": null,
+            "placement": {
+              "mode": "layout",
+              "position_mm": [
+                20.0,
+                40.0,
+                1.6
+              ],
+              "rotation_deg": [
+                0,
+                0,
+                0
+              ],
+              "explode_offset_mm": [
+                0,
+                0,
+                35.0
+              ],
+              "source": "solver",
+              "locked": false,
+              "layout_id": "lay_corne_r"
+            },
+            "card": {
+              "part_id": "sw:gateron_yellow_mx",
+              "display_name": "Gateron Yellow (MX)",
+              "kind": "component",
+              "primary_function": "input.key",
+              "summary": "Linear MX style switch, 50 gf.",
+              "key_specs": [
+                {
+                  "label": "Family",
+                  "value": "MX",
+                  "unit": null
+                },
+                {
+                  "label": "Type",
+                  "value": "linear",
+                  "unit": null
+                },
+                {
+                  "label": "Force",
+                  "value": 50,
+                  "unit": "gf"
+                }
+              ],
+              "thumbnail_url": "/assets/parts/gateron_yellow_mx.png",
+              "licence_spdx": "CC-BY-4.0",
+              "commercial_ok": "yes",
+              "verified": "geometry",
+              "source_url": null
+            },
+            "assets": [
+              {
+                "asset_id": "a_gateron_yellow_mx_glb",
+                "kind": "glb",
+                "role": "model",
+                "url": "/assets/parts/gateron_yellow_mx.glb",
+                "status": "ready"
+              },
+              {
+                "asset_id": "a_gateron_yellow_mx_png",
+                "kind": "png",
+                "role": "thumbnail",
+                "url": "/assets/parts/gateron_yellow_mx.png",
+                "status": "ready"
+              }
+            ],
+            "origin": "compose",
+            "status": "ok"
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 4,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "slot.updated",
+        "seq": 54,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.909Z",
+        "stage": "compose",
+        "payload": {
+          "slot": {
+            "slot_id": "switches",
+            "label": "Switches",
+            "function_id": "input.key",
+            "criticality": "critical",
+            "quantity": 42,
+            "side": "none",
+            "order": 4,
+            "state": "decided",
+            "candidates_total": 160,
+            "candidates_left": 1,
+            "chosen_part_id": "sw:gateron_yellow_mx",
+            "instance_ids": [
+              "u_sw_l",
+              "u_sw_r"
+            ],
+            "from_design": false
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 3,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "connection.added",
+        "seq": 55,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.912Z",
+        "stage": "compose",
+        "payload": {
+          "connection": {
+            "connection_id": "c_sw_l",
+            "type": "switch_socket",
+            "kind": "mechanical",
+            "from": {
+              "instance_id": "u_pcb_l",
+              "interface_id": "sw_socket",
+              "index": null
+            },
+            "to": {
+              "instance_id": "u_sw_l",
+              "interface_id": "pins",
+              "index": null
+            },
+            "via_instance_id": null,
+            "nets": [],
+            "resolved": {},
+            "origin": "compose",
+            "status": "ok",
+            "label": "21 MX hotswap sockets"
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 3,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "connection.added",
+        "seq": 56,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.915Z",
+        "stage": "compose",
+        "payload": {
+          "connection": {
+            "connection_id": "c_sw_r",
+            "type": "switch_socket",
+            "kind": "mechanical",
+            "from": {
+              "instance_id": "u_pcb_r",
+              "interface_id": "sw_socket",
+              "index": null
+            },
+            "to": {
+              "instance_id": "u_sw_r",
+              "interface_id": "pins",
+              "index": null
+            },
+            "via_instance_id": null,
+            "nets": [],
+            "resolved": {},
+            "origin": "compose",
+            "status": "ok",
+            "label": "21 MX hotswap sockets"
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 4,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "slot.updated",
+        "seq": 57,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.919Z",
+        "stage": "compose",
+        "payload": {
+          "slot": {
+            "slot_id": "keycaps",
+            "label": "Keycaps",
+            "function_id": "mech.keycap",
+            "criticality": "critical",
+            "quantity": 42,
+            "side": "none",
+            "order": 5,
+            "state": "narrowing",
+            "candidates_total": 25,
+            "candidates_left": 18,
+            "chosen_part_id": null,
+            "instance_ids": [],
+            "from_design": false
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 20,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "candidates.ready",
+        "seq": 58,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.939Z",
+        "stage": "compose",
+        "payload": {
+          "slot_id": "keycaps",
+          "step": 5,
+          "filters": [
+            {
+              "facet": "switch_family",
+              "op": "eq",
+              "value": "mx",
+              "reason": "propagated",
+              "from_slot_id": "switches",
+              "req_id": null,
+              "count_before": 25,
+              "count_after": 18,
+              "label": "MX cross stem"
+            }
+          ],
+          "count_before": 25,
+          "count_after": 18,
+          "survivors": [
+            {
+              "short_id": "C1",
+              "card": {
+                "part_id": "cap:dsa_1u_pbt",
+                "display_name": "DSA 1u keycap (PBT)",
+                "kind": "mechanical",
+                "primary_function": "mech.keycap",
+                "summary": "Uniform profile 1u keycap, MX cross stem.",
+                "key_specs": [
+                  {
+                    "label": "Profile",
+                    "value": "DSA",
+                    "unit": null
+                  },
+                  {
+                    "label": "Stem",
+                    "value": "MX",
+                    "unit": null
+                  }
+                ],
+                "thumbnail_url": "/assets/parts/dsa_1u_pbt.png",
+                "licence_spdx": "CC0-1.0",
+                "commercial_ok": "yes",
+                "verified": "geometry",
+                "source_url": null
+              },
+              "score": 0.86,
+              "is_default": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 5,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "decision.made",
+        "seq": 59,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.944Z",
+        "stage": "compose",
+        "payload": {
+          "decision": {
+            "decision_id": "d7",
+            "slot_id": "keycaps",
+            "step": 5,
+            "method": "default",
+            "chosen_part_id": "cap:dsa_1u_pbt",
+            "chosen_short_id": "C1",
+            "survivors": 18,
+            "reason": "Uniform DSA profile works on column staggered boards.",
+            "model": null,
+            "propagated": []
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 8,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "part.added",
+        "seq": 60,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.952Z",
+        "stage": "compose",
+        "payload": {
+          "part": {
+            "instance_id": "u_cap_l",
+            "part_id": "cap:dsa_1u_pbt",
+            "slot_id": "keycaps",
+            "label": "Keycaps left",
+            "quantity": 21,
+            "side": "left",
+            "color": {
+              "hex": "#E8E4DA",
+              "material": "plastic",
+              "node": null
+            },
+            "placement": {
+              "mode": "layout",
+              "position_mm": [
+                -132.0,
+                40.0,
+                13.0
+              ],
+              "rotation_deg": [
+                0,
+                0,
+                0
+              ],
+              "explode_offset_mm": [
+                0,
+                0,
+                55.0
+              ],
+              "source": "solver",
+              "locked": false,
+              "layout_id": "lay_corne_l"
+            },
+            "card": {
+              "part_id": "cap:dsa_1u_pbt",
+              "display_name": "DSA 1u keycap (PBT)",
+              "kind": "mechanical",
+              "primary_function": "mech.keycap",
+              "summary": "Uniform profile 1u keycap, MX cross stem.",
+              "key_specs": [
+                {
+                  "label": "Profile",
+                  "value": "DSA",
+                  "unit": null
+                },
+                {
+                  "label": "Stem",
+                  "value": "MX",
+                  "unit": null
+                }
+              ],
+              "thumbnail_url": "/assets/parts/dsa_1u_pbt.png",
+              "licence_spdx": "CC0-1.0",
+              "commercial_ok": "yes",
+              "verified": "geometry",
+              "source_url": null
+            },
+            "assets": [
+              {
+                "asset_id": "a_dsa_1u_pbt_glb",
+                "kind": "glb",
+                "role": "model",
+                "url": "/assets/parts/dsa_1u_pbt.glb",
+                "status": "ready"
+              },
+              {
+                "asset_id": "a_dsa_1u_pbt_png",
+                "kind": "png",
+                "role": "thumbnail",
+                "url": "/assets/parts/dsa_1u_pbt.png",
+                "status": "ready"
+              }
+            ],
+            "origin": "compose",
+            "status": "ok"
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 8,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "part.added",
+        "seq": 61,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.960Z",
+        "stage": "compose",
+        "payload": {
+          "part": {
+            "instance_id": "u_cap_r",
+            "part_id": "cap:dsa_1u_pbt",
+            "slot_id": "keycaps",
+            "label": "Keycaps right",
+            "quantity": 21,
+            "side": "right",
+            "color": {
+              "hex": "#E8E4DA",
+              "material": "plastic",
+              "node": null
+            },
+            "placement": {
+              "mode": "layout",
+              "position_mm": [
+                20.0,
+                40.0,
+                13.0
+              ],
+              "rotation_deg": [
+                0,
+                0,
+                0
+              ],
+              "explode_offset_mm": [
+                0,
+                0,
+                55.0
+              ],
+              "source": "solver",
+              "locked": false,
+              "layout_id": "lay_corne_r"
+            },
+            "card": {
+              "part_id": "cap:dsa_1u_pbt",
+              "display_name": "DSA 1u keycap (PBT)",
+              "kind": "mechanical",
+              "primary_function": "mech.keycap",
+              "summary": "Uniform profile 1u keycap, MX cross stem.",
+              "key_specs": [
+                {
+                  "label": "Profile",
+                  "value": "DSA",
+                  "unit": null
+                },
+                {
+                  "label": "Stem",
+                  "value": "MX",
+                  "unit": null
+                }
+              ],
+              "thumbnail_url": "/assets/parts/dsa_1u_pbt.png",
+              "licence_spdx": "CC0-1.0",
+              "commercial_ok": "yes",
+              "verified": "geometry",
+              "source_url": null
+            },
+            "assets": [
+              {
+                "asset_id": "a_dsa_1u_pbt_glb",
+                "kind": "glb",
+                "role": "model",
+                "url": "/assets/parts/dsa_1u_pbt.glb",
+                "status": "ready"
+              },
+              {
+                "asset_id": "a_dsa_1u_pbt_png",
+                "kind": "png",
+                "role": "thumbnail",
+                "url": "/assets/parts/dsa_1u_pbt.png",
+                "status": "ready"
+              }
+            ],
+            "origin": "compose",
+            "status": "ok"
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 4,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "slot.updated",
+        "seq": 62,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.964Z",
+        "stage": "compose",
+        "payload": {
+          "slot": {
+            "slot_id": "keycaps",
+            "label": "Keycaps",
+            "function_id": "mech.keycap",
+            "criticality": "critical",
+            "quantity": 42,
+            "side": "none",
+            "order": 5,
+            "state": "decided",
+            "candidates_total": 25,
+            "candidates_left": 1,
+            "chosen_part_id": "cap:dsa_1u_pbt",
+            "instance_ids": [
+              "u_cap_l",
+              "u_cap_r"
+            ],
+            "from_design": false
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 3,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "connection.added",
+        "seq": 63,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.967Z",
+        "stage": "compose",
+        "payload": {
+          "connection": {
+            "connection_id": "c_cap_l",
+            "type": "switch_stem",
+            "kind": "mechanical",
+            "from": {
+              "instance_id": "u_sw_l",
+              "interface_id": "stem",
+              "index": null
+            },
+            "to": {
+              "instance_id": "u_cap_l",
+              "interface_id": "stem",
+              "index": null
+            },
+            "via_instance_id": null,
+            "nets": [],
+            "resolved": {},
+            "origin": "compose",
+            "status": "ok",
+            "label": "MX cross stem"
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 3,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "connection.added",
+        "seq": 64,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.970Z",
+        "stage": "compose",
+        "payload": {
+          "connection": {
+            "connection_id": "c_cap_r",
+            "type": "switch_stem",
+            "kind": "mechanical",
+            "from": {
+              "instance_id": "u_sw_r",
+              "interface_id": "stem",
+              "index": null
+            },
+            "to": {
+              "instance_id": "u_cap_r",
+              "interface_id": "stem",
+              "index": null
+            },
+            "via_instance_id": null,
+            "nets": [],
+            "resolved": {},
+            "origin": "compose",
+            "status": "ok",
+            "label": "MX cross stem"
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 3,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "check.result",
+        "seq": 65,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.973Z",
+        "stage": "compose",
+        "payload": {
+          "results": [
+            {
+              "check_key": "mech.switch.family_match:u_sw_l",
+              "rule_id": "mech.switch.family_match",
+              "status": "pass",
+              "severity": "critical",
+              "message": "MX switches on MX hotswap sockets.",
+              "subjects": [
+                {
+                  "instance_id": "u_sw_l"
+                },
+                {
+                  "instance_id": "u_pcb_l"
+                }
+              ],
+              "stage": "compose"
+            },
+            {
+              "check_key": "mech.keycap.stem_match:u_cap_l",
+              "rule_id": "mech.keycap.stem_match",
+              "status": "pass",
+              "severity": "error",
+              "message": "MX cross stem on MX switches.",
+              "subjects": [
+                {
+                  "instance_id": "u_cap_l"
+                }
+              ],
+              "stage": "compose"
+            },
+            {
+              "check_key": "mech.layout.match:u_sw_l",
+              "rule_id": "mech.layout.match",
+              "status": "pass",
+              "severity": "error",
+              "message": "21 switches on 21 key positions.",
+              "subjects": [
+                {
+                  "instance_id": "u_sw_l"
+                }
+              ],
+              "measured": 21,
+              "limit": 21,
+              "stage": "compose"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 2,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "stage.progress",
+        "seq": 66,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.975Z",
+        "stage": "compose",
+        "payload": {
+          "stage": "compose",
+          "message": "6 of 8 slots decided",
+          "fraction": 0.75
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 4,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "slot.updated",
+        "seq": 67,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.979Z",
+        "stage": "compose",
+        "payload": {
+          "slot": {
+            "slot_id": "foam",
+            "label": "Case foam",
+            "function_id": "mech.foam",
+            "criticality": "optional",
+            "quantity": 2,
+            "side": "none",
+            "order": 7,
+            "state": "narrowing",
+            "candidates_total": 3,
+            "candidates_left": 3,
+            "chosen_part_id": null,
+            "instance_ids": [],
+            "from_design": false
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 15,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "candidates.ready",
+        "seq": 68,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.994Z",
+        "stage": "compose",
+        "payload": {
+          "slot_id": "foam",
+          "step": 6,
+          "filters": [
+            {
+              "facet": "layout_size",
+              "op": "eq",
+              "value": "split",
+              "reason": "compatibility",
+              "from_slot_id": "pcb",
+              "req_id": null,
+              "count_before": 3,
+              "count_after": 0,
+              "label": "Cut for Corne"
+            }
+          ],
+          "count_before": 3,
+          "count_after": 0,
+          "survivors": []
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 4,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "decision.made",
+        "seq": 69,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:00.998Z",
+        "stage": "compose",
+        "payload": {
+          "decision": {
+            "decision_id": "d8",
+            "slot_id": "foam",
+            "step": 6,
+            "method": "none",
+            "chosen_part_id": null,
+            "chosen_short_id": null,
+            "survivors": 0,
+            "reason": "No case foam in the catalog fits the Corne. Optional, so the build continues without it.",
+            "model": null,
+            "propagated": []
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 4,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "slot.updated",
+        "seq": 70,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:01.002Z",
+        "stage": "compose",
+        "payload": {
+          "slot": {
+            "slot_id": "foam",
+            "label": "Case foam",
+            "function_id": "mech.foam",
+            "criticality": "optional",
+            "quantity": 2,
+            "side": "none",
+            "order": 7,
+            "state": "none",
+            "candidates_total": 3,
+            "candidates_left": 0,
+            "chosen_part_id": null,
+            "instance_ids": [],
+            "from_design": false
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 3,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "warning",
+        "seq": 71,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:01.005Z",
+        "stage": "compose",
+        "payload": {
+          "warning": {
+            "warning_id": "w2",
+            "code": "optional_part_missing",
+            "severity": "info",
+            "message": "Case foam left out: no catalog part fits.",
+            "subjects": [
+              {
+                "slot_id": "foam"
+              }
+            ],
+            "stage": "compose"
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 3,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "check.result",
+        "seq": 72,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:01.008Z",
+        "stage": "compose",
+        "payload": {
+          "results": [
+            {
+              "check_key": "slot.critical_filled:build",
+              "rule_id": "slot.critical_filled",
+              "status": "pass",
+              "severity": "critical",
+              "message": "All 6 critical slots filled.",
+              "subjects": [],
+              "measured": 6,
+              "limit": 6,
+              "stage": "compose"
+            },
+            {
+              "check_key": "slot.optional_missing:foam",
+              "rule_id": "slot.optional_missing",
+              "status": "fail",
+              "severity": "info",
+              "message": "Optional slot Case foam is empty.",
+              "subjects": [
+                {
+                  "slot_id": "foam"
+                }
+              ],
+              "stage": "compose"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 5,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "stage.completed",
+        "seq": 73,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:01.013Z",
+        "stage": "compose",
+        "payload": {
+          "stage": "compose",
+          "status": "ok",
+          "duration_ms": 912
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 5,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "stage.started",
+        "seq": 74,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:01.018Z",
+        "stage": "place",
+        "payload": {
+          "stage": "place",
+          "label": "Placing parts",
+          "budget_ms": 50
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 30,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "placement.updated",
+        "seq": 75,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:01.048Z",
+        "stage": "place",
+        "payload": {
+          "placements": [
+            {
+              "instance_id": "u_pcb_l",
+              "placement": {
+                "mode": "single",
+                "position_mm": [
+                  -132.0,
+                  40.0,
+                  0.0
+                ],
+                "rotation_deg": [
+                  0,
+                  0,
+                  0
+                ],
+                "explode_offset_mm": [
+                  0,
+                  0,
+                  0.0
+                ],
+                "source": "solver",
+                "locked": false
+              }
+            },
+            {
+              "instance_id": "u_pcb_r",
+              "placement": {
+                "mode": "single",
+                "position_mm": [
+                  20.0,
+                  40.0,
+                  0.0
+                ],
+                "rotation_deg": [
+                  0,
+                  0,
+                  0
+                ],
+                "explode_offset_mm": [
+                  0,
+                  0,
+                  0.0
+                ],
+                "source": "solver",
+                "locked": false
+              }
+            },
+            {
+              "instance_id": "u_plate_l",
+              "placement": {
+                "mode": "single",
+                "position_mm": [
+                  -132.0,
+                  40.0,
+                  5.0
+                ],
+                "rotation_deg": [
+                  0,
+                  0,
+                  0
+                ],
+                "explode_offset_mm": [
+                  0,
+                  0,
+                  20.0
+                ],
+                "source": "solver",
+                "locked": false
+              }
+            },
+            {
+              "instance_id": "u_plate_r",
+              "placement": {
+                "mode": "single",
+                "position_mm": [
+                  20.0,
+                  40.0,
+                  5.0
+                ],
+                "rotation_deg": [
+                  0,
+                  0,
+                  0
+                ],
+                "explode_offset_mm": [
+                  0,
+                  0,
+                  20.0
+                ],
+                "source": "solver",
+                "locked": false
+              }
+            },
+            {
+              "instance_id": "u_mcu_l",
+              "placement": {
+                "mode": "single",
+                "position_mm": [
+                  -14.0,
+                  28.0,
+                  6.0
+                ],
+                "rotation_deg": [
+                  0,
+                  0,
+                  0
+                ],
+                "explode_offset_mm": [
+                  0,
+                  0,
+                  15.0
+                ],
+                "source": "solver",
+                "locked": false
+              }
+            },
+            {
+              "instance_id": "u_mcu_r",
+              "placement": {
+                "mode": "single",
+                "position_mm": [
+                  14.0,
+                  28.0,
+                  6.0
+                ],
+                "rotation_deg": [
+                  0,
+                  0,
+                  0
+                ],
+                "explode_offset_mm": [
+                  0,
+                  0,
+                  15.0
+                ],
+                "source": "solver",
+                "locked": false
+              }
+            },
+            {
+              "instance_id": "u_bat_l",
+              "placement": {
+                "mode": "single",
+                "position_mm": [
+                  -111.0,
+                  24.0,
+                  -4.5
+                ],
+                "rotation_deg": [
+                  0,
+                  0,
+                  0
+                ],
+                "explode_offset_mm": [
+                  0,
+                  0,
+                  -15.0
+                ],
+                "source": "solver",
+                "locked": false
+              }
+            },
+            {
+              "instance_id": "u_bat_r",
+              "placement": {
+                "mode": "single",
+                "position_mm": [
+                  111.0,
+                  24.0,
+                  -4.5
+                ],
+                "rotation_deg": [
+                  0,
+                  0,
+                  0
+                ],
+                "explode_offset_mm": [
+                  0,
+                  0,
+                  -15.0
+                ],
+                "source": "solver",
+                "locked": false
+              }
+            },
+            {
+              "instance_id": "u_oled_l",
+              "placement": {
+                "mode": "single",
+                "position_mm": [
+                  -14.0,
+                  28.0,
+                  12.0
+                ],
+                "rotation_deg": [
+                  0,
+                  0,
+                  0
+                ],
+                "explode_offset_mm": [
+                  0,
+                  0,
+                  30.0
+                ],
+                "source": "solver",
+                "locked": false
+              }
+            },
+            {
+              "instance_id": "u_oled_r",
+              "placement": {
+                "mode": "single",
+                "position_mm": [
+                  14.0,
+                  28.0,
+                  12.0
+                ],
+                "rotation_deg": [
+                  0,
+                  0,
+                  0
+                ],
+                "explode_offset_mm": [
+                  0,
+                  0,
+                  30.0
+                ],
+                "source": "solver",
+                "locked": false
+              }
+            },
+            {
+              "instance_id": "u_sw_l",
+              "placement": {
+                "mode": "layout",
+                "position_mm": [
+                  -132.0,
+                  40.0,
+                  1.6
+                ],
+                "rotation_deg": [
+                  0,
+                  0,
+                  0
+                ],
+                "explode_offset_mm": [
+                  0,
+                  0,
+                  35.0
+                ],
+                "source": "solver",
+                "locked": false,
+                "layout_id": "lay_corne_l"
+              }
+            },
+            {
+              "instance_id": "u_sw_r",
+              "placement": {
+                "mode": "layout",
+                "position_mm": [
+                  20.0,
+                  40.0,
+                  1.6
+                ],
+                "rotation_deg": [
+                  0,
+                  0,
+                  0
+                ],
+                "explode_offset_mm": [
+                  0,
+                  0,
+                  35.0
+                ],
+                "source": "solver",
+                "locked": false,
+                "layout_id": "lay_corne_r"
+              }
+            },
+            {
+              "instance_id": "u_cap_l",
+              "placement": {
+                "mode": "layout",
+                "position_mm": [
+                  -132.0,
+                  40.0,
+                  13.0
+                ],
+                "rotation_deg": [
+                  0,
+                  0,
+                  0
+                ],
+                "explode_offset_mm": [
+                  0,
+                  0,
+                  55.0
+                ],
+                "source": "solver",
+                "locked": false,
+                "layout_id": "lay_corne_l"
+              }
+            },
+            {
+              "instance_id": "u_cap_r",
+              "placement": {
+                "mode": "layout",
+                "position_mm": [
+                  20.0,
+                  40.0,
+                  13.0
+                ],
+                "rotation_deg": [
+                  0,
+                  0,
+                  0
+                ],
+                "explode_offset_mm": [
+                  0,
+                  0,
+                  55.0
+                ],
+                "source": "solver",
+                "locked": false,
+                "layout_id": "lay_corne_r"
+              }
+            }
+          ],
+          "assembly_bbox_mm": {
+            "min": [
+              -140.0,
+              -45.0,
+              -12.0
+            ],
+            "max": [
+              140.0,
+              45.0,
+              21.0
+            ]
+          },
+          "solver": {
+            "status": "optimal",
+            "duration_ms": 22
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 5,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "stage.completed",
+        "seq": 76,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:01.053Z",
+        "stage": "place",
+        "payload": {
+          "stage": "place",
+          "status": "ok",
+          "duration_ms": 35
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 5,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "stage.started",
+        "seq": 77,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:01.058Z",
+        "stage": "enclose",
+        "payload": {
+          "stage": "enclose",
+          "label": "Generating the case",
+          "budget_ms": 100
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 45,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "enclosure.updated",
+        "seq": 78,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:01.103Z",
+        "stage": "enclose",
+        "payload": {
+          "enclosure": {
+            "enclosure_id": "e_case_l",
+            "kind": "generated",
+            "side": "left",
+            "for_instance_ids": [
+              "u_pcb_l",
+              "u_mcu_l",
+              "u_bat_l",
+              "u_oled_l"
+            ],
+            "params": {
+              "wall_mm": 2.0,
+              "floor_mm": 2.0,
+              "fillet_mm": 3.0,
+              "clearance_mm": 0.5,
+              "height_mm": null,
+              "split": "tray",
+              "standoff_height_mm": 6.5,
+              "screw": "m2"
+            },
+            "outer_size_mm": [
+              138.0,
+              98.0,
+              14.5
+            ],
+            "position_mm": [
+              -71.0,
+              0.0,
+              -10.5
+            ],
+            "rotation_deg": [
+              0,
+              0,
+              0
+            ],
+            "explode_offset_mm": [
+              0,
+              0,
+              -30.0
+            ],
+            "cutouts": [
+              {
+                "cutout_id": "cut_usb_l",
+                "for": {
+                  "instance_id": "u_mcu_l",
+                  "interface_id": "usb",
+                  "index": null
+                },
+                "feature": "usb_c",
+                "face": "pos_y",
+                "shape": "slot",
+                "center_mm": [
+                  -14.0,
+                  49.0,
+                  7.0
+                ],
+                "size_mm": [
+                  10.0,
+                  4.0
+                ]
+              },
+              {
+                "cutout_id": "cut_pwr_l",
+                "for": null,
+                "feature": "power_switch",
+                "face": "pos_y",
+                "shape": "rect",
+                "center_mm": [
+                  -28.0,
+                  49.0,
+                  7.0
+                ],
+                "size_mm": [
+                  8.0,
+                  4.0
+                ]
+              }
+            ],
+            "color": {
+              "hex": "#9E9E9E",
+              "material": "plastic",
+              "node": null
+            },
+            "material": "plastic",
+            "color_source": "default",
+            "assets": [
+              {
+                "asset_id": "a_case_l_glb_r1",
+                "kind": "glb",
+                "role": "model",
+                "url": "/assets/builds/b_compose01A/case_l_r1.glb",
+                "status": "ready",
+                "origin": "generated"
+              },
+              {
+                "asset_id": "a_case_l_stl_r1",
+                "kind": "stl",
+                "role": "export",
+                "url": "/assets/builds/b_compose01A/case_l_r1.stl",
+                "status": "ready"
+              }
+            ],
+            "status": "ok",
+            "duration_ms": 41,
+            "revision": 1
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 45,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "enclosure.updated",
+        "seq": 79,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:01.148Z",
+        "stage": "enclose",
+        "payload": {
+          "enclosure": {
+            "enclosure_id": "e_case_r",
+            "kind": "generated",
+            "side": "right",
+            "for_instance_ids": [
+              "u_pcb_r",
+              "u_mcu_r",
+              "u_bat_r",
+              "u_oled_r"
+            ],
+            "params": {
+              "wall_mm": 2.0,
+              "floor_mm": 2.0,
+              "fillet_mm": 3.0,
+              "clearance_mm": 0.5,
+              "height_mm": null,
+              "split": "tray",
+              "standoff_height_mm": 6.5,
+              "screw": "m2"
+            },
+            "outer_size_mm": [
+              138.0,
+              98.0,
+              14.5
+            ],
+            "position_mm": [
+              71.0,
+              0.0,
+              -10.5
+            ],
+            "rotation_deg": [
+              0,
+              0,
+              0
+            ],
+            "explode_offset_mm": [
+              0,
+              0,
+              -30.0
+            ],
+            "cutouts": [
+              {
+                "cutout_id": "cut_usb_r",
+                "for": {
+                  "instance_id": "u_mcu_r",
+                  "interface_id": "usb",
+                  "index": null
+                },
+                "feature": "usb_c",
+                "face": "pos_y",
+                "shape": "slot",
+                "center_mm": [
+                  14.0,
+                  49.0,
+                  7.0
+                ],
+                "size_mm": [
+                  10.0,
+                  4.0
+                ]
+              },
+              {
+                "cutout_id": "cut_pwr_r",
+                "for": null,
+                "feature": "power_switch",
+                "face": "pos_y",
+                "shape": "rect",
+                "center_mm": [
+                  28.0,
+                  49.0,
+                  7.0
+                ],
+                "size_mm": [
+                  8.0,
+                  4.0
+                ]
+              }
+            ],
+            "color": {
+              "hex": "#9E9E9E",
+              "material": "plastic",
+              "node": null
+            },
+            "material": "plastic",
+            "color_source": "default",
+            "assets": [
+              {
+                "asset_id": "a_case_r_glb_r1",
+                "kind": "glb",
+                "role": "model",
+                "url": "/assets/builds/b_compose01A/case_r_r1.glb",
+                "status": "ready",
+                "origin": "generated"
+              },
+              {
+                "asset_id": "a_case_r_stl_r1",
+                "kind": "stl",
+                "role": "export",
+                "url": "/assets/builds/b_compose01A/case_r_r1.stl",
+                "status": "ready"
+              }
+            ],
+            "status": "ok",
+            "duration_ms": 41,
+            "revision": 1
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 4,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "check.result",
+        "seq": 80,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:01.152Z",
+        "stage": "enclose",
+        "payload": {
+          "results": [
+            {
+              "check_key": "mech.fit.enclosure:e_case_l",
+              "rule_id": "mech.fit.enclosure",
+              "status": "pass",
+              "severity": "error",
+              "message": "All parts inside the case with 0.5 mm clearance.",
+              "subjects": [
+                {
+                  "enclosure_id": "e_case_l"
+                }
+              ],
+              "measured": 0.5,
+              "limit": 0.5,
+              "unit": "mm",
+              "stage": "enclose"
+            },
+            {
+              "check_key": "mech.access.panel:cut_usb_l",
+              "rule_id": "mech.access.panel",
+              "status": "pass",
+              "severity": "warning",
+              "message": "USB C reachable through the case wall.",
+              "subjects": [
+                {
+                  "enclosure_id": "e_case_l",
+                  "instance_id": "u_mcu_l"
+                }
+              ],
+              "stage": "enclose"
+            },
+            {
+              "check_key": "mech.fit.collision:build",
+              "rule_id": "mech.fit.collision",
+              "status": "pass",
+              "severity": "error",
+              "message": "No overlapping parts.",
+              "subjects": [],
+              "stage": "enclose"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 5,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "stage.completed",
+        "seq": 81,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:01.157Z",
+        "stage": "enclose",
+        "payload": {
+          "stage": "enclose",
+          "status": "ok",
+          "duration_ms": 99
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 5,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "stage.started",
+        "seq": 82,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:01.162Z",
+        "stage": "board",
+        "payload": {
+          "stage": "board",
+          "label": "Checking the boards",
+          "budget_ms": 100
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 20,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "board.updated",
+        "seq": 83,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:01.182Z",
+        "stage": "board",
+        "payload": {
+          "board": {
+            "board_id": "pcb_l",
+            "source": "design",
+            "side": "left",
+            "part_instance_id": "u_pcb_l",
+            "for_instance_ids": [
+              "u_mcu_l",
+              "u_sw_l",
+              "u_oled_l"
+            ],
+            "outline_mm": [],
+            "size_mm": [
+              132.0,
+              93.0
+            ],
+            "thickness_mm": 1.6,
+            "layers": 2,
+            "nets": [
+              {
+                "name": "SDA",
+                "kind": "signal",
+                "members": [
+                  {
+                    "instance_id": "u_mcu_l",
+                    "pin": "P0.17",
+                    "index": null
+                  },
+                  {
+                    "instance_id": "u_oled_l",
+                    "pin": "SDA",
+                    "index": null
+                  }
+                ]
+              }
+            ],
+            "routing": {
+              "status": "routed",
+              "unrouted_nets": [],
+              "duration_ms": 0,
+              "method": "design",
+              "cache_key": null,
+              "cache_hit": false,
+              "router": null
+            },
+            "drc": "pass",
+            "assets": [
+              {
+                "asset_id": "a_corne_kicad_l",
+                "kind": "kicad_pcb",
+                "role": "source",
+                "url": "/assets/designs/corne/corne_l.kicad_pcb",
+                "status": "ready"
+              }
+            ],
+            "status": "ok",
+            "revision": 1
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 20,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "board.updated",
+        "seq": 84,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:01.202Z",
+        "stage": "board",
+        "payload": {
+          "board": {
+            "board_id": "pcb_r",
+            "source": "design",
+            "side": "right",
+            "part_instance_id": "u_pcb_r",
+            "for_instance_ids": [
+              "u_mcu_r",
+              "u_sw_r",
+              "u_oled_r"
+            ],
+            "outline_mm": [],
+            "size_mm": [
+              132.0,
+              93.0
+            ],
+            "thickness_mm": 1.6,
+            "layers": 2,
+            "nets": [
+              {
+                "name": "SDA",
+                "kind": "signal",
+                "members": [
+                  {
+                    "instance_id": "u_mcu_r",
+                    "pin": "P0.17",
+                    "index": null
+                  },
+                  {
+                    "instance_id": "u_oled_r",
+                    "pin": "SDA",
+                    "index": null
+                  }
+                ]
+              }
+            ],
+            "routing": {
+              "status": "routed",
+              "unrouted_nets": [],
+              "duration_ms": 0,
+              "method": "design",
+              "cache_key": null,
+              "cache_hit": false,
+              "router": null
+            },
+            "drc": "pass",
+            "assets": [
+              {
+                "asset_id": "a_corne_kicad_r",
+                "kind": "kicad_pcb",
+                "role": "source",
+                "url": "/assets/designs/corne/corne_r.kicad_pcb",
+                "status": "ready"
+              }
+            ],
+            "status": "ok",
+            "revision": 1
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 3,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "check.result",
+        "seq": 85,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:01.205Z",
+        "stage": "board",
+        "payload": {
+          "results": [
+            {
+              "check_key": "board.routing.complete:pcb_l",
+              "rule_id": "board.routing.complete",
+              "status": "pass",
+              "severity": "error",
+              "message": "Design board, fully routed.",
+              "subjects": [
+                {
+                  "board_id": "pcb_l"
+                }
+              ],
+              "stage": "board"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 5,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "stage.completed",
+        "seq": 86,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:01.210Z",
+        "stage": "board",
+        "payload": {
+          "stage": "board",
+          "status": "ok",
+          "duration_ms": 48
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 5,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "stage.started",
+        "seq": 87,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:01.215Z",
+        "stage": "firmware",
+        "payload": {
+          "stage": "firmware",
+          "label": "Writing firmware",
+          "budget_ms": 50
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 30,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "firmware.ready",
+        "seq": 88,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:01.245Z",
+        "stage": "firmware",
+        "payload": {
+          "firmware": {
+            "firmware_id": "fw_main",
+            "framework": "zmk",
+            "origin": "template",
+            "mode": "compiled",
+            "mode_reason": "The controller changed from the design's wired Pro Micro to a nice!nano, so the design binary does not apply.",
+            "targets": [
+              {
+                "target_id": "corne_left",
+                "mcu_instance_id": "u_mcu_l",
+                "side": "left",
+                "label": "Left half (central)"
+              },
+              {
+                "target_id": "corne_right",
+                "mcu_instance_id": "u_mcu_r",
+                "side": "right",
+                "label": "Right half"
+              }
+            ],
+            "files": [
+              {
+                "path": "config/corne.keymap",
+                "language": "keymap",
+                "content": "// Corne default keymap, 3 layers\n",
+                "asset": null,
+                "bytes": 2048
+              },
+              {
+                "path": "config/corne.conf",
+                "language": "kconfig",
+                "content": "CONFIG_ZMK_DISPLAY=y\nCONFIG_ZMK_SLEEP=y\n",
+                "asset": null,
+                "bytes": 38
+              },
+              {
+                "path": "build.yaml",
+                "language": "yaml",
+                "content": "include:\n  - board: nice_nano_v2\n    shield: corne_left nice_view_adapter\n  - board: nice_nano_v2\n    shield: corne_right\n",
+                "asset": null,
+                "bytes": 120
+              }
+            ],
+            "drivers": [
+              {
+                "part_id": "disp:ssd1306_128x32",
+                "library": "zmk,ssd1306",
+                "version": null,
+                "include": null
+              }
+            ],
+            "pin_map": [
+              {
+                "instance_id": "u_oled_l",
+                "interface_id": "i2c",
+                "signal": "SDA",
+                "mcu_instance_id": "u_mcu_l",
+                "mcu_pin": "P0.17"
+              },
+              {
+                "instance_id": "u_oled_l",
+                "interface_id": "i2c",
+                "signal": "SCL",
+                "mcu_instance_id": "u_mcu_l",
+                "mcu_pin": "P0.20"
+              }
+            ],
+            "compile": {
+              "status": "pending",
+              "duration_ms": 0,
+              "binaries": [],
+              "log": null,
+              "message": "Queued; runs after the build finishes."
+            },
+            "revision": 1
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 3,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "check.result",
+        "seq": 89,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:01.248Z",
+        "stage": "firmware",
+        "payload": {
+          "results": [
+            {
+              "check_key": "fw.driver.available:u_oled_l",
+              "rule_id": "fw.driver.available",
+              "status": "pass",
+              "severity": "error",
+              "message": "ZMK has an SSD1306 driver.",
+              "subjects": [
+                {
+                  "instance_id": "u_oled_l"
+                }
+              ],
+              "stage": "firmware"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 5,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "stage.completed",
+        "seq": 90,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:01.253Z",
+        "stage": "firmware",
+        "payload": {
+          "stage": "firmware",
+          "status": "ok",
+          "duration_ms": 38
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 5,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "stage.started",
+        "seq": 91,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:01.258Z",
+        "stage": "render",
+        "payload": {
+          "stage": "render",
+          "label": "Preparing the 3D scene",
+          "budget_ms": 50
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 20,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "scene.ready",
+        "seq": 92,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:01.278Z",
+        "stage": "render",
+        "payload": {
+          "scene": {
+            "camera": {
+              "position_mm": [
+                0.0,
+                -260.0,
+                220.0
+              ],
+              "target_mm": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "fov_deg": 35
+            },
+            "assembly_bbox_mm": {
+              "min": [
+                -142.0,
+                -49.0,
+                -17.75
+              ],
+              "max": [
+                142.0,
+                49.0,
+                21.0
+              ]
+            },
+            "render": {
+              "asset_id": "a_render_b_compose01A",
+              "kind": "png",
+              "role": "render",
+              "url": "/assets/builds/b_compose01A/render.png",
+              "status": "ready"
+            },
+            "preload": [
+              "/assets/parts/corne_plate_fr4_l.glb",
+              "/assets/parts/corne_plate_fr4_r.glb",
+              "/assets/parts/corne_v3_l.glb",
+              "/assets/parts/corne_v3_r.glb",
+              "/assets/parts/dsa_1u_pbt.glb",
+              "/assets/parts/gateron_yellow_mx.glb",
+              "/assets/parts/lipo_301230_110.glb",
+              "/assets/parts/nice_nano_v2.glb",
+              "/assets/parts/ssd1306_128x32.glb",
+              "/assets/builds/b_compose01A/case_l_r1.glb",
+              "/assets/builds/b_compose01A/case_r_r1.glb"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 5,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "stage.completed",
+        "seq": 93,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:01.283Z",
+        "stage": "render",
+        "payload": {
+          "stage": "render",
+          "status": "ok",
+          "duration_ms": 25
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 5,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "build.done",
+        "seq": 94,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:01.288Z",
+        "revision": 1,
+        "payload": {
+          "summary": {
+            "part_count": 94,
+            "instance_count": 14,
+            "connection_count": 11,
+            "warning_count": 2,
+            "checks": {
+              "pass": 13,
+              "fail": 1,
+              "unknown": 1
+            }
+          },
+          "timings_ms": {
+            "classify": 35,
+            "reuse": 23,
+            "compose": 912,
+            "place": 35,
+            "enclose": 99,
+            "board": 48,
+            "firmware": 38,
+            "render": 25
+          },
+          "total_ms": 1283
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 15000,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "firmware.progress",
+        "seq": 95,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:16.288Z",
+        "stage": "firmware",
+        "payload": {
+          "firmware_id": "fw_main",
+          "phase": "compiling",
+          "fraction": 0.4,
+          "target_id": "corne_left",
+          "message": "Compiling the left half"
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 22000,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "firmware.progress",
+        "seq": 96,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:38.288Z",
+        "stage": "firmware",
+        "payload": {
+          "firmware_id": "fw_main",
+          "phase": "packaging",
+          "fraction": 0.95,
+          "target_id": null,
+          "message": "Packaging UF2 files"
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 1200,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "firmware.ready",
+        "seq": 97,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:39.488Z",
+        "stage": "firmware",
+        "payload": {
+          "firmware": {
+            "firmware_id": "fw_main",
+            "framework": "zmk",
+            "origin": "template",
+            "mode": "compiled",
+            "mode_reason": "The controller changed from the design's wired Pro Micro to a nice!nano, so the design binary does not apply.",
+            "targets": [
+              {
+                "target_id": "corne_left",
+                "mcu_instance_id": "u_mcu_l",
+                "side": "left",
+                "label": "Left half (central)"
+              },
+              {
+                "target_id": "corne_right",
+                "mcu_instance_id": "u_mcu_r",
+                "side": "right",
+                "label": "Right half"
+              }
+            ],
+            "files": [
+              {
+                "path": "config/corne.keymap",
+                "language": "keymap",
+                "content": "// Corne default keymap, 3 layers\n",
+                "asset": null,
+                "bytes": 2048
+              },
+              {
+                "path": "config/corne.conf",
+                "language": "kconfig",
+                "content": "CONFIG_ZMK_DISPLAY=y\nCONFIG_ZMK_SLEEP=y\n",
+                "asset": null,
+                "bytes": 38
+              },
+              {
+                "path": "build.yaml",
+                "language": "yaml",
+                "content": "include:\n  - board: nice_nano_v2\n    shield: corne_left nice_view_adapter\n  - board: nice_nano_v2\n    shield: corne_right\n",
+                "asset": null,
+                "bytes": 120
+              }
+            ],
+            "drivers": [
+              {
+                "part_id": "disp:ssd1306_128x32",
+                "library": "zmk,ssd1306",
+                "version": null,
+                "include": null
+              }
+            ],
+            "pin_map": [
+              {
+                "instance_id": "u_oled_l",
+                "interface_id": "i2c",
+                "signal": "SDA",
+                "mcu_instance_id": "u_mcu_l",
+                "mcu_pin": "P0.17"
+              },
+              {
+                "instance_id": "u_oled_l",
+                "interface_id": "i2c",
+                "signal": "SCL",
+                "mcu_instance_id": "u_mcu_l",
+                "mcu_pin": "P0.20"
+              }
+            ],
+            "compile": {
+              "status": "ok",
+              "duration_ms": 38200,
+              "message": null,
+              "binaries": [
+                {
+                  "asset_id": "a_fw_left_uf2",
+                  "kind": "uf2",
+                  "role": "binary",
+                  "url": "/assets/builds/b_compose01A/corne_left.uf2",
+                  "status": "ready",
+                  "bytes": 352256
+                },
+                {
+                  "asset_id": "a_fw_right_uf2",
+                  "kind": "uf2",
+                  "role": "binary",
+                  "url": "/assets/builds/b_compose01A/corne_right.uf2",
+                  "status": "ready",
+                  "bytes": 348160
+                }
+              ],
+              "log": {
+                "asset_id": "a_fw_log",
+                "kind": "log",
+                "role": "log",
+                "url": "/assets/builds/b_compose01A/compile.log",
+                "status": "ready"
+              }
+            },
+            "revision": 1
+          }
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 3,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "check.result",
+        "seq": 98,
+        "build_id": "b_compose01A",
+        "ts": "2026-10-24T20:00:39.491Z",
+        "stage": "firmware",
+        "payload": {
+          "results": [
+            {
+              "check_key": "fw.compile:fw_main",
+              "rule_id": "fw.compile",
+              "status": "pass",
+              "severity": "error",
+              "message": "Both halves compiled.",
+              "subjects": [],
+              "measured": 38200,
+              "unit": "ms",
+              "stage": "firmware"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
