@@ -30,6 +30,7 @@ PER_FETCH_S = 25.0
 TOTAL_BUDGET_S = 140.0
 BUDGET_PER_NEED_S = 20.0  # a device with many parts to find gets time for each of them
 MISS_TTL_S = 600.0
+SUFFIX_MAX = 4  # package + reel letters a vendor appends to a KiCad symbol name (TRG1, DSGR)
 UV_ARGS = ("--with", "easyeda2kicad", "--with", "trimesh", "--with", "numpy")
 
 # (term, function) -> monotonic time of the last miss
@@ -81,9 +82,21 @@ def slug(text: str) -> str:
 
 def _names_part(query: str, name: str) -> bool:
     """A KiCad symbol answers a part number that is its name or its name plus a short
-    packing suffix (DRV8833PWPR is the DRV8833PW on a reel)."""
+    package/packing suffix (DRV8833PWPR is the DRV8833PWP on a reel, AP2112K-3.3TRG1 the
+    AP2112K-3.3). A suffix that continues a number names another part (ATmega32 is not
+    the ATmega328), so it must start with a letter when the name ends in a digit."""
     q, n = slug(query).replace("_", ""), slug(name).replace("_", "")
-    return bool(q) and (q in n or (len(n) >= 6 and q.startswith(n) and len(q) - len(n) <= 2))
+    if not q:
+        return False
+    if q in n:
+        return True
+    rest = q[len(n) :]
+    return (
+        len(n) >= 6
+        and q.startswith(n)
+        and 0 < len(rest) <= SUFFIX_MAX
+        and not (n[-1].isdigit() and rest[0].isdigit())
+    )
 
 
 def name_slug(part: dict[str, Any]) -> str:
@@ -216,7 +229,7 @@ class Resolver:
         for q in need.kicad:
             # the index matches whole words: a part number with a packing suffix is also
             # looked up without it
-            stems = [q] + [q[:-k] for k in (1, 2) if len(q) - k >= 6]
+            stems = [q] + [q[:-k] for k in range(1, SUFFIX_MAX + 1) if len(q) - k >= 6]
             hits = []
             for stem in stems:
                 try:

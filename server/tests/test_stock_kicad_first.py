@@ -5,8 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from bara.live import completeness as cp
-from bara.live.fetch import Overlay, Resolver
+from bara.live.fetch import Overlay, Resolver, _names_part
 
 SYMBOLS = ["DRV8833PW", "DRV8833PWP", "DRV8833RTY"]
 
@@ -36,3 +38,18 @@ def test_reel_suffix_finds_the_powerpad_symbol(tmp_path: Path) -> None:
     r = Resolver(Overlay(Source()), cli=lambda *a: (1, "no"), fetched_path=tmp_path / "f.jsonl")
     part = r.generated(need)
     assert part is not None and part["part_id"].endswith(":DRV8833PWP")
+
+
+@pytest.mark.parametrize(
+    ("query", "name", "ok"),
+    [
+        ("AP2112K-3.3TRG1", "AP2112K-3.3", True),
+        ("DRV8838DSGR", "DRV8838", True),
+        ("USBLC6-2SC6", "USBLC6-2SC6", True),
+        ("ATmega328", "ATmega32", False),  # a digit suffix is another part
+        ("LM3170", "LM317", False),
+        ("MAX17048G+T10", "MAX1704", False),
+    ],
+)
+def test_suffix_rule(query: str, name: str, ok: bool) -> None:
+    assert _names_part(query, name) is ok
