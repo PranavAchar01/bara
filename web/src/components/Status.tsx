@@ -1,10 +1,53 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../state/store";
 import { applyEdit, startBuild } from "../net/client";
 import type { CheckResult, Suggestion } from "../spec/types";
 import { STAGE_IDS } from "../spec/types";
-import { Chip, Icon, Panel } from "../ui/common";
+import { Chip, Icon, Panel, useNow } from "../ui/common";
+import { buildProgress, fmtDuration, fmtLeft } from "../state/progress";
 import { checkTone, fmtMs, fmtValue, known, severityTone, vlabel } from "../ui/format";
+
+/** Whole-build progress bar with time left while running, then a done confirmation. */
+export function BuildProgress() {
+  const status = useApp((s) => s.build?.status);
+  const buildId = useApp((s) => s.build?.build_id ?? null);
+  const stages = useApp((s) => s.view.stages);
+  const startAt = useApp((s) => s.view.startAt);
+  const total = useApp((s) => s.view.done?.total_ms ?? s.view.doneMs);
+  const warnings = useApp((s) => s.build?.warnings?.length ?? 0);
+  const [closed, setClosed] = useState<string | null>(null);
+  const running = status === "running";
+  const now = useNow(running, 1000);
+  if (running) {
+    const p = buildProgress(stages, startAt, now);
+    const pct = Math.round(p.fraction * 100);
+    return (
+      <div className="build-progress" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-label="Build progress">
+        <div className="bp-head">
+          <span className="mono">{pct}%</span>
+          {p.leftMs !== null && <span className="muted">{fmtLeft(p.leftMs)}</span>}
+        </div>
+        <div className="bp-track">
+          <span style={{ width: `${Math.max(2, pct)}%` }} />
+        </div>
+      </div>
+    );
+  }
+  if (status !== "done" || closed === buildId) return null;
+  return (
+    <div className="build-done" role="status" aria-live="polite">
+      <span className="bd-check" aria-hidden>
+        ✓
+      </span>
+      <strong>Build done</strong>
+      {total !== null && total !== undefined && <span className="muted">in {fmtDuration(total)}</span>}
+      {warnings > 0 && <span className="muted">· {warnings} warning{warnings > 1 ? "s" : ""} to look at</span>}
+      <button type="button" className="btn ghost sm icon" aria-label="Close" onClick={() => setClosed(buildId)}>
+        <Icon name="x" />
+      </button>
+    </div>
+  );
+}
 
 /** C05 LatencyHUD: time to first part, per stage, total, model calls. */
 export function LatencyHUD() {

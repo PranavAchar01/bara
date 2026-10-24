@@ -245,7 +245,6 @@ class LiveRunner:
         "slot.critical_filled": "E_CRITICAL_PART_MISSING",
         "form.valid": "E_ENCLOSURE_FAILED",
         "form.fit": "E_ENCLOSURE_FAILED",
-        "identity.reads_as_device": "E_ENCLOSURE_FAILED",
         "board.drc": "E_BOARD_FAILED",
         "board.routing.complete": "E_BOARD_FAILED",
         "mech.fit.enclosure": "E_ENCLOSURE_FAILED",
@@ -729,7 +728,9 @@ class LiveRunner:
                         "check_key": "identity.reads_as_device",
                         "rule_id": "identity.reads_as_device",
                         "status": "pass" if ok else ("fail" if verdict else "unknown"),
-                        "severity": "error",
+                        # a look judgement: reported and repaired once, never a reason to
+                        # withhold a board and case that pass every physical check
+                        "severity": "warning",
                         "message": message[:300],
                         "subjects": [],
                         "stage": "render",

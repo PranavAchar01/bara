@@ -3,7 +3,7 @@ import { useApp } from "./state/store";
 import { ConnectionBanner, EngineNotice, FileHeader, TopBar } from "./components/TopBar";
 import { ExampleChips, PromptBar } from "./components/PromptBar";
 import { StepPlayer } from "./components/LeftColumn";
-import { EditStatus, EventLog, FailureCard, LatencyHUD, Toast, WarningBanner } from "./components/Status";
+import { BuildProgress, EditStatus, EventLog, FailureCard, LatencyHUD, Toast, WarningBanner } from "./components/Status";
 import { PartsList, RightColumn } from "./components/RightColumn";
 import { AddPartPicker, ConnectDialog, PartInspector, ResizePanel, SwapDrawer } from "./components/Overlays";
 import { Viewport3D } from "./three/Viewport3D";
@@ -73,6 +73,7 @@ function Workspace() {
       <section className="centre">
         <Viewport3D />
         <div className="centre-top">
+          <BuildProgress />
           <WarningBanner />
         </div>
         <LatencyHUD />
