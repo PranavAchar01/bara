@@ -4,7 +4,7 @@
 // BARA_ACCESS_TOKEN is a Vercel env var holding the same key the engine checks.
 import { createHash, timingSafeEqual } from "node:crypto";
 // The line below is rewritten by scripts/serve-public.sh; empty means no engine published.
-const ENGINE_URL: string = "https://storage-excellent-diamonds-specifically.trycloudflare.com";
+const ENGINE_URL: string = "https://william-criterion-singer-nvidia.trycloudflare.com";
 
 const digest = (s: string) => createHash("sha256").update(s).digest();
 
