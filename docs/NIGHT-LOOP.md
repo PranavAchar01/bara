@@ -43,3 +43,8 @@ Every row is fixed by changing one generic mechanism. No device-name branches, p
 | E7 | DRC errors left on a finished board (controller 2) | board: DRC errors feed back into one re-route pass with wider clearance / alternative footprint before failing | compose |
 | E8 | Ungrouped identical BOM lines, unnamed lines | BOM is built from instances grouped by part id with qty; every line carries the resolved part name | compose |
 | E9 | Thin BOMs (no MCU, no amp, no DAC, no sensor) | function blocks: every implied function chain (audio out = source + DAC/amp + transducer, input = sensor + MCU) expands to all its blocks | compose |
+
+### 2026-10-24 ~00:00 PT
+- E1-E9 engine commits pushed (0c1261c..7956604): fit with both sides + rotation + declared-size redraw, relaxed resolver, optional slots never fail, BOM grouped by function, function-chain audit, DRC wide-rules re-route, off-board modules (E3), identity judge sees assembled parts. KEYBOARD_ONLY filter replaced by "a block must serve a function the brief implies".
+- Sculpted shell merged (5980fa7): geometry/shell.py builds the case from ProductForm silhouette, thickness and anchors (crowned top, fillets, stick wells, d-pad, buttons, screen window, port slots, hidden part pockets, ribs so nothing floats). Fixture renders in scratchpad/shell/ read as a gamepad and a phone.
+- Device-name grep of both diffs: clean. Server restarted on 5980fa7. Full 27-row suite restarting on 5980fa7; that run is the one reported.
