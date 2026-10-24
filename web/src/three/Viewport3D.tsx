@@ -11,7 +11,7 @@ import { useShallow } from "zustand/react/shallow";
 import { GizmoHelper, GizmoViewcube, Html, OrbitControls, TransformControls } from "@react-three/drei";
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
-import { select, useApp, type ViewPreset } from "../state/store";
+import { focusPart, select, setView, useApp, type ViewPreset } from "../state/store";
 import { applyEdit } from "../net/client";
 import { fetchPart } from "../components/Overlays";
 import type { BBox, Board, Build, BuildPart, Enclosure, Layout } from "../spec/types";
@@ -21,6 +21,7 @@ import { placeholderBox, type Box } from "./bbox";
 import { LAYER_RANK, explodeZ, isKeycapPart, layerGap, layerOf, partLabel, type LayerId, type PartLabel } from "./explode";
 import { elementPoses, type ElementPose } from "./layout";
 import { LabelOverlay, LabelProjector, labelOpacity } from "./labels";
+import { FocusDriver, nearFocused } from "./focus";
 import { defaultColor, ghost, placeholderMaterial, presetFor, presetMaterial, tinted, usesPreset } from "./materials";
 import { registerAnchor, stage, stageBox } from "./stage";
 import { StudioEnvironment, StudioFloor, studioPalette, type StudioPalette } from "./studio";
@@ -138,12 +139,36 @@ function elementMatrix(pose: ElementPose): THREE.Matrix4 {
   return new THREE.Matrix4().compose(new THREE.Vector3(p[0], p[1], p[2]), q, new THREE.Vector3(1, 1, 1));
 }
 
-/** Moves a group along Z with the eased explode factor, and registers its label anchor. */
-function useLayerGroup(layer: LayerId, anchorKey: string | null, anchorLocal: THREE.Vector3) {
+/**
+ * Moves a group along Z with the eased explode factor, registers its label anchor, and blends it
+ * toward its focus pose (centre stage, or the shelf) as focus eases in.
+ */
+function useLayerGroup(layer: LayerId, anchorKey: string | null, anchorLocal: THREE.Vector3, focusKey: string | null = null) {
   const ref = useRef<THREE.Group>(null);
   useFrame(() => {
-    if (ref.current) ref.current.position.z = explodeZ(layer, stage.gap, stage.explode);
+    const g = ref.current;
+    if (!g) return;
+    const z = explodeZ(layer, stage.gap, stage.explode);
+    g.userData.restZ = z;
+    const pose = stage.focusK > 0 ? stage.focusPose.get(g) : undefined;
+    if (!pose) {
+      g.position.set(0, 0, z);
+      if (g.scale.x !== 1) g.scale.setScalar(1);
+      return;
+    }
+    const k = stage.focusK;
+    g.position.set(pose.pos.x * k, pose.pos.y * k, z + (pose.pos.z - z) * k);
+    g.scale.setScalar(1 + (pose.scale - 1) * k);
   });
+  useEffect(() => {
+    const g = ref.current;
+    if (!g || !focusKey) return;
+    stage.focusGroups.set(g, focusKey);
+    return () => {
+      stage.focusGroups.delete(g);
+      stage.focusPose.delete(g);
+    };
+  }, [focusKey]);
   useEffect(() => {
     if (!anchorKey) return;
     const out = new THREE.Vector3();
@@ -155,6 +180,7 @@ function useLayerGroup(layer: LayerId, anchorKey: string | null, anchorLocal: TH
         if (g) out.z += g.position.z;
         return out;
       },
+      owner: () => ref.current,
     });
   }, [anchorKey, anchorLocal]);
   return ref;
@@ -279,7 +305,10 @@ function PartNode(props: PartNodeProps) {
   const hull = useMemo(() => (hullSrc ? hullGeometry(hullSrc, String(part.card.kind) === "pcb" ? 1.2 : 0.8) : null), [hullSrc, part.card.kind]);
   useEffect(() => () => hull?.dispose(), [hull]);
   const matrices = useMemo(() => poses.map((p) => elementMatrix(p)), [poses]);
-  const outline = props.failing ? theme.fail : props.selected || props.highlight || props.focus ? theme.accent : null;
+  // in focus the part is already singled out; a selection outline would only drown it in blue
+  const inFocus = useApp((s) => s.focusKey === partLabel(part).key);
+  const focusOn = useApp((s) => s.focusKey !== null);
+  const outline = props.failing ? theme.fail : (props.selected || props.highlight || props.focus) && !inFocus ? theme.accent : null;
   const hullRef = useRef<THREE.InstancedMesh>(null);
   useLayoutEffect(() => {
     const ref = hullRef.current;
@@ -291,6 +320,7 @@ function PartNode(props: PartNodeProps) {
   const onClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
     select(part.instance_id);
+    focusPart(partLabel(part).key);
   };
   const midZ = loaded ? (loaded.bbox.min.z + loaded.bbox.max.z) / 2 : (box.min[2] + box.max[2]) / 2;
   const topZ = loaded ? loaded.bbox.max.z : box.max[2];
@@ -314,7 +344,7 @@ function PartNode(props: PartNodeProps) {
     return new THREE.Vector3(best.x, best.y, best.z + midZ);
   }, [centroid, matrices, midZ]);
   const htmlAnchor = useMemo(() => new THREE.Vector3(centroid.x, centroid.y, centroid.z + topZ + 2), [centroid, topZ]);
-  const ref = useLayerGroup(layerOf(part), props.labelKey, anchorLocal);
+  const ref = useLayerGroup(layerOf(part), props.labelKey, anchorLocal, partLabel(part).key);
   // Agent target: every element's box (model or placeholder) in the layer group's space; holds when covered too.
   const localBox = useMemo(() => {
     const out = new THREE.Box3();
@@ -357,7 +387,7 @@ function PartNode(props: PartNodeProps) {
           <meshBasicMaterial color={outline} side={THREE.BackSide} transparent opacity={0.95} depthWrite={false} toneMapped={false} />
         </instancedMesh>
       )}
-      {(props.labels || props.selected || (missing && !props.covered && assembled && (hover || props.highlight))) && (
+      {!focusOn && (props.labels || props.selected || (missing && !props.covered && assembled && (hover || props.highlight))) && (
         <Html position={htmlAnchor} center zIndexRange={[20, 0]} style={{ pointerEvents: "none" }}>
           <span className={`vp-label ${missing ? "missing" : ""} ${props.failing ? "failing" : ""}`}>
             {part.label ?? part.card.display_name}
@@ -369,8 +399,8 @@ function PartNode(props: PartNodeProps) {
   );
 }
 
-/** Case colour: the brief's, or a neutral light grey when the server only filled in its default. */
-const CASE_NEUTRAL = "#D3D1CB";
+/** Case colour: the brief's, or graphite when the server only filled in its default (a light grey melted into the white floor). */
+const CASE_NEUTRAL = "#4A4E55";
 function caseHex(enc: Enclosure): string {
   return enc.color?.hex && enc.color_source !== "default" ? enc.color.hex : CASE_NEUTRAL;
 }
@@ -441,6 +471,7 @@ function CasePieceNode(props: {
   material: THREE.MeshStandardMaterial;
   edge: string | null;
   anchorKey: string | null;
+  focusKey: string;
   onClick: (e: ThreeEvent<MouseEvent>) => void;
 }) {
   const { piece, enc } = props;
@@ -457,7 +488,7 @@ function CasePieceNode(props: {
     v.applyEuler(new THREE.Euler(rot[0] * DEG, rot[1] * DEG, rot[2] * DEG, "XYZ"));
     return v.add(new THREE.Vector3(pos[0], pos[1], pos[2]));
   }, [piece, pos, rot]);
-  const ref = useLayerGroup(piece.lid ? "lid" : "case", props.anchorKey, anchorLocal);
+  const ref = useLayerGroup(piece.lid ? "lid" : "case", props.anchorKey, anchorLocal, props.focusKey);
   // Assembled, every case piece is a translucent shell with its edges drawn, so
   // the board inside stays in view; pieces turn solid as the explode opens.
   const material = useMemo(() => {
@@ -469,7 +500,7 @@ function CasePieceNode(props: {
   useEffect(() => () => material.dispose(), [material]);
   const edges = useMemo(() => piece.geoms.map((g) => new THREE.EdgesGeometry(g, 40)), [piece.geoms]);
   useEffect(() => () => edges.forEach((e) => e.dispose()), [edges]);
-  const edgeMat = useMemo(() => new THREE.LineBasicMaterial({ color: "#6F757D", transparent: true, opacity: 0.3, depthWrite: false, toneMapped: false }), []);
+  const edgeMat = useMemo(() => new THREE.LineBasicMaterial({ color: "#1F2226", transparent: true, opacity: 0.3, depthWrite: false, toneMapped: false }), []);
   useEffect(() => () => edgeMat.dispose(), [edgeMat]);
   const base = props.material.opacity;
   const floor = piece.lid ? 0.16 : 0.24;
@@ -477,7 +508,8 @@ function CasePieceNode(props: {
     const k = Math.min(1, stage.explode / 0.6);
     const o = (floor + (1 - floor) * k) * base;
     material.opacity = o;
-    edgeMat.opacity = 0.3 * (1 - k);
+    // Creases stay drawn when pulled apart, like the outlines the library parts carry in their own geometry.
+    edgeMat.opacity = 0.3 + 0.25 * k;
     const solid = k >= 0.999 && base >= 0.999;
     if (material.depthWrite !== solid) {
       material.depthWrite = solid;
@@ -553,6 +585,7 @@ function EnclosureNode(props: { enc: Enclosure; theme: Theme; selected: boolean;
           edge={edge}
           onClick={onClick}
           anchorKey={props.labelled ? (p.lid && pieces.length > 1 ? "e:case_top" : "e:case") : null}
+          focusKey={p.lid && pieces.length > 1 ? "e:case_top" : "e:case"}
         />
       ))}
     </>
@@ -631,13 +664,15 @@ function BoardPiece(props: {
   /** Registers the piece as an agent target under this id, bounded by `targetBox` (board space). */
   targetId?: string;
   targetBox?: THREE.Box3 | null;
+  /** The part this piece draws (a footprint's 3D model), or the bare board. */
+  focusKey?: string;
   onClick?: (e: ThreeEvent<MouseEvent>) => void;
   children?: ReactNode;
 }) {
   const { board, targetId, targetBox } = props;
   const pos = useMemo(() => board.position_mm ?? [0, 0, 0], [board.position_mm]);
   const rot = useMemo(() => board.rotation_deg ?? [0, 0, 0], [board.rotation_deg]);
-  const ref = useLayerGroup(props.layer, props.labelKey, props.anchor);
+  const ref = useLayerGroup(props.layer, props.labelKey, props.anchor, props.focusKey ?? "b:board");
   const localBox = useMemo(() => (targetBox && !targetBox.isEmpty() ? targetBox.clone().applyMatrix4(boardMatrix(board)) : null), [targetBox, board]);
   useEffect(() => (targetId && localBox && ref.current ? registerPart(targetId, ref.current, localBox) : undefined), [ref, targetId, localBox]);
   return (
@@ -721,20 +756,27 @@ function BoardNode(props: {
           {hover}
         </BoardPiece>
       </group>
-      {pieces?.parts.map(({ cand, groups: g }) => (
-        <BoardPiece
-          key={cand.instanceId}
-          groups={g}
-          board={board}
-          layer={cand.layer}
-          labelKey={null}
-          anchor={anchorLocal}
-          onClick={(e) => {
-            e.stopPropagation();
-            select(cand.instanceId);
-          }}
-        />
-      ))}
+      {pieces?.parts.map(({ cand, groups: g }) => {
+        // a footprint's 3D model focuses as its part (the switches, the MCU), not as the board
+        const part = props.parts.find((p) => p.instance_id === cand.instanceId);
+        const key = part ? partLabel(part).key : "b:board";
+        return (
+          <BoardPiece
+            key={cand.instanceId}
+            groups={g}
+            board={board}
+            layer={cand.layer}
+            labelKey={null}
+            anchor={anchorLocal}
+            focusKey={key}
+            onClick={(e) => {
+              e.stopPropagation();
+              select(cand.instanceId);
+              focusPart(key);
+            }}
+          />
+        );
+      })}
     </>
   );
 }
@@ -998,7 +1040,8 @@ function CameraRig() {
   }, [explodeTarget]);
   useFrame((_, dt) => {
     // Label column room: shift the projection, not the camera, so orbit stays centred on the model.
-    const want = labelOpacity(stage.explode) * LABEL_SHIFT;
+    // no label column while a part is in focus, so the view centres again
+    const want = labelOpacity(stage.explode) * (1 - stage.focusK) * LABEL_SHIFT;
     if (Math.abs(want - shift.current) > 1e-4) {
       shift.current = want;
       if (want > 0) cam.setViewOffset(size.width, size.height, size.width * want, 0, size.width, size.height);
@@ -1182,6 +1225,11 @@ export interface LabelRowData extends PartLabel {
   quantity: number;
 }
 
+/** The focus (and label) key a part belongs to: a PCB drawn from the board GLB focuses as the board. */
+export function focusKeyOf(build: Build | null, part: BuildPart): string {
+  return boardDrawnPcbs(build).has(part.instance_id) ? "b:board" : partLabel(part).key;
+}
+
 /** One label per catalog part, plus the case and any board drawn from its GLB. */
 export function labelRows(build: Build | null): LabelRowData[] {
   if (!build) return [];
@@ -1311,6 +1359,7 @@ function SceneContents(props: {
       <StudioEnvironment palette={props.palette} post={props.post} />
       {preset !== "bottom" && <StudioFloor palette={props.palette} revision={revision} grid />}
       <ExplodeDriver />
+      <FocusDriver />
       <group ref={rootRef}>
         {visible.map((p) => (
           <PartNode
@@ -1400,7 +1449,14 @@ export function Viewport3D() {
         frameloop="demand"
         camera={{ up: [0, 0, 1], position: [-120, -380, 260], near: 1, far: 10000, fov: 32 }}
         onPointerMissed={(e) => {
-          if (e.type === "click") select(null);
+          // a click on empty space steps back: out of focus first, then clears the selection
+          // (R3F only reports a miss for a click, not for the end of an orbit drag)
+          if (e.type !== "click") return;
+          if (useApp.getState().focusKey) {
+            // a click in a gap inside the part (between keys) keeps it out; only clearly empty space puts it back
+            const r = (e.currentTarget as HTMLElement | null)?.getBoundingClientRect?.() ?? (e.target as HTMLElement).getBoundingClientRect();
+            if (!nearFocused(e.clientX - r.left, e.clientY - r.top, r.width, r.height)) focusPart(null);
+          } else select(null);
         }}
         gl={{ antialias: !post, preserveDrawingBuffer: true, powerPreference: "high-performance" }}
       >
@@ -1469,13 +1525,16 @@ function ViewportToolbar(props: {
       };
     }),
   );
-  const setPreset = (p: ViewPreset) => useApp.setState((s) => ({ preset: p, cameraNonce: s.cameraNonce + 1 }));
+  const setPreset = (p: ViewPreset) => setView(p);
   const toggle = (k: keyof typeof toggles) => useApp.setState((s) => ({ toggles: { ...s.toggles, [k]: !s.toggles[k] } }));
   return (
     <div className="vp-toolbar" role="toolbar" aria-label="View" style={props.compact ? { ...TOOLBAR_FIT, gap: 4, padding: "4px 6px" } : TOOLBAR_FIT}>
       <label className="vp-explode">
         {!props.compact && <span className="small">Explode</span>}
-        <input style={props.compact ? { width: 56 } : undefined} type="range" min={0} max={1} step={0.01} value={explode} onChange={(e) => useApp.setState({ explode: Number(e.target.value) })} aria-label="Explode" />
+        <input style={props.compact ? { width: 56 } : undefined} type="range" min={0} max={1} step={0.01} value={explode} onChange={(e) => {
+            if (useApp.getState().focusKey) focusPart(null);
+            useApp.setState({ explode: Number(e.target.value) });
+          }} aria-label="Explode" />
       </label>
       <span className="vp-sep" />
       <div className="seg">
@@ -1526,4 +1585,14 @@ function ViewportToolbar(props: {
       )}
     </div>
   );
+}
+
+const noFit = () => undefined;
+
+/** The build drawn as the workspace draws it, for another canvas (the simulator): no toolbar, no move gizmo. */
+export function DeviceScene() {
+  const theme = useTheme();
+  const palette = useMemo(() => studioPalette(), []);
+  const post = useMemo(postEnabled, []);
+  return <SceneContents gizmoMode="translate" theme={theme} palette={palette} boardOnly={false} post={post} onFit={noFit} />;
 }

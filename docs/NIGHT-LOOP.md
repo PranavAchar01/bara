@@ -160,3 +160,85 @@ Web: bara-merge agent merges Nithin's figma-design-in-code / agent-board-3d / fi
 - Controller on d611c95: case checks clear, board.drc 60 errors, all from fetched footprints now on the PCB: ESP32-S3-WROOM 0.25 mm thermal vias (drill, clearance) and EasyEDA rings at 0.0999 mm vs 0.1 minimum (SS49E, RKJXV stick and others). 2 track_width necks from the router.
 - Fix e3fee5c: kicad_script._fit_holes drops unnumbered PTH vias under the minimum hole and grows thin rings, for any footprint. A dropped pad freed by Python corrupts pcbnew's pad list, so removed pads are kept alive. Unrouted rebuild of that board: 0 DRC errors. Test added (5 pass).
 - Open: the controller BOM has both an ESP32-S3 module and a BlueMicro840. Suite restarted on e3fee5c (server 65980, suite 66012).
+
+### 09:35 (cd33090)
+- Suite on e3fee5c, controller: battery is now a LiPo (chemistry filter works) and DRC has 0 errors (hole fit works); only fail is board.routing.complete with 3 unconnected, all on U5 = LSM6DS3TR-C (LGA-14, 0.5 mm pitch) pins 6/7/8. All 4 router strategies left the same 3 open.
+- Cause: the placer's region allowed a courtyard 0.5 mm from the outline; U5's edge-side pads sat 0.67 mm from the edge keep-out band, so its pins had no way out (only pin 5 escaped, by a via). Parts get 1.2 mm between each other but no channel at the rim.
+- Fix cd33090 (generic, no device names): fine-pitch SMD parts (>= 6 pads, min pad spacing < 0.65 mm, not cable connectors) keep EDGE_COPPER_MM + PART_GAP/2 from the edge. Test tests/test_fine_pitch_edge.py; 47 related tests pass.
+- Server still runs e3fee5c; suite continues on mouse/mp3/mp4/monitor for the identity re-check. Controller re-check on the next run.
+
+### 09:55 (78230d2)
+- Suite on e3fee5c, 5 rows: controller only fails routing (fixed by cd33090), identity PASS; monitor regressed: device.complete (bicolor standby LED missing) + 1 DRC error; mouse fails identity (peanut blob, pockets); mp3 fails identity (two black screen windows over nothing); mp4 fails device.complete (charge LED) + identity (plain slab).
+- MP3 cause: keyword LCSC fetch took the first stocked hit for "2.0 in TFT", an FH12 FPC connector, tagged it display.tft; the case cut a screen window for it. LCSC does stock HS20HS072RX (2.0 in ST7789 LCD, 1499 pcs).
+- Fix 78230d2: best_stocked skips connector-category hits unless the block is interconnect; FH12-40S, FH12-14S, DF19G-30P rows retagged interconnect.connector (monitor may now flag its panel; check).
+- Restarted server 17852 + suite 17889 on 78230d2 (27 devices).
+- Next gaps: status LEDs missing on monitor/mp4 (catalog/LED filter), mouse shell identity, pockets breaking through the skin.
+
+### 10:00 iteration
+- 90dca15: a spec screen-type requirement (display_type eq tft) only filters screen slots; it was emptying the status-LED slot (8 to 0) on monitor and mp4.
+- 078c228: the top skin rises over the tallest hidden part (plate kept at 1.5 mm) instead of a blind pocket opening through it (the mouse's rectangular recesses).
+- 61dc051: a product with a desk-facing sensor keeps a flat floor and domes over the board (spread goes to crown, no belly). New `mouse` shell fixture; gamepad output byte-identical.
+- 98f210f: new site kind `wheel` (scroll / thumb wheel / roller): a 20 mm wheel on edge in a slot along the plan's long axis; the encoder-access check probes the slot for wheeled encoders.
+- Controller on 78230d2: identity PASS, fit PASS, routing fixed (cd33090).
+- Suite restarted on 98f210f: server 33627, suite 33676.
+
+### 10:05 iteration
+- Monitor DRC: the one error is a 0.18 mm Freerouting neck at 0.12 mm (GND, F.Cu) between two 0.2 mm segments, squeezing past pad 124 of the 0.4 mm-pitch DF19G panel connector. Widening it to the 0.15 minimum after SES import trades it for 2 clearance errors against that pad (0.1488 vs 0.15), so it was not committed. Open: needs a reroute or a placement nudge around fine-pitch cable connectors.
+- mp4 identity ("portrait screen, a third of the face") root cause: the EA eDIP TFT43 footprint is drawn portrait (71.5 x 107.3) and kept rotation 0, so the 125x75 form could not hold it and fit repair grew the body to 220x140. Fix f7fc877: a screen >= 20 mm long turns a quarter when its long side runs across the body's long side (test_screen_orientation.py, 59 placement/form tests pass).
+- 346fc7e: the hero renderer skipped every k-th triangle over its 400k budget, so big shells (monitor 1.8M) rendered speckled and see-through and the identity judge described noise. Vertices now cluster on a grid until the meshes fit; the monitor re-render is a solid closed shell (test_hero_render.py fails on the old code).
+- Suite restarted on 346fc7e: server 45053, suite 45089.
+
+### 10:25 iteration
+- Controller mech.view.screen (81/162 rays on DS4): player indicator LEDs (display.indicator_led) took role "screen", got a DS ref and a screen window cut to their 1.6 mm size, which the wall shadows. c5ba867: an indicator LED keeps its own role (ref D) and gets a round light hole (LED size + clearance) instead of a screen rect; it is off the screen-visibility check (test_indicator_led_role.py).
+- Monitor neck DRC: Freerouting necks wherever it squeezes past a fine-pitch pad, at every track width (0.15 default gave 18 necks at 0.11, 0.2 gave 1 at 0.12). c49e1ea: after SES import each sub-minimum neck that is not a pin entry is widened to the minimum and slid along its normal (with the joined trace ends) in 5 um steps to the first spot that keeps clearance + 5 um. Monitor board 1 error -> 0 on three reroutes; two other cached boards stay at 0 (test_neck_repair.py). A 0.148 mm Freerouting clearance error near U8 shows on some runs with or without the repair; the strategy retries handle it.
+- Suite restarted on c5ba867 (server 54420, suite 54445); the neck repair is in KiCad's subprocess, so it applies to boards routed from here on.
+- 10:40: controller row on c5ba867 failed board.drc (8 errors on every strategy): the BOM now carries a DRV8833PWPR rumble driver whose HTSSOP footprint has 4 unnumbered thermal vias inside exposed pad 17 (GND); with no net each one shorted the pad (clearance + mask bridge). 7c296eb: an unnumbered plated hole inside a numbered pad takes that pad's net. Controller board 8 -> 0 errors and routes in 4 s instead of 55 s (test_thermal_vias.py).
+- 10:55 (his question: why our own assets, is it not in KiCad?): the DRV8833 came from LCSC (EasyEDA footprint + model, licence NOASSERTION) although KiCad ships Driver_Motor:DRV8833PWP on the stock HTSSOP-16 EP thermal-via footprint. Two resolver faults: parts fetched on earlier runs sat in the curated pool ahead of the KiCad tier, and the KiCad lookup missed DRV8833PWPR because the index matches whole words and R is the reel suffix. b5fdf59: the pool no longer offers cached LCSC rows (missing needs try KiCad, then that cache, then a new fetch), and the KiCad lookup also tries the number minus a 1-2 char suffix and keeps the longest matching name (PWP, not PW) (test_stock_kicad_first.py). Suite restarted.
+- 11:00 (his follow-up: "same with the game, it's all in KiCad"): controller BOM audit. From LCSC though stock KiCad carries them: DRV8833PWPR, DRV8838DSGR, AP2112K-3.3TRG1, USBLC6-2SC6, SMAJ5.0A (plus footprints for MSK12C02 and the MAX17048 TDFN). 1f9a058: suffix rule widened to 4 letters with a digit guard (ATmega32 never answers ATmega328); all five now resolve to Driver_Motor / Regulator_Linear / Power_Protection / Diode symbols. Not in stock KiCad, so still LCSC: RKJXV thumbstick, BMI270, DRV5056, SS49E, LTST-C195 bicolor LED, the TS-1088/TS-1187A tact switches by part number.
+
+### 10:50 provenance (his "why did you not try this by your own")
+- Miss owned: the loop scored checks only and treated an LCSC fetch as success; it never asked where parts came from. Last suite: ~70% of chosen parts were LCSC (controller 12, monitor 12, mouse 10, mp4 10, mp3 9).
+- Root cause beyond the 10:55 resolver fix: `WithFetched` served all 233 cached LCSC rows to function queries as curated parts, so stock-first never ran for them.
+- 9e25e3f: a cached row whose MPN names a stock KiCad symbol is served as that library part in the fetched role (44 of 233; reels of one chip merge roles; LCSC row still readable by id). `scripts/provenance_audit.py` lists any remaining overlap (48 MPN hits before the fix).
+- Standing check from now on: every iteration logs LCSC vs stock count per device (monitor prints it per row).
+- Next gap: parts with no stock symbol but generic stock equivalents (tactile switches TS-1187A/TS-1088 -> SW_Push + Button_Switch_SMD, LEDs LTST-C19x -> LED_0603/bicolor, FH12/DF19 FPC -> Connector_FFC-FPC), and footprint-only matches (MSK12C02, MAX17048 TDFN).
+
+### 11:05 two-hour push (his "you have 2 hrs i want the entire engine to work", deadline 12:46)
+- 3-shard suite on a999081: controller PASS 183 s (lcsc 4, stock 3 of 12); mouse FAIL identity only (lcsc 9, stock 0 of 14); mp3 FAIL device.complete + board.drc + identity (lcsc 6, stock 3 of 14).
+- Mouse: the optical sensor anchor ("cursor navigation") classified as a d-pad, so the top got a cross cut; the DPI status LED read as a button ("select") and got an 18.5 mm hole. c13b07a: shell kinds `inner` (sensor, IMU, antenna, chip: pocket only) and `light` (LED: 3.2 mm light pipe), matched before d-pad and button words; touch/fingerprint sensors stay touch.
+- mp3: the "ST7735S 1.77 TFT module" need missed every name search and the 46 catalog display.tft parts were never offered. e336394: resolve_missing's last resort is the catalog by function, spec-checked (a near miss is still taken by take_closest).
+- mp3 board.drc 12: stock KiCad ESP32-WROOM-32E thermal vias are 0.2 mm and numbered 39 (the exposed pad), so the unnumbered-via rule missed them. 46fdab0 drops sub-minimum vias numbered as an SMD pad. Hits every ESP32-WROOM board.
+- Suite restarted on 46fdab0, 4 shards, 26 devices (controller kept as passed): suite pid 7282, monitor bv0ht02hp.
+- 11:15 his rule: "again everything should be open source". c29a78a: the LCSC/EasyEDA download tier is gone from the resolver; cached LCSC rows are served only as the stock KiCad part their MPN names; new check `provenance.open_source` fails any build with an lcsc: part or a NOASSERTION licence. Curated catalog audited: KiCad CC-BY-SA, MIT, CERN-OHL-P, CC0 (4 curated bodies say "No licence recorded": trackball, two LiPo cells, TRRS cable; not yet flagged). Needs with no stock part now fall to recipes, then catalog-by-function, then the closest near miss. Suite restarted on c29a78a, all 27, 4 shards (pid 13488).
+- 11:16 correction from him: "I just meant everything should be derived from like actual libraries... not open source... a figure of speech". Real library parts (KiCad stock, LCSC/EasyEDA real parts) are fine; the rule is no self-made assets. cea883c reverts c29a78a. Stock KiCad still preferred first. Suite restarted on cea883c.
+- 11:30 his ask: "figure out how to make the construction of any piece almost instant". Controller profile on cea883c (303 s, 4 shards): classify 100 s (3 sequential Sonnet calls: blocks, block_audit, block_names), compose 91 s (15 sequential 4-9 s model steps), board 42 s (freerouting), place 28 s, render 25 s (identity judge), enclose 17 s. e9ab04c: ask_json answers cached on disk by question (model+system+prompt+schema+images; data/cache/llm, ignored), spec_check/relax_names/block_names on the fast model, all slots' spec checks run in parallel before the pick loop. Next levers: stream the device to the viewer before board/judge finish (board + identity as background checks), one combined blocks call, reuse a prior design for a near-duplicate prompt.
+- 11:30 mp3 on cea883c: only identity fails now (screen + DRC fixed).
+
+### 11:33 iteration
+- cea883c rows: controller PASS 303 s (lcsc 9, stock 2 of 18); mp3, calculator FAIL identity; mouse FAIL identity + board.built + mech.access.panel (lcsc 6, stock 2 of 14). calculator lcsc 3, stock 1 of 9.
+- Cause 1 (calculator): graphite keycaps rendered near-black, 1.3 mm proud, so the judge saw holes. 2c963df: caps 2.2 mm proud, hero render lifts dark albedo. Re-render confirms keys read as keys.
+- Cause 2 (mp3, calculator): screen-window bevel grew 0.55 mm/mm from the board seat, about 9 mm/side on deep cases, eating the whole top. 803fc7c: straight shaft, bevel only through the last 4.5 mm.
+- Tried and reverted: capping hidden pockets under the top skin (gamepad shoulders then collide with the case).
+- Open: mouse picks two vertical-shaft encoders (EC11 + PEC11R) for the scroll wheel; the shaft pokes through. Needs a horizontal mouse encoder in the part query.
+- Suite restarted on 803fc7c (pid 38817), which includes e9ab04c speedups; build times to be measured.
+
+### 11:55 iteration
+- Suite on 3b87218 (partial): controller PASS 224 s (lcsc 11, stock 1 of 22); mouse FAIL identity 207 s (lcsc 4, stock 4 of 16); gameboy FAIL form.fit 242 s (lcsc 3, stock 3 of 14).
+- Root causes found and fixed:
+  - bba2542: generated stock-KiCad parts carry `kicad:Lib:Name` footprint refs; the board could not resolve them, so every `kicadgen:` part (mouse main clicks, ESD, LDO, LED) was quietly left off the board.
+  - bba2542: two needs naming one block ("scroll_wheel", "scroll_wheel_encoder_with...") made two encoders with the same instance id; now one slot, and instance ids are always unique.
+  - 4b2c556: a through-hole part's opposite-side shadow is its lead pads, not their hull (the 2xAA holder blocked a 60 mm strip); unanchored through-hole holders may go on the back.
+  - 7104d07: one d-pad cross per slot (an 8-switch slot = arrows + face buttons); KiCad build reruns once on the intermittent wx traits assert (not reproducible on 25 cached plans).
+- Suite restarted on bba2542 (pid 64357). Known pre-existing failure: tests/test_live_form.py::test_ask_json_asks_again_when_the_answer_was_cut_off (ask_json cache).
+
+- 2026-10-24 13:08 iteration: web references are live (You.com search, 3 photos per build). Gap: the
+  search used the brief's generic device class ("handheld game console 3d model"), and one of the
+  3 hits was a lantern. Fixed at the source in 0d0b9ff: a prompt of 6 words or fewer is searched
+  as typed ("game boy 3d model"). This goes live at the next engine restart, after the
+  current Game Boy test build. bara-keycaps (wide keycaps) is still running.
+
+- 2026-10-24 13:20: Find design was a 0 ms no-op in live builds (compared against the sample designs only). dc21756 makes it name the closest open KiCad project with a shell from docs/shell-sources.json, and gives the live stages measured budgets. Engine restarted at his request on 632e58e: all builds were stopped, including the old suite. Probe check: "a game boy" shows GameTiger, esp32-emu-turbo and pico-handheld-games-console. New tunnel: dentists-contents-proposition-airline.trycloudflare.com.
+
+- 2026-10-24 13:45: Find design works for any device: 1711c50 adds GitHub repo search (product words + "kicad", by stars) ahead of the web search, and checks each repo's tree for a .kicad_pcb and shell files. Live probe: "a mechanical keyboard" gives piantor, ErgoTravel and taira-keyboard. The engine restarted on 1711c50 (tunnel wives-heavily-testimony-protection), and the self-hosted site was rebuilt against it. bara-keycaps finished: wide caps render at HEAD (2f4c9ad adds a test), so the screenshot was a stale viewer. Live suite paused while Pranav tests prompts by hand.
+
+- 2026-10-24 14:20: His "not 20% complete" Game Boy, traced to its source. (1) The screen slot became a 0603 LED: ad05642 put LEDs first from stock, and its regex matched the requirement's "LED backlight". The backlight driver also became an LED. (2) Catalog parts with a model that was never made, plus stock footprints that ship with no 3D model, drew as grey boxes or bare pads. (3) The OG's case layout made no sense because, with no screen, the form put the D-pad and buttons in the screen half. It also never knew any control's real size. Engine fixes, no device branches: 4937d03 gates each stock primitive by the block's function family and never lets a part named as a chip or panel be one. A missing catalog model borrows the part's own footprint model, and a model-less stock footprint borrows a same-body sibling's (VQFN gets the WQFN model). The next commit gives the form each touch part's real size, so its anchors leave room for the part. Web photos already went to the form model, which sets silhouette and anchors. Tests: test_part_sourcing_rules.py (6). Engine restarted on these while it was idle.

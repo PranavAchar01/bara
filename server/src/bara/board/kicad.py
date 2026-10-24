@@ -114,7 +114,22 @@ def _models_for(it: Item) -> list[dict]:
         if path is not None:
             # keep the footprint author's model offset/rotation/scale (KiCad applies them)
             out.append({"path": str(path), **xforms.get(ref, {})})
+    if not out:
+        out = _sibling_model(it.fp.lib, it.fp.name)
     return out
+
+
+def _sibling_model(lib: str, name: str) -> list[dict]:
+    """A stock footprint the library ships without a 3D model is drawn with the model of
+    its closest sibling of the same body size, so the routed board shows the part."""
+    from bara.kicad_generated import KicadIndex
+
+    index = KicadIndex.open()
+    lender = index.model_footprint(f"{lib}:{name}") if index is not None else None
+    if lender is None:
+        return []
+    models = index.kicad(lender)["models"]
+    return [{"path": m["path"]} for m in models if Path(m["path"]).exists()]
 
 
 def _poly_coords(poly: Polygon, ox: float, oy: float) -> list[list[float]]:
@@ -192,9 +207,11 @@ def board_region(plan: BoardPlan) -> Polygon:
 
 
 def build_pcb(plan_path: Path, timeout: float = 120) -> None:
-    proc = _run(
-        [str(KICAD_PYTHON), str(SCRIPT), "build", str(plan_path)], timeout, cwd=plan_path.parent
-    )
+    cmd = [str(KICAD_PYTHON), str(SCRIPT), "build", str(plan_path)]
+    proc = _run(cmd, timeout, cwd=plan_path.parent)
+    if proc.returncode != 0 and "create wxApp" in proc.stderr:
+        # pcbnew's wx traits assert fires now and then under parallel builds; a rerun clears it
+        proc = _run(cmd, timeout, cwd=plan_path.parent)
     if proc.returncode != 0:
         raise ToolError(f"kicad build failed: {proc.stderr[-2000:]}")
 

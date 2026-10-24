@@ -1,8 +1,9 @@
 """Stage 1 classify call: Cerebras first, Anthropic second, enum-constrained JSON.
 
 Keys come from the environment only (CEREBRAS_API_KEY, ANTHROPIC_API_KEY). Every call has
-a hard deadline (BARA_LLM_TIMEOUT_S, default 5 s). The result is validated locally against
-the same schema the model was constrained with; any failure moves to the next provider.
+a hard deadline (BARA_LLM_TIMEOUT_S, default 60 s, room for a high-effort answer). The
+result is validated locally against the same schema the model was constrained with; any
+failure moves to the next provider.
 """
 
 from __future__ import annotations
@@ -130,14 +131,19 @@ async def _anthropic(
 ) -> dict[str, Any]:
     from anthropic import AsyncAnthropic
 
-    client = AsyncAnthropic(api_key=key, timeout=timeout_s, max_retries=0)
+    client = AsyncAnthropic(
+        api_key=key, timeout=timeout_s, max_retries=0, default_headers=anthropic_headers()
+    )
     try:
         response = await client.messages.create(
             model=model,
-            max_tokens=1024,
+            max_tokens=16000,
             system=SYSTEM_PROMPT,
             messages=[{"role": "user", "content": prompt}],
-            output_config={"format": {"type": "json_schema", "schema": schema}},
+            output_config={
+                "effort": "high",
+                "format": {"type": "json_schema", "schema": schema},
+            },
         )
     finally:
         await client.close()
@@ -147,6 +153,12 @@ async def _anthropic(
     if text is None:
         raise ValueError("no text block in the classify response")
     return _validate(schema, json.loads(text))
+
+
+def anthropic_headers() -> dict[str, str]:
+    """A user-scoped key names its workspace on every request (ANTHROPIC_WORKSPACE_ID)."""
+    ws = os.environ.get("ANTHROPIC_WORKSPACE_ID")
+    return {"anthropic-workspace-id": ws} if ws else {}
 
 
 def providers_configured() -> dict[str, bool]:

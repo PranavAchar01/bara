@@ -18,7 +18,7 @@ export interface LogEntry {
   raw: string;
 }
 
-export type Overlay = "inspector" | "swap" | "resize" | "connect" | "addpart" | null;
+export type Overlay = "inspector" | "swap" | "resize" | "connect" | "addpart" | "focus" | null;
 /** Right panel tabs, as in the Figma layout: Design (what), Build (how it was decided), Code (wiring, board, firmware). */
 export type RightTab = "design" | "build" | "code";
 export type CodeTab = "connections" | "board" | "firmware";
@@ -58,6 +58,10 @@ export interface AppState {
   inspectPartId: string | null;
   /** Instance with the MoveGizmo attached (C20). */
   moving: string | null;
+  /** Part pulled out of the build into focus: its label key (one per catalog part, the case, the board). */
+  focusKey: string | null;
+  /** Build id when the open build came from the library (not started in this page). */
+  openedFromLibrary: string | null;
   hoverConnection: string | null;
   explode: number;
   preset: ViewPreset;
@@ -104,6 +108,8 @@ export const useApp = create<AppState>(() => ({
   selection: null,
   inspectPartId: null,
   moving: null,
+  focusKey: null,
+  openedFromLibrary: null,
   hoverConnection: null,
   explode: 0,
   preset: "scene",
@@ -141,7 +147,25 @@ export function select(instanceId: string | null): void {
   }));
 }
 
+/** Pulls one part out into focus (null puts it back); the right column shows the agent card. */
+export function focusPart(key: string | null): void {
+  const st = useApp.getState().build?.status;
+  if (key && (st === "running" || st === "awaiting_input")) {
+    // parts are still moving into place; pulling one out now left a half-applied layout
+    showToast("Parts can be pulled out once the build is done.");
+    return;
+  }
+  useApp.setState((s) =>
+    key
+      ? { focusKey: key, overlay: "focus" }
+      : // putting it back leaves nothing selected: no outline or name tag lingers on the whole build
+        { focusKey: null, overlay: s.overlay === "focus" ? null : s.overlay, selection: s.focusKey ? null : s.selection, moving: null },
+  );
+}
+
 export function setView(preset: ViewPreset): void {
+  // a new view is a new look at the whole build: put a focused part back first
+  if (useApp.getState().focusKey) focusPart(null);
   useApp.setState((s) => ({ preset, cameraNonce: s.cameraNonce + 1 }));
 }
 

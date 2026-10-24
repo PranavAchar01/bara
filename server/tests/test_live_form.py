@@ -657,6 +657,10 @@ def test_locating_pegs_keep_the_other_side_clear() -> None:
     assert pf["fit_report"]["ok"] is False  # a hole through one is a hole through the other
 
 
+async def _no_photos(run: object) -> list[bytes]:
+    return []
+
+
 def test_identity_redraw_below_the_fit_floor_keeps_the_fitting_form(monkeypatch: Any) -> None:
     from types import SimpleNamespace
 
@@ -678,7 +682,10 @@ def test_identity_redraw_below_the_fit_floor_keeps_the_fitting_form(monkeypatch:
     )
     st = SimpleNamespace(progress=lambda *a: None, emit=lambda *a, **k: None)
     fake = SimpleNamespace(
-        _touches=lambda r: [], _warn=lambda *a: warned.append(a[-1]), _stage=None
+        _touches=lambda r: [],
+        _warn=lambda *a: warned.append(a[-1]),
+        _stage=None,
+        _photos=_no_photos,
     )
     result = SimpleNamespace(log=[])
     got = asyncio.run(rn.LiveRunner.form_stage(fake, run, result, st))  # type: ignore[arg-type]
@@ -727,10 +734,14 @@ def test_a_cap_without_a_key_switch_is_dropped_and_counts_reach_the_slots() -> N
     assert "mech.keycap" not in qty
 
 
-def test_ask_json_asks_again_when_the_answer_was_cut_off(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_ask_json_asks_again_when_the_answer_was_cut_off(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     import types
 
     from bara.live import ask
+
+    monkeypatch.setattr(ask, "CACHE", tmp_path)  # a cached answer would hide the retry
 
     budgets: list[int] = []
 
@@ -1038,3 +1049,44 @@ def test_a_battery_cell_matches_the_chemistry_the_controller_takes() -> None:
     lipo = {"part_id": "bat:lipo", "facets": {"chemistry": "lipo"}}
     tests = [f.test for f in comp.filters_for(bat, [aa, lipo]) if f.facet == "chemistry"]
     assert tests and [all(t(p) for t in tests) for p in (aa, lipo)] == [False, True]
+
+
+def test_a_screen_type_requirement_leaves_indicator_leds_alone() -> None:
+    from bara.live import compose as cmp
+
+    comp = object.__new__(cmp.Composer)
+    comp.brief, comp.board_controllers = {}, {}
+    comp.spec = {
+        "hard_requirements": [
+            {"req_id": "r1", "facet": "display_type", "op": "eq", "value": "tft", "label": "Screen"}
+        ]
+    }
+    led = cmp.Slot("status", "Status LED", "display.indicator_led", "optional", 1, [])
+    screen = cmp.Slot("screen", "Screen", "display.tft", "critical", 1, [])
+    led.need = screen.need = object()
+    comp.slots = [led, screen]
+    ind = {"part_id": "led:x", "facets": {"display_type": "led"}}
+    oled = {"part_id": "oled:x", "facets": {"display_type": "oled"}}
+    tft = {"part_id": "tft:x", "facets": {"display_type": "tft"}}
+    assert not [f for f in comp.filters_for(led, [ind]) if f.facet == "display_type"]
+    tests = [f.test for f in comp.filters_for(screen, [oled, tft]) if f.facet == "display_type"]
+    assert tests and [all(t(p) for t in tests) for p in (oled, tft)] == [False, True]
+
+
+def test_the_power_source_requirement_leaves_a_speaker_alone() -> None:
+    from bara.live import compose as cmp
+
+    comp = object.__new__(cmp.Composer)
+    comp.brief, comp.board_controllers = {}, {}
+    comp.spec = {
+        "hard_requirements": [
+            {"req_id": "r1", "facet": "power_source", "op": "has", "value": "battery",
+             "label": "Battery"}
+        ]
+    }  # fmt: skip
+    spk = cmp.Slot("speaker", "Speaker", "audio.speaker", "optional", 1, [])
+    spk.need = object()
+    comp.slots = [spk]
+    module = {"part_id": "mod:x", "facets": {"power_source": ["usb"]}}
+    bare = {"part_id": "out:spk", "facets": {}}
+    assert not [f for f in comp.filters_for(spk, [module, bare]) if f.facet == "power_source"]

@@ -76,6 +76,7 @@ ROLE_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
     ("knob", ("knob",)),
     ("trackball", ("trackball", "ball")),
     ("encoder", ("rotary_encoder", "encoder", "ec11", "ec12")),
+    ("indicator_led", ("indicator_led",)),
     ("screen", ("oled", "display", "lcd", "ssd1306", "screen", "epaper", "tft")),
     ("sensor", ("pmw", "paw3", "optical_sensor")),
     ("battery", ("battery", "lipo", "li-po", "18650", "cr2032")),
@@ -527,6 +528,17 @@ def mesh_part(
     return MeshPart(name, v, np.asarray(mesh.tri_verts, dtype=np.int64), n, hex_color, roughness)
 
 
+OWN_HOLE_ROLES = ("trackball", "sensor")
+OPENING_ROLES = ("switch", "keycap", "encoder", "knob", "screen", "indicator_led")
+
+
+def _hidden(f: Feature) -> bool:
+    """A top-side part the shell covers: it gets a blind pocket, never an opening."""
+    if f.side == "bottom" or f.role in OWN_HOLE_ROLES or f.role in OPENING_ROLES:
+        return False
+    return True  # a touched part with no opening role still needs the skin over it
+
+
 def enclose_report(
     board: dict[str, Any], parts_with_poses: list[dict[str, Any]], brief: dict[str, Any]
 ) -> EncloseReport:
@@ -555,7 +567,10 @@ def enclose_report(
 
     top = t  # board top surface
     wall_top = top + H["wall_top_mm"]
-    bezel_top = top + H["bezel_top_mm"]
+    # the skin covers every part that gets no opening, so a tall hidden part lifts the top
+    plate = H["bezel_top_mm"] - H["wall_top_mm"]
+    covered = [f.z_range(t)[1] + H["part_opening_clearance_mm"] for f in feats if _hidden(f)]
+    bezel_top = max([top + H["bezel_top_mm"], *(z + plate for z in covered)])
 
     # Pockets for bottom-side parts; the floor goes under the deepest one.
     pockets: list[mf.Manifold] = []
@@ -617,9 +632,9 @@ def enclose_report(
         z_bot = min(z_bot, pocket_bottom - H["floor_mm"], cup_bottom)
 
     # The product's own thickness (from its form) sets the body height; the board stays at the
-    # top, with the extra body below it.
+    # top, with the extra body below it; on a desk the floor stays put and the body domes above.
     body = _num(brief.get("body_thickness_mm"), 0.0)
-    if body > 0 and body > bezel_top - z_bot:
+    if body > 0 and body > bezel_top - z_bot and not desk_sensors:
         z_bot = bezel_top - body
     shaped = body > 0
 
@@ -661,6 +676,7 @@ def enclose_report(
             _num(brief.get("edge_thickness_mm"), 0.0),
             min(x1 - x0, y1 - y0),
             r_min,
+            desk=bool(desk_sensors),
         )
         sculpt = shell.build_body(plan, prof)
         z_port: dict[str, float] = {}
@@ -729,10 +745,11 @@ def enclose_report(
     holes_cs: list[mf.CrossSection] = []
     pockets: list[tuple[mf.CrossSection, float]] = []
     openings: dict[str, Any] = {"keys": 0, "encoders": [], "screens": [], "usb": []}
+    openings["wheels"] = site_feats.wheels
     keycaps = [f for f in feats if f.role == "keycap"]
     for f in feats:
         z_lo, z_hi = f.z_range(t)
-        if f.side == "bottom" or f.role in ("trackball", "sensor"):
+        if f.side == "bottom" or f.role in OWN_HOLE_ROLES:
             continue
         if f.ref in site_feats.claimed:
             continue  # the form's anchor already gave it a sculpted feature
@@ -756,6 +773,11 @@ def enclose_report(
         elif f.role == "screen":
             holes_cs.append(_rect_cs(f.x, f.y, f.w, f.d, f.rot_deg))
             openings["screens"].append(f.ref)
+        elif f.role == "indicator_led":
+            # a round light hole: the LED shows through the skin, nothing frames it
+            r = max(f.w, f.d) / 2 + H["part_opening_clearance_mm"]
+            holes_cs.append(_circle_cs(f.x, f.y, r))
+            openings.setdefault("lights", []).append({"ref": f.ref, "r": r})
         elif f.touch and f.role not in ("usb", "mcu", "battery"):
             # finger-sized, soft-cornered: a bare switch footprint is far smaller than the
             # button a person presses
@@ -770,8 +792,7 @@ def enclose_report(
             # the soft corners must not clip the part: its own clearance box is cut too
             holes_cs.append(_rect_cs(f.x, f.y, f.w + c, f.d + c, f.rot_deg))
         elif z_hi > seat - 0.01:
-            # hidden, so it gets a blind pocket under the skin, not a hole a person sees; a part
-            # taller than the shell still breaks through and the fit checks report it
+            # hidden, so it gets a blind pocket under the skin, not a hole a person sees
             c = 2 * H["part_opening_clearance_mm"]
             pockets.append((_rect_cs(f.x, f.y, f.w + c, f.d + c, f.rot_deg), z_hi + c / 2))
     for g in ball_geo:

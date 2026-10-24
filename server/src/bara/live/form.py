@@ -72,6 +72,7 @@ class Touch:
     function_id: str
     count: int
     groups: tuple[str, ...] = ()
+    size_mm: tuple[float, float] | None = None  # the chosen part's footprint, width x depth
 
 
 @dataclass
@@ -354,11 +355,14 @@ def validate(form: Form, touches: list[Touch]) -> list[str]:
 def _prompt(prompt: str, touches: list[Touch], refs: list[dict[str, Any]], note: str) -> str:
     slots = "\n".join(
         f"- {t.slot_id}: {t.label} x{t.count} ({t.function_id})"
+        + (f", each {t.size_mm[0]:.0f} x {t.size_mm[1]:.0f} mm" if t.size_mm else "")
         + (f", groups: {'; '.join(t.groups)}" if len(t.groups) > 1 else "")
         for t in touches
     )
     return (
-        f"Device request: {prompt}\n\nTouch slots (each needs anchors):\n{slots or '- none'}\n\n"
+        f"Device request: {prompt}\n\nTouch slots (each needs anchors; sizes are the real parts "
+        f"chosen, so every anchor must leave room for its part and none may overlap):\n"
+        f"{slots or '- none'}\n\n"
         f"Reference designs from the catalog (real dimensions, use as evidence):\n"
         f"{json.dumps(refs, indent=1) if refs else 'none close to this request'}\n{note}"
     )
@@ -407,6 +411,7 @@ async def derive(
     previous: Form | None = None,
     critique: str = "",
     fit: dict | None = None,
+    photos: list[bytes] | None = None,
 ) -> tuple[Form | None, str]:
     """Ask for the form, check it, and make one repair pass. A form that still fails keeps its
     problems on the object so the caller can fail loudly."""
@@ -429,11 +434,17 @@ async def derive(
             + "\nEarlier silhouette: "
             + json.dumps([[round(x), round(y)] for x, y in previous.silhouette])
         )
+    if photos:
+        note += (
+            f"\nThe {len(photos)} attached image(s) are photos of real products found by a web "
+            "search for this request. Match their silhouette, proportions, corner shapes and "
+            "where each control sits; ignore anything in them that is not the product."
+        )
     form: Form | None = previous
     for attempt in (0, 1):
         data, why = await ask_json(
             SYSTEM, _prompt(prompt, touches, refs, note), sch, name="form", timeout_s=90,
-            max_tokens=6000,
+            max_tokens=6000, images=photos,
         )  # fmt: skip
         if data is None:
             return form, why

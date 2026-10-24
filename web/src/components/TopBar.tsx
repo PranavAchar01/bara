@@ -5,6 +5,7 @@ import { serverUrl, storeKey } from "../net/mode";
 import { Icon } from "../ui/common";
 import { ReplayControl } from "../bot/ReplayControl";
 import type { ConnStatus } from "../net/connection";
+import { SimulateButton } from "../sim/SimulateButton";
 
 const CONN_LABEL: Record<ConnStatus, string> = {
   connecting: "Connecting",
@@ -76,6 +77,12 @@ export function FileHeader() {
   const mock = useApp((s) => s.mode.mock);
   const status = build?.status ?? "idle";
   const fallback = health?.llm_fallback?.provider ? `Fallback: ${health.llm_fallback.provider} ${health.llm_fallback.model ?? ""}` : "No fallback";
+  const used = usedModels(build);
+  const primary = health?.llm?.model;
+  // The build used something other than the configured model: say which, and why, instead of switching silently.
+  const switched = used.backup || (primary !== undefined && used.models.some((m) => m !== primary));
+  const usedName = used.models.find((m) => m !== primary) ?? (used.backup ? "rules only" : primary);
+  const why = used.reasons[0] ?? (used.backup ? "The primary model failed, so the backup answered." : "This build used a different model.");
   return (
     <header className="file-header">
       <div className="file-title">
@@ -101,14 +108,29 @@ export function FileHeader() {
         {health?.llm?.model && (
           <>
             <span className="sep">·</span>
-            <span className="file-model" title={`${health.llm.provider} ${health.llm.model}. ${fallback}`}>
-              {health.llm.model}
-            </span>
+            {switched ? (
+              <span className="file-model switched" title={`${why} Configured: ${health.llm.provider} ${health.llm.model}. ${fallback}`}>
+                <s>{health.llm.model}</s> → {usedName} <span className="file-why">backup</span>
+              </span>
+            ) : (
+              <span className="file-model" title={`${health.llm.provider} ${health.llm.model}. ${fallback}`}>
+                {health.llm.model}
+              </span>
+            )}
           </>
         )}
       </div>
     </header>
   );
+}
+
+/** Models this build's calls went to, whether any of them was the backup, and the warnings that explain it. */
+function usedModels(build: ReturnType<typeof useApp.getState>["build"]) {
+  const calls = [build?.spec?.classifier, ...(build?.decisions ?? []).map((d) => d.model)].filter((c) => c != null);
+  const models = [...new Set(calls.map((c) => c.model).filter((m): m is string => !!m))];
+  const backup = calls.some((c) => c.fallback);
+  const reasons = (build?.warnings ?? []).filter((w) => w.code === "llm_fallback" || w.code === "llm_degraded").map((w) => w.message);
+  return { models, backup, reasons };
 }
 
 /** Right panel header in the workspace (Figma toolbar right): Home and Export, Export is the one primary action. */
@@ -119,6 +141,7 @@ export function PanelToolbar() {
         <Icon name="home" />
       </button>
       <span className="spacer" />
+      <SimulateButton />
       <ExportMenu primary />
     </div>
   );
@@ -145,8 +168,17 @@ export function ExportMenu(props: { primary?: boolean }) {
     const close = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
+    const esc = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopImmediatePropagation();
+      setOpen(false);
+    };
     window.addEventListener("mousedown", close);
-    return () => window.removeEventListener("mousedown", close);
+    window.addEventListener("keydown", esc, true);
+    return () => {
+      window.removeEventListener("mousedown", close);
+      window.removeEventListener("keydown", esc, true);
+    };
   }, [open]);
   const ready = build?.status === "done";
   return (
@@ -190,7 +222,7 @@ export function ConnectionBanner() {
     conn === "resyncing"
       ? "Reconnected. Catching up on missed events; editing is paused."
       : conn === "offline"
-        ? "Offline. Still retrying every 8 s; the last state stays on screen."
+        ? "Can't reach the build engine. Trying again every 8 s; what's on screen stays, and your saved builds still open."
         : conn === "connecting"
           ? "Connecting to the build server."
           : "Connection lost. Reconnecting; the last state stays on screen.";

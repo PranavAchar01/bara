@@ -11,13 +11,15 @@ import asyncio
 import copy
 import json
 import logging
+import math
+import re
 import time
 from typing import TYPE_CHECKING, Any
 
 from shapely.geometry import Polygon
 
 from bara.live import adapters as A
-from bara.live import archetype, completeness, hero
+from bara.live import archetype, completeness, hero, open_designs, websearch
 from bara.live import blocks as blocks_mod
 from bara.live import form as form_mod
 from bara.live import identity as identity_mod
@@ -33,6 +35,28 @@ if TYPE_CHECKING:
     from bara.engine import BuildRun, Engine
 
 log = logging.getLogger(__name__)
+# p90 of measured live builds (2026-10-24 suite); the fixture budgets are for the mock path
+LIVE_BUDGET_MS = {
+    "classify": 90_000,
+    "reuse": 15_000,
+    "compose": 120_000,
+    "place": 10_000,
+    "enclose": 60_000,
+    "board": 240_000,
+    "firmware": 30_000,
+    "render": 45_000,
+}
+SHORT_PROMPT_WORDS = 6  # a longer product phrase is a description, not a name
+# where the product's name ends and the tweaks begin
+PRODUCT_END = re.compile(
+    r"[,;:(]|\s(?:with|that|which|where|using|in|for|but|so|to|and|without)\s", re.IGNORECASE
+)
+# the ask around the product name ("create a", "can you make me an") is not part of it
+REQUEST_LEAD = re.compile(
+    r"^(?:(?:please|can|could|you|i|want|would|like|need|to|me|us|"
+    r"create|make|build|design|generate|give|get)\b[\s,]*)+(?:(?:a|an|the|my|some)\b\s*)?",
+    re.IGNORECASE,
+)
 
 MAX_CLARIFY_ROUNDS = 2
 
@@ -119,6 +143,77 @@ def _question(round_no: int) -> dict[str, Any]:
     }
 
 
+def _euler_xyz(deg: list[float]) -> list[list[float]]:
+    """Rotation matrix for intrinsic XYZ Euler degrees (the viewer's convention)."""
+    x, y, z = (math.radians(v) for v in deg)
+    cx, sx, cy, sy, cz, sz = (
+        math.cos(x),
+        math.sin(x),
+        math.cos(y),
+        math.sin(y),
+        math.cos(z),
+        math.sin(z),
+    )
+    return [
+        [cy * cz, -cy * sz, sy],
+        [cx * sz + sx * sy * cz, cx * cz - sx * sy * sz, -sx * cy],
+        [sx * sz - cx * sy * cz, sx * cz + cx * sy * sz, cx * cy],
+    ]
+
+
+def _matmul(a: list[list[float]], b: list[list[float]]) -> list[list[float]]:
+    return [[sum(a[i][k] * b[k][j] for k in range(3)) for j in range(3)] for i in range(3)]
+
+
+def _xyz_degrees(m: list[list[float]]) -> list[float]:
+    y = math.asin(max(-1.0, min(1.0, m[0][2])))
+    if abs(m[0][2]) < 0.9999999:
+        x, z = math.atan2(-m[1][2], m[2][2]), math.atan2(-m[0][1], m[0][0])
+    else:
+        x, z = math.atan2(m[2][1], m[1][1]), 0.0
+    return [round(math.degrees(v), 3) for v in (x, y, z)]
+
+
+def _seat_on_footprints(board: dict[str, Any], parts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The routed board is where a part really sits: a single-element part with one footprint
+    moves onto that footprint's centre and turn, on the board's top face. Placed before routing,
+    parts otherwise float where the planner left them while the board shows them elsewhere."""
+    by_id: dict[str, list[dict[str, Any]]] = {}
+    for fp in board.get("footprints") or []:
+        if fp.get("instance_id") and fp.get("center_mm"):
+            by_id.setdefault(fp["instance_id"], []).append(fp)
+    pos = board.get("position_mm") or [0.0, 0.0, 0.0]
+    rb = _euler_xyz(board.get("rotation_deg") or [0.0, 0.0, 0.0])
+    top = float(board.get("thickness_mm") or 1.6)
+    out = []
+    for part in parts:
+        fps = by_id.get(part["instance_id"]) or []
+        placement = part.get("placement") or {}
+        if len(fps) != 1 or int(part.get("quantity") or 1) != 1 or placement.get("layout_id"):
+            continue
+        cx, cy = fps[0]["center_mm"]
+        local = [float(cx), float(cy), top]
+        world = [pos[i] + sum(rb[i][k] * local[k] for k in range(3)) for i in range(3)]
+        rot = _matmul(rb, _euler_xyz([0.0, 0.0, float(fps[0].get("rot_deg") or 0.0)]))
+        pl = {**placement, "position_mm": [round(v, 3) for v in world]}
+        pl["rotation_deg"] = _xyz_degrees(rot)
+        part["placement"] = pl
+        out.append({"instance_id": part["instance_id"], "placement": pl})
+    return out
+
+
+def _product_name(run: BuildRun, brief: dict[str, Any]) -> str:
+    """The product the prompt names, as typed: the request words in front and the tweaks after
+    it ("with", "that", a comma) cut off. "create a gameboy with a backlit screen" is "gameboy".
+    The brief's device ("handheld game console") is generic, and a search for it finds lanterns."""
+    product = REQUEST_LEAD.sub("", run.prompt.strip())
+    product = PRODUCT_END.split(product, maxsplit=1)[0].strip(" .!?")
+    product = re.sub(r"^(?:a|an|the|my|some)\s+", "", product, flags=re.IGNORECASE)
+    if product and len(product.split()) <= SHORT_PROMPT_WORDS:
+        return product
+    return str(brief.get("device") or "") or run.prompt
+
+
 class _Stage:
     """One open stage: started on enter, completed on close with its real duration."""
 
@@ -154,6 +249,16 @@ class _Stage:
         self.emit("stage.completed", payload)
 
 
+def _footprint_size(part: dict[str, Any]) -> tuple[float, float] | None:
+    """Width and depth in mm of a part's body, from its mechanical bounding box."""
+    bb = (part.get("mechanical") or {}).get("bbox_mm") or {}
+    lo, hi = bb.get("min"), bb.get("max")
+    if not lo or not hi:
+        return None
+    w, d = abs(hi[0] - lo[0]), abs(hi[1] - lo[1])
+    return (round(w, 1), round(d, 1)) if w > 0 and d > 0 else None
+
+
 def _spans(product: form_mod.Form, size: tuple[float, float]) -> bool:
     """True when the form already has the declared width and height (either way round)."""
     xs = [p[0] for p in product.silhouette]
@@ -179,7 +284,8 @@ class LiveRunner:
         self.settings = engine.settings
 
     def _stage(self, run: BuildRun, stage: str, label: str) -> _Stage:
-        return _Stage(run, self.catalog.stage_budget(stage), stage, label)
+        budget = LIVE_BUDGET_MS.get(stage) or self.catalog.stage_budget(stage)
+        return _Stage(run, budget, stage, label)
 
     def _warn(self, run: BuildRun, stage: str, wid: str, code: str, sev: str, msg: str) -> None:
         used = {w["warning_id"] for w in run.state["warnings"]}
@@ -208,8 +314,9 @@ class LiveRunner:
         if spec_brief is None:
             return
         spec, brief = spec_brief
+        run.device = str(brief.get("device") or "")
         plan = plan_keyboard(brief)
-        self.reuse(run, spec, brief)
+        await self.reuse(run, spec, brief)
         result = await self.compose(run, spec, brief, plan)
         if not result.chosen_parts:  # nothing resolved is a failed build, never an empty DONE
             why = result.error or "No part could be chosen for this request; nothing to build."
@@ -245,7 +352,6 @@ class LiveRunner:
         "slot.critical_filled": "E_CRITICAL_PART_MISSING",
         "form.valid": "E_ENCLOSURE_FAILED",
         "form.fit": "E_ENCLOSURE_FAILED",
-        "identity.reads_as_device": "E_ENCLOSURE_FAILED",
         "board.drc": "E_BOARD_FAILED",
         "board.routing.complete": "E_BOARD_FAILED",
         "mech.fit.enclosure": "E_ENCLOSURE_FAILED",
@@ -385,7 +491,7 @@ class LiveRunner:
             log.warning("live: could not write the brief log for %s", run.build_id)
 
     # ---- reuse ---------------------------------------------------------------------------
-    def reuse(self, run: BuildRun, spec: dict[str, Any], brief: dict[str, Any]) -> None:
+    async def reuse(self, run: BuildRun, spec: dict[str, Any], brief: dict[str, Any]) -> None:
         st = self._stage(run, "reuse", "Looking for an existing open design")
         reqs = spec["hard_requirements"]
         by_facet = {r["facet"]: r["req_id"] for r in reqs}
@@ -425,8 +531,19 @@ class LiveRunner:
             reason = arch.reason() + " New KiCad board, case and firmware generated."
         else:
             reason = "No archetype matched; generating a new KiCad board, case and firmware."
-            if considered:
-                reason += f" Closest open design: {considered[0]['name']}, compared only."
+        st.progress("Searching open KiCad projects", 0.2)
+        found, note = await open_designs.search(_product_name(run, brief))
+        scouted = open_designs.rows(run.prompt, str(brief.get("device") or ""))
+        seen = {r["design_id"] for r in scouted}
+        opens = scouted + [r for r in open_designs.to_rows(found, 5) if r["design_id"] not in seen]
+        opens = sorted(opens, key=lambda r: -r["score"])[:5]
+        run.open_designs = found  # type: ignore[attr-defined]
+        log.info("open designs for %s: %d searched (%s)", run.build_id, len(found), note)
+        if opens:
+            considered = opens + considered
+            reason += f" Closest open design: {opens[0]['name']}, compared only."
+        else:
+            reason += f" No open KiCad project found for this device ({note})."
         st.emit(
             "reuse.decided",
             {
@@ -583,9 +700,27 @@ class LiveRunner:
             if (slot.need is not None and slot.need.touch) or (slot.need is None and plain):
                 groups = slot.need.groups if slot.need is not None else ()
                 out.append(
-                    form_mod.Touch(slot.slot_id, slot.label, fid, max(1, slot.quantity), groups)
+                    form_mod.Touch(
+                        slot.slot_id,
+                        slot.label,
+                        fid,
+                        max(1, slot.quantity),
+                        groups,
+                        _footprint_size(slot.chosen),
+                    )
                 )
         return out
+
+    async def _photos(self, run: BuildRun) -> list[bytes]:
+        """Web pictures of the product (its name plus "3d model"), searched once per build and
+        shared by the form and the identity judge."""
+        if not hasattr(run, "web_photos"):
+            brief = getattr(run, "live_brief", None) or {}
+            photos, sources, note = await websearch.reference_photos(_product_name(run, brief))
+            run.web_photos = photos  # type: ignore[attr-defined]
+            run.web_sources = sources  # type: ignore[attr-defined]
+            log.info("web reference photos for %s: %d (%s)", run.build_id, len(photos), note)
+        return run.web_photos  # type: ignore[attr-defined]
 
     async def form_stage(
         self,
@@ -606,8 +741,9 @@ class LiveRunner:
                 f"{floor[1]:.0f} mm overall with at least {floor[2]:.0f} mm2 of area. Keep every "
                 f"dimension and the area at or above that; change only the shape within it."
             )
+        photos = await self._photos(run)
         product, note = await form_mod.derive(
-            run.prompt, touches, previous if (repair or fit) else None, repair, fit
+            run.prompt, touches, previous if (repair or fit) else None, repair, fit, photos
         )
         if repair and not fit and floor and product is not None and previous is not None:
             w, h, area = _extent(product)
@@ -706,7 +842,7 @@ class LiveRunner:
             run.hero_png = out / f"{run.build_id}{'_repaired' if final else ''}.png"  # type: ignore[attr-defined]
             run.hero_png.write_bytes(png)  # type: ignore[attr-defined]
             verdict, note = await identity_mod.judge(
-                run.prompt, product.description, product.reference, png
+                run.prompt, product.description, product.reference, png, await self._photos(run)
             )
         run.identity = verdict  # type: ignore[attr-defined]
         ok = verdict is not None and bool(verdict["reads_as_device"])
@@ -729,7 +865,9 @@ class LiveRunner:
                         "check_key": "identity.reads_as_device",
                         "rule_id": "identity.reads_as_device",
                         "status": "pass" if ok else ("fail" if verdict else "unknown"),
-                        "severity": "error",
+                        # a look judgement: reported and repaired once, never a reason to
+                        # withhold a board and case that pass every physical check
+                        "severity": "warning",
                         "message": message[:300],
                         "subjects": [],
                         "stage": "render",
@@ -1119,6 +1257,9 @@ class LiveRunner:
                 spec_board["rotation_deg"] = [round(v, 3) for v in rot]
             spec_board["revision"] = 1
             st.emit("board.updated", {"board": spec_board})
+            seated = _seat_on_footprints(spec_board, run.state["parts"])
+            if seated:
+                st.emit("placement.updated", {"placements": seated})
             drc = entry.get("drc") or {}
             bid = spec_board["board_id"]
             errors, unconnected = int(drc.get("errors", 0)), int(drc.get("unconnected", 0))

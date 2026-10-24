@@ -16,7 +16,7 @@ import re
 import shutil
 import subprocess
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +30,7 @@ PER_FETCH_S = 25.0
 TOTAL_BUDGET_S = 140.0
 BUDGET_PER_NEED_S = 20.0  # a device with many parts to find gets time for each of them
 MISS_TTL_S = 600.0
+SUFFIX_MAX = 4  # package + reel letters a vendor appends to a KiCad symbol name (TRG1, DSGR)
 UV_ARGS = ("--with", "easyeda2kicad", "--with", "trimesh", "--with", "numpy")
 
 # (term, function) -> monotonic time of the last miss
@@ -64,19 +65,112 @@ RECIPES: tuple[tuple[str, str, tuple[tuple[str, str], ...]], ...] = (
         "wire-to-board connector for an off-board load",
         (("fp", "JST_PH_B2B-PH-K_1x02_P2.00mm_Vertical"),),
     ),
+    (
+        r"\b(bi-?colou?r|dual[- ]colou?r|two[- ]colou?r)\b",
+        "bicolor LED",
+        (("fp", "LED_LiteOn_LTST-C19HE1WT"), ("fp", "LED_Kingbright_AAA3528ESGCT")),
+    ),
+    (r"\b(leds?|indicator|status light)\b", "indicator LED", (("fp", "LED_0603_1608Metric"),)),
+    (
+        r"\b(tactile|push ?buttons?|buttons?|bumper switch(es)?|keys?)\b",
+        "tactile switch",
+        (("fp", "SW_SPST_TL3342"), ("fp", "SW_Push_1P1T_NO_CK_KMR2")),
+    ),
 )
+
+
+# The function families each recipe can serve. A block's words may mention a primitive (a TFT
+# "with LED backlight", a "button debounce IC") while the block itself is a panel or a chip;
+# the block's function decides, so a screen is never met by an LED or a driver by a switch.
+RECIPE_FAMILIES: dict[str, tuple[str, ...]] = {
+    "SMD fuse": ("power.", "interconnect.", "protect"),
+    "TVS protection array": ("power.", "interconnect.", "comm.", "protect"),
+    "IEC mains inlet": ("power.",),
+    "rotary encoder": ("input.",),
+    "buzzer": ("output.buzzer", "output.speaker", "output.sound", "output.audio"),
+    "wire-to-board connector for an off-board load": ("output.", "actuator."),
+    "bicolor LED": ("display.indicator", "output.light", "output.led", "indicator"),
+    "indicator LED": ("display.indicator", "output.light", "output.led", "indicator"),
+    "tactile switch": ("input.",),
+}
+# a block named as a chip or a panel is never a stock primitive, whatever it drives or lights
+NOT_PRIMITIVE = re.compile(
+    r"\b(driver|controller|boost|regulator|ldo|charger|amplifier|amp|gauge|ic|chip|"
+    r"display|screen|lcd|tft|oled|panel|module|sensor|codec|converter)\b"
+)
+
+
+# recipes whose primitive is the whole part: tried before an LCSC download, not after
+STOCK_FIRST = frozenset({"SMD fuse", "bicolor LED", "indicator LED", "tactile switch"})
 
 
 def recipe_for(need: Need) -> tuple[str, tuple[tuple[str, str], ...]] | None:
     words = f"{need.label} {need.requirement}".lower()
     for pattern, name, steps in RECIPES:
-        if re.search(pattern, words):
-            return name, steps
+        if not re.search(pattern, words):
+            continue
+        families = RECIPE_FAMILIES.get(name, ())
+        if need.function_id and families and not need.function_id.startswith(families):
+            continue  # the words name a primitive the block only mentions
+        if name in STOCK_FIRST and NOT_PRIMITIVE.search(need.label.lower()):
+            continue  # a chip or panel named after what it drives is not that primitive
+        return name, steps
     return None
+
+
+def stock_primitive(need: Need) -> bool:
+    """The need is a generic part the KiCad library itself carries (no MPN needed)."""
+    found = recipe_for(need)
+    return found is not None and found[0] in STOCK_FIRST and not need.mechanical
 
 
 def slug(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", str(text).lower()).strip("_")
+
+
+def _names_part(query: str, name: str) -> bool:
+    """A KiCad symbol answers a part number that is its name or its name plus a short
+    package/packing suffix (DRV8833PWPR is the DRV8833PWP on a reel, AP2112K-3.3TRG1 the
+    AP2112K-3.3). A suffix that continues a number names another part (ATmega32 is not
+    the ATmega328), so it must start with a letter when the name ends in a digit."""
+    q, n = slug(query).replace("_", ""), slug(name).replace("_", "")
+    if not q:
+        return False
+    if q in n:
+        return True
+    rest = q[len(n) :]
+    return (
+        len(n) >= 6
+        and q.startswith(n)
+        and 0 < len(rest) <= SUFFIX_MAX
+        and not (n[-1].isdigit() and rest[0].isdigit())
+    )
+
+
+def stock_symbol(
+    search: Callable[..., list[dict[str, Any]]], mpn: str, rejected: Iterable[str] = ()
+) -> dict[str, Any] | None:
+    """The KiCad library symbol (with a usable footprint) that a part number names, or None."""
+    # the index matches whole words: a part number with a packing suffix is also looked up
+    # without it
+    stems = [mpn] + [mpn[:-k] for k in range(1, SUFFIX_MAX + 1) if len(mpn) - k >= 6]
+    hits: list[dict[str, Any]] = []
+    for stem in stems:
+        try:
+            hits += search(stem, kind="symbol", limit=10)
+        except Exception:
+            log.exception("generated search failed for %r", stem)
+    skip = set(rejected)
+    ok = [
+        p
+        for p in hits
+        if p["part_id"].startswith("kicadgen:")
+        and p.get("fp_ok")
+        and p["part_id"] not in skip
+        and _names_part(mpn, p.get("name") or p.get("display_name") or "")
+    ]
+    # the longest name is the closest variant (DRV8833PWP, not DRV8833PW)
+    return max(ok, key=lambda p: len(slug(p.get("name") or ""))) if ok else None
 
 
 def name_slug(part: dict[str, Any]) -> str:
@@ -193,10 +287,8 @@ class Resolver:
         for p in self.source.extra.values():
             if p["part_id"] not in found and name_hit(p, words) and self._serves(p, need):
                 found[p["part_id"]] = p
-        for p in read_fetched(self.path):
-            if p["part_id"] not in found and name_hit(p, words) and self._serves(p, need):
-                self.source.add(p)
-                found[p["part_id"]] = p
+        # parts fetched from LCSC on earlier runs are not offered here: a missing need tries
+        # the stock KiCad library first and only then that cache (resolve_missing)
         return [p for p in found.values() if p["part_id"] not in self.rejected]
 
     @staticmethod
@@ -209,18 +301,9 @@ class Resolver:
         if search is None:
             return None
         for q in need.kicad:
-            try:
-                hits = search(q, kind="symbol", limit=10)
-            except Exception:
-                log.exception("generated search failed for %r", q)
-                continue
-            for p in hits:
-                if not p["part_id"].startswith("kicadgen:") or not p.get("fp_ok"):
-                    continue
-                if p["part_id"] in self.rejected:
-                    continue
-                if slug(q) in slug(p.get("name") or p.get("display_name") or ""):
-                    return self._accept(p, need)
+            found = stock_symbol(search, q, self.rejected)
+            if found is not None:
+                return self._accept(found, need)
         return None
 
     def composed(self, need: Need) -> dict[str, Any] | None:

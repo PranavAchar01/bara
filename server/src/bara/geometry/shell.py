@@ -209,9 +209,11 @@ def profile_for(
     edge: float,
     short: float,
     r_min: float,
+    desk: bool = False,
 ) -> Profile:
     """Thickness profile -> shape. `body` is the thickest the product gets, `edge` the thinnest
-    rim; the stack (board, parts, floor, bezel plate) is the floor on both."""
+    rim; the stack (board, parts, floor, bezel plate) is the floor on both. A product that rests
+    on a desk (it looks down through its floor) keeps a flat floor and domes over the board."""
     ref = max(body, 14.0)
     rt = min(0.2 * ref, 4.5, 0.8 * r_min)
     rb = min(0.3 * ref, 7.0, 0.9 * r_min)
@@ -219,8 +221,11 @@ def profile_for(
     plateau = z_top - z_bot
     spread = max(body - max(plateau, edge), 0.0)
     flat = min(0.04 * short, 2.0)
-    crown = min(max(0.35 * spread, 0.6 * flat), 6.0, 0.1 * short)
-    belly = max(spread - crown, flat)
+    if desk:
+        crown, belly = min(max(spread, 0.6 * flat), 0.5 * short), 0.0
+    else:
+        crown = min(max(0.35 * spread, 0.6 * flat), 6.0, 0.1 * short)
+        belly = max(spread - crown, flat)
     land = (z_top - rt) - (z_bot + rb)
     if land < 1.5:  # a thin product: keep a straight band at the parting line
         k = max(0.3, 1.0 - (1.5 - land) / max(rt + rb, 1e-6))
@@ -315,9 +320,13 @@ def build_body(plan: Polygon, prof: Profile, edge_len: float = 1.0) -> Body:
 KIND_WORDS: list[tuple[str, str]] = [
     ("screen", r"screen|display|lcd|oled|e-?ink|epaper|tft|panel"),
     ("port", r"usb|connector|charg|jack|socket|plug|cable|hdmi|ethernet|\bport"),
+    # parts with no control surface: pocketed under the shell, nothing cut through it
+    ("inner", r"sensor|\bimu\b|gyro|accelerometer|magnetometer|antenna|\bchip\b"),
+    ("light", r"\bleds?\b|indicator|status light|light ?pipe"),
     ("stick", r"stick|joy|analog|trackpoint"),
     ("dpad", r"d-?pad|directional|\bcross\b|arrow|navigation"),
     ("shoulder", r"shoulder|trigger|bumper|\blb\b|\brb\b|\blt\b|\brt\b"),
+    ("wheel", r"scroll|thumb ?wheel|roller"),
     ("knob", r"knob|dial|encoder|crown|wheel"),
     ("button", r"button|key|switch|press|click|action|face|start|select|menu|home|power|side"),
 ]
@@ -325,7 +334,10 @@ KIND_WORDS: list[tuple[str, str]] = [
 
 def classify(anchor: dict[str, Any]) -> str:
     text = " ".join(str(anchor.get(k) or "") for k in ("name", "purpose", "slot_id")).lower()
+    pressed = re.search(r"touch|finger|button|key|\bpad\b", text)
     for kind, pat in KIND_WORDS:
+        if kind == "inner" and pressed:
+            continue  # a touch or fingerprint sensor is still a surface the finger meets
         if re.search(pat, text):
             return kind
     return "touch"
@@ -394,6 +406,10 @@ def sites_from_anchors(
 # ---------------------------------------------------------------- feature solids
 
 TOUCH_MIN_MM = 9.0
+# a scroll wheel stands on edge in a slot: typical mouse wheel size, typed in
+WHEEL_D_MM = 20.0
+WHEEL_W_MM = 7.0
+WHEEL_PROUD_MM = 4.0
 
 
 def _cyl(r: float, z0: float, z1: float, x: float, y: float, seg: int = 48) -> mf.Manifold:
@@ -486,6 +502,7 @@ class Features:
     glass: list[mf.Manifold] = field(default_factory=list)
     cutouts: list[dict[str, Any]] = field(default_factory=list)
     ports: list[dict[str, Any]] = field(default_factory=list)  # axis-facing ports, for checks
+    wheels: list[dict[str, Any]] = field(default_factory=list)  # wheel slots, for checks
     claimed: set[str] = field(default_factory=set)
     kinds: dict[str, int] = field(default_factory=dict)
 
@@ -544,7 +561,8 @@ def build_features(
     out = Features()
     zmax = body.profile.z_top + body.profile.crown + 2.0
     done_groups: set[int] = set()
-    knobs = [k for k in sites if k.kind in ("stick", "knob") and k.mount == "front"]
+    cross: dict[int, list[Site]] = {}
+    knobs = [k for k in sites if k.kind in ("stick", "knob", "wheel") and k.mount == "front"]
     for s in sites:
         if s.ref:
             out.claimed.add(s.ref)
@@ -560,6 +578,8 @@ def build_features(
             continue
         if s.kind == "button" and s.mount == "front" and _under_knob(s, knobs, clear):
             continue  # pressed through the wheel or stick above it (a mouse's middle click)
+        if s.kind == "inner":
+            continue
         if s.kind == "port" or s.mount == "back":
             if s.kind == "port":
                 _port(out, s, body, wall_mm, port_w, port_h, z_port)
@@ -569,9 +589,15 @@ def build_features(
         elif s.kind == "screen":
             _screen(out, s, body, seat, zmax, clear)
         elif s.kind == "dpad":
-            if s.group not in done_groups:
-                done_groups.add(s.group)
-                _dpad(out, [t for t in sites if t.group == s.group], body, seat, zmax, clear)
+            if s.group not in cross:
+                cross[s.group] = _cross_sites([t for t in sites if t.group == s.group])
+                _dpad(out, cross[s.group], body, seat, zmax, clear)
+            elif not any(t is s for t in cross[s.group]):
+                _button(out, s, body, seat, zmax, clear)  # the slot's other switches (A/B, start)
+        elif s.kind == "light":
+            _light(out, s, body, seat, zmax)
+        elif s.kind == "wheel":
+            _wheel(out, s, body, seat, zmax, clear)
         elif s.kind in ("stick", "knob"):
             _stick(out, s, body, seat, zmax, clear)
         else:
@@ -620,6 +646,29 @@ def _stick(out: Features, s: Site, body: Body, seat: float, zmax: float, clear: 
     out.cutouts.append(_cut("stick", s.x, s.y, zc, 2 * r_h, "circle"))
 
 
+def _long_axis_deg(plan: Polygon) -> float:
+    """Direction of the plan's longer side: the way a hand slides along the product."""
+    pts = np.asarray(plan.minimum_rotated_rectangle.exterior.coords)[:3]
+    a, b = pts[1] - pts[0], pts[2] - pts[1]
+    v = a if np.hypot(*a) >= np.hypot(*b) else b
+    return math.degrees(math.atan2(v[1], v[0]))
+
+
+def _wheel(out: Features, s: Site, body: Body, seat: float, zmax: float, clear: float) -> None:
+    """A wheel on edge, rolling along the product's long axis, proud of the surface in a slot."""
+    r = WHEEL_D_MM / 2
+    roll = _long_axis_deg(body.plan)
+    zc = body.top_at(s.x, s.y)
+    chord = 2 * math.sqrt(r * r - (r - WHEEL_PROUD_MM) ** 2)
+    slot = _rrect(s.x, s.y, chord + 2 * clear, WHEEL_W_MM + 2 * clear, roll, 1.0)
+    out.cuts.append(_prism(slot, seat - 1.0, zmax + 4))
+    wheel = mf.Manifold.cylinder(WHEEL_W_MM, r, r, 72, True).rotate((90, 0, 0))
+    wheel = wheel.rotate((0, 0, roll)).translate((s.x, s.y, zc + WHEEL_PROUD_MM - r))
+    out.caps.append(wheel.trim_by_plane((0, 0, 1), seat + 0.3))
+    out.cutouts.append(_cut("wheel", s.x, s.y, zc, chord, "slot", WHEEL_W_MM))
+    out.wheels.append({"ref": s.ref, "x": s.x, "y": s.y})
+
+
 def _button(out: Features, s: Site, body: Body, seat: float, zmax: float, clear: float) -> None:
     r_h = max(max(s.w, s.d) / 2 + clear, TOUCH_MIN_MM / 2)
     zc = body.top_at(s.x, s.y)
@@ -630,10 +679,38 @@ def _button(out: Features, s: Site, body: Body, seat: float, zmax: float, clear:
     out.cuts.append(_cyl(r_h + cham, zc, zmax + 4, s.x, s.y))
     rc = r_h - 0.5
     z0 = max(seat + 0.3, zc - 1.4)
-    prof = [(0.0, z0), (rc, z0), (rc, zc + 0.5), *_arc((rc - 0.8, zc + 0.5), 0.8, 0, 90, 4),
-            (0.0, zc + 1.3)]  # fmt: skip
+    prof = [(0.0, z0), (rc, z0), (rc, zc + 1.4), *_arc((rc - 0.8, zc + 1.4), 0.8, 0, 90, 4),
+            (0.0, zc + 2.2)]  # fmt: skip
     out.caps.append(_revolve(prof, s.x, s.y, 48))
     out.cutouts.append(_cut("button", s.x, s.y, zc, 2 * r_h, "circle"))
+
+
+def _light(out: Features, s: Site, body: Body, seat: float, zmax: float) -> None:
+    """A light pipe: a small round window over the LED, capped flush."""
+    r = 1.6
+    zc = body.top_at(s.x, s.y)
+    out.cuts.append(_cyl(r, seat - 1.0, zmax + 4, s.x, s.y))
+    out.caps.append(_cyl(r - 0.15, max(seat + 0.3, zc - 1.4), zc, s.x, s.y))
+    out.cutouts.append(_cut("light", s.x, s.y, zc, 2 * r, "circle"))
+
+
+def _cross_sites(group: list[Site]) -> list[Site]:
+    """One cross per anchor: a slot of eight switches is the four arrows plus the face
+    buttons, so only the tightest cluster of at most four becomes the pad."""
+    if len(group) <= 4:
+        return group
+    foot = max(max(s.w, s.d) for s in group) or 8.0
+    clusters: list[list[Site]] = []
+    for s in group:  # single linkage: switches within two footprints are one cluster
+        near = [
+            c for c in clusters if any(math.hypot(s.x - t.x, s.y - t.y) < 2.2 * foot for t in c)
+        ]
+        merged = [s] + [t for c in near for t in c]
+        clusters = [c for c in clusters if c not in near] + [merged]
+    best = max(clusters, key=len)
+    cx = sum(s.x for s in best) / len(best)
+    cy = sum(s.y for s in best) / len(best)
+    return sorted(best, key=lambda s: math.hypot(s.x - cx, s.y - cy))[:4]
 
 
 def _dpad(
@@ -705,7 +782,9 @@ def _screen(out: Features, s: Site, body: Body, seat: float, zmax: float, clear:
     else:
         win = _rrect(s.x, s.y, w, d, s.rot, 2.0)
     ledge = win.offset(2.2, mf.JoinType.Round)
-    out.cuts.append(_flare(win, seat - 1.0, zmax + 4, 0.55 * (zmax + 5 - seat)))
+    zf = max(seat - 1.0, zc - 4.5)  # straight shaft below, a bevel only through the last few mm
+    out.cuts.append(_prism(win, seat - 1.0, zf + 0.01))
+    out.cuts.append(_flare(win, zf, zmax + 4, 0.55 * (zmax + 4 - zf)))
     out.cuts.append(_prism(ledge, zc - 1.0, zmax + 4))
     lip = ledge.offset(1.4, mf.JoinType.Round) - ledge.offset(0.2, mf.JoinType.Round)
     out.adds.append(_prism(lip, zc - 1.6, zc + 0.5))

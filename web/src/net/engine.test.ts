@@ -18,10 +18,11 @@ function fake(routes: Record<string, () => Response>) {
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status });
 
 describe("discoverEngine", () => {
-  it("is locked without a key and asks nothing", async () => {
-    const f = fake({});
-    expect((await discoverEngine(null, f.fn)).state).toBe("locked");
-    expect(f.seen).toHaveLength(0);
+  it("goes live without a key and sends none", async () => {
+    const f = fake({ "/api/engine": () => json(200, { url: ENGINE }), [ENGINE]: () => json(200, {}) });
+    expect(await discoverEngine(null, f.fn)).toEqual({ state: "live", url: ENGINE });
+    expect(f.seen[0].init?.headers).toEqual({});
+    expect(f.seen[1].url).toBe(`${ENGINE}/v1/vocab`);
   });
 
   it("is locked when the site rejects the key", async () => {

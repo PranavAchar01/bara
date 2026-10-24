@@ -19,10 +19,13 @@ export function postEnabled(): boolean {
 }
 
 export function StudioPost(props: { dark: boolean }) {
+  // In focus the shelf shrinks parts below the AO radius, which smeared them dark: lighter and tighter then.
+  const focused = useApp((s) => s.focusKey !== null);
+  const intensity = (props.dark ? 2.2 : 2.6) * (focused ? 0.45 : 1);
   return (
     <EffectComposer multisampling={0} enableNormalPass={false}>
       {/* Radius in mm: about a key gap, so crevices darken and open faces stay clean. */}
-      <N8AO aoRadius={5} distanceFalloff={1.2} intensity={props.dark ? 2.2 : 2.6} quality="high" color="black" />
+      <N8AO aoRadius={focused ? 2 : 5} distanceFalloff={1.2} intensity={intensity} quality="high" color="black" />
       <SMAA />
       <ToneMapping mode={ToneMappingMode.NEUTRAL} />
     </EffectComposer>

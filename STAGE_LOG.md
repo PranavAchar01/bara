@@ -169,6 +169,217 @@ Branch `figma-design-in-code`, pushed after each step so the backend work can co
 
 **Minutes:** about 12. **Rating:** 4/5.
 
+### Trust fixes from the live-site audit
+
+The coverage audit of the live site found three places where the UI said two contradicting things. Each is now one honest statement. Tools: Claude Code against the existing components; the Figma status colours (warn amber) for the new states.
+
+**Stages over budget.** A stage that finished past its budget showed an amber time and the word "ok" ("Find design 123 / 30 ms ok"). Now the status reads "over 4.1×", the dot turns amber, and hovering says it finished but took 123 ms against 30. Running and failed stages are unchanged.
+
+**Unexplained model switch.** The header named the configured model while the build's calls could have gone to the backup. Now the header reads the models the build actually used (classifier and decisions): if any call fell back, it shows ~~llama-4-scout~~ → claude-haiku-5-5 BACKUP in amber, with the server's fallback warning as the hover reason.
+
+**Firmware "Compiled" and "compile skipped" together.** The server's `mode: compiled` means the source was generated for this board, not that a binary exists. The badges now read "Generated source" and "not built" (amber, with the reason on hover); the other states read "build queued", "building", "binary built", "build failed".
+
+**Checked:** typecheck, lint, 50 tests; mock build shows "over 4.1×" on Find design and "Prebuilt · not built" on firmware; the backup-model header was checked by setting a fallback classifier in the store, since the mock never falls back.
+
+**Minutes:** about 20. **Rating:** 4/5.
+
+### Four new features: Figma first
+
+**Tools:** Figma Design through the Figma agent (use_figma), reusing the Agent, Chip, Kbd and Ask Field components and the colour and type variables. Five new frames on the Screens page:
+- 17 Focus · isolated part, with 17a Focus · motion
+- 18 Explode · view-aware labels
+- 19 Voice · talk to Bara
+- 20 Case · match the library parts
+
+**What we decided in Figma before writing code:**
+- **Focus:** clicking a part pulls it to the centre and shrinks everything else onto a shelf on the left. The agent card asks one question with three plain options (Ask about it `A`, Change it `S`, Something else `O`) and three suggested questions. The motion is specified beat by beat (press, pull apart, centre, agent asks, put back).
+- **Labels:** a part gets a label only while a ray from the camera hits it first. The line lands on its nearest visible anchor, and hidden parts are counted under the column.
+- **Voice:** hold Space to talk; Bara answers out loud with live captions in the Ask pill.
+- **Case:** the exploded view showed it as a pale slab whose edges vanished; it becomes graphite with satin plastic, and its edges stay drawn.
+
+**Friction:** the part renders are 1x1 frames with overflowing vectors, so placement had to be measured from the leaf vectors. The case layers carried low layer opacity, which hid the first recolour.
+
+**Minutes:** about 35. **Rating:** 4/5.
+
+### Case on par with the library parts
+
+**What moved:** the default case colour is graphite `#4A4E55` instead of `#D3D1CB`, and the brief's colour still wins. The case material is satin plastic with a light clearcoat and a rim sheen. Crease lines stay drawn in ink when pulled apart instead of fading to nothing.
+
+**Checked:** typecheck; a real keyboard build against the live engine, exploded in ISO view. The case top and bottom read as solid shells next to the KiCad board and the sourced switches.
+
+**Not done:** the darker inner wall from the Figma spec; it needs per-face shading in the shader. **Minutes:** about 15. **Rating:** 4/5.
+
+### Labels that follow what you can see
+
+**What moved:** each label anchor now knows which part it sits on. A few times a second, while the camera or the explode moves, a ray from the camera checks whether that part is the first thing it meets. If another part is in the way, the label waits 150 ms, then fades out over 180 ms; turning the model back fades it in. With several anchors per label, the line uses the visible one nearest the label column. Hidden parts are counted under the column ("+6 behind other parts, turn the model to see them"). See-through shells (the assembled case) don't hide what is inside.
+
+**Checked:** typecheck, lint, tests; a real keyboard build pulled apart. ISO and front show all seven labels; from below only the case bottom keeps its label, with the other six counted as behind. Orbiting between the two brings them back.
+
+**Not done:** the Figma rule "hover a Layers row to show its label anyway". **Minutes:** about 20. **Rating:** 4/5.
+
+### Part focus with the agent card
+
+**Tools:** Figma frames 17 and 17a as the spec; Claude Code for the scene, store and card. The engine got a new route, `POST /v1/builds/{id}/ask`, which answers about one part from the build's own facts (card, why it was chosen, connections, checks). It is short and spoken-style, Cerebras first and Anthropic as backup.
+
+**What moved:**
+- Clicking a part in 3D, or its Layers row, pulls it out. It eases to just right of the view's centre and grows to fill about 60% of the view. Every other part shrinks onto a shelf down the left fifth, in stack order. The labels step aside, the floor hides, and the selection outline drops so the part isn't drowned in blue.
+- The right column becomes Bara's card: the eyes, the part, one question and three options. **Ask about it** (`A`) opens a question field. **Change it** (`S`) opens swap, or resize for the case and board. **Something else** (`O`) holds details, recolour, move and take it out. Three suggested questions start the chat, and the model's follow-ups replace them after each answer. `←` `→` step through parts; `Esc` closes a drawer first, then puts the part back.
+- Footprint models drawn from the KiCad board export (switches, diodes, MCU) focus as their own parts, not as "the board".
+
+**Checked:**
+- Typecheck, lint, and 65 tests: 3 new for the focus layout (centred and grown, shelf on the left, split halves kept together) and 3 server tests for the ask route.
+- In the browser, on two fresh keyboard builds from the live engine: pulled out the switches, asked "Why this one?", stepped to the keycaps and pressed Esc.
+
+**Friction:**
+- The exploded framing shifts the image 20% left for the label column. That shift now relaxes as focus eases in, or the shelf would land off-screen.
+- An InstancedMesh's cached bounds were stale after a remount, so focus measures instance by instance.
+- The engine on Pranav's machine still runs code without `/ask` (404). The card says when its answer came from the build rather than the model; the route goes live when the engine restarts on this commit.
+
+**Minutes:** about 60. **Rating:** 4/5.
+
+### Talk to Bara
+
+**Tools:** Figma frame 19 as the spec; ElevenLabs for the voice (text to speech streamed, Scribe v2 for speech to text) through two new engine routes, so the key never reaches the browser.
+
+**What moved:**
+- **Talking:** hold Space, or press and hold Bara's eyes in the Ask pill. Level bars show and your words appear live where the browser can recognise speech; elsewhere the clip goes to the engine's `POST /v1/stt`, which hints Scribe with the build's part names. Releasing sends it: to the focus card when a part is pulled out, otherwise to the prompt. Esc throws it away.
+- **Answers:** spoken through the engine's `GET /v1/tts`, which streams ElevenLabs audio straight into an audio element, so playback starts while the rest is still being generated. The default model is `eleven_v4`, the most natural one; `BARA_TTS_MODEL=eleven_flash_v2_5` trades a little warmth for speed. The voice is Charlotte, chosen as warm and conversational; `BARA_TTS_VOICE` changes it. The words show in Bara's speech bubble as it talks. Without the engine's voice, the browser's best voice speaks instead.
+- **Replies:** spoken replies turn on the first time you talk. The speaker button in the Ask pill or `V` toggles them, and the choice is remembered per browser.
+
+**Checked:**
+- Web typecheck, lint and tests; 4 new server tests (settings follow the environment, long text is cut, part names reach Scribe, no key means no voice), plus the ask and contract tests.
+- In the browser: the caption shows in Bara's bubble and the fallback voice speaks.
+
+**Not checked:** a real ElevenLabs call, because no key is set on this machine. The engine needs `ELEVENLABS_API_KEY` and a restart on this commit. Six live-form and footprint server tests fail on `main` without this change (they need the KiCad libraries on Pranav's machine).
+
+**Changed from Figma:** frame 19 named Flash v2.5; we chose v4 because the brief was "sounds incredibly human", and Flash stays one setting away.
+
+**Minutes:** about 40. **Rating:** 4/5.
+
+### Focus, second pass: shadows and the way back
+
+**Found by Nithin:** leaving focus left stray shadows on the main view, and nothing said how to get back (it took a moment to try Esc).
+
+**What moved:**
+- **Shadows:** the floor shadow is baked once from wherever the parts are. A model finishing loading while a part was in focus re-baked it with the parts on the shelf, and that shadow stayed after going back. Re-bakes now wait until focus has eased out, then run once. Ambient occlusion was also smearing the shrunken shelf parts dark (its 5 mm radius is bigger than a shrunk part), so it is lighter and tighter during focus.
+- **Leftovers:** putting a part back now clears the selection. The blue outline and floating name tag no longer linger on the whole build.
+- **The way back, three ways:** a "← Whole build `Esc`" pill at the top of the canvas with a crumb naming the part; a labelled "Put back `Esc`" button in the card instead of a bare ×; and clicking empty space on the canvas (orbit drags don't count).
+- The timings panel hides during focus, and long part names wrap in the card instead of being cut off.
+
+**Checked:** typecheck, lint; mock build: focus from a Layers row, back with the pill, back with a real click on empty canvas. Card, pill, selection, outline and tag are all gone after each.
+
+**Minutes:** about 25. **Rating:** 3/5; this should have been caught before the first push.
+
+### Your builds on Home
+
+**Asked:** a library at the bottom of the landing page of everything built, so you can go back to it.
+
+**Tools:** Figma frame 21 (Home · your builds) first, cloned from 01 Home: a "Pick up where you left off" grid of build cards with snapshots, search, and status pills. Then Claude Code.
+
+**What moved:**
+- **Saving:** every build is saved in this browser (IndexedDB) as it changes: status, revision and parts. Each save keeps the full build and its view state, plus a 480×300 JPEG of the 3D canvas, taken again once late models have drawn. Up to 60 are kept, newest first.
+- **On Home:** the hero keeps most of the first screen and "Your builds" sits below it as a grid. Each card shows the prompt, the reused design or kind of device, the part count, and when it was made. Pills mark demo (mock) builds, failed or stopped ones, and ones still in progress. Search appears once there are more than three. × asks once more before removing.
+- **Reopening:** clicking a card shows the saved copy at once, then asks the engine to carry on from the last event it saw (`build.resume`), so edits keep working. If the engine has restarted and forgotten the build, a toast says the copy is for looking at and to build it again to change it.
+
+**Checked:** typecheck, lint, 67 tests (2 new for the card line). Mock build: the card appeared with its snapshot and the saved status read done. Opening it from Home brought back the parts, design reuse and status with no errors.
+
+**Not checked:** reopening against the live engine (its tunnel was down while testing).
+
+**Minutes:** about 35. **Rating:** 4/5.
+
+### Pressure test, round one
+
+**Tools:** a separate review agent drove the app in headless Chromium for about 17 minutes, as a first-time user and as a power user (mock mode; the live engine's tunnel was down). It reported 24 findings with screenshots. Claude Code fixed the worst first.
+
+**Fixed:**
+- **Blocker:** typing in the bottom pill while a part was in focus started a new build and threw the current one away. With a part in focus the pill now asks about it ("Ask about the Pro Micro…", button "Ask"). The card's second question field is gone; "Ask about it" puts the cursor in the pill.
+- **Narrow windows:** the shell CSS from step one had overridden the stacked layout, so the canvas fell to about 230 px at 800 wide. Restored. Under 860 px it stacks canvas, then details (with the focus card), then layers. Under 980 the timings panel hides, and the view toolbar scrolls sideways instead of running under the panels.
+- **Keyboard:** Enter or Space on a Layers row now focuses the part, and rows report `aria-pressed`. Esc works from inside the prompt or the explode slider: it leaves the field, then steps back. Esc closes the Export menu.
+- **Focus during a build:** blocked, with a toast ("Parts can be pulled out once the build is done"), because it left a half-applied layout. The focus layout is laid out again when parts change.
+- **Collisions and leftovers:** the "← Whole build" pill moved from the top of the canvas (where it covered the done toast and progress bar) to just above the Ask pill. Starting a new build clears focus, so the pill no longer sticks. Part name chips (LABELS on) hide in focus.
+- **Views:** a view preset, Reset or the explode slider puts a focused part back first, instead of garbling the layout.
+- **←/→:** follows the Layers order, includes the board and case, skips parts with no 3D model, and wraps instead of silently dropping out.
+- The duplicated Esc hint in the card footer is gone, and the speaker toggle is a round button rather than a grey box.
+
+**Checked:** typecheck, lint, 67 tests. In mock mode:
+- Enter on a row focuses the part.
+- Typing in the pill and pressing Enter asks and keeps the same build.
+- Space inside the field types and does not listen.
+- Esc from the field puts the part back.
+- Arrows ran through 8 parts and wrapped.
+- FRONT and the explode slider put the part back.
+- At 800 px the card sits right under the canvas.
+
+**Left for round two:**
+- A click in a gap inside the focused part still puts it back.
+- The offline banner wording, V giving no visible feedback, and failing checks drawn grey like unknown ones.
+- The bot bubble's tiny type and the swap drawer's padding.
+
+**Minutes:** about 45. **Rating:** 3/5; most of these should not have shipped.
+
+### Pressure test, round two
+
+**Fixed:**
+- A click in a gap inside the focused part (between keys) no longer puts it back. Only a click clearly outside the part's outline on screen (with a 12% margin) does.
+- The swap and resize panels had lost their padding: the inspector restyle had flattened every side panel. It is now scoped to the inspector.
+- Offline banner: "Can't reach the build engine. Trying again every 8 s; what's on screen stays, and your saved builds still open." It used to read like a passing blip.
+- A failed check is never grey (grey read as "not checked"); low-severity failures are amber.
+- V now says what it did ("Bara will answer out loud. Press V to turn it off.").
+
+**Checked:**
+- Typecheck, lint, 71 tests.
+- Reopened the build from the library after a reload and focused a part. A real click beside it kept the focus; a click in clear space put it back.
+
+**Still open:**
+- The bot bubble's small type.
+- "Build done" toasts again when a library build reopens in mock mode.
+- Real-engine checks of the library, voice and ask routes, once the engine is back up on the new code.
+
+**Minutes:** about 20. **Rating:** 4/5.
+
+### Landing page: the instruction-manual direction
+
+**Asked:** landing pages that don't look like the usual chat box with rounded cards; then, after a first round, "a LEGO manual, just based on how all of the stuff is laid out."
+
+**Tools:**
+- Claude Code wrote the layouts as HTML with real isometric geometry: a small generator draws the keyboard, its parts and partial assemblies as SVG.
+- Each page was checked in a local headless browser, then sent to Figma with `html_to_figma`.
+- Fixed in Figma with `use_figma`: the converter dropped the eye drawing's viewBox scale, so the eyes were cropped until regrouped and scaled.
+
+**First round (direction finding):** four metaphors. An engineering drawing sheet (title block as the input), a fill-in sentence, an assembly manual, and a receipt on a bench. The drawing sheet went to Figma ("Earlier · Drawing sheet"); the user chose the manual direction before the others were sent.
+
+**In Figma, page "Landing concepts":**
+- **Landing A, manual with a box-art cover.**
+  - The cover is the box: set number, piece count, "ages you+", a 1:1 size panel. The prompt is written on the box ("What's in the box?") with an "Open the box ↵" bar.
+  - "How Bara builds it" is a two-page spread of four numbered steps. Each has a parts callout (1×, 61×), fat arrows, a sub-build box (the KiCad routing) and a "turn it over" icon.
+  - An inventory page lists every piece with its licence; "Back on the shelf" shows past builds as set boxes.
+- **Landing B, page 1 of the manual.** Step 1 is your idea: the parts callout holds the input ("1× your idea"), an arrow points into a dashed outline of the device to be built, steps 2 to 4 wait faded at the side, and "Build it →" turns the page.
+
+**Kept from the brand:** Averia Serif Libre and Atkinson Hyperlegible, ink plus one blue, Bara's eyes. Corners stay square except the small 4 px manual callouts.
+
+**Next:** the user picks parts of A and B, then they are built into the app.
+
+**Minutes:** about 50. **Rating:** 4/5.
+
+### Landing C: inspired by the manual, and the agent made exact
+
+**Feedback:** "some of the orientation like a LEGO manual, not the entire thing"; and the agent in Figma didn't have the site's shape.
+
+**Agent:**
+- The Figma Agent component had a 40×32 warm-gradient squircle body.
+- The site's BaraBot is an ink stadium: 88×62 units with fully round ends, two 13×19 rounded eyes, 25 apart.
+- All nine variants were rebuilt from the site's own numbers with `use_figma`, and each state now maps to a site mood: listening, asking, working, thinking, worried, happy, sad, offline. That covers the stadium body, lids, the happy cheeks, tilt and eye scale.
+- Every screen that uses the component updated with it. The hand-drawn eyes in the landing concepts were swapped for instances.
+
+**Landing C (recommended):** the clean Bara site with only a few manual cues.
+- The prompt is step "1", in a square field with the agent inside.
+- The hero drawing has drop arrows between layers and part counts (61×, 1×).
+- "How it builds" is four numbered steps, each with small part-count chips and a build-up thumbnail.
+- "Your builds" is a plain card grid with a quiet "No. 014".
+- No box art, set numbers or manual-blue pages; A and B stay on the page as references.
+
+**Minutes:** about 35. **Rating:** 4/5.
+
 ## Before and after
 
 | Change | Before | After |

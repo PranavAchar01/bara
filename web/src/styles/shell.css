@@ -392,16 +392,17 @@
   font-family: var(--font-mono);
   font-size: 11px;
 }
-.side-b {
+/* flat hairline sections are the inspector's; the swap and resize panels keep their padding */
+.inspector .side-b {
   padding: 0;
   gap: 0;
 }
-.side-b > section,
-.side-b > .insp-actions {
+.inspector .side-b > section,
+.inspector .side-b > .insp-actions {
   padding: 14px 16px;
   border-bottom: 1px solid var(--line);
 }
-.side-b > section:last-child {
+.inspector .side-b > section:last-child {
   border-bottom: 0;
 }
 .side-b h3 {
@@ -499,4 +500,678 @@
 }
 .insp-meta {
   gap: 8px;
+}
+
+/* a finished stage over its budget: the status word turns amber with the time */
+.stage.over .stage-status {
+  color: var(--warn);
+}
+
+/* header model line when the build ran on the backup model */
+.file-model.switched {
+  color: var(--warn);
+}
+.file-model.switched s {
+  color: var(--ink-faint);
+}
+.file-why {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+}
+
+/* Whole-build progress (time left) and the done confirmation, top of the canvas. */
+.build-progress,
+.build-done {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: calc(var(--radius) + 2px);
+  box-shadow: var(--shadow-pop);
+  padding: 8px 12px;
+  min-width: min(360px, calc(100vw - 32px));
+}
+.bp-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+.bp-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--paper-3);
+  overflow: hidden;
+}
+.bp-track > span {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--ink);
+  transition: width 0.8s ease;
+}
+.build-done {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  border-color: var(--ok);
+}
+.bd-check {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  background: var(--ok);
+  color: var(--surface);
+  font-size: 11px;
+}
+.build-done .btn {
+  margin-left: auto;
+}
+
+/* Focus card (Figma 17): Bara asks what to do with the part pulled out of the build. */
+.focus-card {
+  background: var(--paper);
+  border-left: 1px solid var(--line);
+  box-shadow: none;
+}
+.fc-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 12px 12px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.fc-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.fc-title h2 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 22px;
+  letter-spacing: var(--track-display);
+  line-height: 1.05;
+  /* long part names wrap to two lines rather than losing their end */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.fc-head {
+  align-items: flex-start;
+}
+.fc-head .fc-back {
+  margin-top: 2px;
+}
+.fc-title .fc-kicker {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fc-kicker {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+  color: var(--text-2);
+}
+.fc-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.fc-say {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--text);
+}
+.fc-src,
+.fc-thinking {
+  color: var(--text-2);
+  font-size: 12px;
+}
+.fc-thinking {
+  margin: -6px 0 0;
+}
+.fc-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.fc-opt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 10px 10px 10px 12px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: var(--paper-2);
+  color: var(--text);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.fc-opt > span {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.fc-opt b {
+  font-weight: 500;
+}
+.fc-opt small {
+  font-size: 12px;
+  color: var(--text-2);
+}
+.fc-opt:hover:not(:disabled) {
+  background: var(--paper-3);
+}
+.fc-opt.active {
+  background: var(--paper-3);
+  border-color: var(--ink);
+}
+.fc-opt:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.fc-opt kbd,
+.fc-keys kbd {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1;
+  padding: 3px 5px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--paper);
+  color: var(--text-2);
+}
+.fc-more {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.fc-ask {
+  display: flex;
+  gap: 6px;
+}
+.fc-ask .prompt-input {
+  flex: 1;
+  height: 34px;
+  border-radius: 17px;
+  padding: 0 12px;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+}
+.fc-ask .btn {
+  border-radius: 17px;
+}
+.fc-suggest {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.fc-suggest .chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.fc-suggest .chip {
+  cursor: pointer;
+}
+.fc-history {
+  font-size: 12px;
+  color: var(--text-2);
+}
+.fc-history p {
+  margin: 6px 0 0;
+}
+.fc-keys {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--text-2);
+}
+.fc-keys .spacer {
+  flex: 1;
+}
+
+/* Voice (Figma 19): hold the eyes or Space to talk; level bars while listening, captions in the bubble. */
+.bot-mic {
+  display: inline-flex;
+  padding: 0;
+  border: 0;
+  background: none;
+  border-radius: 50%;
+  cursor: pointer;
+  touch-action: none;
+}
+.bot-mic.on {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+.prompt-input.listening {
+  outline: 1px solid var(--ink);
+  background: var(--paper);
+}
+.voice-bars {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 20px;
+  flex: none;
+}
+.voice-bars i {
+  display: block;
+  width: 2px;
+  height: 6px;
+  border-radius: 1px;
+  background: var(--ink);
+  animation: voice-bar 0.9s ease-in-out infinite;
+}
+.voice-bars i:nth-child(2) {
+  animation-delay: 0.12s;
+}
+.voice-bars i:nth-child(3) {
+  animation-delay: 0.24s;
+}
+.voice-bars i:nth-child(4) {
+  animation-delay: 0.36s;
+}
+.voice-bars i:nth-child(5) {
+  animation-delay: 0.48s;
+}
+@keyframes voice-bar {
+  0%,
+  100% {
+    height: 4px;
+  }
+  50% {
+    height: 18px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .voice-bars i {
+    animation: none;
+    height: 10px;
+  }
+}
+.voice-toggle {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 17px;
+  background: none;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.voice-toggle:hover {
+  background: var(--paper-2);
+}
+.voice-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.voice-toggle.on {
+  color: var(--ink);
+}
+
+/* The way back from focus, top left of the canvas (and "Put back" in the card) */
+/* above the Ask pill in the bottom stack, so it never collides with toasts or progress at the top */
+.centre-bottom > .focus-exit {
+  width: auto;
+}
+.focus-exit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: focus-exit-in 220ms ease-out;
+}
+@keyframes focus-exit-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .focus-exit {
+    animation: none;
+  }
+}
+.focus-exit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 8px 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 17px;
+  background: var(--paper);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+.focus-exit-btn:hover {
+  background: var(--paper-2);
+}
+.focus-exit-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.focus-exit kbd,
+.fc-back kbd {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1;
+  padding: 3px 5px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--paper);
+  color: var(--text-2);
+}
+.focus-crumb {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+  color: var(--text-2);
+}
+.focus-crumb .sep {
+  color: var(--ink-faint);
+}
+.fc-back {
+  flex: none;
+  gap: 6px;
+}
+
+/* Home with your builds below the fold (Figma 21): the hero keeps most of the first screen. */
+.home {
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0 16px;
+}
+.home-hero {
+  width: 100%;
+  min-height: min(78vh, 760px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.home-hero .home-inner {
+  margin-bottom: 0;
+}
+.library {
+  width: min(1040px, 100%);
+  padding: 32px 0 64px;
+  border-top: 1px solid var(--line);
+  flex: none;
+}
+.lib-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+.lib-kicker {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+  color: var(--text-2);
+}
+.lib-head h2 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 28px;
+  letter-spacing: var(--track-display);
+  margin-top: 4px;
+}
+.lib-search {
+  width: min(280px, 100%);
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: 18px;
+  background: var(--paper-2);
+  font: inherit;
+  color: var(--text);
+}
+.lib-search:focus {
+  outline: none;
+  border-color: var(--ink);
+  background: var(--paper);
+}
+.lib-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+}
+.lib-card {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+  overflow: hidden;
+  transition: border-color 120ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+.lib-card:hover {
+  border-color: var(--ink-faint);
+  box-shadow: var(--shadow);
+  transform: translateY(-1px);
+}
+.lib-card.opening {
+  opacity: 0.6;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lib-card,
+  .lib-card:hover {
+    transition: none;
+    transform: none;
+  }
+}
+.lib-open {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.lib-open:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: 12px;
+}
+.lib-thumb {
+  display: block;
+  aspect-ratio: 16 / 10;
+  background: var(--paper-2);
+  border-bottom: 1px solid var(--line);
+}
+.lib-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.lib-nothumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+  color: var(--ink-faint);
+}
+.lib-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px 14px;
+}
+.lib-title {
+  font-weight: 500;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.lib-sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.lib-line {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lib-pill {
+  flex: none;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--paper-3);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+  color: var(--text-2);
+}
+.lib-pill.st-failed {
+  color: var(--fail);
+}
+.lib-pill.st-running,
+.lib-pill.st-awaiting_input {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.lib-del {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--paper);
+  color: var(--text-2);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.lib-card:hover .lib-del,
+.lib-del:focus-visible,
+.lib-del.confirm {
+  opacity: 1;
+}
+.lib-del.confirm {
+  color: var(--fail);
+  border-color: var(--fail);
+}
+@media (hover: none) {
+  .lib-del {
+    opacity: 1;
+  }
+}
+.lib-empty,
+.lib-note {
+  font-size: 13px;
+  color: var(--text-2);
+}
+.lib-note {
+  margin-top: 16px;
+}
+
+/* Narrow windows. shell.css set the three columns without a breakpoint, which overrode the stacked
+   layout in app.css: the canvas fell to ~230 px at 800 wide. Middle widths drop the left column's
+   width a little; narrow ones stack canvas, then details, then layers. */
+@media (max-width: 980px) {
+  .workspace {
+    grid-template-columns: 212px minmax(0, 1fr) 280px;
+  }
+  .hud {
+    display: none;
+  }
+}
+@media (max-width: 860px) {
+  .workspace {
+    grid-template-columns: 1fr;
+    grid-template-rows: 62vh auto auto;
+    overflow: auto;
+  }
+  .centre {
+    order: -1;
+    min-height: 62vh;
+  }
+  /* details (and the focus card) right under the canvas, layers after */
+  .rightcol-wrap {
+    position: relative;
+    min-height: 480px;
+    order: 0;
+  }
+  .leftcol {
+    order: 1;
+  }
+  .leftcol,
+  .rightcol-wrap {
+    border: 0;
+    border-top: 1px solid var(--line);
+    overflow: visible;
+  }
+}
+/* the view toolbar scrolls sideways rather than running under the panels */
+.vp-toolbar {
+  max-width: calc(100% - 24px);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.vp-toolbar::-webkit-scrollbar {
+  display: none;
+}
+.vp-toolbar > * {
+  flex: none;
 }

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { select, useApp, type CodeTab, type RightTab } from "../state/store";
+import { focusPart, select, useApp, type CodeTab, type RightTab } from "../state/store";
+import { focusKeyOf } from "../three/Viewport3D";
 import { ClarifyCard, DecisionTrace, ReuseCard, SpecCard, StageTimeline } from "./LeftColumn";
 import { PanelToolbar } from "./TopBar";
 import { applyEdit } from "../net/client";
@@ -150,9 +151,17 @@ export function PartsList() {
                 className={`part-row ${selection === p.instance_id ? "selected" : ""} ${p.placement.source === "intent" ? "provisional" : ""}`}
                 role="button"
                 tabIndex={0}
-                onClick={() => select(p.instance_id)}
+                aria-pressed={selection === p.instance_id}
+                data-focus-key={focusKeyOf(build, p)}
+                onClick={() => {
+                  select(p.instance_id);
+                  focusPart(focusKeyOf(useApp.getState().build, p));
+                }}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") select(p.instance_id);
+                  if (e.target !== e.currentTarget || (e.key !== "Enter" && e.key !== " ")) return;
+                  e.preventDefault();
+                  select(p.instance_id);
+                  focusPart(focusKeyOf(useApp.getState().build, p));
                 }}
               >
                 <Dot tone={instanceTone(build, p.instance_id) ?? (known(p.status, ["ok", "warning", "failed"] as const) === "failed" ? "fail" : "ok")} />
@@ -436,6 +445,15 @@ function BoardSvg(props: { board: Board }) {
 }
 
 /** C16 FirmwareView: file tree, read-only source, pin map, mode badge, compile progress. */
+const COMPILE_LABEL: Record<string, string> = {
+  pending: "build queued",
+  running: "building",
+  ok: "binary built",
+  failed: "build failed",
+  skipped: "not built",
+  unknown: "build unknown",
+};
+
 export function FirmwareView() {
   const fw = useApp((s) => s.build?.firmware ?? null);
   const progress = useApp((s) => s.view.firmwareProgress);
@@ -456,10 +474,17 @@ export function FirmwareView() {
       title="Firmware"
       meta={
         <span className="chips">
+          {/* mode is where the source came from ("compiled" = generated for this board), not whether a binary exists;
+              saying "Compiled" next to "compile skipped" contradicted itself. */}
           <Badge tone="accent" title={fw.mode_reason ?? undefined}>
-            {mode === "prebuilt" ? "Prebuilt" : mode === "compiled" ? "Compiled" : "unknown"}
+            {mode === "prebuilt" ? "Prebuilt" : mode === "compiled" ? "Generated source" : "unknown"}
           </Badge>
-          <Badge tone={compile === "ok" ? "ok" : compile === "failed" ? "fail" : compile === "running" ? "accent" : "muted"}>compile {compile}</Badge>
+          <Badge
+            tone={compile === "ok" ? "ok" : compile === "failed" ? "fail" : compile === "running" ? "accent" : compile === "skipped" ? "warn" : "muted"}
+            title={fw.compile.message ?? undefined}
+          >
+            {COMPILE_LABEL[compile]}
+          </Badge>
         </span>
       }
     >

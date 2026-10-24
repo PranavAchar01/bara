@@ -3,20 +3,29 @@ import { useApp } from "./state/store";
 import { ConnectionBanner, EngineNotice, FileHeader, TopBar } from "./components/TopBar";
 import { ExampleChips, PromptBar } from "./components/PromptBar";
 import { StepPlayer } from "./components/LeftColumn";
-import { EditStatus, EventLog, FailureCard, LatencyHUD, Toast, WarningBanner } from "./components/Status";
+import { BuildProgress, EditStatus, EventLog, FailureCard, LatencyHUD, Toast, WarningBanner } from "./components/Status";
 import { PartsList, RightColumn } from "./components/RightColumn";
 import { AddPartPicker, ConnectDialog, PartInspector, ResizePanel, SwapDrawer } from "./components/Overlays";
+import { FocusCard, FocusExit } from "./components/FocusCard";
+import { bindVoiceKeys } from "./voice/voice";
+import { Library } from "./components/Library";
+import { startAutosave } from "./library/autosave";
 import { Viewport3D } from "./three/Viewport3D";
 import { BotLab } from "./bot/BotLab";
 import { AgentStage } from "./bot/AgentStage";
 import { Explainer } from "./bot/Explainer";
 import { CandidateFlyby } from "./bot/CandidateFlyby";
+import { SimView } from "./sim/SimView";
+import { useSim } from "./sim/simStore";
 
 function useKeys() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
+      const inField = !!t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable);
+      // Esc from a field (the prompt, the explode slider) leaves the field and steps back as usual
+      if (inField && e.key === "Escape") t.blur();
+      else if (inField) return;
       const tab = e.altKey && !e.metaKey && !e.ctrlKey ? ({ Digit1: "design", Digit2: "build", Digit3: "code" } as const)[e.code as "Digit1"] : undefined;
       if (tab) {
         e.preventDefault();
@@ -25,7 +34,13 @@ function useKeys() {
       }
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === "l" || e.key === "L") useApp.setState((s) => ({ logOpen: !s.logOpen }));
-      if (e.key === "Escape") useApp.setState({ overlay: null, moving: null, inspectPartId: null });
+      // Esc steps back one level: out of a drawer opened from focus, then out of focus itself
+      if (e.key === "Escape")
+        useApp.setState((s) =>
+          s.focusKey && s.overlay !== "focus"
+            ? { overlay: "focus", moving: null, inspectPartId: null }
+            : { overlay: null, moving: null, inspectPartId: null, focusKey: null, selection: s.focusKey ? null : s.selection },
+        );
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -36,6 +51,7 @@ function Home() {
   const health = useApp((s) => s.health);
   return (
     <main className="home">
+      <div className="home-hero">
       <div className="home-inner">
         <h1>Describe a device. It gets built from open hardware.</h1>
         <p className="muted">
@@ -50,6 +66,8 @@ function Home() {
           </p>
         )}
       </div>
+      </div>
+      <Library />
     </main>
   );
 }
@@ -58,6 +76,8 @@ function RightOverlay() {
   const overlay = useApp((s) => s.overlay);
   const selection = useApp((s) => s.selection);
   const inspectPartId = useApp((s) => s.inspectPartId);
+  const focusKey = useApp((s) => s.focusKey);
+  if (overlay === "focus" && focusKey) return <FocusCard />;
   if (overlay === "inspector" && (selection || inspectPartId)) return <PartInspector />;
   if (overlay === "swap" && selection) return <SwapDrawer />;
   if (overlay === "resize") return <ResizePanel />;
@@ -76,6 +96,7 @@ function Workspace() {
       <section className="centre">
         <Viewport3D />
         <div className="centre-top">
+          <BuildProgress />
           <WarningBanner />
         </div>
         <LatencyHUD />
@@ -83,6 +104,7 @@ function Workspace() {
           <FailureCard />
         </div>
         <div className="centre-bottom">
+          <FocusExit />
           <EditStatus />
           <PromptBar docked />
         </div>
@@ -109,7 +131,11 @@ export function App() {
 
 function Main() {
   useKeys();
+  useEffect(() => bindVoiceKeys(), []);
+  useEffect(() => startAutosave(), []);
   const screen = useApp((s) => s.screen);
+  const simOpen = useSim((s) => s.open) && screen === "workspace";
+  if (simOpen) return <SimView />;
   return (
     <div className="app">
       {screen === "home" && <TopBar />}

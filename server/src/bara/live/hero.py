@@ -173,6 +173,36 @@ def _png(rgb: np.ndarray) -> bytes:
     )
 
 
+def _cluster(verts: np.ndarray, tris: np.ndarray, cell: float) -> tuple[np.ndarray, np.ndarray]:
+    """Merge the vertices in each grid cell and drop the triangles that collapse: fewer
+    triangles over the same closed surface (skipping triangles would leave holes)."""
+    keys = np.floor(verts / cell).astype(np.int64)
+    _, inv, counts = np.unique(keys, axis=0, return_inverse=True, return_counts=True)
+    inv = inv.ravel()
+    merged = np.zeros((len(counts), 3))
+    np.add.at(merged, inv, verts)
+    merged /= counts[:, None]
+    t = inv[tris]
+    keep = (t[:, 0] != t[:, 1]) & (t[:, 1] != t[:, 2]) & (t[:, 0] != t[:, 2])
+    t = t[keep]
+    first = np.unique(np.sort(t, axis=1), axis=0, return_index=True)[1]
+    return merged, t[np.sort(first)]
+
+
+def _within_budget(meshes: list[Mesh]) -> list[Mesh]:
+    """The meshes, clustered on a common grid coarse enough to hold MAX_TRIS triangles."""
+    total = sum(len(t) for _, t, _ in meshes)
+    if total <= MAX_TRIS:
+        return meshes
+    pts = np.vstack([v for v, _, _ in meshes])
+    cell = float(np.linalg.norm(pts.max(axis=0) - pts.min(axis=0))) / 2000.0
+    out = meshes
+    while sum(len(t) for _, t, _ in out) > MAX_TRIS:
+        out = [(*_cluster(v, t, cell), rgb) for v, t, rgb in meshes]
+        cell *= 1.5
+    return out
+
+
 def render(
     meshes: list[Mesh],
     eye: tuple[float, float, float],
@@ -196,11 +226,7 @@ def render(
     zbuf = np.full((size, size), np.inf)
     key = np.array([-0.45, -0.55, 0.7])
     key /= np.linalg.norm(key)
-    budget = MAX_TRIS
-    for verts, tris, rgb in meshes:
-        if len(tris) > budget:
-            tris = tris[:: int(np.ceil(len(tris) / max(budget, 1)))]
-        budget = max(0, budget - len(tris))
+    for verts, tris, rgb in _within_budget(meshes):
         rel = verts - eye_v
         cam = np.c_[rel @ right, rel @ up, rel @ fwd]
         ok = cam[:, 2] > 1.0
@@ -214,7 +240,8 @@ def render(
         flip = (nrm * to_eye).sum(axis=1) < 0
         nrm[flip] *= -1
         shade = 0.38 + 0.52 * np.clip(nrm @ key, 0, 1) + 0.1 * np.clip(nrm @ -fwd, 0, 1)
-        base = np.array(rgb) * 255.0
+        # dark materials (graphite keys, glass) lifted so their shape reads on a grey ground
+        base = (0.22 + 0.78 * np.array(rgb)) * 255.0
         for t in range(len(tris)):
             a, b, c = tris[t]
             if not (ok[a] and ok[b] and ok[c]) or ln[t] < 1e-9:

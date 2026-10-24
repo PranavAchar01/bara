@@ -18,8 +18,10 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from typing import Any
 
+from bara.kicad_generated import GLB_URL, SERVER, KicadIndex, glb_stem
 from bara.live import completeness as cp
 from bara.live.ask import ask_json
+from bara.live.brief import DISPLAY_TYPES
 from bara.live.catalog_source import (
     PartSource,
     card_for,
@@ -32,7 +34,13 @@ from bara.live.catalog_source import (
     part_functions,
 )
 from bara.live.completeness import Completeness, Need
-from bara.live.fetch import BUDGET_PER_NEED_S, TOTAL_BUDGET_S, Resolver, as_overlay
+from bara.live.fetch import (
+    BUDGET_PER_NEED_S,
+    TOTAL_BUDGET_S,
+    Resolver,
+    as_overlay,
+    stock_primitive,
+)
 from bara.live.layout import PITCH_MM, KeyboardPlan, feature_sides, pin_need, stab_size
 from bara.live.llm_json import call_json
 
@@ -41,6 +49,7 @@ log = logging.getLogger(__name__)
 Emit = Callable[..., dict[str, Any]]
 
 MAX_SURVIVORS = 8
+ASSETS_DIR = SERVER / "data" / "assets"
 HALF_GAP_MM = 40.0  # inner-edge gap between split halves in the first placement guess
 
 # function id -> (slot id, label, instance prefix, feature kind for side assignment)
@@ -74,6 +83,34 @@ PERIPHERAL_KIND = {
     "trackball": "trackball",
 }
 COMPAT_PARAMS = ("family", "stem", "form_factor", "chemistry")
+
+
+# LCSC category in the product URL: a driver, controller or bridge chip, never a panel
+DRIVER_CATEGORY = re.compile(
+    r"lcsc\.com/product-detail/[^/_]*(Driver|Controller|Interface|Bridge)", re.I
+)
+
+
+def _model_from_footprint(part: dict[str, Any], assets: list[dict[str, Any]]) -> None:
+    """A catalog model that was never made (no file on disk) is replaced by the 3D model of
+    the part's own KiCad footprint, converted on first request, so the part is drawn as
+    itself instead of as a box."""
+    fp = str(part.get("footprint") or "")
+    if ":" not in fp:
+        return
+    for a in assets:
+        url = str(a.get("url") or "")
+        if a.get("kind") != "glb" or not url.startswith("/assets/") or "/kicad_gen/" in url:
+            continue
+        if a.get("status") != "missing" and (ASSETS_DIR / url.removeprefix("/assets/")).is_file():
+            continue
+        index = KicadIndex.open()
+        lender = index.model_footprint(fp) if index is not None else None
+        if lender is None:
+            return
+        a["url"] = f"{GLB_URL}/{glb_stem(lender)}.glb"
+        a["origin"] = "generated"
+        a["status"] = "pending"
 
 
 @dataclass
@@ -262,7 +299,15 @@ def derive_slots(
                 feature=feature,
             )
         )
+    seen: list[Any] = []
     for need in comp.needs.values() if comp else []:
+        if any(
+            n.function_id == need.function_id
+            and (n.key.startswith(need.key) or need.key.startswith(n.key))
+            for n in seen
+        ):  # one block named twice ("scroll_wheel" and "scroll_wheel_encoder_with...")
+            continue
+        seen.append(need)
         slots.append(
             Slot(
                 slot_id=need.key,
@@ -274,6 +319,13 @@ def derive_slots(
                 need=need,
             )
         )
+    ids: set[str] = set()
+    for slot in slots:  # ten-letter prefixes can collide; every instance id is unique
+        for inst in slot.instances:
+            base, n = inst.instance_id, 2
+            while inst.instance_id in ids:
+                inst.instance_id, n = f"{base}{n}", n + 1
+            ids.add(inst.instance_id)
     rank = {
         "charger": 84,
         "switches": 0,
@@ -526,6 +578,13 @@ class Composer:
                 )
                 continue
             if facet not in present or facet in ("split", "key_count"):
+                continue
+            # how the device is powered filters the parts that power it, not a speaker module
+            if facet == "power_source" and not slot.function_id.startswith("power."):
+                continue
+            # the screen type names the device's screen; an indicator LED is no screen
+            screen = slot.function_id.removeprefix("display.")
+            if facet == "display_type" and screen not in DISPLAY_TYPES:
                 continue
             op_ = "eq" if op in ("has", "in") else op
             filters.append(
@@ -917,6 +976,7 @@ class Composer:
                 a["origin"] = "catalog"
             if a.get("status") not in ("ready", "pending", "missing", "unknown"):
                 a["status"] = "pending"
+        _model_from_footprint(part, assets)
         card = card_for(part)
         if not str(card.get("display_name") or "").strip():
             card["display_name"] = str(part.get("mpn") or part.get("part_id") or slot.label)[:120]
@@ -1052,14 +1112,15 @@ class Composer:
 
     async def run(self, emit: Emit, progress: Callable[[str, float | None], None]) -> ComposeResult:
         n_slots = len(self.slots)
+        # every block's spec check at once: each is independent of the picks that follow
+        ahead = [s for s in self.slots if s.need is not None and s.need.requirement]
+        await asyncio.gather(*(self.vet(s, self.base(s)) for s in ahead))
         for step, slot in enumerate(self.slots, start=1):
             cover = self.covering_slot(slot)
             if cover is not None:
                 self.mark_covered(slot, cover, step, emit)
                 continue
             slot.state = "narrowing"
-            if slot.need is not None and slot.need.requirement:
-                await self.vet(slot, self.base(slot))
             if slot.need is not None and not self.base(slot):
                 await self.resolve_missing(slot, emit)
             if slot.need is not None and slot.criticality != "optional" and not self.base(slot):
@@ -1253,6 +1314,11 @@ class Composer:
     async def vet(self, slot: Slot, parts: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Parts that meet the block's key numbers (size, connector standard, rating). The ones
         that do not are rejected for good, so the next lookup moves on."""
+        if slot.function_id.startswith("display.") and slot.function_id != "display.indicator_led":
+            chips = [p for p in parts if DRIVER_CATEGORY.search(str(p.get("datasheet") or ""))]
+            for p in chips:  # a panel's driver chip is not the panel
+                self.resolver.rejected.add(p["part_id"])
+            parts = [p for p in parts if p not in chips]
         need = slot.need
         if need is None or not need.requirement or not parts:
             return parts
@@ -1276,6 +1342,7 @@ class Composer:
             f"Product block: {need.label}\nRequirement: {need.requirement}\nCandidates:\n{lines}",
             schema,
             name="spec_check",
+            fast=True,
             timeout_s=40,
         )
         if data is None:
@@ -1354,6 +1421,7 @@ class Composer:
             f"Why they failed: {why or 'no match'}",
             schema,
             name="relax_names",
+            fast=True,
             timeout_s=45,
         )
         if data is None:
@@ -1388,16 +1456,36 @@ class Composer:
         the same with relaxed names (other drivers, library families) before it fails."""
         if slot.need is None:
             return
-        part, via = await self._find(slot)
+        part, via = None, ""
+        if stock_primitive(slot.need):
+            # a plain LED, button or fuse: the KiCad library part, not an LCSC download
+            part = self.resolver.composed(slot.need)
+            if part is not None and not await self.vet(slot, [part]):
+                part = None
+            via = f"a composed {part['composed']} (KiCad library)" if part else ""
+        if part is None:
+            part, via = await self._find(slot)
         for _ in range(self.RELAX_ROUNDS):
             if part is not None or not await self.relax(slot):
                 break
             part, via = await self._find(slot)
         if part is None:
             part = self.resolver.composed(slot.need)
-            if part is None or not await self.vet(slot, [part]):
+            if part is not None and not await self.vet(slot, [part]):
+                part = None
+            via = f"a composed {part['composed']} (KiCad library)" if part else ""
+        if part is None:
+            # nothing by name: a catalog part serving the function, spec-checked (a near miss
+            # is still taken later) beats a device missing it
+            pool = [
+                p
+                for p in self.source.query(function=slot.function_id, limit=500)
+                if p["part_id"] not in self.resolver.rejected
+            ]
+            kept = await self.vet(slot, pool)
+            if not kept:
                 return
-            via = f"a composed {part['composed']} (KiCad library)"
+            part, via = kept[0], "the catalog, by function"
         self.extra.setdefault(slot.slot_id, []).append(part)
         emit(
             "warning",

@@ -287,3 +287,27 @@ def test_a_desk_facing_sensor_looks_through_the_floor_and_a_knob_fits_round(tmp_
 
     knob = Feature("M8", "knob", 0.0, 0.0, 0.0, "top", 10.0, 20.0, 20.0)
     assert _feature_box(knob, 1.6).volume() < 0.8 * 20 * 20 * 10  # a disc, not its box
+
+
+@pytest.mark.parametrize("body", [0.0, 30.0])
+def test_a_tall_hidden_part_stays_under_the_skin(tmp_path, monkeypatch, body):
+    monkeypatch.setenv("BARA_DATA_DIR", str(tmp_path))
+    board = {
+        "board_id": "pcb_main",
+        "side": "none",
+        "outline": [[0, 0], [60, 0], [60, 90], [0, 90]],
+        "thickness_mm": 1.6,
+        "placements": [
+            {"ref": "C9", "role": "capacitor", "label": "470uF bulk electrolytic capacitor",
+             "x_mm": 30.0, "y_mm": 45.0, "rot_deg": 0, "side": "top", "on_pcb": True,
+             "touch": False, "height_mm": 9.0, "size_mm": [8.0, 8.0]},
+        ],
+    }  # fmt: skip
+    brief = {"body_thickness_mm": body} if body else {}
+    rep = enclose_report(board, [], brief)
+    from bara.geometry.validate import _first_hit
+
+    # straight down from above the case, the skin is met before the part's top
+    origin = np.array([30.0, 45.0, 60.0])
+    hit = _first_hit(rep.bezel, origin, np.array([0, 0, -1.0]), 80)
+    assert hit is not None and origin[2] - hit > 1.6 + 9.0, hit

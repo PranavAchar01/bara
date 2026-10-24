@@ -221,6 +221,7 @@ async def _name_the_parts(prompt: str, data: dict[str, Any], note: str) -> str:
         f"Product: {prompt}\nBlocks:\n{lines}",
         out_schema,
         name="block_names",
+        fast=True,
         timeout_s=45,
     )
     if got is None:
