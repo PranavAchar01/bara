@@ -120,7 +120,13 @@ def _fit_holes(board, fp) -> None:
     ds = board.GetDesignSettings()
     min_hole, ring = ds.m_MinThroughDrill, ds.m_ViasMinAnnularWidth
     pth = [p for p in fp.Pads() if p.GetAttribute() == pcbnew.PAD_ATTRIB_PTH]
-    vias = [p for p in pth if not p.GetNumber() and min(p.GetDrillSize()) < min_hole]
+    # a thermal via is unnumbered or carries its exposed pad's number (an SMD pad's)
+    smd = {p.GetNumber() for p in fp.Pads() if p.GetAttribute() == pcbnew.PAD_ATTRIB_SMD}
+    vias = [
+        p
+        for p in pth
+        if (not p.GetNumber() or p.GetNumber() in smd) and min(p.GetDrillSize()) < min_hole
+    ]
     for pad in vias:
         fp.Remove(pad)
     # a removed pad freed by Python corrupts the footprint's pad list; keep it alive
