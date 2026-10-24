@@ -86,6 +86,9 @@ def power_net(name: str) -> str | None:
     return None
 
 
+FLOOR_SENSOR = re.compile(r"\bpmw|\bpaw3|optical[ _]?(mouse )?sensor")
+
+
 def _role(record: dict[str, Any]) -> str:
     fns = [f["function_id"] for f in record.get("functions", [])]
     primary = next((f["function_id"] for f in record.get("functions", []) if f.get("primary")), "")
@@ -206,6 +209,9 @@ def plan_device_board(
             it.meta["slot_id"] = part.get("slot_id")
             it.meta["touch"] = part.get("slot_id") in touch_slots
             it.meta["module"] = record.get("kind") == "module"
+            # an optical tracking sensor reads the desk, so it sits on the board's underside
+            name = f"{part['part_id']} {it.label}".lower()
+            it.meta["floor_sensor"] = bool(FLOOR_SENSOR.search(name))
             items.append(it)
     if skipped:
         log.append("no KiCad footprint, kept off the board: " + ", ".join(skipped[:6]))
@@ -932,6 +938,8 @@ def place_in_form(
             it.side = "bottom" if tgt[2] == "back" else "top"
         else:
             targets[id(it)] = hub
+        if it.meta.get("floor_sensor") and not any(o.role == "trackball" for o in on_board):
+            it.side = "bottom"
         if id(it) in rim:
             targets[id(it)] = rim[id(it)]
         gaps[id(it)] = PASSIVE_GAP if it.meta.get("near") is not None else PART_GAP
