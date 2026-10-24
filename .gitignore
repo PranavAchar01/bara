@@ -11,3 +11,4 @@ __pycache__/
 server/data/cache/
 e2e/logs/
 e2e/screenshots/
+.vercel

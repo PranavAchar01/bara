@@ -1,0 +1,6 @@
+{
+  "framework": "vite",
+  "installCommand": "pnpm install",
+  "buildCommand": "VITE_MOCK=1 pnpm build",
+  "outputDirectory": "dist"
+}
