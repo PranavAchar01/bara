@@ -18,6 +18,13 @@ KICAD_SHARE = KICAD_APP / "Contents/SharedSupport"
 KICAD_PYTHON = KICAD_APP / "Contents/Frameworks/Python.framework/Versions/Current/bin/python3"
 SOURCES = Path(os.environ.get("BARA_SOURCES", Path.home() / "helloworld/bara-sources"))
 LIBS = SOURCES / "kicad-libs"
+# Parts fetched from LCSC: easyeda2kicad writes each one's footprint, symbol and model
+# under its own folder, <C number>/<C number>.kicad_mod (live/fetch.py).
+FETCHED_SRC = Path(
+    os.environ.get(
+        "BARA_FETCHED_SRC", Path(__file__).resolve().parents[3] / "data/catalog/fetched/src"
+    )
+)
 
 # Library roots: name -> (footprint dir, 3D model dirs, source url, licence, commit file or None).
 LIBRARIES: dict[str, dict] = {
@@ -48,6 +55,12 @@ LIBRARIES: dict[str, dict] = {
         "models": [],
         "url": "https://github.com/sadekbaroudi/fingerpunch",
         "licence": "MIT",
+    },
+    "easyeda": {
+        "footprints": None,  # one folder per part, see find_footprint
+        "models": [FETCHED_SRC],
+        "url": "https://www.lcsc.com",
+        "licence": "LCSC/EasyEDA part library (via easyeda2kicad)",
     },
     "garden36": {
         "footprints": None,
@@ -189,7 +202,9 @@ def _layer_of(item: list) -> str:
 @lru_cache(maxsize=256)
 def load_footprint(lib: str, pretty: str, name: str) -> FootprintInfo:
     meta = LIBRARIES[lib]
-    lib_dir = Path(meta["footprints"]) / f"{pretty}.pretty"
+    lib_dir = (
+        FETCHED_SRC / name if lib == "easyeda" else Path(meta["footprints"]) / f"{pretty}.pretty"
+    )
     path = lib_dir / f"{name}.kicad_mod"
     tree = parse_sexpr(path.read_text())
     pads: list[Pad] = []
@@ -237,6 +252,10 @@ def load_footprint(lib: str, pretty: str, name: str) -> FootprintInfo:
             if xyz:
                 xf[key] = _floats(xyz, 3)
         xforms[str(m[1])] = xf
+    step = sorted(lib_dir.glob(f"{name}.st*p")) if lib == "easyeda" else []
+    if step and models:  # fetch.py keeps the part's model beside it as <C number>.step
+        xforms[str(step[0])] = xforms.get(models[0], {})
+        models = [str(step[0])]
     descr_node = _child(tree, "descr")
     return FootprintInfo(
         lib=lib,
@@ -266,6 +285,9 @@ def find_footprint(lib_id: str) -> FootprintInfo | None:
     if ":" not in lib_id:
         return None
     pretty, name = lib_id.split(":", 1)
+    if pretty == "easyeda":
+        found = (FETCHED_SRC / name / f"{name}.kicad_mod").exists()
+        return load_footprint("easyeda", pretty, name) if found else None
     for lib, meta in LIBRARIES.items():
         root = meta.get("footprints")
         if root and (Path(root) / f"{pretty}.pretty" / f"{name}.kicad_mod").exists():
