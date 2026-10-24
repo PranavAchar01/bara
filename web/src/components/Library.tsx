@@ -1,7 +1,7 @@
 // Your builds, at the bottom of Home (Figma 21): every build made in this browser, newest first,
 // with its canvas snapshot. Click to reopen; × (twice) to remove; type to filter.
 import { useEffect, useMemo, useState } from "react";
-import { openSaved } from "../net/client";
+import { openLibraryBuild, openSaved } from "../net/client";
 import { showToast } from "../state/store";
 import { deleteEntry, loadEntry, useLibrary, type LibraryCard } from "../library/library";
 
@@ -32,6 +32,12 @@ function BuildCard(props: { card: LibraryCard; now: number }) {
   const open = async () => {
     setOpening(true);
     const entry = await loadEntry(card.build_id).catch(() => null);
+    if (!entry && card.remote) {
+      // not saved in this browser: replay the engine's stored events
+      await openLibraryBuild(card.build_id);
+      setOpening(false);
+      return;
+    }
     setOpening(false);
     if (!entry) {
       showToast("That build couldn't be read from this browser's storage.");
@@ -67,7 +73,7 @@ function BuildCard(props: { card: LibraryCard; now: number }) {
         }}
         onBlur={() => setConfirm(false)}
         aria-label={confirm ? `Remove “${card.prompt}” for good` : `Remove “${card.prompt}”`}
-        title={confirm ? "Click again to remove it" : "Remove from your builds"}
+        title={confirm ? (card.remote ? "Click again to delete it for everyone" : "Click again to remove it") : "Remove from the library"}
       >
         {confirm ? "Remove?" : "×"}
       </button>
@@ -114,7 +120,7 @@ export function Library() {
           ))}
         </ul>
       )}
-      {cards.length > 0 && <p className="lib-note">Saved in this browser as you build. A build opens right away; changing it works while the engine still has it.</p>}
+      {cards.length > 0 && <p className="lib-note">Finished builds are kept on the engine, so everyone who opens this site sees them; deleting one removes it for everyone. A build opens right away; changing it works while the engine still has it.</p>}
     </section>
   );
 }

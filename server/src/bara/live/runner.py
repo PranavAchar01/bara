@@ -237,6 +237,7 @@ class LiveRunner:
         if spec_brief is None:
             return
         spec, brief = spec_brief
+        run.device = str(brief.get("device") or "")
         plan = plan_keyboard(brief)
         await self.reuse(run, spec, brief)
         result = await self.compose(run, spec, brief, plan)
