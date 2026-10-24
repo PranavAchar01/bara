@@ -440,6 +440,12 @@ class LiveRunner:
         )
         st.done()
 
+    def _write_chain(self, run: BuildRun, record: dict[str, Any]) -> None:
+        """Keep the jobs -> functions -> blocks -> parts chain next to the build's artefacts."""
+        out = self.settings.data_dir / "cache" / "chains"
+        out.mkdir(parents=True, exist_ok=True)
+        (out / f"{run.build_id}.json").write_text(json.dumps(record, indent=1))
+
     # ---- compose -------------------------------------------------------------------------
     async def compose(
         self,
@@ -473,6 +479,15 @@ class LiveRunner:
                 )
                 st.emit("layout.added", {"layout": plan.layout_json(half, lid, name)})
         result = await composer.run(st.emit, st.progress)
+        record = blocks_mod.chain(blocks, composer.slots, composer.comp.dropped)
+        run.use_case_chain = record  # type: ignore[attr-defined]
+        uc = record["use_case"] or {}
+        jobs = "; ".join(uc.get("jobs") or [])
+        unresolved = sum(1 for k in record["links"] if k["outcome"].startswith("UNRESOLVED"))
+        st.progress(
+            f"use case: {jobs[:90]} -> {len(record['links'])} blocks, {unresolved} unresolved", None
+        )
+        self._write_chain(run, record)
         checks = composer.checks()
         if checks:
             st.emit("check.result", {"results": checks})

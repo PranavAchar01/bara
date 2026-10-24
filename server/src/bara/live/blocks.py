@@ -14,8 +14,15 @@ from bara.live.ask import ask_json
 
 CATEGORIES = ["input", "sensing", "compute", "comms", "power", "output", "mechanical"]
 
-SYSTEM = """You are the electronics lead on a hardware design tool. Given a device request, list
-the function block diagram of a real, working product of that kind.
+SYSTEM = """You are the electronics lead on a hardware design tool. Given a device request, work
+from the use case to the parts, then list the function block diagram of a real, working product.
+
+First understand the use case (use_case): the jobs the person does with it (what they want to
+get done, in plain verbs), the environment it lives in, its power source, and how it is held,
+worn or mounted. Then derive every function those jobs require. Each block carries `why`: the
+job from use_case.jobs it serves, so every part traces back to something the person does. A job
+with no ready-made part still gets a block (name the closest real part or describe the
+function); never skip a job because no part comes to mind.
 
 Rules:
 - One block per distinct job, grouped by category: input, sensing, compute, comms, power,
@@ -65,8 +72,10 @@ def schema(function_ids: list[str]) -> dict[str, Any]:
             "kicad_names",
             "touchpoint",
             "requirement",
+            "why",
         ],
         "properties": {
+            "why": {"type": "string"},
             "category": {"type": "string", "enum": CATEGORIES},
             "function_id": {"type": "string", "enum": function_ids},
             "label": {"type": "string"},
@@ -86,9 +95,21 @@ def schema(function_ids: list[str]) -> dict[str, Any]:
             "portable",
             "avg_current_ma",
             "shell_g",
+            "use_case",
             "blocks",
         ],
         "properties": {
+            "use_case": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["jobs", "environment", "power", "handling"],
+                "properties": {
+                    "jobs": {"type": "array", "items": {"type": "string"}},
+                    "environment": {"type": "string"},
+                    "power": {"type": "string"},
+                    "handling": {"type": "string"},
+                },
+            },
             "device_class": {"type": "string"},
             "mains_input": {"type": "boolean"},
             "portable": {"type": "boolean"},
@@ -205,3 +226,34 @@ async def _name_the_parts(prompt: str, data: dict[str, Any], note: str) -> str:
             blk["search_terms"] = [t for t in row["search_terms"] if t][:3]
             blk["kicad_names"] = [t for t in row["kicad_names"] if t][:3]
     return note
+
+
+def chain(
+    blocks: dict[str, Any] | None, slots: list[Any], dropped: list[dict[str, str]]
+) -> dict[str, Any]:
+    """The audit trail: use case -> jobs -> functions -> blocks -> parts, one link per slot."""
+    links = []
+    for slot in slots:
+        need = slot.need
+        if need is None:
+            continue
+        if slot.chosen is not None:
+            outcome = f"part {slot.chosen.get('part_id')}"
+        elif slot.covered_by:
+            outcome = f"covered by {slot.covered_by}"
+        else:
+            outcome = f"UNRESOLVED: {slot.unresolved or 'no part'}"
+        links.append(
+            {
+                "job": need.why,
+                "function_id": need.function_id,
+                "block": need.label,
+                "quantity": max(1, slot.quantity),
+                "outcome": outcome,
+            }
+        )
+    return {
+        "use_case": (blocks or {}).get("use_case"),
+        "links": links,
+        "dropped": dropped,
+    }

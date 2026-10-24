@@ -731,3 +731,36 @@ def test_mating_parts_share_a_spot_but_strangers_still_collide() -> None:
     assert _mates(sw, stab)
     assert not _mates(feat("SW2", "switch", 30.0, 14.0), stab)  # another switch under it
     assert not _mates(sw, feat("BT1", "battery", 0.0, 20.0))
+
+
+def test_every_part_traces_to_a_user_job_and_dropped_blocks_are_logged() -> None:
+    from bara.live import blocks as bl
+    from bara.live.compose import derive_slots
+
+    spec: dict[str, Any] = {"functions": []}
+    blocks = {
+        "device_class": "gadget",
+        "mains_input": False,
+        "portable": True,
+        "avg_current_ma": 10,
+        "shell_g": 5,
+        "use_case": {
+            "jobs": ["see the time at night"],
+            "environment": "bedside",
+            "power": "battery",
+            "handling": "sits on a table",
+        },
+        "blocks": [
+            block("input.button", "Set button", 2, why="set the time"),
+            block("comms.ble", "Radio", 1, why="sync the time", category="comms"),
+        ],
+    }
+    comp = cp.apply(spec, {}, None, blocks)
+    slots = derive_slots(spec, {}, None, comp)
+    got = bl.chain(blocks, slots, comp.dropped)
+    assert got["use_case"]["jobs"] == ["see the time at night"]
+    link = next(k for k in got["links"] if k["function_id"] == "input.button")
+    assert link["job"] == "set the time" and link["quantity"] == 2
+    assert link["outcome"].startswith("UNRESOLVED")  # nothing chosen yet, never silently ok
+    assert [d["label"] for d in got["dropped"]] == ["Radio"]
+    assert got["dropped"][0]["why"] == "sync the time"
