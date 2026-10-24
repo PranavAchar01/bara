@@ -705,6 +705,7 @@ class LiveRunner:
             gb["product_form"] = product.json()
             brief["body_thickness_mm"] = product.thickness_mm
             brief["edge_thickness_mm"] = product.edge_thickness_mm
+            brief["anchors"] = product.anchors
         board, err = await asyncio.to_thread(A.plan_board, gb, parts, run.build_id)
         if product is not None and board is not None:
             self._form_fit_check(run, st, board, product)
