@@ -21,6 +21,7 @@ from typing import Any
 from bara.catalog import Catalog
 from bara.config import Settings
 from bara.edits import EditEngine
+from bara.library import Library
 from bara.reducer import apply_event, new_build
 from bara.router import Route, Router, normalize
 from bara.util import envelope, error_obj, new_build_id, now_ts
@@ -59,6 +60,9 @@ class BuildRun:
     edit_counter: int = 0
     assumption_warnings_sent: bool = False
     started_at: float = field(default_factory=time.monotonic)
+    # Library hook: set for live builds so every emitted event is kept on disk.
+    recorder: Any = None
+    device: str = ""
 
     @property
     def oldest_seq(self) -> int:
@@ -92,6 +96,11 @@ class BuildRun:
         elif msg_type in TERMINAL:
             self.terminal = msg_type
         self.log.append(msg)
+        if self.recorder is not None:
+            try:
+                self.recorder.record(self, msg)
+            except OSError:
+                log.exception("library write failed for %s", self.build_id)
         if len(self.log) > self.keep:
             del self.log[: len(self.log) - self.keep]
         for send in list(self.subscribers.values()):
@@ -132,6 +141,7 @@ class Engine:
         self.router = router
         self.edits = edits
         self.builds: dict[str, BuildRun] = {}
+        self.library = Library(settings.data_dir / "library", settings.assets_dir)
         # Live 8-stage runner for BARA_MOCK=0 (bara.live.runner.LiveRunner), set by services.
         self.live: Any = None
         kw = router.keywords
@@ -182,6 +192,7 @@ class Engine:
                 and not self.settings.mock
                 and not run.options.get("mock_fixture")
             ):
+                run.recorder = self.library
                 await self.live.run(run)
             else:
                 await self._replay(run)

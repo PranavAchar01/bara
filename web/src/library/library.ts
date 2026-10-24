@@ -5,6 +5,8 @@
 import { create } from "zustand";
 import type { Build } from "../spec/types";
 import type { ViewState } from "../state/view";
+import { deleteLibraryBuild, fetchLibrary, type StoredBuild } from "../net/client";
+import { serverUrl } from "../net/mode";
 
 export interface LibraryCard {
   build_id: string;
@@ -18,6 +20,8 @@ export interface LibraryCard {
   /** JPEG data URL of the canvas, or null before the 3D view has drawn the build. */
   thumb: string | null;
   mock: boolean;
+  /** Listed from the engine's shared library, so it may have no copy in this browser. */
+  remote?: boolean;
 }
 
 export interface LibraryEntry {
@@ -58,16 +62,46 @@ export const useLibrary = create<{ cards: LibraryCard[]; ready: boolean; unavail
   unavailable: false,
 }));
 
-/** Reloads the list, newest first. */
+/** A card for a build stored on the engine, which every visitor of the site sees. */
+export function remoteCard(b: StoredBuild): LibraryCard {
+  const t = b.created_at ? Date.parse(b.created_at) : NaN;
+  const at = Number.isNaN(t) ? 0 : t;
+  const device = b.device ? b.device.charAt(0).toUpperCase() + b.device.slice(1) : "";
+  return {
+    build_id: b.build_id,
+    prompt: b.prompt,
+    summary: device,
+    status: b.status === "done" ? "done" : "failed",
+    parts: 0,
+    createdAt: at,
+    updatedAt: at,
+    thumb: b.hero_url ? serverUrl(b.hero_url) : null,
+    mock: false,
+    remote: true,
+  };
+}
+
+/** Local cards plus the engine's shared library; a build in both shows once, with the local card. */
+export function mergeCards(local: LibraryCard[], remote: StoredBuild[]): LibraryCard[] {
+  const have = new Map(local.map((c) => [c.build_id, c]));
+  const out = local.map((c) => {
+    const r = remote.find((x) => x.build_id === c.build_id);
+    return r ? { ...c, remote: true, thumb: c.thumb ?? (r.hero_url ? serverUrl(r.hero_url) : null) } : c;
+  });
+  for (const r of remote) if (!have.has(r.build_id)) out.push(remoteCard(r));
+  return out.sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+/** Reloads the list, newest first: this browser's builds and the engine's shared library. */
 export async function refreshLibrary(): Promise<void> {
+  const remote = await fetchLibrary().catch(() => []);
   try {
     const d = await db();
     const cards = await done(d.transaction(CARDS).objectStore(CARDS).getAll() as IDBRequest<LibraryCard[]>);
-    cards.sort((a, b) => b.updatedAt - a.updatedAt);
-    useLibrary.setState({ cards, ready: true, unavailable: false });
+    useLibrary.setState({ cards: mergeCards(cards, remote), ready: true, unavailable: false });
   } catch {
-    // private window or storage blocked: the library just stays empty
-    useLibrary.setState({ cards: [], ready: true, unavailable: true });
+    // private window or storage blocked: only the engine's shared builds are listed
+    useLibrary.setState({ cards: mergeCards([], remote), ready: true, unavailable: remote.length === 0 });
   }
 }
 
@@ -110,14 +144,21 @@ export async function loadEntry(buildId: string): Promise<LibraryEntry | null> {
   return card && saved ? { card, ...saved } : null;
 }
 
+/** Removes a build from this browser and from the engine's shared library (the engine's caches stay). */
 export async function deleteEntry(buildId: string): Promise<void> {
-  const d = await db();
-  const tx = d.transaction([CARDS, BUILDS], "readwrite");
-  tx.objectStore(CARDS).delete(buildId);
-  tx.objectStore(BUILDS).delete(buildId);
-  await new Promise<void>((resolve) => {
-    tx.oncomplete = () => resolve();
-  });
+  await deleteLibraryBuild(buildId);
+  try {
+    const d = await db();
+    const tx = d.transaction([CARDS, BUILDS], "readwrite");
+    tx.objectStore(CARDS).delete(buildId);
+    tx.objectStore(BUILDS).delete(buildId);
+    await new Promise<void>((resolve) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    });
+  } catch {
+    // storage blocked: nothing local to remove
+  }
   await refreshLibrary();
 }
 

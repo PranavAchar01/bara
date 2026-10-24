@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from bara import SERVER_VERSION, SPEC_VERSION, geometry, part_ask, voice
 from bara.edits import Reject
+from bara.library import BUILD_ID_RE
 from bara.llm import providers_configured
 from bara.services import Services
 from bara.util import error_obj, http_status
@@ -219,6 +220,23 @@ def build_router(svc: Services) -> APIRouter:
             },
             201,
         )
+
+    @api.get("/v1/library")
+    def library_list() -> JSONResponse:
+        return body({"builds": svc.engine.library.list()})
+
+    @api.get("/v1/library/{build_id}")
+    def library_get(build_id: str) -> JSONResponse:
+        entry = svc.engine.library.get(build_id) if BUILD_ID_RE.fullmatch(build_id) else None
+        if entry is None:
+            raise ApiError("E_NOT_FOUND", f"No stored build {build_id}.")
+        return body(entry)
+
+    @api.delete("/v1/library/{build_id}")
+    def library_delete(build_id: str) -> JSONResponse:
+        if not BUILD_ID_RE.fullmatch(build_id) or not svc.engine.library.delete(build_id):
+            raise ApiError("E_NOT_FOUND", f"No stored build {build_id}.")
+        return body({"deleted": build_id})
 
     @api.get("/v1/builds/{build_id}")
     def get_build(build_id: str) -> JSONResponse:

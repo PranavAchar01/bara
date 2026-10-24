@@ -6,7 +6,7 @@ import { authHeaders, withServer } from "./mode";
 
 export type RestResult<T> = { ok: true; status: number; body: T } | { ok: false; status: number; error: ErrorObject };
 
-export type Fetcher = (method: "GET" | "POST", path: string, body?: unknown) => Promise<{ status: number; body: unknown }>;
+export type Fetcher = (method: "GET" | "POST" | "DELETE", path: string, body?: unknown) => Promise<{ status: number; body: unknown }>;
 
 export const httpFetcher = (server: string | null): Fetcher => async (method, path, body) => {
   const res = await fetch(withServer(server, path), {
@@ -53,7 +53,7 @@ export class RestClient {
     this.fetcher = fetcher;
   }
 
-  async request<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<RestResult<T>> {
+  async request<T>(method: "GET" | "POST" | "DELETE", path: string, body?: unknown): Promise<RestResult<T>> {
     try {
       const res = await this.fetcher(method, path, body);
       if (res.status >= 400) {
@@ -77,11 +77,17 @@ export class RestClient {
   get<T>(path: string): Promise<RestResult<T>> {
     return this.request<T>("GET", path);
   }
+
+  delete<T>(path: string): Promise<RestResult<T>> {
+    return this.request<T>("DELETE", path);
+  }
 }
 
 export const paths = {
   health: () => "/v1/health",
   vocab: () => "/v1/vocab",
+  library: () => "/v1/library",
+  libraryBuild: (id: string) => `/v1/library/${encodeURIComponent(id)}`,
   build: (id: string) => `/v1/builds/${encodeURIComponent(id)}`,
   part: (partId: string) => `/v1/parts/${encodeURIComponent(partId)}`,
   parts: (q: string) => `/v1/parts${q ? `?q=${encodeURIComponent(q)}` : ""}`,
