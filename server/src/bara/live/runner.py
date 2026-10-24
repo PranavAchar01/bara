@@ -11,6 +11,7 @@ import asyncio
 import copy
 import json
 import logging
+import math
 import re
 import time
 from typing import TYPE_CHECKING, Any
@@ -136,6 +137,65 @@ def _question(round_no: int) -> dict[str, Any]:
         "missing_facets": ["function"],
         "timeout_ms": 60000,
     }
+
+
+def _euler_xyz(deg: list[float]) -> list[list[float]]:
+    """Rotation matrix for intrinsic XYZ Euler degrees (the viewer's convention)."""
+    x, y, z = (math.radians(v) for v in deg)
+    cx, sx, cy, sy, cz, sz = (
+        math.cos(x),
+        math.sin(x),
+        math.cos(y),
+        math.sin(y),
+        math.cos(z),
+        math.sin(z),
+    )
+    return [
+        [cy * cz, -cy * sz, sy],
+        [cx * sz + sx * sy * cz, cx * cz - sx * sy * sz, -sx * cy],
+        [sx * sz - cx * sy * cz, sx * cz + cx * sy * sz, cx * cy],
+    ]
+
+
+def _matmul(a: list[list[float]], b: list[list[float]]) -> list[list[float]]:
+    return [[sum(a[i][k] * b[k][j] for k in range(3)) for j in range(3)] for i in range(3)]
+
+
+def _xyz_degrees(m: list[list[float]]) -> list[float]:
+    y = math.asin(max(-1.0, min(1.0, m[0][2])))
+    if abs(m[0][2]) < 0.9999999:
+        x, z = math.atan2(-m[1][2], m[2][2]), math.atan2(-m[0][1], m[0][0])
+    else:
+        x, z = math.atan2(m[2][1], m[1][1]), 0.0
+    return [round(math.degrees(v), 3) for v in (x, y, z)]
+
+
+def _seat_on_footprints(board: dict[str, Any], parts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The routed board is where a part really sits: a single-element part with one footprint
+    moves onto that footprint's centre and turn, on the board's top face. Placed before routing,
+    parts otherwise float where the planner left them while the board shows them elsewhere."""
+    by_id: dict[str, list[dict[str, Any]]] = {}
+    for fp in board.get("footprints") or []:
+        if fp.get("instance_id") and fp.get("center_mm"):
+            by_id.setdefault(fp["instance_id"], []).append(fp)
+    pos = board.get("position_mm") or [0.0, 0.0, 0.0]
+    rb = _euler_xyz(board.get("rotation_deg") or [0.0, 0.0, 0.0])
+    top = float(board.get("thickness_mm") or 1.6)
+    out = []
+    for part in parts:
+        fps = by_id.get(part["instance_id"]) or []
+        placement = part.get("placement") or {}
+        if len(fps) != 1 or int(part.get("quantity") or 1) != 1 or placement.get("layout_id"):
+            continue
+        cx, cy = fps[0]["center_mm"]
+        local = [float(cx), float(cy), top]
+        world = [pos[i] + sum(rb[i][k] * local[k] for k in range(3)) for i in range(3)]
+        rot = _matmul(rb, _euler_xyz([0.0, 0.0, float(fps[0].get("rot_deg") or 0.0)]))
+        pl = {**placement, "position_mm": [round(v, 3) for v in world]}
+        pl["rotation_deg"] = _xyz_degrees(rot)
+        part["placement"] = pl
+        out.append({"instance_id": part["instance_id"], "placement": pl})
+    return out
 
 
 def _product_name(run: BuildRun, brief: dict[str, Any]) -> str:
@@ -1173,6 +1233,9 @@ class LiveRunner:
                 spec_board["rotation_deg"] = [round(v, 3) for v in rot]
             spec_board["revision"] = 1
             st.emit("board.updated", {"board": spec_board})
+            seated = _seat_on_footprints(spec_board, run.state["parts"])
+            if seated:
+                st.emit("placement.updated", {"placements": seated})
             drc = entry.get("drc") or {}
             bid = spec_board["board_id"]
             errors, unconnected = int(drc.get("errors", 0)), int(drc.get("unconnected", 0))
