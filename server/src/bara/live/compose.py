@@ -32,7 +32,7 @@ from bara.live.catalog_source import (
     part_functions,
 )
 from bara.live.completeness import Completeness, Need
-from bara.live.fetch import Resolver, as_overlay
+from bara.live.fetch import BUDGET_PER_NEED_S, TOTAL_BUDGET_S, Resolver, as_overlay
 from bara.live.layout import PITCH_MM, KeyboardPlan, feature_sides, pin_need, stab_size
 from bara.live.llm_json import call_json
 
@@ -394,7 +394,9 @@ class Composer:
             blocks,
             keyboard=plan is not None,
         )
-        self.resolver = Resolver(self.source)
+        self.resolver = Resolver(
+            self.source, budget_s=max(TOTAL_BUDGET_S, BUDGET_PER_NEED_S * len(self.comp.needs))
+        )
         self.fetched: list[dict[str, Any]] = []  # rows added during this build
         self.extra: dict[str, list[dict[str, Any]]] = {}  # slot id -> parts found for it
         self.slots = derive_slots(spec, brief, plan, self.comp)
