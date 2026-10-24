@@ -166,3 +166,10 @@ Web: bara-merge agent merges Nithin's figma-design-in-code / agent-board-3d / fi
 - Cause: the placer's region allowed a courtyard 0.5 mm from the outline; U5's edge-side pads sat 0.67 mm from the edge keep-out band, so its pins had no way out (only pin 5 escaped, by a via). Parts get 1.2 mm between each other but no channel at the rim.
 - Fix cd33090 (generic, no device names): fine-pitch SMD parts (>= 6 pads, min pad spacing < 0.65 mm, not cable connectors) keep EDGE_COPPER_MM + PART_GAP/2 from the edge. Test tests/test_fine_pitch_edge.py; 47 related tests pass.
 - Server still runs e3fee5c; suite continues on mouse/mp3/mp4/monitor for the identity re-check. Controller re-check on the next run.
+
+### 09:55 (78230d2)
+- Suite on e3fee5c, 5 rows: controller only fails routing (fixed by cd33090), identity PASS; monitor regressed: device.complete (bicolor standby LED missing) + 1 DRC error; mouse fails identity (peanut blob, pockets); mp3 fails identity (two black screen windows over nothing); mp4 fails device.complete (charge LED) + identity (plain slab).
+- MP3 cause: keyword LCSC fetch took the first stocked hit for "2.0 in TFT", an FH12 FPC connector, tagged it display.tft; the case cut a screen window for it. LCSC does stock HS20HS072RX (2.0 in ST7789 LCD, 1499 pcs).
+- Fix 78230d2: best_stocked skips connector-category hits unless the block is interconnect; FH12-40S, FH12-14S, DF19G-30P rows retagged interconnect.connector (monitor may now flag its panel; check).
+- Restarted server 17852 + suite 17889 on 78230d2 (27 devices).
+- Next gaps: status LEDs missing on monitor/mp4 (catalog/LED filter), mouse shell identity, pockets breaking through the skin.
