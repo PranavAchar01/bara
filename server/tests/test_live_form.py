@@ -486,7 +486,8 @@ def test_footprintless_module_becomes_an_off_board_item_with_a_board_connector()
     parts = [
         {
             "instance_id": "i1", "part_id": "p1", "slot_id": "panel", "quantity": 1,
-            "label": "Panel", "record": rec("Panel", "screen", {"min": [0, 0, 0], "max": [60, 40, 3]}),
+            "label": "Panel",
+            "record": rec("Panel", "screen", {"min": [0, 0, 0], "max": [60, 40, 3]}),
         },
     ]  # fmt: skip
     plan = plan_device_board(parts, [], {})
