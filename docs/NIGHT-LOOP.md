@@ -142,3 +142,9 @@ Web: bara-merge agent merges Nithin's figma-design-in-code / agent-board-3d / fi
 - Mouse on c0684e6: board.drc no longer fails (the f853f67 flip fix cleared its 8 errors). Still FAIL: device.complete (2.4 GHz chip antenna, function component.other, so the nice!nano's built-in radio does not cover it; no LCSC match), 1 unconnected, mech.access.panel (bezel overhangs encoder M5, 2/8 rays), identity ("top mostly open or cut away, showing internal clutter").
 - Suite restarted on 16b24f2 (code = 3323217; server 98063, suite 98119).
 - Next gaps, in order: antenna covered by a radio module (block function mapping), mouse top shell closing over parts, routing leftover, scroll-wheel overhang. Vercel URL and bench not done (agents stopped).
+
+### 08:15 (code c64242b)
+- Suite on 3323217: MONITOR PASS with real HDMI/DP receptacles (Amphenol 10029449, 20455-030E-12), so the NONE pick works. CONTROLLER FAIL: form.fit FORM_OVERFLOW on a 2x AA holder (60x33 mm), board on the floor.
+- Cause: BlueMicro840 needs a LiPo (battery interface, chemistry lipo), but the AA holder's battery interface is also "requires", so `_mates` never compared them and the model picked AA.
+- Fix c64242b: filters_for adds a chemistry filter on a power.battery slot from every chosen part that requires a battery of a named chemistry. Test added; live_form 45 pass.
+- Mouse still running on 3323217; suite restart on c64242b after it finishes.
