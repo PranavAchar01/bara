@@ -79,6 +79,27 @@ RECIPES: tuple[tuple[str, str, tuple[tuple[str, str], ...]], ...] = (
 )
 
 
+# The function families each recipe can serve. A block's words may mention a primitive (a TFT
+# "with LED backlight", a "button debounce IC") while the block itself is a panel or a chip;
+# the block's function decides, so a screen is never met by an LED or a driver by a switch.
+RECIPE_FAMILIES: dict[str, tuple[str, ...]] = {
+    "SMD fuse": ("power.", "interconnect.", "protect"),
+    "TVS protection array": ("power.", "interconnect.", "comm.", "protect"),
+    "IEC mains inlet": ("power.",),
+    "rotary encoder": ("input.",),
+    "buzzer": ("output.buzzer", "output.speaker", "output.sound", "output.audio"),
+    "wire-to-board connector for an off-board load": ("output.", "actuator."),
+    "bicolor LED": ("display.indicator", "output.light", "output.led", "indicator"),
+    "indicator LED": ("display.indicator", "output.light", "output.led", "indicator"),
+    "tactile switch": ("input.",),
+}
+# a block named as a chip or a panel is never a stock primitive, whatever it drives or lights
+NOT_PRIMITIVE = re.compile(
+    r"\b(driver|controller|boost|regulator|ldo|charger|amplifier|amp|gauge|ic|chip|"
+    r"display|screen|lcd|tft|oled|panel|module|sensor|codec|converter)\b"
+)
+
+
 # recipes whose primitive is the whole part: tried before an LCSC download, not after
 STOCK_FIRST = frozenset({"SMD fuse", "bicolor LED", "indicator LED", "tactile switch"})
 
@@ -86,8 +107,14 @@ STOCK_FIRST = frozenset({"SMD fuse", "bicolor LED", "indicator LED", "tactile sw
 def recipe_for(need: Need) -> tuple[str, tuple[tuple[str, str], ...]] | None:
     words = f"{need.label} {need.requirement}".lower()
     for pattern, name, steps in RECIPES:
-        if re.search(pattern, words):
-            return name, steps
+        if not re.search(pattern, words):
+            continue
+        families = RECIPE_FAMILIES.get(name, ())
+        if need.function_id and families and not need.function_id.startswith(families):
+            continue  # the words name a primitive the block only mentions
+        if name in STOCK_FIRST and NOT_PRIMITIVE.search(need.label.lower()):
+            continue  # a chip or panel named after what it drives is not that primitive
+        return name, steps
     return None
 
 

@@ -72,6 +72,7 @@ class Touch:
     function_id: str
     count: int
     groups: tuple[str, ...] = ()
+    size_mm: tuple[float, float] | None = None  # the chosen part's footprint, width x depth
 
 
 @dataclass
@@ -354,11 +355,14 @@ def validate(form: Form, touches: list[Touch]) -> list[str]:
 def _prompt(prompt: str, touches: list[Touch], refs: list[dict[str, Any]], note: str) -> str:
     slots = "\n".join(
         f"- {t.slot_id}: {t.label} x{t.count} ({t.function_id})"
+        + (f", each {t.size_mm[0]:.0f} x {t.size_mm[1]:.0f} mm" if t.size_mm else "")
         + (f", groups: {'; '.join(t.groups)}" if len(t.groups) > 1 else "")
         for t in touches
     )
     return (
-        f"Device request: {prompt}\n\nTouch slots (each needs anchors):\n{slots or '- none'}\n\n"
+        f"Device request: {prompt}\n\nTouch slots (each needs anchors; sizes are the real parts "
+        f"chosen, so every anchor must leave room for its part and none may overlap):\n"
+        f"{slots or '- none'}\n\n"
         f"Reference designs from the catalog (real dimensions, use as evidence):\n"
         f"{json.dumps(refs, indent=1) if refs else 'none close to this request'}\n{note}"
     )
