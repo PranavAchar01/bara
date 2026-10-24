@@ -489,10 +489,12 @@ def enclosure_dir() -> Path:
 def mesh_part(
     name: str, m: mf.Manifold, transform: np.ndarray, hex_color: str, roughness: float = 0.55
 ) -> MeshPart:
-    mesh = m.calculate_normals(3, 40.0).to_mesh(3)
+    # property channel 0 sits after the three position columns: the normals land in columns 3:6
+    mesh = m.calculate_normals(0, 40.0).to_mesh()
     props = np.asarray(mesh.vert_properties, dtype=np.float64)
     v = props[:, :3] @ transform[:3, :3].T + transform[:3, 3]
     n = props[:, 3:6] @ transform[:3, :3].T
+    n /= np.maximum(np.linalg.norm(n, axis=1, keepdims=True), 1e-12)
     return MeshPart(name, v, np.asarray(mesh.tri_verts, dtype=np.int64), n, hex_color, roughness)
 
 
@@ -590,7 +592,7 @@ def enclose_report(
     sites: list[shell.Site] = []
     crown = 0.0
     if shaped:
-        sites = shell.sites_from_anchors(list(brief.get("anchors") or []), feats)
+        sites = shell.sites_from_anchors(list(brief.get("anchors") or []), feats, t)
         claimed_refs = {s_.ref for s_ in sites if s_.ref}
         port_parts = [f for f in feats if f.role == "usb"] or [f for f in feats if f.role == "mcu"]
         raw = _largest_polygon(outer_cs)

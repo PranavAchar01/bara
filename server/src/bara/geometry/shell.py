@@ -271,12 +271,16 @@ def build_body(plan: Polygon, prof: Profile, edge_len: float = 1.0) -> Body:
     u = _blur(u, 2.0 / step)
     s_top = 1.0 - (1.0 - u) ** 2
     s_bot = 1.0 - (1.0 - u) ** 1.6
-    top = prof.z_top + prof.crown * s_top - _fillet(dpos, prof.rt)
-    bot = prof.z_floor - prof.belly * s_bot + _fillet(dpos, prof.rb)
+    top0 = prof.z_top + prof.crown * s_top  # the surface before the rim is rounded
+    bot0 = prof.z_floor - prof.belly * s_bot
+    top = top0 - _fillet(dpos, prof.rt)
+    bot = bot0 + _fillet(dpos, prof.rb)
 
-    tl, bl, dl = top.ravel().tolist(), bot.ravel().tolist(), d.ravel().tolist()
+    tl, bl, dl = top0.ravel().tolist(), bot0.ravel().tolist(), d.ravel().tolist()
     nx, ny, inv = ras.nx, ras.ny, 1.0 / step
     rx0, ry0 = ras.x0, ras.y0
+    rt, rb = prof.rt, prof.rb
+    hypot = math.hypot
 
     def sdf(x: float, y: float, z: float) -> float:
         fx, fy = (x - rx0) * inv, (y - ry0) * inv
@@ -289,7 +293,14 @@ def build_body(plan: Polygon, prof: Profile, edge_len: float = 1.0) -> Body:
         dd = dl[i] * w00 + dl[i + 1] * w10 + dl[i + nx] * w01 + dl[i + nx + 1] * w11
         tt = tl[i] * w00 + tl[i + 1] * w10 + tl[i + nx] * w01 + tl[i + nx + 1] * w11
         bb = bl[i] * w00 + bl[i + 1] * w10 + bl[i + nx] * w01 + bl[i + nx + 1] * w11
-        return min(dd, tt - z, z - bb)
+        # distance to the top and bottom faces; within a fillet radius of the rim the rounded
+        # edge is a true circle (a distance field, so the iso-surface stays smooth)
+        a, b = tt - z, z - bb
+        if dd < rt and a < rt:
+            a = rt - hypot(rt - dd, rt - a)
+        if dd < rb and b < rb:
+            b = rb - hypot(rb - dd, rb - b)
+        return min(dd, a, b)
 
     zlo = float(bot.min()) - 1.0
     zhi = float(top.max()) + 1.0
@@ -334,9 +345,12 @@ class Site:
     round_window: bool = False
     ref: str = ""
     pitch: float = 0.0
+    z_hi: float = 0.0  # top of the part under it, board frame
 
 
-def sites_from_anchors(anchors: list[dict[str, Any]], feats: list[Any]) -> list[Site]:
+def sites_from_anchors(
+    anchors: list[dict[str, Any]], feats: list[Any], board_top: float = 0.0
+) -> list[Site]:
     """One site per anchor instance, sized from the nearest unclaimed part footprint."""
     from bara.live.form import expand  # local: live imports geometry
 
@@ -359,7 +373,7 @@ def sites_from_anchors(anchors: list[dict[str, Any]], feats: list[Any]) -> list[
                 round_window=bool(re.search(r"round|circular", text)),
             )
             near = None
-            best = max(6.0, 0.7 * pitch)
+            best = 30.0 if kind == "port" else max(6.0, 0.7 * pitch)
             for f in feats:
                 if f.ref in claimed or f.role in ("battery", "sensor", "trackball"):
                     continue
@@ -370,7 +384,9 @@ def sites_from_anchors(anchors: list[dict[str, Any]], feats: list[Any]) -> list[
                     best, near = dist, f
             if near is not None:
                 claimed.add(near.ref)
+                s.x, s.y = near.x, near.y  # the feature sits over the part, not the loose anchor
                 s.w, s.d, s.rot, s.ref = near.w, near.d, near.rot_deg, near.ref
+                s.z_hi = near.z_range(board_top)[1]
             sites.append(s)
     return sites
 
@@ -531,10 +547,19 @@ def build_features(
     for s in sites:
         if s.ref:
             out.claimed.add(s.ref)
-        if s.kind in ("port", "shoulder") or s.mount == "back":
+        if s.kind == "shoulder" and s.mount == "edge":
+            if s.group not in done_groups:
+                done_groups.add(s.group)
+                _shoulder(out, [t for t in sites if t.group == s.group], body, seat, clear)
+            out.kinds[s.kind] = out.kinds.get(s.kind, 0) + 1
+            continue
+        if s.kind == "port" or s.mount == "back":
             if s.kind == "port":
                 _port(out, s, body, wall_mm, port_w, port_h, z_port)
             continue
+        if s.w and s.d:  # a pocket the part's full footprint wide, hidden under the top surface
+            pocket = _rrect(s.x, s.y, s.w + 2 * clear, s.d + 2 * clear, s.rot, 0.8)
+            out.cuts.append(_prism(pocket, seat - 1.0, max(s.z_hi, seat) + clear))
         if s.mount == "edge":
             _edge_button(out, s, body, wall_mm, clear)
         elif s.kind == "screen":
@@ -606,14 +631,20 @@ def _dpad(
     cy = sum(s.y for s in group) / len(group)
     foot = max(max(s.w, s.d) for s in group) or 8.0
     reach = max((max(abs(s.x - cx), abs(s.y - cy)) for s in group), default=0.0)
-    if len(group) > 1:
+    if len(group) > 1:  # separate buttons laid out as a cross: arms as wide as one button
         half = reach + foot / 2 + clear + 1.5
-    else:
-        half = max(1.5 * foot, 10.0)
-    arm = max(foot + 2 * clear, 0.62 * half * 2 / 1.6, 7.5)
+        arm = max(foot + 2 * clear, 7.5)
+    else:  # one part: the cross fits its footprint, arms a third of the span
+        half = max(foot / 2 + clear + 1.0, 8.0)
+        arm = max(0.36 * 2 * half, 7.0)
     rot = group[0].rot
     cross = _rrect(cx, cy, 2 * half, arm, rot, 1.6) + _rrect(cx, cy, arm, 2 * half, rot, 1.6)
     zc = body.top_at(cx, cy)
+    for s in group:  # the part's whole footprint is hidden under the shell, not only the cross
+        if s.w and s.d:
+            c = 2 * clear
+            pocket = _rrect(s.x, s.y, s.w + c, s.d + c, s.rot, 1.2)
+            out.cuts.append(_prism(pocket, seat - 1.0, max(s.z_hi, seat) + clear + 0.2))
     out.cuts.append(_prism(cross, seat - 1.0, zmax + 4))
     out.cuts.append(_prism(cross.offset(1.8, mf.JoinType.Round), zc - 0.7, zmax + 4))
     inner = cross.offset(-0.7, mf.JoinType.Round)
@@ -623,11 +654,41 @@ def _dpad(
     out.cutouts.append(_cut("dpad", cx, cy, zc, 2 * half, "unknown"))
 
 
+def _shoulder(out: Features, group: list[Site], body: Body, seat: float, clear: float) -> None:
+    """A bumper: a rounded bar riding the rim where the shoulder anchors face it, over a hidden
+    pocket for each part under it."""
+    ang = math.radians(group[0].normal_deg)
+    nx, ny = math.cos(ang), math.sin(ang)
+    tx, ty = -ny, nx
+    cx = sum(s.x for s in group) / len(group)
+    cy = sum(s.y for s in group) / len(group)
+    hit = _exit_distance(body.plan, cx, cy, nx, ny)
+    if hit is None:
+        return
+    span = max(abs((s.x - cx) * tx + (s.y - cy) * ty) for s in group)
+    half = span + max(max(s.w, s.d) for s in group) / 2 + 3.0
+    r = 3.3
+    px, py = cx + nx * (hit - 2.2), cy + ny * (hit - 2.2)
+    zt = body.top_at(px - nx * 2.0, py - ny * 2.0)
+    ends = [
+        mf.Manifold.sphere(r, 28).translate((px + tx * u, py + ty * u, 0.0))
+        for u in (-(half - r), half - r)
+    ]
+    bar = mf.Manifold.batch_hull(ends).scale((1.0, 1.0, 0.72)).translate((0, 0, zt - 0.2))
+    out.caps.append(bar)
+    for s in group:
+        if s.w and s.d:
+            c = 2 * clear
+            pocket = _rrect(s.x, s.y, s.w + c, s.d + c, s.rot, 1.2)
+            out.cuts.append(_prism(pocket, seat - 1.0, max(s.z_hi, seat) + clear + 0.2))
+    out.cutouts.append(_cut("shoulder", px, py, zt, 2 * half, "rect", 2 * r))
+
+
 def _screen(out: Features, s: Site, body: Body, seat: float, zmax: float, clear: float) -> None:
     w, d = (s.w or 30.0), (s.d or 20.0)
     zc = body.top_at(s.x, s.y)
     if s.round_window:
-        rr = min(w, d) / 2
+        rr = 0.6 * min(w, d)  # a round active area sits inside a square module: open a bit past it
         win = _rrect(s.x, s.y, 2 * rr, 2 * rr, 0.0, rr)
     else:
         win = _rrect(s.x, s.y, w, d, s.rot, 2.0)
