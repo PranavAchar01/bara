@@ -43,3 +43,17 @@ def test_search_uses_github_repo_search_without_a_web_key(monkeypatch, tmp_path)
     assert note == "ok"
     assert cands[0]["repo"] == "https://github.com/maker/handheld"
     assert cands[0]["fit"] == "close"
+
+
+def test_product_name_drops_the_request_words():
+    from types import SimpleNamespace
+
+    from bara.live.runner import _product_name
+
+    def name(prompt: str) -> str:
+        return _product_name(SimpleNamespace(prompt=prompt), {"device": "handheld console"})
+
+    assert name("create a gameboy") == "gameboy"
+    assert name("can you make me a desk lamp") == "desk lamp"
+    assert name("a game boy") == "a game boy"
+    assert name("designer lamp") == "designer lamp"

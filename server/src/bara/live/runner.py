@@ -11,6 +11,7 @@ import asyncio
 import copy
 import json
 import logging
+import re
 import time
 from typing import TYPE_CHECKING, Any
 
@@ -45,6 +46,12 @@ LIVE_BUDGET_MS = {
     "render": 45_000,
 }
 SHORT_PROMPT_WORDS = 6  # up to this many words the prompt is searched as typed
+# the ask around the product name ("create a", "can you make me an") is not part of it
+REQUEST_LEAD = re.compile(
+    r"^(?:(?:please|can|could|you|i|want|would|like|need|to|me|us|"
+    r"create|make|build|design|generate|give|get)\b[\s,]*)+(?:(?:a|an|the|my|some)\b\s*)?",
+    re.IGNORECASE,
+)
 
 MAX_CLARIFY_ROUNDS = 2
 
@@ -134,8 +141,9 @@ def _question(round_no: int) -> dict[str, Any]:
 def _product_name(run: BuildRun, brief: dict[str, Any]) -> str:
     """What to search the web for. A short prompt is the product's own name ("a game boy"); the
     brief generalises it ("handheld game console") and a search then finds lanterns."""
-    if len(run.prompt.split()) <= SHORT_PROMPT_WORDS:
-        return run.prompt
+    product = REQUEST_LEAD.sub("", run.prompt.strip())
+    if len(product.split()) <= SHORT_PROMPT_WORDS:
+        return product or run.prompt
     return str(brief.get("device") or "") or run.prompt
 
 
