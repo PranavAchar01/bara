@@ -468,32 +468,6 @@ def _box(lo: tuple[float, float, float], hi: tuple[float, float, float]) -> mf.M
     return mf.Manifold.cube(size).translate(lo)
 
 
-def _soft_edge(
-    cs: mf.CrossSection, z0: float, z1: float, rise: float, width: float, bottom: bool
-) -> mf.Manifold:
-    """A prism of cs from z0 to z1 whose bottom (or top) edge is rounded: a quarter-circle
-    profile `rise` tall and `width` in from the outline, built as thin stepped slices."""
-    steps = 8
-    solids: list[mf.Manifold] = []
-    if bottom:
-        solids.append(_prism(cs, z0 + rise, z1))
-    else:
-        solids.append(_prism(cs, z0, z1 - rise))
-    for i in range(steps):
-        a, b = rise * i / steps, rise * (i + 1) / steps
-        mid = (a + b) / 2
-        u = (rise - mid) / rise if bottom else mid / rise
-        inset = width * (1.0 - math.sqrt(max(0.0, 1.0 - u * u)))
-        ring = cs.offset(-inset, mf.JoinType.Round) if inset > 1e-6 else cs
-        if ring.is_empty():
-            continue
-        if bottom:
-            solids.append(_prism(ring, z0 + a, z0 + b + 0.01))
-        else:
-            solids.append(_prism(ring, z1 - rise + a, z1 - rise + b + 0.01))
-    return _union(solids)
-
-
 def _union(items: list[mf.Manifold]) -> mf.Manifold:
     items = [m for m in items if not m.is_empty()]
     if not items:
@@ -602,18 +576,12 @@ def enclose_report(
         cup_bottom = cz - r - H["ball_clearance_mm"] - H["cup_wall_mm"]
         z_bot = min(z_bot, pocket_bottom - H["floor_mm"], cup_bottom)
 
-<<<<<<< HEAD
-    # The product's own thickness (from its form) shapes the body: the sculpt below makes the
-    # underside as deep as the thickness profile asks, so the stack floor stays where it is.
-    body = _num(brief.get("body_thickness_mm"), 0.0)
-    shaped = body > 0
-=======
     # The product's own thickness (from its form) sets the body height; the board stays at the
     # top, with the extra body below it.
     body = _num(brief.get("body_thickness_mm"), 0.0)
     if body > 0 and body > bezel_top - z_bot:
         z_bot = bezel_top - body
->>>>>>> main
+    shaped = body > 0
 
     t_geo = time.perf_counter()
     seat = wall_top
@@ -672,20 +640,9 @@ def enclose_report(
         crown = prof.crown
 
     # ---- tray
-<<<<<<< HEAD
     if sculpt is not None:
         solids = [sculpt.solid.trim_by_plane((0, 0, -1), -wall_top)]
         z_bot = min(z_bot, float(sculpt.solid.bounding_box()[2]))
-=======
-    shaped = body > 0
-    soft = min(8.0, 0.3 * (wall_top - z_bot)) if shaped else 0.0
-    if shaped:
-        # the belly of the product: a rounded underside, as deep as the body is thicker than
-        # its rim (grips thicker than the edge), never less than the fillet radius
-        edge = _num(brief.get("edge_thickness_mm"), 0.0)
-        rise = min(max(body - edge, 0.5 * soft, 3.0), 0.5 * (wall_top - z_bot))
-        solids = [_soft_edge(outer_cs, z_bot, wall_top, rise, min(rise * 1.2, 8.0), True)]
->>>>>>> main
     else:
         solids = [_prism(outer_cs, z_bot, wall_top)]
     for g in ball_geo:
@@ -772,7 +729,6 @@ def enclose_report(
             holes_cs.append(_rect_cs(f.x, f.y, f.w + c, f.d + c, f.rot_deg))
     for g in ball_geo:
         holes_cs.append(_circle_cs(g["x"], g["y"], g["r"] + H["ball_ring_clearance_mm"]))
-<<<<<<< HEAD
     if sculpt is not None:
         bezel = sculpt.solid.trim_by_plane((0, 0, 1), seat)
         if site_feats.adds:
@@ -785,38 +741,14 @@ def enclose_report(
     else:
         bezel = _prism(outer_cs, seat, bezel_top)
         zhole = bezel_top + crown + 1
-=======
-    crown = 0.0
-    if shaped:
-        bx = outer_cs.bounds()
-        crown = max(1.5, min(4.0, 0.12 * min(bx[2] - bx[0], bx[3] - bx[1])))
-        bezel = _soft_edge(outer_cs, seat, bezel_top + crown, crown, crown * 1.1, False)
-    else:
-        bezel = _prism(outer_cs, seat, bezel_top)
->>>>>>> main
     if holes_cs:
         bezel = bezel - _prism(
             mf.CrossSection.batch_boolean(holes_cs, mf.OpType.Add)
             if len(holes_cs) > 1
             else holes_cs[0],
             seat - 1,
-<<<<<<< HEAD
             zhole,
-=======
-            bezel_top + crown + 1,
->>>>>>> main
         )
-    if shaped and holes_cs:
-        # raised collars around every opening: stick wells, button bosses, a d-pad crown
-        opened = mf.CrossSection.batch_boolean(holes_cs, mf.OpType.Add)
-        collar = mf.CrossSection.batch_boolean(
-            [opened.offset(2.2, mf.JoinType.Round), opened], mf.OpType.Subtract
-        )
-        collar = mf.CrossSection.batch_boolean(
-            [collar, outer_cs.offset(-crown * 1.2, mf.JoinType.Round)], mf.OpType.Intersect
-        )
-        if not collar.is_empty():
-            bezel = bezel + _prism(collar, bezel_top + crown - 0.05, bezel_top + crown + 1.6)
 
     # ---- USB openings through the wall (tray and bezel)
     cutouts: list[dict[str, Any]] = []
@@ -950,12 +882,8 @@ def enclose_report(
             "tent": tent,
             "side": side,
             "hand": HAND_SET,
-<<<<<<< HEAD
             "v": 3,
             "anchors": brief.get("anchors"),
-=======
-            "v": 2,
->>>>>>> main
             "body": body,
             "edge": brief.get("edge_thickness_mm"),
         }
