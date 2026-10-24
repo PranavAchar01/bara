@@ -5,6 +5,7 @@ import { paths } from "../net/rest";
 import type { Alternatives, BuildPart, Color, EditOp, Part, PartCard, PartsPage, PortRef } from "../spec/types";
 import { Badge, Chip, Empty, Icon, ProvenanceBadge, Skeleton } from "../ui/common";
 import { checkTone, fmtValue, known, vlabel } from "../ui/format";
+import { AskBot } from "../bot/AskBot";
 
 type Load<T> = { state: "loading" } | { state: "ok"; data: T } | { state: "error"; message: string };
 
@@ -194,6 +195,7 @@ export function PartInspector() {
           </div>
         )}
         {colorOpen && instance && <ColorPicker target={{ instance_id: instance.instance_id }} current={instance.color ?? null} onClose={() => setColorOpen(false)} />}
+        {instance && <AskBot instance={instance} />}
         {instance && (
           <section>
             <h3>Position</h3>

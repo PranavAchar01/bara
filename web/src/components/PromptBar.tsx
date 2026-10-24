@@ -17,9 +17,13 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean }) {
   const helloSeen = useApp((s) => s.hello !== null);
   const pending = useApp((s) => s.pendingStart !== null);
   const status = useApp((s) => s.build?.status);
-  const running = status === "running" || status === "awaiting_input";
+  const replaying = useApp((s) => s.replaying);
+  // A replay re-performs a finished build; Stop there would cancel nothing real.
+  const running = !replaying && (status === "running" || status === "awaiting_input");
   const maxChars = useApp((s) => s.hello?.limits?.max_prompt_chars ?? 2000);
   const disabled = !helloSeen || !ready;
+  // The bot is out on the canvas (bot/AgentStage): the docked one steps away, keeping its place.
+  const away = useApp((s) => s.agentOut) && !!props.docked;
 
   const focusKey = useApp((s) => s.focusKey);
   const focusName = useApp((s) => (s.focusKey ? (s.build?.parts.find((p) => focusKeyOf(s.build, p) === s.focusKey)?.card.display_name ?? null) : null));
@@ -86,7 +90,7 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean }) {
           bubbles={bubbles || !!say}
           say={say}
           mood={listening ? "listening" : transcribing ? "thinking" : undefined}
-          className="prompt-bot"
+          className={away ? "prompt-bot is-away" : "prompt-bot"}
         />
       </button>
       {listening && (

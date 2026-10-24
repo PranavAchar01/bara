@@ -27,6 +27,8 @@ import { registerAnchor, stage, stageBox } from "./stage";
 import { StudioEnvironment, StudioFloor, studioPalette, type StudioPalette } from "./studio";
 import { DemandDriver, StudioPost, postEnabled } from "./post";
 import { BoardPlaceholder, BoardStatus, FootprintHover, footprintBoxes } from "./board";
+import { AgentTargetProbe, partWorldBox, registerPart } from "./agentTargets";
+import { agentPose, easeOut } from "./agentCam";
 
 const DEG = Math.PI / 180;
 
@@ -189,6 +191,7 @@ function InstancedGroups(props: {
   groups: MeshGroup[];
   matrices: THREE.Matrix4[];
   onClick?: (e: ThreeEvent<MouseEvent>) => void;
+  onHover?: (on: boolean) => void;
 }) {
   const refs = useRef<(THREE.InstancedMesh | null)[]>([]);
   useLayoutEffect(() => {
@@ -216,9 +219,11 @@ function InstancedGroups(props: {
             if (!props.onClick) return;
             e.stopPropagation();
             document.body.style.cursor = "pointer";
+            props.onHover?.(true);
           }}
           onPointerOut={() => {
             document.body.style.cursor = "";
+            props.onHover?.(false);
           }}
         />
       ))}
@@ -236,6 +241,8 @@ interface PartNodeProps {
   selected: boolean;
   failing: boolean;
   highlight: boolean;
+  /** The agent on stage is working on this part: accent outline, no forced label. */
+  focus: boolean;
   labels: boolean;
   theme: Theme;
   pose: { position_mm: number[]; rotation_deg: number[] } | null;
@@ -301,7 +308,7 @@ function PartNode(props: PartNodeProps) {
   // in focus the part is already singled out; a selection outline would only drown it in blue
   const inFocus = useApp((s) => s.focusKey === partLabel(part).key);
   const focusOn = useApp((s) => s.focusKey !== null);
-  const outline = props.failing ? theme.fail : (props.selected || props.highlight) && !inFocus ? theme.accent : null;
+  const outline = props.failing ? theme.fail : (props.selected || props.highlight || props.focus) && !inFocus ? theme.accent : null;
   const hullRef = useRef<THREE.InstancedMesh>(null);
   useLayoutEffect(() => {
     const ref = hullRef.current;
@@ -338,16 +345,36 @@ function PartNode(props: PartNodeProps) {
   }, [centroid, matrices, midZ]);
   const htmlAnchor = useMemo(() => new THREE.Vector3(centroid.x, centroid.y, centroid.z + topZ + 2), [centroid, topZ]);
   const ref = useLayerGroup(layerOf(part), props.labelKey, anchorLocal, partLabel(part).key);
+  // Agent target: every element's box (model or placeholder) in the layer group's space; holds when covered too.
+  const localBox = useMemo(() => {
+    const out = new THREE.Box3();
+    const base = loaded ? loaded.bbox.clone() : new THREE.Box3(new THREE.Vector3(...box.min), new THREE.Vector3(...box.max));
+    const t = new THREE.Box3();
+    for (const m of matrices) out.union(t.copy(base).applyMatrix4(m));
+    return out;
+  }, [loaded, box, matrices]);
+  useEffect(() => (ref.current ? registerPart(part.instance_id, ref.current, localBox) : undefined), [ref, part.instance_id, localBox]);
   // A placeholder's "(no model)" tag shows on hover or when the parts panel points at it, never by
   // default: a tag pinned in the hero sat on top of real parts (battery under the OLED).
   const [hover, setHover] = useState(false);
+  // hoverPart: the nearest part mesh under the pointer (its over handler stops propagation), for the agent on stage.
+  const id = part.instance_id;
+  const onHover = useCallback(
+    (on: boolean) => {
+      const cur = useApp.getState().hoverPart;
+      if (on && cur !== id) useApp.setState({ hoverPart: id });
+      else if (!on && cur === id) useApp.setState({ hoverPart: null });
+    },
+    [id],
+  );
+  useEffect(() => () => onHover(false), [onHover, props.covered]);
   return (
     <group
       ref={ref}
       onPointerOver={missing ? () => setHover(true) : undefined}
       onPointerOut={missing ? () => setHover(false) : undefined}
     >
-      {!props.covered && <InstancedGroups groups={provisionalGroups} matrices={matrices} onClick={onClick} />}
+      {!props.covered && <InstancedGroups groups={provisionalGroups} matrices={matrices} onClick={onClick} onHover={onHover} />}
       {!props.covered &&
         placeholderEdges &&
         matrices.map((m, i) => (
@@ -636,13 +663,18 @@ function BoardPiece(props: {
   anchor: THREE.Vector3;
   /** The part this piece draws (a footprint's 3D model), or the bare board. */
   focusKey?: string;
+  /** Registers the piece as an agent target under this id, bounded by `targetBox` (board space). */
+  targetId?: string;
+  targetBox?: THREE.Box3 | null;
   onClick?: (e: ThreeEvent<MouseEvent>) => void;
   children?: ReactNode;
 }) {
-  const { board } = props;
+  const { board, targetId, targetBox } = props;
   const pos = useMemo(() => board.position_mm ?? [0, 0, 0], [board.position_mm]);
   const rot = useMemo(() => board.rotation_deg ?? [0, 0, 0], [board.rotation_deg]);
   const ref = useLayerGroup(props.layer, props.labelKey, props.anchor, props.focusKey ?? "b:board");
+  const localBox = useMemo(() => (targetBox && !targetBox.isEmpty() ? targetBox.clone().applyMatrix4(boardMatrix(board)) : null), [targetBox, board]);
+  useEffect(() => (targetId && localBox && ref.current ? registerPart(targetId, ref.current, localBox) : undefined), [ref, targetId, localBox]);
   return (
     <group ref={ref}>
       <group position={[pos[0], pos[1], pos[2]]} rotation={new THREE.Euler(rot[0] * DEG, rot[1] * DEG, rot[2] * DEG, "XYZ")}>
@@ -695,11 +727,21 @@ function BoardNode(props: {
     return c.applyMatrix4(boardMatrix(board));
   }, [loaded, match, board]);
   const hover = <FootprintHover boxes={boxes} parts={props.parts} accent={props.theme.accent} />;
+  const targetId = board.part_instance_id ?? board.board_id;
+  const targetBox = useMemo(() => {
+    if (loaded) return loaded.bbox;
+    const pts = board.outline_mm?.length ? board.outline_mm : board.size_mm ? [[0, 0], [board.size_mm[0], -board.size_mm[1]]] : [];
+    if (!pts.length) return null;
+    const b = new THREE.Box3();
+    for (const p of pts) b.expandByPoint(new THREE.Vector3(p[0], p[1], 0));
+    b.max.z = board.thickness_mm ?? 1.6;
+    return b;
+  }, [loaded, board.outline_mm, board.size_mm, board.thickness_mm]);
   if (!pieces) {
     // No GLB yet (routing, exporting or loading): the board drawn from its record.
     return (
       <group userData={{ fit: `board:${board.board_id}` }}>
-        <BoardPiece groups={[]} board={board} layer="pcb" labelKey={props.labelKey} anchor={anchorLocal}>
+        <BoardPiece groups={[]} board={board} layer="pcb" labelKey={props.labelKey} anchor={anchorLocal} targetId={targetId} targetBox={targetBox}>
           <BoardPlaceholder board={board} busy={busy} />
           {hover}
           {busy && statusText && <BoardStatus board={board} text={statusText} />}
@@ -710,7 +752,7 @@ function BoardNode(props: {
   return (
     <>
       <group userData={{ fit: `board:${board.board_id}` }}>
-        <BoardPiece groups={pieces.base} board={board} layer="pcb" labelKey={props.labelKey} anchor={anchorLocal}>
+        <BoardPiece groups={pieces.base} board={board} layer="pcb" labelKey={props.labelKey} anchor={anchorLocal} targetId={targetId} targetBox={targetBox}>
           {hover}
         </BoardPiece>
       </group>
@@ -1024,6 +1066,102 @@ function CameraRig() {
   return null;
 }
 
+const USER_QUIET_MS = 6000;
+const AGENT_HOME_MS = 1500;
+const AGENT_EASE_S = 0.8;
+const reducedMotion = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/**
+ * Drifts the camera toward the part the agent on stage works on (agentFocus), and back to
+ * the rig's framing 1.5 s after it lets go. Never while the user has touched the view or
+ * picked a preset in the last 6 s, while the explode is open, the MoveGizmo is up, the rig
+ * is easing, or the user prefers reduced motion. Runs after CameraRig in the frame order.
+ */
+function AgentCam() {
+  const { camera, controls, gl, invalidate } = useThree();
+  const cam = camera as THREE.PerspectiveCamera;
+  const focus = useApp((s) => s.agentFocus);
+  const nonce = useApp((s) => s.cameraNonce);
+  const touched = useRef(-Infinity);
+  const drifted = useRef(false);
+  const anim = useRef<{ fromP: THREE.Vector3; fromT: THREE.Vector3; toP: THREE.Vector3; toT: THREE.Vector3; t: number } | null>(null);
+  useEffect(() => {
+    const ctl = controls as unknown as OrbitLike | null;
+    const el = gl.domElement;
+    const on = () => {
+      touched.current = performance.now();
+      anim.current = null;
+      drifted.current = false;
+    };
+    el.addEventListener("pointerdown", on, { passive: true });
+    el.addEventListener("wheel", on, { passive: true });
+    ctl?.addEventListener("start", on);
+    return () => {
+      el.removeEventListener("pointerdown", on);
+      el.removeEventListener("wheel", on);
+      ctl?.removeEventListener("start", on);
+    };
+  }, [controls, gl]);
+  const lastNonce = useRef(nonce);
+  useEffect(() => {
+    if (lastNonce.current === nonce) return;
+    lastNonce.current = nonce;
+    touched.current = performance.now();
+    anim.current = null;
+    drifted.current = false;
+  }, [nonce]);
+  useEffect(() => {
+    const blocked = () => {
+      const s = useApp.getState();
+      return reducedMotion() || performance.now() - touched.current < USER_QUIET_MS || !!s.moving || s.explode > 0.05 || stage.explode > 0.05 || (stage.animating && !anim.current);
+    };
+    const go = (toP: THREE.Vector3, toT: THREE.Vector3) => {
+      const ctl = controls as unknown as OrbitLike | null;
+      if (!ctl) return;
+      anim.current = { fromP: cam.position.clone(), fromT: ctl.target.clone(), toP, toT, t: 0 };
+      invalidate();
+    };
+    if (focus) {
+      const ctl = controls as unknown as OrbitLike | null;
+      const box = partWorldBox(focus, new THREE.Box3());
+      if (!ctl || !box || blocked()) return;
+      const to = agentPose(cam.position, ctl.target, box, cam.fov, cam.aspect);
+      drifted.current = true;
+      go(to.pos, to.target);
+      return;
+    }
+    if (!drifted.current) return;
+    const id = window.setTimeout(() => {
+      if (!drifted.current || blocked()) return;
+      const p = useApp.getState().preset;
+      const to = framePose(p === "scene" || p === "iso" ? "hero" : p, cam, null);
+      drifted.current = false;
+      go(to.pos, to.target);
+    }, AGENT_HOME_MS);
+    return () => window.clearTimeout(id);
+  }, [focus, cam, controls, invalidate]);
+  useFrame((_, dt) => {
+    const a = anim.current;
+    if (!a) return;
+    // The rig's own ease (refit, preset, explode) wins; so does a gizmo or the explode opening.
+    if (stage.animating || useApp.getState().moving || stage.explode > 0.05) {
+      anim.current = null;
+      return;
+    }
+    const ctl = controls as unknown as OrbitLike | null;
+    stage.animating = true;
+    a.t = Math.min(1, a.t + dt / AGENT_EASE_S);
+    const k = easeOut(a.t);
+    cam.position.lerpVectors(a.fromP, a.toP, k);
+    if (ctl) {
+      ctl.target.lerpVectors(a.fromT, a.toT, k);
+      ctl.update();
+    }
+    if (a.t >= 1) anim.current = null;
+  });
+  return null;
+}
+
 /** C20 MoveGizmo: drag locally, send one absolute move with lock on release. */
 function MoveGizmo(props: { mode: "translate" | "rotate" }) {
   const moving = useApp((s) => s.moving);
@@ -1145,6 +1283,7 @@ function SceneContents(props: {
   const hoverConn = useApp((s) => s.hoverConnection);
   const toggles = useApp((s) => s.toggles);
   const dragPose = useApp((s) => s.dragPose);
+  const agentFocus = useApp((s) => s.agentFocus);
   const rootRef = useRef<THREE.Group>(null);
   useLayoutEffect(() => {
     stage.root = rootRef.current;
@@ -1234,6 +1373,7 @@ function SceneContents(props: {
             selected={selection === p.instance_id}
             failing={failing.has(p.instance_id)}
             highlight={hoverEnds.has(p.instance_id)}
+            focus={agentFocus === p.instance_id}
             labels={toggles.labels}
             theme={theme}
             pose={dragPose && dragPose.instance_id === p.instance_id ? dragPose : null}
@@ -1261,7 +1401,9 @@ function SceneContents(props: {
       </group>
       <MoveGizmo mode={props.gizmoMode} />
       <CameraRig />
+      <AgentCam />
       <LabelProjector />
+      <AgentTargetProbe />
       <DemandDriver />
       <FitCheck onResult={props.onFit} />
       {props.post && <StudioPost dark={false} />}
@@ -1301,7 +1443,7 @@ export function Viewport3D() {
     [rows],
   );
   return (
-    <div ref={vpRef} className="viewport" style={{ background: palette.background }}>
+    <div ref={vpRef} className="viewport" data-agent="viewport" style={{ background: palette.background }}>
       <Canvas
         dpr={[1, 2]}
         frameloop="demand"

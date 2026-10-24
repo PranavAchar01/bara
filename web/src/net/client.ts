@@ -41,7 +41,30 @@ function onSent(env: ClientEnvelope, resend: boolean): void {
   pushLog({ dir: "out", type: env.type, msgId: env.msg_id, note: resend ? "resend" : undefined, raw: rawOf(env) });
 }
 
-function onEnvelope(env: ServerEnvelope): void {
+/** Live build events that arrive while a replay is re-performing the same build (bot/replay.ts).
+ *  They are held back so they do not land on the half-replayed state, and applied once it ends. */
+let heldDuringReplay: ServerEnvelope[] = [];
+
+function onLiveEnvelope(env: ServerEnvelope): void {
+  const s = useApp.getState();
+  if (s.replaying && env.build_id && s.build && env.build_id === s.build.build_id) {
+    heldDuringReplay.push(env);
+    return;
+  }
+  applyServerEnvelope(env);
+}
+
+/** Hand back (and forget) the live events held during a replay. */
+export function takeHeldDuringReplay(): ServerEnvelope[] {
+  const held = heldDuringReplay;
+  heldDuringReplay = [];
+  return held;
+}
+
+/** Apply one incoming server envelope to the store and the event log. Replay feeds recorded
+ *  envelopes through here too (note "replay"); it never goes through Connection, so the
+ *  connection's per-build seq cursor (gap and duplicate detection) never sees replayed seqs. */
+export function applyServerEnvelope(env: ServerEnvelope, opts?: { note?: string }): void {
   const known = isKnownEvent(env.type);
   pushLog({
     dir: "in",
@@ -50,7 +73,7 @@ function onEnvelope(env: ServerEnvelope): void {
     buildId: env.build_id ?? undefined,
     msgId: (env.payload as { msg_id?: string } | null)?.msg_id ?? env.cause?.msg_id,
     unknown: !known,
-    note: known ? undefined : "unknown type",
+    note: known ? opts?.note : "unknown type",
     raw: rawOf(env),
   });
   const now = performance.now();
@@ -184,7 +207,7 @@ export async function startClient(): Promise<Mode> {
       if (!b || b.status === "failed" || b.status === "cancelled") return null;
       return { build_id: b.build_id, last_seq: b.last_seq };
     },
-    onEnvelope,
+    onEnvelope: onLiveEnvelope,
     onStatus: (status) => useApp.setState({ conn: status }),
     onSent,
     onDrop,
@@ -337,6 +360,11 @@ export function applyEdit(ops: EditOp[], label?: string): void {
   const s = useApp.getState();
   const b = s.build;
   if (!b || !conn || ops.length === 0) return;
+  // A replay shows an old revision; editing it would be rejected or worse.
+  if (s.replaying) {
+    showToast("Stop the replay to edit");
+    return;
+  }
   const msgId = conn.send("edit.apply", { build_id: b.build_id, base_revision: b.revision, ops });
   useApp.setState({ view: editSent(useApp.getState().view, msgId, ops, label) });
 }
@@ -379,7 +407,7 @@ export async function openLibraryBuild(buildId: string): Promise<boolean> {
     explode: 0,
     dragPose: null,
   });
-  for (const env of events) onEnvelope(env);
+  for (const env of events) applyServerEnvelope(env);
   return true;
 }
 

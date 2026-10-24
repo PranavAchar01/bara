@@ -58,6 +58,60 @@ export function selectEditFixture(fx: FixtureSet, ops: EditOp[]): string | null 
   return null;
 }
 
+/**
+ * The fixtures stream a whole build in about a second, which is too fast to
+ * watch: the bot on stage (bot/AgentStage.tsx) ends up acting the build out
+ * long after it finished. Build events get at least this much time before them
+ * (ms at mock_speed=1), so a build takes about 12 to 20 s, roughly what the real
+ * server takes. Edits, acks and anything after the build ends keep the
+ * fixture's own delays (the trailing firmware compile is already slow).
+ */
+export const BUILD_PACE_MS: Record<string, number> = {
+  "stage.started": 300,
+  "stage.completed": 120,
+  "stage.progress": 80,
+  "spec.ready": 700,
+  "reuse.decided": 600,
+  "slots.ready": 400,
+  "layout.added": 100,
+  "candidates.ready": 380,
+  "decision.made": 240,
+  "slot.updated": 40,
+  "part.added": 180,
+  "connection.added": 100,
+  "placement.updated": 700,
+  "enclosure.updated": 600,
+  "board.updated": 800,
+  "firmware.progress": 500,
+  "firmware.ready": 800,
+  "check.result": 120,
+  warning: 300,
+  "clarify.request": 400,
+  "scene.ready": 400,
+  "build.done": 300,
+  "build.failed": 300,
+};
+
+/**
+ * Delay before each step (ms at mock_speed=1): the fixture's delay_ms, raised to
+ * BUILD_PACE_MS for events of a build in progress (after a client build.start and
+ * before its build.done or build.failed).
+ */
+export function pacedDelays(steps: FixtureStep[], building = true): number[] {
+  let on = building;
+  return steps.map((s) => {
+    if (s.dir === "client") {
+      if (s.msg.type === "build.start") on = true;
+      return 0;
+    }
+    const raw = s.delay_ms ?? 0;
+    const type = s.msg.type;
+    const d = on ? Math.max(raw, BUILD_PACE_MS[type] ?? 0) : raw;
+    if (type === "build.done" || type === "build.failed") on = false;
+    return d;
+  });
+}
+
 function clone<T>(v: T): T {
   return JSON.parse(JSON.stringify(v)) as T;
 }
@@ -84,6 +138,8 @@ const NO_REWRITE: Rewrite = {
 
 interface Replay {
   steps: FixtureStep[];
+  /** Delay before each step at mock_speed=1 (pacedDelays). */
+  delays: number[];
   /** Index of the first step of each fixture segment, with its rewrite. */
   segments: { start: number; rewrite: Rewrite }[];
   pos: number;
@@ -138,7 +194,7 @@ export class MockServer implements MockEndpoint {
       r.awaitingReconnect = false;
       const step = r.steps[r.pos];
       r.pos += 1;
-      this.later(step.dir === "server" ? (step.delay_ms ?? 0) : 0, () => {
+      this.later(step.dir === "server" ? (r.delays[r.pos - 1] ?? step.delay_ms ?? 0) : 0, () => {
         this.emit(step.msg as ServerEnvelope, NO_REWRITE);
         this.advance();
       });
@@ -286,7 +342,17 @@ export class MockServer implements MockEndpoint {
     this.terminal = false;
     this.editCount = 0;
     this.buildId = null;
-    this.replay = { steps, segments, pos: 0, timer: null, awaiting: null, buffered: [], awaitingReconnect: false, stage: null };
+    this.replay = {
+      steps,
+      delays: pacedDelays(steps),
+      segments,
+      pos: 0,
+      timer: null,
+      awaiting: null,
+      buffered: [],
+      awaitingReconnect: false,
+      stage: null,
+    };
     this.advance();
   }
 
@@ -322,8 +388,10 @@ export class MockServer implements MockEndpoint {
       fromEditId,
       rejectMessage: matched ? null : MOCK_EDIT_MESSAGE,
     };
+    const steps = f.steps.slice(firstClient + 1);
     this.replay = {
-      steps: f.steps.slice(firstClient + 1),
+      steps,
+      delays: pacedDelays(steps, false),
       segments: [{ start: 0, rewrite }],
       pos: 0,
       timer: null,
@@ -421,7 +489,7 @@ export class MockServer implements MockEndpoint {
       return;
     }
     const rewrite = this.segmentOf(r).rewrite;
-    r.timer = this.later(step.delay_ms ?? 0, () => {
+    r.timer = this.later(r.delays[r.pos] ?? step.delay_ms ?? 0, () => {
       r.timer = null;
       if (this.replay !== r) return;
       r.pos += 1;

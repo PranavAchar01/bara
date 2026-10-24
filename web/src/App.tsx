@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useApp } from "./state/store";
 import { ConnectionBanner, EngineNotice, FileHeader, TopBar } from "./components/TopBar";
-import { PromptBar } from "./components/PromptBar";
+import { ExampleChips, PromptBar } from "./components/PromptBar";
 import { StepPlayer } from "./components/LeftColumn";
 import { BuildProgress, EditStatus, EventLog, FailureCard, LatencyHUD, Toast, WarningBanner } from "./components/Status";
 import { PartsList, RightColumn } from "./components/RightColumn";
@@ -15,6 +15,9 @@ import { Viewport3D } from "./three/Viewport3D";
 import { BotLab } from "./bot/BotLab";
 import { CanvasTabs } from "./components/CanvasTabs";
 import { startCanvasPersist } from "./state/canvases";
+import { AgentStage } from "./bot/AgentStage";
+import { Explainer } from "./bot/Explainer";
+import { CandidateFlyby } from "./bot/CandidateFlyby";
 
 function useKeys() {
   useEffect(() => {
@@ -128,6 +131,9 @@ function Workspace() {
       </aside>
       {overlay === "connect" && <ConnectDialog />}
       {overlay === "addpart" && <AddPartPicker />}
+      <AgentStage />
+      <CandidateFlyby />
+      <Explainer />
     </main>
   );
 }

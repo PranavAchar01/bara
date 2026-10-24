@@ -50,6 +50,7 @@ export function RightColumn() {
         {TABS.map((t) => (
           <button
             key={t.id}
+            data-agent={`tab:${t.id}`}
             type="button"
             role="tab"
             aria-selected={tab === t.id}
@@ -83,6 +84,7 @@ export function RightColumn() {
               {CODE_TABS.map((t) => (
                 <button
                   key={t.id}
+                  data-agent={`codetab:${t.id}`}
                   type="button"
                   role="tab"
                   aria-selected={codeTab === t.id}
@@ -145,6 +147,7 @@ export function PartsList() {
             {g.parts.map((p) => (
               <div
                 key={p.instance_id}
+                data-agent={`row:${p.instance_id}`}
                 className={`part-row ${selection === p.instance_id ? "selected" : ""} ${p.placement.source === "intent" ? "provisional" : ""}`}
                 role="button"
                 tabIndex={0}
@@ -216,7 +219,7 @@ export function ChecksPanel() {
             {grouped[grp.id].map((c) => {
               const inst = checkInstances(c);
               return (
-                <button key={c.check_key} type="button" className={`check-row tone-${checkTone(c)}`} onClick={() => inst[0] && select(inst[0])}>
+                <button key={c.check_key} data-agent={`check:${c.check_key}`} type="button" className={`check-row tone-${checkTone(c)}`} onClick={() => inst[0] && select(inst[0])}>
                   <span className="dot" />
                   <span className="check-main">
                     <span className="check-rule small muted">{vlabel(vocab, "check_rules", c.rule_id)}</span>
