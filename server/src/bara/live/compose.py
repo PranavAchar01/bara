@@ -28,7 +28,7 @@ from bara.live.catalog_source import (
     model_asset,
     part_functions,
 )
-from bara.live.layout import PITCH_MM, KeyboardPlan, feature_sides, pin_need, stab_size
+from bara.live.layout import PITCH_MM, KeyboardPlan, feature_sides, pin_need
 from bara.live.llm_json import call_json
 
 log = logging.getLogger(__name__)
@@ -42,7 +42,6 @@ HALF_GAP_MM = 40.0  # inner-edge gap between split halves in the first placement
 SLOT_KINDS: dict[str, tuple[str, str, str, str | None]] = {
     "input.key": ("switches", "Switches", "sw", None),
     "mech.keycap": ("keycaps", "Keycaps", "cap", None),
-    "mech.stabilizer": ("stabilizers", "Stabilizers", "stab", None),
     "input.rotary_encoder": ("encoder", "Rotary encoder", "enc", "knob"),
     "mech.knob": ("knob", "Knob", "knob", "knob"),
     "input.trackball": ("trackball", "Trackball", "tb", "trackball"),
@@ -77,8 +76,6 @@ class Instance:
     side: str
     quantity: int
     layout_id: str | None = None
-    # layout keys this instance covers, by key width (u); None = every key
-    key_widths: tuple[float, ...] | None = None
 
 
 @dataclass
@@ -159,14 +156,6 @@ def derive_slots(
     functions = [f["function_id"] for f in spec.get("functions", [])]
     required = {f["function_id"]: f.get("required", True) for f in spec.get("functions", [])}
     counts = {f["function_id"]: int(f.get("count") or 1) for f in spec.get("functions", [])}
-    if (
-        plan is not None
-        and not str(brief.get("switch_family") or "mx").startswith("choc")
-        and any(h.stabilized for h in plan.halves)
-    ):
-        # wide keys need stabilizers; the board places one footprint under each
-        functions.append("mech.stabilizer")
-        required["mech.stabilizer"] = True
     if split and brief.get("wireless") == "none":
         functions += ["interconnect.jack", "interconnect.cable"]
         required["interconnect.jack"] = required["interconnect.cable"] = True
@@ -187,32 +176,19 @@ def derive_slots(
             prefix = _slug(tail)[:10]
             feature = None
         instances: list[Instance] = []
-        if fid in ("input.key", "mech.keycap", "mech.stabilizer") and plan is not None:
+        if fid in ("input.key", "mech.keycap") and plan is not None:
             for half in plan.halves:
                 lay = (
                     f"lay_{'l' if half.side == 'left' else 'r' if half.side == 'right' else 'main'}"
                 )
-                base_id = f"u_{prefix}{_side_suffix(half.side)}"
-                if fid == "input.key":
-                    instances.append(Instance(base_id, half.side, len(half.keys), layout_id=lay))
-                    continue
-                # one BOM line per physical size: a 6.25u spacebar is not a 1u cap
-                groups: dict[float, list[float]] = {}
-                keys = half.stabilized if fid == "mech.stabilizer" else half.keys
-                for k in keys:
-                    w = float(k.get("w_u", 1.0))
-                    size = stab_size(w) if fid == "mech.stabilizer" else w
-                    groups.setdefault(size, []).append(w)
-                for size, ws in sorted(groups.items()):
-                    instances.append(
-                        Instance(
-                            base_id if size == 1.0 else f"{base_id}_{size:g}u".replace(".", "_"),
-                            half.side,
-                            len(ws),
-                            layout_id=lay,
-                            key_widths=tuple(sorted(set(ws))),
-                        )
+                instances.append(
+                    Instance(
+                        f"u_{prefix}{_side_suffix(half.side)}",
+                        half.side,
+                        len(half.keys),
+                        layout_id=lay,
                     )
+                )
         elif fid in ("compute.mcu", "power.battery", "interconnect.jack"):
             instances = [Instance(f"u_{prefix}{_side_suffix(s)}", s, 1) for s in halves]
         elif feature is not None:
@@ -244,15 +220,7 @@ def derive_slots(
                 feature=feature,
             )
         )
-    rank = {
-        "switches": 0,
-        "keycaps": 1,
-        "stabilizers": 2,
-        "controller": 80,
-        "battery": 81,
-        "jack": 82,
-        "cable": 83,
-    }
+    rank = {"switches": 0, "keycaps": 1, "controller": 80, "battery": 81, "jack": 82, "cable": 83}
     slots.sort(key=lambda s: rank.get(s.slot_id, 10))
     for i, slot in enumerate(slots):
         slot.order = i
@@ -351,15 +319,7 @@ class Composer:
             )
         peripherals = []
         for slot in self.slots:
-            if slot.slot_id in (
-                "switches",
-                "keycaps",
-                "stabilizers",
-                "controller",
-                "battery",
-                "cable",
-                "knob",
-            ):
+            if slot.slot_id in ("switches", "keycaps", "controller", "battery", "cable", "knob"):
                 continue
             for inst in slot.instances:
                 if inst.side != side and side != "none":
@@ -704,27 +664,6 @@ class Composer:
             return [HALF_GAP_MM / 2, round(h / 2, 2), 0.0]
         return [round(-w / 2, 2), round(h / 2, 2), 0.0]
 
-    def sized_part(self, slot: Slot, inst: Instance, part: dict[str, Any]) -> dict[str, Any]:
-        """The same family as the chosen part, in the key size this instance covers."""
-        if inst.key_widths is None or not inst.key_widths:
-            return part
-        size = max(inst.key_widths)
-        if slot.function_id == "mech.stabilizer":
-            size = stab_size(size)
-        facets = part.get("facets") or {}
-        if abs(float(facets.get("key_units") or 1.0) - size) < 1e-6 and not facets.get("homing"):
-            return part
-        # homing caps are for F and J only, never a whole group
-        same = [
-            c
-            for c in self.base(slot)
-            if abs(float((c.get("facets") or {}).get("key_units") or 1.0) - size) < 1e-6
-            and (c.get("facets") or {}).get("switch_family") == facets.get("switch_family")
-            and not (c.get("facets") or {}).get("homing")
-        ]
-        same.sort(key=lambda c: (c.get("facets") or {}).get("profile") != facets.get("profile"))
-        return same[0] if same else part
-
     def build_part(self, slot: Slot, inst: Instance, part: dict[str, Any]) -> dict[str, Any]:
         placement: dict[str, Any] = {
             "mode": "layout" if inst.layout_id else "single",
@@ -736,8 +675,6 @@ class Composer:
         }
         if inst.layout_id:
             placement["layout_id"] = inst.layout_id
-        if inst.key_widths is not None:
-            placement["key_widths_u"] = list(inst.key_widths)
             placement["explode_offset_mm"] = [0.0, 0.0, 25.0 if slot.slot_id == "keycaps" else 12.0]
         label = slot.label + (f" {inst.side}" if inst.side not in ("none", "") else "")
         assets = [copy.deepcopy(a) for a in part.get("assets", []) if a.get("url")]
@@ -994,7 +931,7 @@ class Composer:
                 slot.state = "decided"
                 new_parts = []
                 for inst in slot.instances:
-                    bp = self.build_part(slot, inst, self.sized_part(slot, inst, part))
+                    bp = self.build_part(slot, inst, part)
                     new_parts.append(bp)
                     emit("part.added", {"part": bp}, stage="compose")
                 self.result.parts += new_parts

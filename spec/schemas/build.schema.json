@@ -216,11 +216,6 @@
             "null"
           ]
         },
-        "key_widths_u": {
-          "type": "array",
-          "items": {"type": "number"},
-          "description": "mode layout: only the layout keys of these widths (u); absent = every key."
-        },
         "explode_offset_mm": {
           "$ref": "common.schema.json#/$defs/Vec3",
           "description": "Offset at explode factor 1.0. The viewer adds factor * offset."
@@ -847,6 +842,63 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/Net"
+          }
+        },
+        "footprints": {
+          "type": "array",
+          "description": "Footprints on the board in build space, for drawing the board before its model exists and naming what the viewer hovers. ref matches the footprint's node name in the board GLB.",
+          "items": {
+            "type": "object",
+            "required": [
+              "ref"
+            ],
+            "properties": {
+              "ref": {
+                "type": "string",
+                "description": "KiCad reference designator, e.g. SW3."
+              },
+              "label": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "role": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "lib_id": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "KiCad footprint id, e.g. Diode_SMD:D_SOD-123."
+              },
+              "instance_id": {
+                "anyOf": [
+                  {
+                    "$ref": "common.schema.json#/$defs/InstanceId"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "The BuildPart this footprint mounts, when there is one."
+              },
+              "center_mm": {
+                "$ref": "common.schema.json#/$defs/Vec2",
+                "description": "Courtyard centre."
+              },
+              "size_mm": {
+                "$ref": "common.schema.json#/$defs/Vec2",
+                "description": "Courtyard size before rotation."
+              },
+              "rot_deg": {
+                "type": "number"
+              }
+            }
           }
         },
         "routing": {

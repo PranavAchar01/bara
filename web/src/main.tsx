@@ -4,6 +4,7 @@ import { App } from "./App";
 import { startClient } from "./net/client";
 import "./styles/tokens.css";
 import "./styles/app.css";
+import "./styles/shell.css";
 
 void startClient();
 

@@ -79,12 +79,6 @@ PRESETS: dict[str, list[list[float]]] = {
 STABILIZED_U = 2.0  # keys this wide or wider sit on a plate/PCB stabilizer
 
 
-def stab_size(w_u: float) -> float:
-    """Stabilizer wire length for a key: spacebars take 6.25u, every other wide key 2u
-    (the Cherry MX sizes the catalog and board/layout.py STAB_SIZES both carry)."""
-    return 6.25 if w_u >= 6.0 - 1e-6 else 2.0
-
-
 def preset_keys(name: str) -> list[dict[str, Any]]:
     """Row-staggered preset -> SPEC 3.3 keys (x_u, y_u, w_u), reading order."""
     keys: list[dict[str, Any]] = []
