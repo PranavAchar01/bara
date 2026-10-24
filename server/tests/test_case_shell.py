@@ -129,3 +129,10 @@ def test_a_scroll_wheel_turns_in_a_slot(reports: dict[str, EncloseReport]) -> No
     assert [w["ref"] for w in rep.openings["wheels"]] == ["E1"]
     cuts = [c for c in rep.enclosure["cutouts"] if c["feature"] == "wheel"]
     assert len(cuts) == 1 and cuts[0]["shape"] == "slot"
+
+
+def test_sensors_stay_inside_and_leds_get_a_light_pipe() -> None:
+    sensor = {"name": "Optical sensor", "purpose": "tracks surface motion for cursor navigation"}
+    assert shell.classify(sensor) == "inner"  # not a d-pad cut through the top
+    assert shell.classify({"name": "DPI status LED", "purpose": "shows selected DPI"}) == "light"
+    assert shell.classify({"name": "fingerprint sensor"}) == "touch"

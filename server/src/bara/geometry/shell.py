@@ -320,6 +320,9 @@ def build_body(plan: Polygon, prof: Profile, edge_len: float = 1.0) -> Body:
 KIND_WORDS: list[tuple[str, str]] = [
     ("screen", r"screen|display|lcd|oled|e-?ink|epaper|tft|panel"),
     ("port", r"usb|connector|charg|jack|socket|plug|cable|hdmi|ethernet|\bport"),
+    # parts with no control surface: pocketed under the shell, nothing cut through it
+    ("inner", r"sensor|\bimu\b|gyro|accelerometer|magnetometer|antenna|\bchip\b"),
+    ("light", r"\bleds?\b|indicator|status light|light ?pipe"),
     ("stick", r"stick|joy|analog|trackpoint"),
     ("dpad", r"d-?pad|directional|\bcross\b|arrow|navigation"),
     ("shoulder", r"shoulder|trigger|bumper|\blb\b|\brb\b|\blt\b|\brt\b"),
@@ -331,7 +334,10 @@ KIND_WORDS: list[tuple[str, str]] = [
 
 def classify(anchor: dict[str, Any]) -> str:
     text = " ".join(str(anchor.get(k) or "") for k in ("name", "purpose", "slot_id")).lower()
+    pressed = re.search(r"touch|finger|button|key|\bpad\b", text)
     for kind, pat in KIND_WORDS:
+        if kind == "inner" and pressed:
+            continue  # a touch or fingerprint sensor is still a surface the finger meets
         if re.search(pat, text):
             return kind
     return "touch"
@@ -571,6 +577,8 @@ def build_features(
             continue
         if s.kind == "button" and s.mount == "front" and _under_knob(s, knobs, clear):
             continue  # pressed through the wheel or stick above it (a mouse's middle click)
+        if s.kind == "inner":
+            continue
         if s.kind == "port" or s.mount == "back":
             if s.kind == "port":
                 _port(out, s, body, wall_mm, port_w, port_h, z_port)
@@ -583,6 +591,8 @@ def build_features(
             if s.group not in done_groups:
                 done_groups.add(s.group)
                 _dpad(out, [t for t in sites if t.group == s.group], body, seat, zmax, clear)
+        elif s.kind == "light":
+            _light(out, s, body, seat, zmax)
         elif s.kind == "wheel":
             _wheel(out, s, body, seat, zmax, clear)
         elif s.kind in ("stick", "knob"):
@@ -670,6 +680,15 @@ def _button(out: Features, s: Site, body: Body, seat: float, zmax: float, clear:
             (0.0, zc + 1.3)]  # fmt: skip
     out.caps.append(_revolve(prof, s.x, s.y, 48))
     out.cutouts.append(_cut("button", s.x, s.y, zc, 2 * r_h, "circle"))
+
+
+def _light(out: Features, s: Site, body: Body, seat: float, zmax: float) -> None:
+    """A light pipe: a small round window over the LED, capped flush."""
+    r = 1.6
+    zc = body.top_at(s.x, s.y)
+    out.cuts.append(_cyl(r, seat - 1.0, zmax + 4, s.x, s.y))
+    out.caps.append(_cyl(r - 0.15, max(seat + 0.3, zc - 1.4), zc, s.x, s.y))
+    out.cutouts.append(_cut("light", s.x, s.y, zc, 2 * r, "circle"))
 
 
 def _dpad(
