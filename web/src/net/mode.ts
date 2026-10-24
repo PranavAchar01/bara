@@ -32,6 +32,20 @@ export function socketUrl(loc: { protocol: string; host: string }): string {
   return `${loc.protocol === "https:" ? "wss" : "ws"}://${loc.host}/v1/ws`;
 }
 
+/** ?live=1 swaps in the tunnel URL that scripts/tunnel.sh publishes as /server.json. */
+export async function withPublishedServer(search: string): Promise<string> {
+  const q = new URLSearchParams(search);
+  if (q.get("live") !== "1" || q.get("server")) return search;
+  try {
+    const res = await fetch("/server.json", { cache: "no-store" });
+    const { url } = (await res.json()) as { url?: string };
+    if (url) q.set("server", url);
+  } catch {
+    // no published tunnel: stay on the build's default mode
+  }
+  return `?${q.toString()}`;
+}
+
 /** Prefix a root-relative path ("/v1/...", "/assets/...") with the remote server origin. */
 export function withServer(server: string | null, path: string): string {
   return server && path.startsWith("/") ? server + path : path;

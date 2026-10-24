@@ -7,7 +7,7 @@ import { emptyView, editSent, reduceView } from "../state/view";
 import { pushLog, showToast, useApp } from "../state/store";
 import { Connection, type SocketLike } from "./connection";
 import { FakeSocket, MockServer } from "./fakeSocket";
-import { readMode, socketUrl, withServer, type Mode } from "./mode";
+import { readMode, socketUrl, withPublishedServer, withServer, type Mode } from "./mode";
 import { DefaultLoadingManager } from "three";
 import { RestClient, httpFetcher, stubFetcher, paths } from "./rest";
 import { loadFixtures } from "../spec/fixtures";
@@ -113,7 +113,7 @@ function onDrop(env: ServerEnvelope, reason: string): void {
 }
 
 export async function startClient(): Promise<Mode> {
-  const mode = readMode(window.location.search, import.meta.env as { VITE_MOCK?: string; VITE_SERVER_URL?: string });
+  const mode = readMode(await withPublishedServer(window.location.search), import.meta.env as { VITE_MOCK?: string; VITE_SERVER_URL?: string });
   useApp.setState({ mode });
   let factory: (url: string) => SocketLike;
   if (mode.mock) {
