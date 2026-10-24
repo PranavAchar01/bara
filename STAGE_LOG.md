@@ -361,6 +361,43 @@ The coverage audit of the live site found three places where the UI said two con
 
 **Minutes:** about 50. **Rating:** 4/5.
 
+### Landing C: inspired by the manual, and the agent made exact
+
+**Feedback:** "some of the orientation like a LEGO manual, not the entire thing"; and the agent in Figma didn't have the site's shape.
+
+**Agent:**
+- The Figma Agent component had a 40×32 warm-gradient squircle body.
+- The site's BaraBot is an ink stadium: 88×62 units with fully round ends, two 13×19 rounded eyes, 25 apart.
+- All nine variants were rebuilt from the site's own numbers with `use_figma`, and each state now maps to a site mood: listening, asking, working, thinking, worried, happy, sad, offline. That covers the stadium body, lids, the happy cheeks, tilt and eye scale.
+- Every screen that uses the component updated with it. The hand-drawn eyes in the landing concepts were swapped for instances.
+
+**Landing C (recommended):** the clean Bara site with only a few manual cues.
+- The prompt is step "1", in a square field with the agent inside.
+- The hero drawing has drop arrows between layers and part counts (61×, 1×).
+- "How it builds" is four numbered steps, each with small part-count chips and a build-up thumbnail.
+- "Your builds" is a plain card grid with a quiet "No. 014".
+- No box art, set numbers or manual-blue pages; A and B stay on the page as references.
+
+**Minutes:** about 35. **Rating:** 4/5.
+
+### Landing C2: the real product, with Bara at work
+
+**Feedback:** make C "more like the actual product"; the boxed line drawings aren't how the product looks. Make the agent a big part of the page, with the agent cursor being built for generation, where Bara goes through the build acting it out.
+
+**What changed from C:**
+- **Hero:** a near-real workspace window (Layers, canvas, Build tab) instead of a line drawing.
+  - The canvas is a real render of a macropad build from `web/screenshots`, cropped to the model and grid.
+  - Bara is out on the canvas as in the agent-stage work: the Agent component (working state) beside a Figma-style blue selection box with corner handles and a "Placing SSD1306 OLED" chip, and the arrow cursor inside.
+  - A dashed trail leads back to the Layers row it picked from; green ticks mark parts already placed. The dock shows an empty dashed slot where Bara sits at home.
+  - The Build tab shows Place mid-way, with the decision card for the display.
+- **Prompt:** keeps the manual cue, a big "1" beside the field with Bara inside.
+- **"Bara works where you can see it":** four real-render stills, one per agent action: scan ("Reading 'one big knob'"), pick with a ripple, trace a dashed route across the board, type a firmware line in a code chip.
+- **Your builds:** cards use real renders (keyboard, split, smartwatch, macropad).
+
+**Tools:** HTML generated with real render crops (PIL, base64 JPEG) → `html_to_figma`. Then `use_figma` to link both Bara drawings to the Agent component and redraw the trail. The window is a Figma grid frame, so the trail had to be absolutely positioned or it stretched the window to 1198 px.
+
+**Minutes:** about 45. **Rating:** 4/5.
+
 ## Before and after
 
 | Change | Before | After |
