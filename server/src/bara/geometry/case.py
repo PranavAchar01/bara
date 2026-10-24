@@ -263,15 +263,18 @@ HIDDEN_ROLES = {"battery", "mcu", "sensor", "other"}  # roles a part can have ou
 
 
 SLIVER_MM3 = 150.0  # a loose bezel strip smaller than this would snap off: the openings merge
+ISLAND_FRACTION = 0.02  # nor can an island ringed by openings (the middle of a button diamond)
 
 
 def _drop_slivers(m: mf.Manifold) -> mf.Manifold:
     """Two openings a hair apart leave a loose strip of bezel between them; a strip that small
-    cannot be printed or held, so it goes and the openings join."""
+    cannot be printed or held, so it goes and the openings join. So does an island the
+    openings ring round: nothing holds it to the shell."""
     pieces = m.decompose()
     if len(pieces) <= 1:
         return m
-    keep = [p for p in pieces if p.volume() >= SLIVER_MM3]
+    floor = max(SLIVER_MM3, ISLAND_FRACTION * max(p.volume() for p in pieces))
+    keep = [p for p in pieces if p.volume() >= floor]
     if not keep:
         return m
     out = keep[0]
@@ -557,15 +560,24 @@ def enclose_report(
     # Pockets for bottom-side parts; the floor goes under the deepest one.
     pockets: list[mf.Manifold] = []
     deepest = 0.0
+    balls = [f for f in feats if f.role == "trackball"]
+
+    def under_ball(f: Feature) -> bool:
+        return any(math.hypot(f.x - b.x, f.y - b.y) < max(b.w, b.d) / 2 for b in balls)
+
+    # a sensor facing the desk (an optical mouse) looks through the floor; under a ball the
+    # cup below gives it its own pocket
+    desk_sensors = [
+        f for f in feats if f.role == "sensor" and f.side == "bottom" and not under_ball(f)
+    ]
     for f in feats:
-        if f.side != "bottom" or f.height <= 0 or f.role == "sensor":
+        if f.side != "bottom" or f.height <= 0 or (f.role == "sensor" and under_ball(f)):
             continue
         depth = f.height + H["floor_clearance_mm"]
         deepest = max(deepest, depth)
         c = H["pocket_clearance_mm"] * 2
         pockets.append(_prism(_rect_cs(f.x, f.y, f.w + c, f.d + c, f.rot_deg), -depth, 0.01))
 
-    balls = [f for f in feats if f.role == "trackball"]
     ball_geo: list[dict[str, float]] = []
     z_bot = -deepest - H["floor_mm"]
     for b in balls:
@@ -678,6 +690,8 @@ def enclose_report(
         solids.append(_prism(_circle_cs(g["x"], g["y"], rr), z_bot, wall_top))
     tray = _union(solids)
     cuts = [_prism(inner_cs, 0.0, wall_top + 1.0), *pockets]
+    for f in desk_sensors:
+        cuts.append(_prism(_circle_cs(f.x, f.y, H["sensor_window_d_mm"] / 2), z_bot - 1.0, 0.01))
     tray = tray - _union(cuts)
     for g in ball_geo:
         rin = g["r"] + H["ball_clearance_mm"]

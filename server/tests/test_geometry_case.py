@@ -257,3 +257,33 @@ def test_a_loose_bezel_sliver_is_dropped_and_real_pieces_stay():
     assert len(_drop_slivers(main + sliver).decompose()) == 1
     big = mf.Manifold.cube((20, 20, 4)).translate((70, 0, 0))
     assert len(_drop_slivers(main + big).decompose()) == 2  # a real piece is kept and reported
+    island = mf.Manifold.cube((7, 7, 4)).translate((20, 15, 8))  # ringed by button holes
+    assert len(_drop_slivers(main.scale((3, 3, 1)) + island).decompose()) == 1
+
+
+def test_a_desk_facing_sensor_looks_through_the_floor_and_a_knob_fits_round(tmp_path, monkeypatch):
+    monkeypatch.setenv("BARA_DATA_DIR", str(tmp_path))
+    board = {
+        "board_id": "pcb_main",
+        "side": "none",
+        "outline": [[0, 0], [60, 0], [60, 90], [0, 90]],
+        "thickness_mm": 1.6,
+        "placements": [
+            {"ref": "M1", "role": "module", "label": "PMW3360DM-T2QU optical sensor",
+             "x_mm": 30.0, "y_mm": 40.0, "rot_deg": 0, "side": "bottom", "on_pcb": False,
+             "touch": True, "height_mm": 5.0, "size_mm": [10.9, 16.2]},
+        ],
+    }  # fmt: skip
+    rep = enclose_report(board, [], {})
+    fit = _by_rule(rep.checks, "mech.fit.enclosure")[0]
+    assert fit["status"] == "pass", fit["message"]
+    # the floor is open under the lens: a ray straight down from it leaves the tray
+    from bara.geometry.validate import _first_hit
+
+    assert _first_hit(rep.tray, np.array([30.0, 40.0, -1.0]), np.array([0, 0, -1.0]), 40) is None
+
+    from bara.geometry.case import Feature
+    from bara.geometry.validate import _feature_box
+
+    knob = Feature("M8", "knob", 0.0, 0.0, 0.0, "top", 10.0, 20.0, 20.0)
+    assert _feature_box(knob, 1.6).volume() < 0.8 * 20 * 20 * 10  # a disc, not its box

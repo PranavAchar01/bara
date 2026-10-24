@@ -109,7 +109,11 @@ def _feature_box(f: Feature, t: float, z_lo: float | None = None) -> mf.Manifold
     lo, hi = f.z_range(t)
     if z_lo is not None:
         lo = z_lo
-    return _prism(_rect_cs(f.x, f.y, f.w, f.d, f.rot_deg), lo, max(hi, lo + 0.01))
+    if f.role == "knob":  # a knob is turned: round, whatever box its catalog row gives
+        cs = mf.CrossSection.circle(max(f.w, f.d) / 2, 64).translate((f.x, f.y))
+    else:
+        cs = _rect_cs(f.x, f.y, f.w, f.d, f.rot_deg)
+    return _prism(cs, lo, max(hi, lo + 0.01))
 
 
 # Parts built to share one position, beyond the stacked ones: a stabilizer wraps its switch

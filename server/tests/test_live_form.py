@@ -933,3 +933,19 @@ def test_an_off_board_cell_moves_clear_of_the_parts_on_its_side() -> None:
     # either side works: beside the sensor, or flipped above the board where nothing sits
     clear = cell.footprint_poly().intersection(sensor.footprint_poly()).area < 0.01
     assert clear or cell.side == "top"
+
+
+def test_two_catch_all_blocks_on_one_part_are_one_part() -> None:
+    from bara.live import compose as cmp
+
+    comp = object.__new__(cmp.Composer)
+    sensor = cmp.Slot("sensor", "Optical sensor", "other", "critical", 1, [])
+    sensor.chosen = {"part_id": "lcsc:pmw3360"}
+    lens = cmp.Slot("lens", "Lens matched to the sensor", "other", "critical", 1, [])
+    left = cmp.Slot("left", "Left click", "input.button", "critical", 1, [])
+    left.chosen = {"part_id": "lcsc:d2fc"}
+    middle = cmp.Slot("middle", "Middle click", "input.button", "critical", 1, [])
+    comp.slots = [sensor, lens, left, middle]
+    assert comp.twin_slot(lens, {"part_id": "lcsc:pmw3360"}) is sensor
+    # the same switch under two clicks is two switches
+    assert comp.twin_slot(middle, {"part_id": "lcsc:d2fc"}) is None

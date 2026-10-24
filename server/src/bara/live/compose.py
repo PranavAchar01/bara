@@ -1142,6 +1142,10 @@ class Composer:
                 )
             else:
                 part = ranked[idx]
+                twin = self.twin_slot(slot, part)
+                if twin is not None:
+                    self.mark_covered(slot, twin, step, emit)
+                    continue
                 slot.chosen = part
                 self.result.chosen_parts[slot.slot_id] = part
                 if method == "default":
@@ -1375,6 +1379,21 @@ class Composer:
             if slot.function_id not in part_functions(other.chosen):
                 continue
             if sides <= ({i.side for i in other.instances} | {"none"}):
+                return other
+        return None
+
+    def twin_slot(self, slot: Slot, part: dict[str, Any]) -> Slot | None:
+        """A decided catch-all slot that already holds this very part.
+
+        A block with no function in the taxonomy is found by its names alone; when two such
+        blocks land on one part (an optical sensor, and its lens "matched to" that sensor),
+        the second named the first's part, so it is one part, not two."""
+        if slot.function_id != "other":
+            return None
+        for other in self.slots:
+            if other is slot or other.chosen is None or other.covered_by:
+                continue
+            if other.function_id == "other" and other.chosen["part_id"] == part["part_id"]:
                 return other
         return None
 
