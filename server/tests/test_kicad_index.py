@@ -185,3 +185,41 @@ def test_curated_ranks_above_generated(lib: Path) -> None:
     )
     assert src.get_part("kicadgen:kicad:sym:Sensor_Test:ADNS-TEST")["name"] == "ADNS-TEST"
     assert src.get_part("mod:mouse_sensor") is curated
+
+
+def test_package_sig_ignores_pad_and_thin_prefix() -> None:
+    sig = kicad_generated.package_sig
+    assert sig("VQFN-16-1EP_3x3mm_P0.5mm_EP1.68x1.68mm") == ("QFN", "16", "3x3", "0.5")
+    assert sig("QFN-16-1EP_3x3mm_P0.5mm_EP1.7x1.7mm") == ("QFN", "16", "3x3", "0.5")
+    assert sig("HTSSOP-16-1EP_4.4x5mm_P0.65mm") == sig("TSSOP-16_4.4x5mm_P0.65mm")
+    assert sig("QFN-16-1EP_4x4mm_P0.65mm") != sig("QFN-16-1EP_3x3mm_P0.5mm")
+    assert sig("PinHeader_1x02_P2.54mm_Vertical") is None
+
+
+def test_model_lent_by_same_package_sibling(lib: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    pretty = lib / "footprints" / "Pkg_Test.pretty"
+    shapes = lib / "3dmodels" / "Pkg_Test.3dshapes"
+    lent = "QFN-16-1EP_3x3mm_P0.5mm_EP1.7x1.7mm"
+    for name in ("VQFN-16-1EP_3x3mm_P0.5mm_EP1.68x1.68mm", lent, "QFN-16-1EP_4x4mm_P0.65mm"):
+        (pretty / f"{name}.kicad_mod").write_text(MOD.replace("SOIC-4", name))
+    for name in (lent, "QFN-16-1EP_4x4mm_P0.65mm"):
+        (shapes / f"{name}.step").write_text("ISO-10303-21;")
+    rows, meta = ki.build_rows(("kicad",))
+    ki.write_index(rows, meta)
+    idx = kicad_generated.KicadIndex(ki.INDEX_SQLITE, glb_dir=lib / "glb")
+    calls: list[str] = []
+
+    def fake_convert(fp: dict, out: Path) -> bool:
+        calls.append(fp["part_id"])
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_bytes(b"glTF")
+        return True
+
+    monkeypatch.setattr(kicad_generated, "_convert", fake_convert)
+    pid = "kicadgen:kicad:fp:Pkg_Test:VQFN-16-1EP_3x3mm_P0.5mm_EP1.68x1.68mm"
+    lender = f"kicadgen:kicad:fp:Pkg_Test:{lent}"
+    assert idx.model_footprint("Pkg_Test:VQFN-16-1EP_3x3mm_P0.5mm_EP1.68x1.68mm") == lender
+    asset = idx.get_part(pid)["assets"][0]
+    assert asset["url"].endswith(f"{kicad_generated.glb_stem(lender)}.glb")
+    assert idx.ensure_glb(pid) is not None and calls == [lender]
+    assert idx.model_footprint("Pkg_Test:Orphan") is None  # no same-size sibling, no model

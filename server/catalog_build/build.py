@@ -44,6 +44,12 @@ SERVER = Path(__file__).resolve().parent.parent
 ASSETS = SERVER / "data/assets/parts"
 CATALOG = SERVER / "data/catalog"
 MESH_MANIFEST = CATALOG / "meshes.json"
+# part id -> {"lcsc", "mpn", "query", "path"}: models fetched by part number for entries whose
+# footprint has no library model (catalog_build.model_backfill writes it)
+LCSC_MODELS_JSON = CATALOG / "lcsc_models.json"
+LCSC_MODELS: dict[str, dict[str, str]] = (
+    json.loads(LCSC_MODELS_JSON.read_text()) if LCSC_MODELS_JSON.is_file() else {}
+)
 WORK = Path("/tmp/bara-catalog-work")
 ALIGN_TOL_MM = 0.05
 
@@ -119,6 +125,15 @@ def plan_entry(e: Entry) -> Plan:
                 p.missing_models.append(m.path)
             else:
                 p.models.append((res, m, None))
+    if not p.models and e.part_id in LCSC_MODELS:
+        # no library model for this footprint: the same part's model from LCSC by part number
+        spec = ModelSpec("lcsc", LCSC_MODELS[e.part_id]["path"])
+        path = SOURCES["lcsc"].root / spec.path
+        if path.is_file():
+            p.models.append((Resolved(path, SOURCES["lcsc"], spec.path), None, spec))
+            p.missing_models.clear()
+        else:
+            p.problems.append(f"model missing: {path}")
     return p
 
 

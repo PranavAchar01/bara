@@ -38,6 +38,25 @@ _STEM_BAD = re.compile(r"[^A-Za-z0-9._-]")
 _glb_lock = threading.Lock()
 
 
+_PKG = re.compile(r"^([A-Z]+)-(\d+)")
+_PKG_BODY = re.compile(r"(?<![A-Za-z])(\d+(?:\.\d+)?x\d+(?:\.\d+)?)mm")
+_PITCH = re.compile(r"_P(\d+(?:\.\d+)?)mm")
+# thin, very thin, ultra thin and heat-sink variants share the package's outline
+_THIN = re.compile(r"^[VWUXH](?=(?:QFN|DFN|SON|TSSOP|SSOP|SOP|LGA|BGA))")
+
+
+def package_sig(name: str) -> tuple[str, str, str, str] | None:
+    """(family, pins, body, pitch) of a package footprint name, ignoring the exposed pad:
+    "VQFN-16-1EP_3x3mm_P0.5mm_EP1.68x1.68mm" -> ("QFN", "16", "3x3", "0.5"). None when the
+    name is not a sized package."""
+    m = _PKG.match(name)
+    body = _PKG_BODY.search(name)
+    pitch = _PITCH.search(name)
+    if not m or not body or not pitch:
+        return None
+    return (_THIN.sub("", m.group(1)), m.group(2), body.group(1), pitch.group(1))
+
+
 def glb_stem(footprint_part_id: str) -> str:
     return _STEM_BAD.sub("_", footprint_part_id.removeprefix("kicadgen:"))
 
@@ -104,7 +123,16 @@ class KicadIndex:
         return [self.get_part(pid) for pid in ids]
 
     def get_part(self, part_id: str) -> dict[str, Any]:
-        return part_from_record(self.record(part_id), self.footprint_record(part_id))
+        return part_from_record(self.record(part_id), self.model_record(part_id))
+
+    def model_record(self, part_id: str) -> dict[str, Any] | None:
+        """The footprint record whose 3D model draws this part: its own footprint's, else the
+        same-package sibling's (model_footprint). None when neither has a model."""
+        fp = self.footprint_record(part_id)
+        if fp is None or fp.get("model_path"):
+            return fp
+        lender = self.model_footprint(f"{fp['lib']}:{fp['name']}")
+        return self.record(lender) if lender is not None else None
 
     def footprint_record(self, part_id: str) -> dict[str, Any] | None:
         rec = self.record(part_id)
@@ -118,11 +146,9 @@ class KicadIndex:
         fp = self.footprint_record(part_id)
         if fp is None:
             return {"footprint": None, "models": []}
-        if not fp.get("model_path"):  # draw it with the same body's model from a sibling
-            lender = self.model_footprint(f"{fp['lib']}:{fp['name']}")
-            if lender is not None:
-                lent = self.record(lender)
-                fp = {**fp, "model_source": lent["model_source"], "model_path": lent["model_path"]}
+        lent = self.model_record(part_id)  # the same body's model from a sibling, if needed
+        if lent is not None:
+            fp = {**fp, "model_source": lent["model_source"], "model_path": lent["model_path"]}
         return {
             "footprint": {"path": str(_abs(fp["source"], fp["fp_path"]))},
             "models": (
@@ -144,28 +170,33 @@ class KicadIndex:
             (lib,),
         )
         body = set(_BODY.findall(name))
+        sig = package_sig(name)
         best, best_r = None, SIBLING_SIMILARITY
+        same_pkg, same_r = None, -1.0
         for r in rows:
             if not r["has_model"]:
                 continue
             if r["name"] == name:
                 return str(r["part_id"])
+            ratio = SequenceMatcher(None, r["name"], name).ratio()
+            if sig is not None and package_sig(r["name"]) == sig and ratio > same_r:
+                # same family, pins, body and pitch: the same outside, whatever its pad
+                same_pkg, same_r = str(r["part_id"]), ratio
             if body and not body <= set(_BODY.findall(r["name"])):
                 continue  # another body size is another part
-            ratio = SequenceMatcher(None, r["name"], name).ratio()
             if ratio > best_r:
                 best, best_r = str(r["part_id"]), ratio
-        return best
+        return same_pkg or best
 
     def glb_file(self, part_id: str) -> Path | None:
-        fp = self.footprint_record(part_id)
+        fp = self.model_record(part_id)
         return self.glb_dir / f"{glb_stem(fp['part_id'])}.glb" if fp else None
 
     def ensure_glb(self, part_id: str) -> Path | None:
         """The part's GLB, converting its footprint on first use. None when the footprint has
         no 3D model or the conversion fails."""
-        fp = self.footprint_record(part_id)
-        if fp is None or not fp.get("model_path"):
+        fp = self.model_record(part_id)
+        if fp is None:
             return None
         out = self.glb_dir / f"{glb_stem(fp['part_id'])}.glb"
         with _glb_lock:
