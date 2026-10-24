@@ -1,0 +1,278 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://app.invalid/spec/v1/common.schema.json",
+  "x-spec-version": "1.1.0",
+  "title": "Common definitions",
+  "description": "Shared scalar types, identifiers, geometry primitives and small enums. Units: length mm, angle deg, voltage V, current A, power W, mass g, frequency Hz, duration ms, capacity mAh. Coordinates are build space: right-handed, Z up, mm.",
+  "$defs": {
+    "SpecVersion": {
+      "type": "string",
+      "description": "Semantic version of this spec. Clients accept any 1.x.y and reject other majors with E_UNSUPPORTED_VERSION.",
+      "pattern": "^1\\.[0-9]+\\.[0-9]+$"
+    },
+    "Id": {
+      "type": "string",
+      "description": "Generic stable identifier. Case sensitive. Part ids imported from Etch keep the Etch key verbatim (for example kicad:4xxx:14528@DIP-16_W10.16mm). URL-encode when used in a path.",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@/+\\-]{0,199}$"
+    },
+    "Slug": {
+      "type": "string",
+      "description": "Lowercase machine name.",
+      "pattern": "^[a-z0-9][a-z0-9_.\\-]{0,79}$"
+    },
+    "BuildId": {
+      "type": "string",
+      "pattern": "^b_[A-Za-z0-9]{8,32}$"
+    },
+    "InstanceId": {
+      "type": "string",
+      "description": "Part instance id, unique within one build.",
+      "pattern": "^[a-z][a-z0-9_]{0,63}$"
+    },
+    "MsgId": {
+      "type": "string",
+      "description": "Client generated message id (UUID v4 recommended). Used for idempotency.",
+      "pattern": "^[A-Za-z0-9_\\-]{8,64}$"
+    },
+    "Timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC 3339 UTC timestamp with milliseconds, for example 2026-10-24T18:02:11.120Z."
+    },
+    "DurationMs": {
+      "type": "number",
+      "minimum": 0
+    },
+    "Vec2": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "Vec3": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "BBox": {
+      "type": "object",
+      "description": "Axis aligned box in mm.",
+      "required": [
+        "min",
+        "max"
+      ],
+      "properties": {
+        "min": {
+          "$ref": "#/$defs/Vec3"
+        },
+        "max": {
+          "$ref": "#/$defs/Vec3"
+        }
+      }
+    },
+    "HexColor": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$"
+    },
+    "Material": {
+      "type": "string",
+      "enum": [
+        "plastic",
+        "metal",
+        "pcb",
+        "rubber",
+        "glass",
+        "fabric",
+        "wood",
+        "unknown"
+      ]
+    },
+    "Color": {
+      "type": "object",
+      "required": [
+        "hex"
+      ],
+      "properties": {
+        "hex": {
+          "$ref": "#/$defs/HexColor"
+        },
+        "material": {
+          "$ref": "#/$defs/Material"
+        },
+        "node": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "GLB node name the color applies to. null means every recolorable node of the instance."
+        }
+      }
+    },
+    "StageId": {
+      "type": "string",
+      "enum": [
+        "classify",
+        "reuse",
+        "compose",
+        "place",
+        "enclose",
+        "board",
+        "firmware",
+        "render",
+        "edit",
+        "unknown"
+      ]
+    },
+    "Tier": {
+      "type": "string",
+      "description": "exact: an open design satisfies every hard requirement and there are no soft ones. substitute: hard requirements met, soft ones applied as whitelisted transforms. compose: built from parts.",
+      "enum": [
+        "exact",
+        "substitute",
+        "compose",
+        "unknown"
+      ]
+    },
+    "Severity": {
+      "type": "string",
+      "enum": [
+        "info",
+        "warning",
+        "error",
+        "critical",
+        "unknown"
+      ]
+    },
+    "CheckStatus": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "fail",
+        "unknown"
+      ]
+    },
+    "TriState": {
+      "type": "string",
+      "enum": [
+        "yes",
+        "no",
+        "unknown"
+      ]
+    },
+    "Side": {
+      "type": "string",
+      "description": "Which half of a split device an instance belongs to. none for non-split devices.",
+      "enum": [
+        "left",
+        "right",
+        "center",
+        "none",
+        "unknown"
+      ]
+    },
+    "Criticality": {
+      "type": "string",
+      "enum": [
+        "critical",
+        "optional",
+        "unknown"
+      ]
+    },
+    "Origin": {
+      "type": "string",
+      "description": "Who introduced an object into the build.",
+      "enum": [
+        "design",
+        "compose",
+        "solver",
+        "user",
+        "unknown"
+      ]
+    },
+    "PortRef": {
+      "type": "object",
+      "description": "One interface on one part instance. index selects one element of an arrayed instance (quantity > 1); null means the whole array, mapped element to element.",
+      "required": [
+        "instance_id",
+        "interface_id"
+      ],
+      "properties": {
+        "instance_id": {
+          "$ref": "#/$defs/InstanceId"
+        },
+        "interface_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "index": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        }
+      }
+    },
+    "Subject": {
+      "type": "object",
+      "description": "What a check, warning or error is about. All fields optional; the UI highlights whatever is present.",
+      "properties": {
+        "instance_id": {
+          "$ref": "#/$defs/InstanceId"
+        },
+        "interface_id": {
+          "type": "string"
+        },
+        "connection_id": {
+          "type": "string"
+        },
+        "slot_id": {
+          "type": "string"
+        },
+        "part_id": {
+          "$ref": "#/$defs/Id"
+        },
+        "enclosure_id": {
+          "type": "string"
+        },
+        "board_id": {
+          "type": "string"
+        }
+      }
+    },
+    "KeySpec": {
+      "type": "object",
+      "description": "One short spec line on a part card, for example {label: Voltage, value: 3.3, unit: V}.",
+      "required": [
+        "label",
+        "value"
+      ],
+      "properties": {
+        "label": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "value": {
+          "type": [
+            "string",
+            "number",
+            "boolean"
+          ]
+        },
+        "unit": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 12
+        }
+      }
+    }
+  }
+}

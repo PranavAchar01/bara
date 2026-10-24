@@ -1,0 +1,1254 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://app.invalid/spec/v1/build.schema.json",
+  "x-spec-version": "1.1.0",
+  "title": "Build",
+  "description": "The assembled device. GET /v1/builds/{id} returns it; the WebSocket stream delivers the same state as granular events. Reducing every event of a build in seq order must produce exactly this object (contract test C6).",
+  "type": "object",
+  "$ref": "#/$defs/Build",
+  "$defs": {
+    "Build": {
+      "type": "object",
+      "required": [
+        "build_id",
+        "prompt",
+        "status",
+        "revision",
+        "tier",
+        "parts",
+        "connections",
+        "slots",
+        "enclosures",
+        "boards",
+        "checks",
+        "warnings",
+        "last_seq"
+      ],
+      "properties": {
+        "build_id": {
+          "$ref": "common.schema.json#/$defs/BuildId"
+        },
+        "prompt": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "running",
+            "awaiting_input",
+            "done",
+            "failed",
+            "cancelled",
+            "unknown"
+          ],
+          "description": "awaiting_input: a clarify.request is open and the build waits for clarify.answer (see clarify)."
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "0 while the build runs. build.done sets 1. Each edit.applied adds 1. Late firmware.ready and check.result events never change it."
+        },
+        "created_at": {
+          "$ref": "common.schema.json#/$defs/Timestamp"
+        },
+        "tier": {
+          "$ref": "common.schema.json#/$defs/Tier"
+        },
+        "spec": {
+          "oneOf": [
+            {
+              "$ref": "spec.schema.json"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "design_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Reused design (exact, substitute) or skeleton design (compose)."
+        },
+        "slots": {
+          "type": "array",
+          "items": {
+            "$ref": "slot.schema.json#/$defs/Slot"
+          }
+        },
+        "decisions": {
+          "type": "array",
+          "items": {
+            "$ref": "slot.schema.json#/$defs/Decision"
+          }
+        },
+        "parts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BuildPart"
+          }
+        },
+        "connections": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Connection"
+          }
+        },
+        "layouts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Layout"
+          }
+        },
+        "enclosures": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Enclosure"
+          }
+        },
+        "boards": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Board"
+          }
+        },
+        "firmware": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/Firmware"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "$ref": "check.schema.json"
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Warning"
+          }
+        },
+        "scene": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/Scene"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "timings_ms": {
+          "type": "object",
+          "description": "Stage id to wall time in ms.",
+          "additionalProperties": {
+            "$ref": "common.schema.json#/$defs/DurationMs"
+          }
+        },
+        "error": {
+          "oneOf": [
+            {
+              "$ref": "error.schema.json"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "last_seq": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "seq of the last event folded into this snapshot."
+        },
+        "clarify": {
+          "oneOf": [
+            {
+              "$ref": "spec.schema.json#/$defs/ClarifyQuestion"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The open clarify question while status is awaiting_input, else null."
+        },
+        "clarifications": {
+          "type": "array",
+          "items": {
+            "$ref": "spec.schema.json#/$defs/ClarifyResolution"
+          },
+          "description": "Every resolved clarify round, oldest first."
+        }
+      }
+    },
+    "Placement": {
+      "type": "object",
+      "description": "Pose of an instance in build space. rotation_deg is intrinsic Euler XYZ in degrees (three.js order XYZ). mode layout: the pose is the layout origin and each array element sits at its key position (SPEC.md 3.3).",
+      "required": [
+        "mode",
+        "position_mm",
+        "rotation_deg"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "single",
+            "layout",
+            "unknown"
+          ]
+        },
+        "position_mm": {
+          "$ref": "common.schema.json#/$defs/Vec3"
+        },
+        "rotation_deg": {
+          "$ref": "common.schema.json#/$defs/Vec3"
+        },
+        "layout_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "explode_offset_mm": {
+          "$ref": "common.schema.json#/$defs/Vec3",
+          "description": "Offset at explode factor 1.0. The viewer adds factor * offset."
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "design",
+            "solver",
+            "intent",
+            "user",
+            "unknown"
+          ]
+        },
+        "locked": {
+          "type": "boolean",
+          "default": false,
+          "description": "true after a user move: the solver keeps this pose fixed."
+        },
+        "intent": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/PlacementIntent"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "PlacementIntent": {
+      "type": "object",
+      "description": "What the agent wants; the CP-SAT solver turns it into exact coordinates.",
+      "properties": {
+        "region": {
+          "type": "string",
+          "enum": [
+            "top",
+            "bottom",
+            "left",
+            "right",
+            "front",
+            "back",
+            "center",
+            "any",
+            "unknown"
+          ]
+        },
+        "near_instance_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "face_wall": {
+          "$ref": "vocab.schema.json#/$defs/Face"
+        },
+        "layer": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Stack order from the base, 0 = bottom."
+        },
+        "note": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "Layout": {
+      "type": "object",
+      "description": "Key positions in key units, KLE / QMK info.json convention (x right, y down, origin top left).",
+      "required": [
+        "layout_id",
+        "pitch_x_mm",
+        "pitch_y_mm",
+        "keys"
+      ],
+      "properties": {
+        "layout_id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "pitch_x_mm": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "pitch_y_mm": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "keys": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "i",
+              "x_u",
+              "y_u"
+            ],
+            "properties": {
+              "i": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Array index; equals PortRef.index and the element index of arrayed instances."
+              },
+              "x_u": {
+                "type": "number"
+              },
+              "y_u": {
+                "type": "number"
+              },
+              "w_u": {
+                "type": "number",
+                "default": 1
+              },
+              "h_u": {
+                "type": "number",
+                "default": 1
+              },
+              "r_deg": {
+                "type": "number",
+                "default": 0
+              },
+              "rx_u": {
+                "type": "number",
+                "default": 0
+              },
+              "ry_u": {
+                "type": "number",
+                "default": 0
+              },
+              "matrix": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "minItems": 2,
+                "maxItems": 2
+              }
+            }
+          }
+        }
+      }
+    },
+    "BuildPart": {
+      "type": "object",
+      "required": [
+        "instance_id",
+        "part_id",
+        "quantity",
+        "placement",
+        "card"
+      ],
+      "properties": {
+        "instance_id": {
+          "$ref": "common.schema.json#/$defs/InstanceId"
+        },
+        "part_id": {
+          "$ref": "common.schema.json#/$defs/Id"
+        },
+        "slot_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "quantity": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Number of physical copies. quantity > 1 requires placement.mode layout with that many keys."
+        },
+        "side": {
+          "$ref": "common.schema.json#/$defs/Side"
+        },
+        "color": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/Color"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "null: use Part.render.default_color."
+        },
+        "placement": {
+          "$ref": "#/$defs/Placement"
+        },
+        "card": {
+          "$ref": "part.schema.json#/$defs/PartCard"
+        },
+        "assets": {
+          "type": "array",
+          "items": {
+            "$ref": "asset.schema.json"
+          }
+        },
+        "origin": {
+          "$ref": "common.schema.json#/$defs/Origin"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "ok",
+            "warning",
+            "failed",
+            "unknown"
+          ],
+          "default": "ok"
+        }
+      }
+    },
+    "Connection": {
+      "type": "object",
+      "required": [
+        "connection_id",
+        "type",
+        "kind",
+        "from",
+        "to"
+      ],
+      "properties": {
+        "connection_id": {
+          "type": "string",
+          "pattern": "^c_[a-z0-9_]{1,63}$"
+        },
+        "type": {
+          "$ref": "vocab.schema.json#/$defs/InterfaceType"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "electrical",
+            "mechanical",
+            "wireless",
+            "unknown"
+          ]
+        },
+        "from": {
+          "$ref": "common.schema.json#/$defs/PortRef",
+          "description": "The provides side."
+        },
+        "to": {
+          "$ref": "common.schema.json#/$defs/PortRef",
+          "description": "The requires side."
+        },
+        "via_instance_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Cable, fastener or adapter instance that physically carries the connection."
+        },
+        "nets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "signal"
+            ],
+            "properties": {
+              "signal": {
+                "type": "string"
+              },
+              "from_pin": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "to_pin": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        },
+        "resolved": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Parameters fixed by the connection, for example {address: 60} or {rail: 3v3}."
+        },
+        "label": {
+          "type": "string"
+        },
+        "origin": {
+          "$ref": "common.schema.json#/$defs/Origin"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "ok",
+            "warning",
+            "failed",
+            "unknown"
+          ],
+          "default": "ok"
+        }
+      }
+    },
+    "Cutout": {
+      "type": "object",
+      "required": [
+        "cutout_id",
+        "face",
+        "shape",
+        "center_mm",
+        "size_mm"
+      ],
+      "properties": {
+        "cutout_id": {
+          "type": "string"
+        },
+        "for": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/PortRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "feature": {
+          "type": "string"
+        },
+        "face": {
+          "$ref": "vocab.schema.json#/$defs/Face"
+        },
+        "shape": {
+          "type": "string",
+          "enum": [
+            "rect",
+            "circle",
+            "slot",
+            "unknown"
+          ]
+        },
+        "center_mm": {
+          "$ref": "common.schema.json#/$defs/Vec3"
+        },
+        "size_mm": {
+          "$ref": "common.schema.json#/$defs/Vec2"
+        }
+      }
+    },
+    "Enclosure": {
+      "type": "object",
+      "description": "The one generated object. design: the open design's own case, unchanged. generated: Manifold shell minus cutouts, computed from the parts. none: no enclosure.",
+      "required": [
+        "enclosure_id",
+        "kind",
+        "params",
+        "status",
+        "revision"
+      ],
+      "properties": {
+        "enclosure_id": {
+          "type": "string",
+          "pattern": "^e_[a-z0-9_]{1,63}$"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "generated",
+            "design",
+            "none",
+            "unknown"
+          ],
+          "description": "design: the open design's own case, kept unchanged (exact and substitute tiers). generated: a blank parametric case (compose tier). none: no case."
+        },
+        "side": {
+          "$ref": "common.schema.json#/$defs/Side"
+        },
+        "for_instance_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/InstanceId"
+          }
+        },
+        "params": {
+          "type": "object",
+          "properties": {
+            "wall_mm": {
+              "type": "number",
+              "minimum": 0.8,
+              "maximum": 10
+            },
+            "floor_mm": {
+              "type": "number",
+              "minimum": 0.8,
+              "maximum": 10
+            },
+            "fillet_mm": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 20
+            },
+            "clearance_mm": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 10
+            },
+            "height_mm": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 1,
+              "description": "null: fit to contents."
+            },
+            "split": {
+              "type": "string",
+              "enum": [
+                "none",
+                "lid_top",
+                "tray",
+                "halves",
+                "unknown"
+              ]
+            },
+            "standoff_height_mm": {
+              "type": "number",
+              "minimum": 0
+            },
+            "screw": {
+              "$ref": "vocab.schema.json#/$defs/Screw"
+            }
+          }
+        },
+        "outer_size_mm": {
+          "$ref": "common.schema.json#/$defs/Vec3"
+        },
+        "position_mm": {
+          "$ref": "common.schema.json#/$defs/Vec3"
+        },
+        "rotation_deg": {
+          "$ref": "common.schema.json#/$defs/Vec3"
+        },
+        "explode_offset_mm": {
+          "$ref": "common.schema.json#/$defs/Vec3"
+        },
+        "cutouts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Cutout"
+          }
+        },
+        "color": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/Color"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "assets": {
+          "type": "array",
+          "items": {
+            "$ref": "asset.schema.json"
+          }
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "ok",
+            "failed",
+            "unknown"
+          ]
+        },
+        "duration_ms": {
+          "$ref": "common.schema.json#/$defs/DurationMs"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Increments on every rebuild of this enclosure."
+        },
+        "material": {
+          "$ref": "common.schema.json#/$defs/Material",
+          "default": "plastic",
+          "description": "Render material of the case."
+        },
+        "color_source": {
+          "type": "string",
+          "enum": [
+            "default",
+            "user",
+            "design",
+            "unknown"
+          ],
+          "default": "default",
+          "description": "default: neutral gray #9E9E9E, no decoration (every generated case unless the user asked for a colour). user: the user asked for this colour in the prompt or an edit. design: colour taken from the open design."
+        }
+      }
+    },
+    "Net": {
+      "type": "object",
+      "required": [
+        "name",
+        "members"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "power",
+            "ground",
+            "signal",
+            "unknown"
+          ]
+        },
+        "members": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "instance_id",
+              "pin"
+            ],
+            "properties": {
+              "instance_id": {
+                "$ref": "common.schema.json#/$defs/InstanceId"
+              },
+              "pin": {
+                "type": "string"
+              },
+              "index": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              }
+            }
+          }
+        }
+      }
+    },
+    "Board": {
+      "type": "object",
+      "description": "A PCB. When part_instance_id is set, the board is also a BuildPart (from a design) and the viewport renders that part; the board view uses this record. When null, the viewport renders this record's own model asset.",
+      "required": [
+        "board_id",
+        "source",
+        "status",
+        "revision"
+      ],
+      "properties": {
+        "board_id": {
+          "type": "string",
+          "pattern": "^pcb_[a-z0-9_]{1,63}$"
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "design",
+            "prerouted",
+            "tscircuit",
+            "none",
+            "unknown"
+          ]
+        },
+        "side": {
+          "$ref": "common.schema.json#/$defs/Side"
+        },
+        "part_instance_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "for_instance_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/InstanceId"
+          },
+          "description": "Instances mounted on or wired through this board."
+        },
+        "outline_mm": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/Vec2"
+          }
+        },
+        "size_mm": {
+          "$ref": "common.schema.json#/$defs/Vec2"
+        },
+        "thickness_mm": {
+          "type": "number",
+          "minimum": 0
+        },
+        "layers": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "position_mm": {
+          "$ref": "common.schema.json#/$defs/Vec3"
+        },
+        "rotation_deg": {
+          "$ref": "common.schema.json#/$defs/Vec3"
+        },
+        "nets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Net"
+          }
+        },
+        "routing": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "routed",
+                "partial",
+                "unrouted",
+                "skipped",
+                "unknown"
+              ]
+            },
+            "unrouted_nets": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "duration_ms": {
+              "$ref": "common.schema.json#/$defs/DurationMs"
+            },
+            "method": {
+              "type": "string",
+              "enum": [
+                "design",
+                "autorouted",
+                "none",
+                "unknown"
+              ],
+              "description": "design: the reused design's own routed board, loaded as is. autorouted: a new composition routed live by the autorouter. none: no board to route."
+            },
+            "cache_key": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Exact composition key (hash of sorted part ids, connections and board outline). Autorouted results are cached under it; null for design boards."
+            },
+            "cache_hit": {
+              "type": "boolean",
+              "description": "true when an autorouted result came from the cache."
+            },
+            "router": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Autorouter that produced the result, e.g. freerouting or tscircuit. null for design boards."
+            }
+          }
+        },
+        "drc": {
+          "$ref": "common.schema.json#/$defs/CheckStatus"
+        },
+        "assets": {
+          "type": "array",
+          "items": {
+            "$ref": "asset.schema.json"
+          }
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "ok",
+            "failed",
+            "unknown"
+          ]
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "Firmware": {
+      "type": "object",
+      "required": [
+        "firmware_id",
+        "framework",
+        "files",
+        "compile",
+        "revision"
+      ],
+      "properties": {
+        "firmware_id": {
+          "type": "string",
+          "pattern": "^fw_[a-z0-9_]{1,63}$"
+        },
+        "framework": {
+          "$ref": "part.schema.json#/$defs/Framework"
+        },
+        "origin": {
+          "type": "string",
+          "enum": [
+            "design",
+            "template",
+            "unknown"
+          ],
+          "description": "design: the open design's own firmware (keymap or config). template: filled from per part driver templates."
+        },
+        "targets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "target_id",
+              "mcu_instance_id"
+            ],
+            "properties": {
+              "target_id": {
+                "type": "string"
+              },
+              "mcu_instance_id": {
+                "$ref": "common.schema.json#/$defs/InstanceId"
+              },
+              "side": {
+                "$ref": "common.schema.json#/$defs/Side"
+              },
+              "label": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "path",
+              "language"
+            ],
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Relative path, forward slashes, no .. segments."
+              },
+              "language": {
+                "type": "string",
+                "enum": [
+                  "c",
+                  "cpp",
+                  "python",
+                  "yaml",
+                  "devicetree",
+                  "keymap",
+                  "json",
+                  "kconfig",
+                  "text",
+                  "unknown"
+                ]
+              },
+              "content": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 262144,
+                "description": "Inline text up to 256 KiB; otherwise null and asset is set."
+              },
+              "asset": {
+                "oneOf": [
+                  {
+                    "$ref": "asset.schema.json"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "bytes": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        },
+        "drivers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "part_id",
+              "library"
+            ],
+            "properties": {
+              "part_id": {
+                "$ref": "common.schema.json#/$defs/Id"
+              },
+              "library": {
+                "type": "string"
+              },
+              "version": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "include": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        },
+        "pin_map": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "instance_id",
+              "signal",
+              "mcu_instance_id",
+              "mcu_pin"
+            ],
+            "properties": {
+              "instance_id": {
+                "$ref": "common.schema.json#/$defs/InstanceId"
+              },
+              "interface_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "signal": {
+                "type": "string"
+              },
+              "mcu_instance_id": {
+                "$ref": "common.schema.json#/$defs/InstanceId"
+              },
+              "mcu_pin": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "compile": {
+          "type": "object",
+          "required": [
+            "status"
+          ],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "running",
+                "ok",
+                "failed",
+                "skipped",
+                "unknown"
+              ]
+            },
+            "duration_ms": {
+              "$ref": "common.schema.json#/$defs/DurationMs"
+            },
+            "binaries": {
+              "type": "array",
+              "items": {
+                "$ref": "asset.schema.json"
+              }
+            },
+            "log": {
+              "oneOf": [
+                {
+                  "$ref": "asset.schema.json"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "message": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "prebuilt",
+            "compiled",
+            "unknown"
+          ],
+          "description": "prebuilt: the known design's own binary, served as is, compile.status skipped. compiled: generated source compiled live (only when routing sends the build there: compose tier, or a substitute that changes the MCU or pin map)."
+        },
+        "mode_reason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 200,
+          "description": "One line on why this mode was chosen."
+        }
+      }
+    },
+    "Warning": {
+      "type": "object",
+      "required": [
+        "warning_id",
+        "code",
+        "message"
+      ],
+      "properties": {
+        "warning_id": {
+          "type": "string"
+        },
+        "code": {
+          "type": "string",
+          "enum": [
+            "optional_part_missing",
+            "licence_unknown",
+            "licence_noncommercial",
+            "dims_third_party",
+            "data_unverified",
+            "constraint_relaxed",
+            "substitute_used",
+            "llm_fallback",
+            "llm_degraded",
+            "slow_stage",
+            "asset_missing",
+            "compile_skipped",
+            "assumption_made",
+            "other",
+            "unknown"
+          ]
+        },
+        "severity": {
+          "$ref": "common.schema.json#/$defs/Severity"
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "subjects": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/Subject"
+          }
+        },
+        "stage": {
+          "$ref": "common.schema.json#/$defs/StageId"
+        }
+      }
+    },
+    "Scene": {
+      "type": "object",
+      "required": [
+        "camera",
+        "assembly_bbox_mm"
+      ],
+      "properties": {
+        "camera": {
+          "type": "object",
+          "required": [
+            "position_mm",
+            "target_mm"
+          ],
+          "properties": {
+            "position_mm": {
+              "$ref": "common.schema.json#/$defs/Vec3"
+            },
+            "target_mm": {
+              "$ref": "common.schema.json#/$defs/Vec3"
+            },
+            "fov_deg": {
+              "type": "number",
+              "default": 35
+            }
+          }
+        },
+        "assembly_bbox_mm": {
+          "$ref": "common.schema.json#/$defs/BBox"
+        },
+        "render": {
+          "oneOf": [
+            {
+              "$ref": "asset.schema.json"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Large PNG of the assembled device, shown until GLBs finish loading."
+        },
+        "preload": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Asset urls to fetch first, in priority order."
+        }
+      }
+    }
+  }
+}

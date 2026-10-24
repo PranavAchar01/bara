@@ -1,0 +1,276 @@
+{
+  "fixture": "part",
+  "spec_version": "1.1.0",
+  "kind": "rest",
+  "description": "Full Part record (Etch fields plus the v1 fields).",
+  "body_def": "PartResponse",
+  "request": {
+    "method": "GET",
+    "path": "/v1/parts/mod%3Anice_nano_v2"
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "spec_version": "1.1.0",
+      "part": {
+        "key": "mod:nice_nano_v2",
+        "lib_id": "nice_nano:nice_nano_v2",
+        "footprint": "keyboard_footprints:ProMicro_Socketed",
+        "family": "module",
+        "name": "nice!nano v2",
+        "descr": "nRF52840 wireless keyboard controller, Pro Micro pinout, LiPo charger",
+        "kw": "nrf52840 ble pro micro keyboard",
+        "pins": {
+          "1": "P0.06",
+          "2": "P0.08",
+          "3": "GND",
+          "4": "GND",
+          "5": "P0.17",
+          "6": "P0.20",
+          "21": "VCC",
+          "23": "GND",
+          "24": "BAT+"
+        },
+        "pads_ok": true,
+        "model": null,
+        "spice": {
+          "prefix": "X",
+          "pins": [],
+          "role": "none"
+        },
+        "spice_note": "No SPICE model; module.",
+        "datasheet": "https://nicekeyboards.com/docs/nice-nano/",
+        "source": "community",
+        "tags": [
+          "keyboard",
+          "ble",
+          "pro_micro"
+        ],
+        "fp_ok": true,
+        "part_id": "mod:nice_nano_v2",
+        "kind": "module",
+        "display_name": "nice!nano v2",
+        "mpn": "nice!nano v2",
+        "manufacturer": "Nice Keyboards",
+        "vendor_urls": [
+          "https://nicekeyboards.com/nice-nano"
+        ],
+        "summary": "nRF52840 BLE controller in Pro Micro form factor with LiPo charger.",
+        "functions": [
+          {
+            "function_id": "compute.mcu",
+            "primary": true,
+            "params": {
+              "mcu": "nRF52840"
+            }
+          },
+          {
+            "function_id": "comms.ble",
+            "primary": false,
+            "params": {
+              "version": "5.0"
+            }
+          },
+          {
+            "function_id": "power.charger",
+            "primary": false,
+            "params": {
+              "chemistry": "lipo",
+              "i_charge_a": 0.1
+            }
+          }
+        ],
+        "interfaces": [
+          {
+            "id": "footprint",
+            "type": "module_footprint",
+            "role": "requires",
+            "label": "Pro Micro footprint",
+            "params": {
+              "form_factor": "pro_micro",
+              "mount": "socketed",
+              "pin_count": 24
+            },
+            "pins": []
+          },
+          {
+            "id": "i2c0",
+            "type": "i2c",
+            "role": "provides",
+            "label": "I2C",
+            "params": {
+              "v_logic_v": 3.3,
+              "speed_max_hz": 400000
+            },
+            "pins": [
+              "5",
+              "6"
+            ],
+            "signals": {
+              "SDA": "5",
+              "SCL": "6"
+            },
+            "max_connections": 8
+          },
+          {
+            "id": "bat",
+            "type": "battery",
+            "role": "requires",
+            "label": "Battery pads",
+            "params": {
+              "chemistry": "lipo",
+              "v_nom_v": 3.7,
+              "connector": "solder"
+            },
+            "pins": [
+              "24",
+              "23"
+            ],
+            "optional": true
+          },
+          {
+            "id": "usb",
+            "type": "usb",
+            "role": "provides",
+            "label": "USB C",
+            "params": {
+              "connector": "usb_c",
+              "usb_role": "device",
+              "speed": "full",
+              "power_v": 5.0
+            },
+            "pins": []
+          },
+          {
+            "id": "ble",
+            "type": "radio",
+            "role": "provides",
+            "label": "BLE",
+            "params": {
+              "protocol": "ble",
+              "link_role": "peer"
+            },
+            "pins": []
+          },
+          {
+            "id": "vcc_out",
+            "type": "power_out",
+            "role": "provides",
+            "label": "3.3 V out",
+            "params": {
+              "rail": "3v3",
+              "v_nom_v": 3.3,
+              "i_max_a": 0.1
+            },
+            "pins": [
+              "21"
+            ]
+          }
+        ],
+        "electrical": {
+          "v_in_min_v": 3.0,
+          "v_in_max_v": 5.5,
+          "v_logic_v": 3.3,
+          "i_typ_a": 0.003,
+          "i_sleep_a": 2e-05
+        },
+        "mechanical": {
+          "bbox_mm": {
+            "min": [
+              -9.0,
+              -16.75,
+              0.0
+            ],
+            "max": [
+              9.0,
+              16.75,
+              3.2
+            ]
+          },
+          "mass_g": 2.6,
+          "standards": [
+            "pro_micro",
+            "2.54mm_header"
+          ]
+        },
+        "drivers": [
+          {
+            "framework": "zmk",
+            "library": "board nice_nano_v2",
+            "version": null,
+            "include": null
+          }
+        ],
+        "render": {
+          "default_color": "#1F2A44",
+          "material": "pcb",
+          "recolorable_nodes": []
+        },
+        "assets": [
+          {
+            "asset_id": "a_nice_nano_v2_glb",
+            "kind": "glb",
+            "role": "model",
+            "url": "/assets/parts/nice_nano_v2.glb",
+            "status": "ready"
+          },
+          {
+            "asset_id": "a_nice_nano_v2_png",
+            "kind": "png",
+            "role": "thumbnail",
+            "url": "/assets/parts/nice_nano_v2.png",
+            "status": "ready"
+          }
+        ],
+        "licence": {
+          "spdx": "NOASSERTION",
+          "name": "No hardware licence declared",
+          "url": null,
+          "commercial_ok": "unknown",
+          "copyleft": "no",
+          "attribution_required": "no"
+        },
+        "provenance": {
+          "route": "community_scrape",
+          "source_url": "https://nicekeyboards.com/nice-nano",
+          "extractor": "datasheet",
+          "verified": "third_party",
+          "confidence": 0.8,
+          "dims_source_url": "https://nicekeyboards.com/docs/nice-nano/",
+          "retrieved_at": "2026-10-20T18:00:00Z",
+          "field_sources": {
+            "/mechanical/bbox_mm": {
+              "extractor": "datasheet",
+              "verified": "datasheet",
+              "confidence": 0.9,
+              "source_url": "https://nicekeyboards.com/docs/nice-nano/"
+            }
+          }
+        },
+        "facets": {
+          "module_footprint": "pro_micro",
+          "wireless": "ble",
+          "mcu_family": "nrf52",
+          "v_logic_v": 3.3,
+          "power_source": [
+            "usb",
+            "battery"
+          ],
+          "commercial_ok": "unknown"
+        },
+        "compatible_with": [
+          {
+            "part_id": "bat:lipo_301230_110",
+            "relation": "used_with",
+            "evidence": "corne_wireless"
+          }
+        ],
+        "popularity": {
+          "stars": 0,
+          "designs_using": 34
+        },
+        "status": "active"
+      }
+    }
+  }
+}

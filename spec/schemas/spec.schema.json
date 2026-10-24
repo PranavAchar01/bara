@@ -1,0 +1,488 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://app.invalid/spec/v1/spec.schema.json",
+  "x-spec-version": "1.1.0",
+  "title": "Spec",
+  "description": "Output of the classify stage: what the user asked for, as a taxonomy path, a function list and typed requirements. Requirements use facet keys and values from GET /v1/facets only; free text that maps to no facet stays in leftover_text and only influences ranking.",
+  "type": "object",
+  "required": [
+    "spec_id",
+    "prompt",
+    "device_class",
+    "taxonomy_path",
+    "functions",
+    "hard_requirements",
+    "soft_requirements",
+    "classifier"
+  ],
+  "properties": {
+    "spec_id": {
+      "type": "string"
+    },
+    "prompt": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "normalized_prompt": {
+      "type": "string"
+    },
+    "device_class": {
+      "$ref": "vocab.schema.json#/$defs/DeviceClass"
+    },
+    "taxonomy_path": {
+      "type": "array",
+      "description": "device class > form > subsystem, as slugs. The first element equals device_class.",
+      "minItems": 1,
+      "items": {
+        "$ref": "common.schema.json#/$defs/Slug"
+      }
+    },
+    "functions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "function_id",
+          "required"
+        ],
+        "properties": {
+          "function_id": {
+            "$ref": "vocab.schema.json#/$defs/FunctionId"
+          },
+          "required": {
+            "type": "boolean",
+            "description": "true: the device must have it (becomes a critical slot). false: nice to have (optional slot)."
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 1
+          },
+          "source": {
+            "$ref": "#/$defs/RequirementSource"
+          }
+        }
+      }
+    },
+    "hard_requirements": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Requirement"
+      }
+    },
+    "soft_requirements": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Requirement"
+      }
+    },
+    "leftover_text": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Words that matched no facet."
+    },
+    "classifier": {
+      "type": "object",
+      "required": [
+        "stage",
+        "confidence"
+      ],
+      "properties": {
+        "stage": {
+          "type": "string",
+          "description": "Which cascade step decided.",
+          "enum": [
+            "rules",
+            "knn",
+            "llm",
+            "cache",
+            "unknown"
+          ]
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "margin": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Top 1 minus top 2 score."
+        },
+        "model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "latency_ms": {
+          "$ref": "common.schema.json#/$defs/DurationMs"
+        },
+        "provider": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "LLM provider that served the call: cerebras (primary), anthropic (backup), openai (offline evaluation only)."
+        },
+        "fallback": {
+          "type": "boolean",
+          "description": "true when the backup provider answered because the primary failed or timed out."
+        }
+      }
+    },
+    "scope": {
+      "type": "string",
+      "enum": [
+        "in_scope",
+        "out_of_scope",
+        "unknown"
+      ],
+      "description": "out_of_scope: the request cannot be built from electronics and printable parts (the build then fails with E_OUT_OF_SCOPE)."
+    },
+    "scope_reason": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 300
+    },
+    "assumptions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Assumption"
+      },
+      "description": "Facts the engine assumed instead of asking, shown to the user as editable chips."
+    },
+    "ambiguity": {
+      "type": "object",
+      "required": [
+        "needs_clarify"
+      ],
+      "properties": {
+        "needs_clarify": {
+          "type": "boolean"
+        },
+        "missing_facets": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/Slug"
+          },
+          "description": "Every facet left open, as ClarifyFacet values (blocking and defaultable)."
+        },
+        "blocking_facet": {
+          "oneOf": [
+            {
+              "$ref": "vocab.schema.json#/$defs/ClarifyFacet"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The one blocking facet to ask about, or null. needs_clarify is true exactly when this is set, unless a catalog design that does the same job identifies the device (then it is cleared)."
+        }
+      },
+      "description": "Classifier output that drives the clarify flow (SPEC.md section 8.11)."
+    },
+    "main_purpose": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "The device's core job in one sentence, without the user's tweaks (wireless, battery, colour, extra buttons, size). The reuse test compares this with each candidate design's own job."
+    },
+    "reuse": {
+      "type": "object",
+      "required": [
+        "candidate_design_id",
+        "covers_main_purpose",
+        "changes_needed",
+        "verified"
+      ],
+      "description": "Reuse test that decides the tier (SPEC.md section 8.12). exact: covers_main_purpose and no changes_needed. substitute: covers_main_purpose with changes_needed. compose: no candidate covers the main purpose.",
+      "properties": {
+        "candidate_design_id": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "covers_main_purpose": {
+          "type": "boolean",
+          "description": "True only when the candidate is the same kind of device doing the same core job. Shared parts (buttons, a screen, LEDs, a sensor) are not enough; a firmware-only design does not cover a request for hardware."
+        },
+        "changes_needed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Concrete part changes for stated requirements the candidate's default build does not meet."
+        },
+        "verified": {
+          "type": "boolean",
+          "description": "True when a second, single-design check confirmed the reuse decision."
+        }
+      }
+    }
+  },
+  "$defs": {
+    "RequirementSource": {
+      "type": "string",
+      "description": "explicit: stated in the prompt. implicit: implied by another requirement (wireless implies battery). default: taken from the device class default. clarified: from the user's answer to a clarify question. assumed: the engine's best guess after a skipped or timed out clarify question (also listed in assumptions).",
+      "enum": [
+        "explicit",
+        "implicit",
+        "default",
+        "clarified",
+        "assumed",
+        "unknown"
+      ]
+    },
+    "Requirement": {
+      "type": "object",
+      "required": [
+        "req_id",
+        "facet",
+        "op",
+        "value"
+      ],
+      "properties": {
+        "req_id": {
+          "type": "string"
+        },
+        "facet": {
+          "$ref": "common.schema.json#/$defs/Slug"
+        },
+        "op": {
+          "type": "string",
+          "enum": [
+            "eq",
+            "neq",
+            "in",
+            "lte",
+            "gte",
+            "range",
+            "has",
+            "unknown"
+          ]
+        },
+        "value": {
+          "description": "Scalar for eq/neq/lte/gte/has, array for in, [min, max] for range."
+        },
+        "unit": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source": {
+          "$ref": "#/$defs/RequirementSource"
+        },
+        "text_span": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "description": "[start, end) character offsets into prompt, for highlighting.",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "label": {
+          "type": "string",
+          "description": "Human chip text, for example Wireless (BLE)."
+        }
+      }
+    },
+    "ClarifyOption": {
+      "type": "object",
+      "required": [
+        "option_id",
+        "label"
+      ],
+      "properties": {
+        "option_id": {
+          "type": "string",
+          "pattern": "^o_[a-z0-9_]{1,31}$"
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 200
+        },
+        "implies": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Requirement"
+          },
+          "description": "Requirements added to the spec if this option is picked."
+        }
+      }
+    },
+    "ClarifyQuestion": {
+      "type": "object",
+      "required": [
+        "question_id",
+        "question",
+        "options",
+        "allow_free_text",
+        "reason",
+        "missing_facets",
+        "round"
+      ],
+      "properties": {
+        "question_id": {
+          "type": "string",
+          "pattern": "^q_[a-z0-9_]{1,31}$"
+        },
+        "question": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "options": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 4,
+          "items": {
+            "$ref": "#/$defs/ClarifyOption"
+          }
+        },
+        "allow_free_text": {
+          "type": "boolean"
+        },
+        "allow_skip": {
+          "type": "boolean",
+          "default": true,
+          "description": "true: the card shows Just pick, which resolves as skipped with the default option."
+        },
+        "default_option_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Best guess used on skip or timeout."
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "Why the engine is asking instead of guessing."
+        },
+        "missing_facets": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "common.schema.json#/$defs/Slug"
+          }
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 60000,
+          "description": "After this long with no answer the server resolves with timeout."
+        },
+        "round": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2
+        }
+      }
+    },
+    "ClarifyResolution": {
+      "type": "object",
+      "required": [
+        "question_id",
+        "resolution",
+        "assumptions"
+      ],
+      "properties": {
+        "question_id": {
+          "type": "string",
+          "pattern": "^q_[a-z0-9_]{1,31}$"
+        },
+        "resolution": {
+          "type": "string",
+          "enum": [
+            "answered_option",
+            "answered_text",
+            "skipped",
+            "timeout",
+            "unknown"
+          ]
+        },
+        "option_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "free_text": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 300
+        },
+        "assumptions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Assumption"
+          },
+          "description": "Filled on skipped and timeout: what the engine picked in the user's place."
+        }
+      }
+    },
+    "Assumption": {
+      "type": "object",
+      "required": [
+        "assumption_id",
+        "facet",
+        "value",
+        "label"
+      ],
+      "properties": {
+        "assumption_id": {
+          "type": "string",
+          "pattern": "^as_[a-z0-9_]{1,31}$"
+        },
+        "facet": {
+          "$ref": "common.schema.json#/$defs/Slug"
+        },
+        "value": {
+          "type": [
+            "string",
+            "number",
+            "boolean"
+          ]
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 200
+        }
+      }
+    }
+  }
+}

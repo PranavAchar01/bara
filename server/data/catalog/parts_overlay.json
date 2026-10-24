@@ -1,0 +1,166 @@
+{
+  "description": "Hand-authored catalog data. The fixtures carry PartCards and assets for every part but a full Part record (functions, interfaces) only for mod:nice_nano_v2. This overlay adds functions, interfaces and facets for the other parts so swap/add/connect checks run from data. Interface ids match the ids the fixture connections use.",
+  "parts": {
+    "pcb:corne_v3_l": {
+      "functions": [{"function_id": "interconnect.pcb", "primary": true}],
+      "interfaces": [
+        {"id": "mcu_socket", "type": "module_footprint", "role": "provides", "label": "Pro Micro socket", "params": {"form_factor": "pro_micro", "mount": "socketed", "pin_count": 24}, "pins": []},
+        {"id": "sw_socket", "type": "switch_socket", "role": "provides", "label": "MX hotswap sockets", "params": {"family": "mx", "hotswap": true, "count": 21, "pitch_x_mm": 19.05, "pitch_y_mm": 19.05}, "pins": []}
+      ],
+      "facets": {"switch_family": "mx", "layout_size": "split", "module_footprint": "pro_micro", "hotswap": true}
+    },
+    "pcb:corne_v3_r": {
+      "functions": [{"function_id": "interconnect.pcb", "primary": true}],
+      "interfaces": [
+        {"id": "mcu_socket", "type": "module_footprint", "role": "provides", "label": "Pro Micro socket", "params": {"form_factor": "pro_micro", "mount": "socketed", "pin_count": 24}, "pins": []},
+        {"id": "sw_socket", "type": "switch_socket", "role": "provides", "label": "MX hotswap sockets", "params": {"family": "mx", "hotswap": true, "count": 21, "pitch_x_mm": 19.05, "pitch_y_mm": 19.05}, "pins": []}
+      ],
+      "facets": {"switch_family": "mx", "layout_size": "split", "module_footprint": "pro_micro", "hotswap": true}
+    },
+    "mod:pro_micro_32u4": {
+      "functions": [{"function_id": "compute.mcu", "primary": true, "params": {"mcu": "ATmega32U4"}}, {"function_id": "comms.usb_device", "primary": false}],
+      "interfaces": [
+        {"id": "footprint", "type": "module_footprint", "role": "requires", "label": "Pro Micro footprint", "params": {"form_factor": "pro_micro", "mount": "socketed", "pin_count": 24}, "pins": []},
+        {"id": "i2c0", "type": "i2c", "role": "provides", "label": "I2C", "params": {"v_logic_v": 5.0, "speed_max_hz": 400000}, "pins": [], "max_connections": 8},
+        {"id": "serial", "type": "uart", "role": "provides", "label": "Serial (split link)", "params": {"v_logic_v": 5.0}, "pins": []},
+        {"id": "usb", "type": "usb", "role": "provides", "label": "USB micro B", "params": {"connector": "micro_b", "usb_role": "device", "speed": "full", "power_v": 5.0}, "pins": []}
+      ],
+      "facets": {"module_footprint": "pro_micro", "wireless": "none", "mcu_family": "avr", "v_logic_v": 5.0, "power_source": ["usb"]}
+    },
+    "mod:bluemicro840": {
+      "functions": [{"function_id": "compute.mcu", "primary": true, "params": {"mcu": "nRF52840"}}, {"function_id": "comms.ble", "primary": false}, {"function_id": "power.charger", "primary": false}],
+      "interfaces": [
+        {"id": "footprint", "type": "module_footprint", "role": "requires", "label": "Pro Micro footprint", "params": {"form_factor": "pro_micro", "mount": "socketed", "pin_count": 24}, "pins": []},
+        {"id": "i2c0", "type": "i2c", "role": "provides", "label": "I2C", "params": {"v_logic_v": 3.3, "speed_max_hz": 400000}, "pins": [], "max_connections": 8},
+        {"id": "bat", "type": "battery", "role": "requires", "label": "Battery pads", "params": {"chemistry": "lipo", "v_nom_v": 3.7, "connector": "solder"}, "pins": [], "optional": true},
+        {"id": "ble", "type": "radio", "role": "provides", "label": "BLE", "params": {"protocol": "ble", "link_role": "peer"}, "pins": []}
+      ],
+      "facets": {"module_footprint": "pro_micro", "wireless": "ble", "mcu_family": "nrf52", "v_logic_v": 3.3, "power_source": ["usb", "battery"]}
+    },
+    "mod:puchi_ble": {
+      "functions": [{"function_id": "compute.mcu", "primary": true, "params": {"mcu": "nRF52840"}}, {"function_id": "comms.ble", "primary": false}],
+      "interfaces": [
+        {"id": "footprint", "type": "module_footprint", "role": "requires", "label": "Pro Micro footprint", "params": {"form_factor": "pro_micro", "mount": "socketed", "pin_count": 24}, "pins": []},
+        {"id": "i2c0", "type": "i2c", "role": "provides", "label": "I2C", "params": {"v_logic_v": 3.3}, "pins": [], "max_connections": 8},
+        {"id": "bat", "type": "battery", "role": "requires", "label": "Battery pads", "params": {"chemistry": "lipo", "v_nom_v": 3.7, "connector": "solder"}, "pins": [], "optional": true},
+        {"id": "ble", "type": "radio", "role": "provides", "label": "BLE", "params": {"protocol": "ble", "link_role": "peer"}, "pins": []}
+      ],
+      "facets": {"module_footprint": "pro_micro", "wireless": "ble", "mcu_family": "nrf52", "v_logic_v": 3.3, "power_source": ["usb", "battery"]}
+    },
+    "mod:supermini_nrf52840": {
+      "functions": [{"function_id": "compute.mcu", "primary": true, "params": {"mcu": "nRF52840"}}, {"function_id": "comms.ble", "primary": false}],
+      "interfaces": [
+        {"id": "footprint", "type": "module_footprint", "role": "requires", "label": "Pro Micro footprint", "params": {"form_factor": "pro_micro", "mount": "socketed", "pin_count": 24}, "pins": []},
+        {"id": "i2c0", "type": "i2c", "role": "provides", "label": "I2C", "params": {"v_logic_v": 3.3}, "pins": [], "max_connections": 8},
+        {"id": "bat", "type": "battery", "role": "requires", "label": "Battery pads", "params": {"chemistry": "lipo", "v_nom_v": 3.7, "connector": "solder"}, "pins": [], "optional": true},
+        {"id": "ble", "type": "radio", "role": "provides", "label": "BLE", "params": {"protocol": "ble", "link_role": "peer"}, "pins": []}
+      ],
+      "facets": {"module_footprint": "pro_micro", "wireless": "ble", "mcu_family": "nrf52", "v_logic_v": 3.3, "power_source": ["usb", "battery"]}
+    },
+    "mod:xiao_esp32c3": {
+      "functions": [{"function_id": "compute.mcu", "primary": true, "params": {"mcu": "ESP32-C3"}}, {"function_id": "comms.wifi", "primary": false}, {"function_id": "comms.ble", "primary": false}],
+      "interfaces": [
+        {"id": "footprint", "type": "module_footprint", "role": "requires", "label": "XIAO footprint", "params": {"form_factor": "xiao", "mount": "castellated", "pin_count": 14}, "pins": []},
+        {"id": "i2c0", "type": "i2c", "role": "provides", "label": "I2C", "params": {"v_logic_v": 3.3, "speed_max_hz": 400000}, "pins": [], "max_connections": 8},
+        {"id": "usb", "type": "usb", "role": "provides", "label": "USB C", "params": {"connector": "usb_c", "usb_role": "device", "speed": "full", "power_v": 5.0}, "pins": []},
+        {"id": "wifi", "type": "radio", "role": "provides", "label": "Wi-Fi", "params": {"protocol": "wifi", "link_role": "peer"}, "pins": []}
+      ],
+      "facets": {"module_footprint": "xiao", "wireless": "wifi", "mcu_family": "esp32", "v_logic_v": 3.3, "power_source": ["usb"]}
+    },
+    "disp:ssd1306_128x32": {
+      "functions": [{"function_id": "display.oled", "primary": true, "params": {"resolution": "128x32"}}],
+      "interfaces": [
+        {"id": "i2c", "type": "i2c", "role": "requires", "label": "I2C header", "params": {"v_logic_v": 3.3, "addresses": [60], "address_options": [60, 61]}, "pins": []}
+      ],
+      "facets": {"display_type": "oled", "bus": "i2c"}
+    },
+    "disp:sh1106_128x64": {
+      "functions": [{"function_id": "display.oled", "primary": true, "params": {"resolution": "128x64"}}],
+      "interfaces": [
+        {"id": "i2c", "type": "i2c", "role": "requires", "label": "I2C header", "params": {"v_logic_v": 3.3, "addresses": [60], "address_options": [60, 61]}, "pins": []}
+      ],
+      "facets": {"display_type": "oled", "bus": "i2c"}
+    },
+    "sens:bme280_breakout": {
+      "functions": [{"function_id": "sense.temperature", "primary": true}, {"function_id": "sense.humidity", "primary": false}, {"function_id": "sense.pressure", "primary": false}],
+      "interfaces": [
+        {"id": "i2c", "type": "i2c", "role": "requires", "label": "I2C header", "params": {"v_logic_v": 3.3, "addresses": [118], "address_options": [118, 119]}, "pins": []}
+      ],
+      "facets": {"measures": ["temperature", "humidity", "pressure"], "bus": "i2c"}
+    },
+    "conn:pj320a_trrs": {
+      "functions": [{"function_id": "interconnect.jack", "primary": true}],
+      "interfaces": [
+        {"id": "socket", "type": "jack", "role": "provides", "label": "TRRS socket", "params": {"kind": "trrs", "poles": 4, "use": "split_link"}, "pins": []}
+      ],
+      "facets": {"jack": "trrs"}
+    },
+    "cable:trrs_1m": {
+      "functions": [{"function_id": "interconnect.cable", "primary": true}],
+      "interfaces": [
+        {"id": "plug_l", "type": "jack", "role": "requires", "label": "Plug A", "params": {"kind": "trrs", "poles": 4, "use": "split_link"}, "pins": []},
+        {"id": "plug_r", "type": "jack", "role": "requires", "label": "Plug B", "params": {"kind": "trrs", "poles": 4, "use": "split_link"}, "pins": []}
+      ],
+      "facets": {"jack": "trrs", "length_mm": 1000}
+    },
+    "cap:dsa_1u_pbt": {
+      "functions": [{"function_id": "mech.keycap", "primary": true}],
+      "interfaces": [
+        {"id": "stem", "type": "switch_stem", "role": "requires", "label": "MX cross stem", "params": {"stem": "mx_cross", "family": "mx"}, "pins": []}
+      ],
+      "facets": {"switch_family": "mx", "profile": "dsa"}
+    },
+    "sw:gateron_yellow_mx": {
+      "functions": [{"function_id": "input.key", "primary": true}],
+      "interfaces": [
+        {"id": "pins", "type": "switch_socket", "role": "requires", "label": "MX pins", "params": {"family": "mx"}, "pins": []},
+        {"id": "stem", "type": "switch_stem", "role": "provides", "label": "MX cross stem", "params": {"stem": "mx_cross", "family": "mx"}, "pins": []}
+      ],
+      "facets": {"switch_family": "mx", "switch_type": "linear", "force_gf": 50}
+    },
+    "sw:cherry_mx2a_brown": {
+      "functions": [{"function_id": "input.key", "primary": true}],
+      "interfaces": [
+        {"id": "pins", "type": "switch_socket", "role": "requires", "label": "MX pins", "params": {"family": "mx"}, "pins": []},
+        {"id": "stem", "type": "switch_stem", "role": "provides", "label": "MX cross stem", "params": {"stem": "mx_cross", "family": "mx"}, "pins": []}
+      ],
+      "facets": {"switch_family": "mx", "switch_type": "tactile", "force_gf": 55}
+    },
+    "sw:kailh_choc_red": {
+      "functions": [{"function_id": "input.key", "primary": true}],
+      "interfaces": [
+        {"id": "pins", "type": "switch_socket", "role": "requires", "label": "Choc v1 pins", "params": {"family": "choc_v1"}, "pins": []},
+        {"id": "stem", "type": "switch_stem", "role": "provides", "label": "Choc v1 stem", "params": {"stem": "choc_v1", "family": "choc_v1"}, "pins": []}
+      ],
+      "facets": {"switch_family": "choc_v1", "switch_type": "linear", "force_gf": 50}
+    },
+    "mech:corne_plate_fr4_l": {
+      "functions": [{"function_id": "mech.plate", "primary": true}],
+      "interfaces": [
+        {"id": "cutouts", "type": "plate_cutout", "role": "provides", "label": "MX cutouts", "params": {"family": "mx", "cutout_mm": 14.0, "thickness_mm": 1.5, "count": 21}, "pins": []}
+      ],
+      "facets": {"switch_family": "mx"}
+    },
+    "mech:corne_plate_fr4_r": {
+      "functions": [{"function_id": "mech.plate", "primary": true}],
+      "interfaces": [
+        {"id": "cutouts", "type": "plate_cutout", "role": "provides", "label": "MX cutouts", "params": {"family": "mx", "cutout_mm": 14.0, "thickness_mm": 1.5, "count": 21}, "pins": []}
+      ],
+      "facets": {"switch_family": "mx"}
+    },
+    "bat:lipo_301230_110": {
+      "functions": [{"function_id": "power.battery", "primary": true, "params": {"chemistry": "lipo", "capacity_mah": 110}}],
+      "interfaces": [
+        {"id": "lead", "type": "battery", "role": "provides", "label": "Battery lead", "params": {"chemistry": "lipo", "v_nom_v": 3.7, "capacity_mah": 110, "connector": "solder"}, "pins": []}
+      ],
+      "facets": {"chemistry": "lipo", "capacity_mah": 110}
+    },
+    "bat:lipo_401230_150": {
+      "functions": [{"function_id": "power.battery", "primary": true, "params": {"chemistry": "lipo", "capacity_mah": 150}}],
+      "interfaces": [
+        {"id": "lead", "type": "battery", "role": "provides", "label": "Battery lead", "params": {"chemistry": "lipo", "v_nom_v": 3.7, "capacity_mah": 150, "connector": "solder"}, "pins": []}
+      ],
+      "facets": {"chemistry": "lipo", "capacity_mah": 150}
+    }
+  }
+}

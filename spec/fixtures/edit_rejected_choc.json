@@ -1,0 +1,172 @@
+{
+  "fixture": "edit_rejected_choc",
+  "spec_version": "1.1.0",
+  "kind": "stream",
+  "description": "Edit rejected: swapping in Choc v1 switches fails mech.switch.family_match. Nothing changes; revision stays 1. Starts from exact_keyboard.",
+  "requires_fixture": "exact_keyboard",
+  "steps": [
+    {
+      "dir": "client",
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "edit.apply",
+        "msg_id": "m_edit_choc_01",
+        "ts": "2026-10-24T20:00:20.267Z",
+        "payload": {
+          "build_id": "b_exact001A",
+          "base_revision": 1,
+          "ops": [
+            {
+              "op": "swap_part",
+              "instance_id": "u_sw_l",
+              "part_id": "sw:kailh_choc_red"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 4,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "ack",
+        "seq": 0,
+        "build_id": "b_exact001A",
+        "ts": "2026-10-24T20:00:20.271Z",
+        "payload": {
+          "msg_id": "m_edit_choc_01",
+          "accepted": true,
+          "duplicate": false,
+          "build_id": "b_exact001A",
+          "edit_id": "ed_1",
+          "error": null
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 2,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "stage.started",
+        "seq": 63,
+        "build_id": "b_exact001A",
+        "ts": "2026-10-24T20:00:20.273Z",
+        "stage": "edit",
+        "cause": {
+          "msg_id": "m_edit_choc_01",
+          "edit_id": "ed_1"
+        },
+        "payload": {
+          "stage": "edit",
+          "label": "Swapping switches",
+          "budget_ms": 50
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 5,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "stage.completed",
+        "seq": 64,
+        "build_id": "b_exact001A",
+        "ts": "2026-10-24T20:00:20.278Z",
+        "stage": "edit",
+        "cause": {
+          "msg_id": "m_edit_choc_01",
+          "edit_id": "ed_1"
+        },
+        "payload": {
+          "stage": "edit",
+          "status": "failed",
+          "duration_ms": 5,
+          "message": "Choc v1 switches do not fit MX hotswap sockets."
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 2,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "edit.rejected",
+        "seq": 65,
+        "build_id": "b_exact001A",
+        "ts": "2026-10-24T20:00:20.280Z",
+        "cause": {
+          "msg_id": "m_edit_choc_01",
+          "edit_id": "ed_1"
+        },
+        "payload": {
+          "edit_id": "ed_1",
+          "msg_id": "m_edit_choc_01",
+          "error": {
+            "code": "E_INCOMPATIBLE",
+            "message": "Kailh Choc v1 Red does not fit the left PCB's MX sockets.",
+            "retryable": false,
+            "stage": "edit",
+            "subjects": [
+              {
+                "instance_id": "u_sw_l"
+              },
+              {
+                "part_id": "sw:kailh_choc_red"
+              }
+            ],
+            "details": {
+              "rule_id": "mech.switch.family_match"
+            }
+          },
+          "failed_checks": [
+            {
+              "check_key": "mech.switch.family_match:u_sw_l",
+              "rule_id": "mech.switch.family_match",
+              "status": "fail",
+              "severity": "critical",
+              "message": "Choc v1 switches do not fit the Corne's MX hotswap sockets.",
+              "subjects": [
+                {
+                  "instance_id": "u_sw_l"
+                },
+                {
+                  "instance_id": "u_pcb_l"
+                }
+              ],
+              "measured": "choc_v1",
+              "limit": "mx",
+              "fix_hint": "Pick an MX switch, or start a Choc build.",
+              "stage": "edit"
+            }
+          ],
+          "suggestions": [
+            {
+              "suggestion_id": "sg1",
+              "kind": "edit",
+              "label": "Use Cherry MX2A Brown instead",
+              "prompt": null,
+              "ops": [
+                {
+                  "op": "swap_part",
+                  "instance_id": "u_sw_l",
+                  "part_id": "sw:cherry_mx2a_brown"
+                }
+              ],
+              "design_id": null
+            },
+            {
+              "suggestion_id": "sg2",
+              "kind": "prompt",
+              "label": "Build a Choc split keyboard",
+              "prompt": "a split keyboard with Choc switches",
+              "ops": null,
+              "design_id": null
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

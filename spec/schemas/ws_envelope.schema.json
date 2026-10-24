@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://app.invalid/spec/v1/ws_envelope.schema.json",
+  "x-spec-version": "1.1.0",
+  "title": "WebSocket envelopes",
+  "description": "Generic envelopes. A client that receives a server message whose type it does not know validates it against ServerEnvelope only and ignores it.",
+  "$defs": {
+    "ClientEnvelope": {
+      "type": "object",
+      "required": [
+        "spec_version",
+        "type",
+        "msg_id",
+        "payload"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "type": {
+          "type": "string",
+          "pattern": "^[a-z]+(\\.[a-z_]+)*$"
+        },
+        "msg_id": {
+          "$ref": "common.schema.json#/$defs/MsgId"
+        },
+        "ts": {
+          "$ref": "common.schema.json#/$defs/Timestamp"
+        },
+        "payload": {
+          "type": "object"
+        }
+      }
+    },
+    "ServerEnvelope": {
+      "type": "object",
+      "required": [
+        "spec_version",
+        "type",
+        "seq",
+        "build_id",
+        "ts",
+        "payload"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "type": {
+          "type": "string",
+          "pattern": "^[a-z]+(\\.[a-z_]+)*$"
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Per build, contiguous from 1. 0 for connection scoped events (hello, ack, pong, error without a build)."
+        },
+        "build_id": {
+          "oneOf": [
+            {
+              "$ref": "common.schema.json#/$defs/BuildId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ts": {
+          "$ref": "common.schema.json#/$defs/Timestamp"
+        },
+        "stage": {
+          "$ref": "common.schema.json#/$defs/StageId"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Build revision after this event was applied."
+        },
+        "cause": {
+          "type": "object",
+          "description": "Set on every event caused by a client message (an edit, a cancel).",
+          "properties": {
+            "msg_id": {
+              "$ref": "common.schema.json#/$defs/MsgId"
+            },
+            "edit_id": {
+              "type": "string"
+            }
+          }
+        },
+        "payload": {
+          "type": "object"
+        }
+      }
+    }
+  },
+  "$ref": "#/$defs/ServerEnvelope"
+}

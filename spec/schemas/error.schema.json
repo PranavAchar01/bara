@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://app.invalid/spec/v1/error.schema.json",
+  "x-spec-version": "1.1.0",
+  "title": "ErrorObject",
+  "description": "Error body used by REST responses (status >= 400), the WS error event, ack (accepted false), edit.rejected and build.failed.",
+  "type": "object",
+  "required": [
+    "code",
+    "message",
+    "retryable"
+  ],
+  "properties": {
+    "code": {
+      "$ref": "#/$defs/ErrorCode"
+    },
+    "message": {
+      "type": "string",
+      "maxLength": 500
+    },
+    "retryable": {
+      "type": "boolean",
+      "description": "true when sending the same request again later may succeed."
+    },
+    "stage": {
+      "$ref": "common.schema.json#/$defs/StageId"
+    },
+    "subjects": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/Subject"
+      }
+    },
+    "details": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "ErrorCode": {
+      "type": "string",
+      "enum": [
+        "E_BAD_MESSAGE",
+        "E_UNSUPPORTED_VERSION",
+        "E_NOT_FOUND",
+        "E_UNKNOWN_BUILD",
+        "E_BUILD_NOT_READY",
+        "E_STALE_REVISION",
+        "E_UNKNOWN_PART",
+        "E_UNKNOWN_INSTANCE",
+        "E_UNKNOWN_INTERFACE",
+        "E_INVALID_EDIT",
+        "E_INCOMPATIBLE",
+        "E_CRITICAL_PART_MISSING",
+        "E_CLASSIFY_FAILED",
+        "E_LLM_UNAVAILABLE",
+        "E_LLM_TIMEOUT",
+        "E_SOLVER_INFEASIBLE",
+        "E_SOLVER_TIMEOUT",
+        "E_ENCLOSURE_FAILED",
+        "E_BOARD_FAILED",
+        "E_FIRMWARE_FAILED",
+        "E_ASSET_MISSING",
+        "E_LICENCE_BLOCKED",
+        "E_RESUME_GAP",
+        "E_CANCELLED",
+        "E_CLARIFY_NOT_PENDING",
+        "E_INVALID_ANSWER",
+        "E_OUT_OF_SCOPE",
+        "E_RATE_LIMITED",
+        "E_INTERNAL",
+        "E_UNKNOWN"
+      ]
+    }
+  }
+}

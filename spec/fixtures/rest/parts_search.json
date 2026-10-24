@@ -1,0 +1,84 @@
+{
+  "fixture": "parts_search",
+  "spec_version": "1.1.0",
+  "kind": "rest",
+  "description": "Catalog search for OLED displays.",
+  "body_def": "PartsPage",
+  "request": {
+    "method": "GET",
+    "path": "/v1/parts",
+    "query": {
+      "q": "oled",
+      "function": "display.oled",
+      "limit": "20"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "spec_version": "1.1.0",
+      "items": [
+        {
+          "part_id": "disp:ssd1306_128x32",
+          "display_name": "SSD1306 OLED 128x32 (I2C)",
+          "kind": "module",
+          "primary_function": "display.oled",
+          "summary": "0.91 in monochrome OLED on a 4 pin I2C header.",
+          "key_specs": [
+            {
+              "label": "Resolution",
+              "value": "128x32",
+              "unit": null
+            },
+            {
+              "label": "Bus",
+              "value": "I2C 0x3C",
+              "unit": null
+            },
+            {
+              "label": "Logic",
+              "value": "3.3 to 5",
+              "unit": "V"
+            }
+          ],
+          "thumbnail_url": "/assets/parts/ssd1306_128x32.png",
+          "licence_spdx": "NOASSERTION",
+          "commercial_ok": "unknown",
+          "verified": "third_party",
+          "source_url": null
+        },
+        {
+          "part_id": "disp:sh1106_128x64",
+          "display_name": "SH1106 OLED 128x64 (I2C)",
+          "kind": "module",
+          "primary_function": "display.oled",
+          "summary": "1.3 in monochrome OLED, I2C.",
+          "key_specs": [
+            {
+              "label": "Resolution",
+              "value": "128x64",
+              "unit": null
+            },
+            {
+              "label": "Bus",
+              "value": "I2C 0x3C",
+              "unit": null
+            },
+            {
+              "label": "Width",
+              "value": 35.4,
+              "unit": "mm"
+            }
+          ],
+          "thumbnail_url": "/assets/parts/sh1106_128x64.png",
+          "licence_spdx": "NOASSERTION",
+          "commercial_ok": "unknown",
+          "verified": "third_party",
+          "source_url": null
+        }
+      ],
+      "next_cursor": null,
+      "total": 2
+    }
+  }
+}

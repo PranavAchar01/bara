@@ -1,0 +1,32 @@
+{
+  "fixture": "designs",
+  "spec_version": "1.1.0",
+  "kind": "rest",
+  "description": "Design list.",
+  "body_def": "DesignsPage",
+  "request": {
+    "method": "GET",
+    "path": "/v1/designs",
+    "query": {
+      "device_class": "input_device"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "spec_version": "1.1.0",
+      "items": [
+        {
+          "design_id": "corne",
+          "name": "Corne (crkbd)",
+          "licence_spdx": "MIT",
+          "commercial_ok": "yes",
+          "device_class": "input_device",
+          "thumbnail_url": "/assets/designs/corne.png"
+        }
+      ],
+      "next_cursor": null,
+      "total": 1
+    }
+  }
+}

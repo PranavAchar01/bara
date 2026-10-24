@@ -1,0 +1,28 @@
+{
+  "fixture": "create_build",
+  "spec_version": "1.1.0",
+  "kind": "rest",
+  "description": "Create a build over REST (fallback when the WebSocket cannot send build.start).",
+  "body_def": "CreateBuildResponse",
+  "request": {
+    "method": "POST",
+    "path": "/v1/builds",
+    "body": {
+      "prompt": "a keyboard",
+      "options": {
+        "force_tier": null,
+        "commercial_only": false,
+        "seed": null
+      }
+    }
+  },
+  "response": {
+    "status": 201,
+    "body": {
+      "spec_version": "1.1.0",
+      "build_id": "b_exact001A",
+      "ws_url": "/v1/ws",
+      "events_url": "/v1/builds/b_exact001A/events"
+    }
+  }
+}

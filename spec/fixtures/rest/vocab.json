@@ -1,0 +1,1102 @@
+{
+  "fixture": "vocab",
+  "spec_version": "1.1.0",
+  "kind": "rest",
+  "description": "Every enum with display labels. The UI uses these labels instead of hard coding text.",
+  "body_def": "Vocab",
+  "request": {
+    "method": "GET",
+    "path": "/v1/vocab"
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "spec_version": "1.1.0",
+      "functions": [
+        {
+          "id": "compute.mcu",
+          "label": "MCU",
+          "group": "compute"
+        },
+        {
+          "id": "compute.sbc",
+          "label": "SBC",
+          "group": "compute"
+        },
+        {
+          "id": "compute.fpga",
+          "label": "FPGA",
+          "group": "compute"
+        },
+        {
+          "id": "comms.ble",
+          "label": "BLE",
+          "group": "comms"
+        },
+        {
+          "id": "comms.wifi",
+          "label": "WiFi",
+          "group": "comms"
+        },
+        {
+          "id": "comms.lora",
+          "label": "LoRa",
+          "group": "comms"
+        },
+        {
+          "id": "comms.cellular",
+          "label": "Cellular",
+          "group": "comms"
+        },
+        {
+          "id": "comms.nfc",
+          "label": "NFC",
+          "group": "comms"
+        },
+        {
+          "id": "comms.ir",
+          "label": "IR",
+          "group": "comms"
+        },
+        {
+          "id": "comms.zigbee_thread",
+          "label": "Zigbee thread",
+          "group": "comms"
+        },
+        {
+          "id": "comms.ethernet",
+          "label": "Ethernet",
+          "group": "comms"
+        },
+        {
+          "id": "comms.can",
+          "label": "CAN",
+          "group": "comms"
+        },
+        {
+          "id": "comms.rs485",
+          "label": "RS485",
+          "group": "comms"
+        },
+        {
+          "id": "comms.usb_device",
+          "label": "USB device",
+          "group": "comms"
+        },
+        {
+          "id": "comms.usb_host",
+          "label": "USB host",
+          "group": "comms"
+        },
+        {
+          "id": "comms.wired_link",
+          "label": "Wired link",
+          "group": "comms"
+        },
+        {
+          "id": "input.key",
+          "label": "Key",
+          "group": "input"
+        },
+        {
+          "id": "input.key_matrix",
+          "label": "Key matrix",
+          "group": "input"
+        },
+        {
+          "id": "input.button",
+          "label": "Button",
+          "group": "input"
+        },
+        {
+          "id": "input.rotary_encoder",
+          "label": "Rotary encoder",
+          "group": "input"
+        },
+        {
+          "id": "input.joystick",
+          "label": "Joystick",
+          "group": "input"
+        },
+        {
+          "id": "input.potentiometer",
+          "label": "Potentiometer",
+          "group": "input"
+        },
+        {
+          "id": "input.touch",
+          "label": "Touch",
+          "group": "input"
+        },
+        {
+          "id": "input.trackball",
+          "label": "Trackball",
+          "group": "input"
+        },
+        {
+          "id": "input.toggle_switch",
+          "label": "Toggle switch",
+          "group": "input"
+        },
+        {
+          "id": "sense.temperature",
+          "label": "Temperature",
+          "group": "sense"
+        },
+        {
+          "id": "sense.humidity",
+          "label": "Humidity",
+          "group": "sense"
+        },
+        {
+          "id": "sense.pressure",
+          "label": "Pressure",
+          "group": "sense"
+        },
+        {
+          "id": "sense.gas",
+          "label": "Gas",
+          "group": "sense"
+        },
+        {
+          "id": "sense.co2",
+          "label": "CO2",
+          "group": "sense"
+        },
+        {
+          "id": "sense.particulate",
+          "label": "Particulate",
+          "group": "sense"
+        },
+        {
+          "id": "sense.light",
+          "label": "Light",
+          "group": "sense"
+        },
+        {
+          "id": "sense.color",
+          "label": "Color",
+          "group": "sense"
+        },
+        {
+          "id": "sense.uv",
+          "label": "UV",
+          "group": "sense"
+        },
+        {
+          "id": "sense.proximity",
+          "label": "Proximity",
+          "group": "sense"
+        },
+        {
+          "id": "sense.distance",
+          "label": "Distance",
+          "group": "sense"
+        },
+        {
+          "id": "sense.imu",
+          "label": "IMU",
+          "group": "sense"
+        },
+        {
+          "id": "sense.magnetic",
+          "label": "Magnetic",
+          "group": "sense"
+        },
+        {
+          "id": "sense.gnss",
+          "label": "GNSS",
+          "group": "sense"
+        },
+        {
+          "id": "sense.sound",
+          "label": "Sound",
+          "group": "sense"
+        },
+        {
+          "id": "sense.camera",
+          "label": "Camera",
+          "group": "sense"
+        },
+        {
+          "id": "sense.current",
+          "label": "Current",
+          "group": "sense"
+        },
+        {
+          "id": "sense.weight",
+          "label": "Weight",
+          "group": "sense"
+        },
+        {
+          "id": "sense.soil_moisture",
+          "label": "Soil moisture",
+          "group": "sense"
+        },
+        {
+          "id": "sense.heart_rate",
+          "label": "Heart rate",
+          "group": "sense"
+        },
+        {
+          "id": "sense.presence",
+          "label": "Presence",
+          "group": "sense"
+        },
+        {
+          "id": "sense.water_level",
+          "label": "Water level",
+          "group": "sense"
+        },
+        {
+          "id": "display.oled",
+          "label": "OLED",
+          "group": "display"
+        },
+        {
+          "id": "display.lcd_char",
+          "label": "LCD char",
+          "group": "display"
+        },
+        {
+          "id": "display.tft",
+          "label": "TFT",
+          "group": "display"
+        },
+        {
+          "id": "display.memory_lcd",
+          "label": "Memory lcd",
+          "group": "display"
+        },
+        {
+          "id": "display.epaper",
+          "label": "Epaper",
+          "group": "display"
+        },
+        {
+          "id": "display.led_matrix",
+          "label": "LED matrix",
+          "group": "display"
+        },
+        {
+          "id": "display.seven_segment",
+          "label": "Seven segment",
+          "group": "display"
+        },
+        {
+          "id": "display.indicator_led",
+          "label": "Indicator led",
+          "group": "display"
+        },
+        {
+          "id": "output.rgb_led",
+          "label": "RGB LED",
+          "group": "output"
+        },
+        {
+          "id": "output.speaker",
+          "label": "Speaker",
+          "group": "output"
+        },
+        {
+          "id": "output.buzzer",
+          "label": "Buzzer",
+          "group": "output"
+        },
+        {
+          "id": "output.haptic",
+          "label": "Haptic",
+          "group": "output"
+        },
+        {
+          "id": "output.motor_dc",
+          "label": "Motor dc",
+          "group": "output"
+        },
+        {
+          "id": "output.motor_servo",
+          "label": "Motor servo",
+          "group": "output"
+        },
+        {
+          "id": "output.motor_stepper",
+          "label": "Motor stepper",
+          "group": "output"
+        },
+        {
+          "id": "output.relay",
+          "label": "Relay",
+          "group": "output"
+        },
+        {
+          "id": "output.pump",
+          "label": "Pump",
+          "group": "output"
+        },
+        {
+          "id": "output.solenoid",
+          "label": "Solenoid",
+          "group": "output"
+        },
+        {
+          "id": "output.heater",
+          "label": "Heater",
+          "group": "output"
+        },
+        {
+          "id": "output.fan",
+          "label": "Fan",
+          "group": "output"
+        },
+        {
+          "id": "power.battery",
+          "label": "Battery",
+          "group": "power"
+        },
+        {
+          "id": "power.coin_cell",
+          "label": "Coin cell",
+          "group": "power"
+        },
+        {
+          "id": "power.charger",
+          "label": "Charger",
+          "group": "power"
+        },
+        {
+          "id": "power.regulator",
+          "label": "Regulator",
+          "group": "power"
+        },
+        {
+          "id": "power.usb_in",
+          "label": "USB in",
+          "group": "power"
+        },
+        {
+          "id": "power.solar",
+          "label": "Solar",
+          "group": "power"
+        },
+        {
+          "id": "power.switch",
+          "label": "Switch",
+          "group": "power"
+        },
+        {
+          "id": "power.fuel_gauge",
+          "label": "Fuel gauge",
+          "group": "power"
+        },
+        {
+          "id": "power.protection",
+          "label": "Protection",
+          "group": "power"
+        },
+        {
+          "id": "storage.sd_card",
+          "label": "SD card",
+          "group": "storage"
+        },
+        {
+          "id": "storage.flash",
+          "label": "Flash",
+          "group": "storage"
+        },
+        {
+          "id": "storage.eeprom",
+          "label": "EEPROM",
+          "group": "storage"
+        },
+        {
+          "id": "mech.enclosure",
+          "label": "Enclosure",
+          "group": "mech"
+        },
+        {
+          "id": "mech.plate",
+          "label": "Plate",
+          "group": "mech"
+        },
+        {
+          "id": "mech.keycap",
+          "label": "Keycap",
+          "group": "mech"
+        },
+        {
+          "id": "mech.stabilizer",
+          "label": "Stabilizer",
+          "group": "mech"
+        },
+        {
+          "id": "mech.fastener",
+          "label": "Fastener",
+          "group": "mech"
+        },
+        {
+          "id": "mech.standoff",
+          "label": "Standoff",
+          "group": "mech"
+        },
+        {
+          "id": "mech.foam",
+          "label": "Foam",
+          "group": "mech"
+        },
+        {
+          "id": "mech.foot",
+          "label": "Foot",
+          "group": "mech"
+        },
+        {
+          "id": "mech.mount",
+          "label": "Mount",
+          "group": "mech"
+        },
+        {
+          "id": "mech.chassis",
+          "label": "Chassis",
+          "group": "mech"
+        },
+        {
+          "id": "mech.wheel",
+          "label": "Wheel",
+          "group": "mech"
+        },
+        {
+          "id": "mech.knob",
+          "label": "Knob",
+          "group": "mech"
+        },
+        {
+          "id": "interconnect.pcb",
+          "label": "PCB",
+          "group": "interconnect"
+        },
+        {
+          "id": "interconnect.cable",
+          "label": "Cable",
+          "group": "interconnect"
+        },
+        {
+          "id": "interconnect.connector",
+          "label": "Connector",
+          "group": "interconnect"
+        },
+        {
+          "id": "interconnect.header",
+          "label": "Header",
+          "group": "interconnect"
+        },
+        {
+          "id": "interconnect.jack",
+          "label": "Jack",
+          "group": "interconnect"
+        },
+        {
+          "id": "component.resistor",
+          "label": "Resistor",
+          "group": "component"
+        },
+        {
+          "id": "component.capacitor",
+          "label": "Capacitor",
+          "group": "component"
+        },
+        {
+          "id": "component.inductor",
+          "label": "Inductor",
+          "group": "component"
+        },
+        {
+          "id": "component.diode",
+          "label": "Diode",
+          "group": "component"
+        },
+        {
+          "id": "component.transistor",
+          "label": "Transistor",
+          "group": "component"
+        },
+        {
+          "id": "component.ic",
+          "label": "IC",
+          "group": "component"
+        },
+        {
+          "id": "component.crystal",
+          "label": "Crystal",
+          "group": "component"
+        },
+        {
+          "id": "component.led",
+          "label": "LED",
+          "group": "component"
+        },
+        {
+          "id": "component.other",
+          "label": "Other",
+          "group": "component"
+        },
+        {
+          "id": "other",
+          "label": "Other"
+        },
+        {
+          "id": "unknown",
+          "label": "Unknown"
+        }
+      ],
+      "interface_types": [
+        {
+          "id": "power_in",
+          "label": "Power in"
+        },
+        {
+          "id": "power_out",
+          "label": "Power out"
+        },
+        {
+          "id": "gpio",
+          "label": "GPIO"
+        },
+        {
+          "id": "analog",
+          "label": "Analog"
+        },
+        {
+          "id": "i2c",
+          "label": "I2C"
+        },
+        {
+          "id": "spi",
+          "label": "SPI"
+        },
+        {
+          "id": "uart",
+          "label": "UART"
+        },
+        {
+          "id": "i2s",
+          "label": "I2S"
+        },
+        {
+          "id": "usb",
+          "label": "USB"
+        },
+        {
+          "id": "qwiic",
+          "label": "Qwiic"
+        },
+        {
+          "id": "radio",
+          "label": "Radio"
+        },
+        {
+          "id": "module_footprint",
+          "label": "Module footprint"
+        },
+        {
+          "id": "switch_socket",
+          "label": "Switch socket"
+        },
+        {
+          "id": "switch_stem",
+          "label": "Switch stem"
+        },
+        {
+          "id": "plate_cutout",
+          "label": "Plate cutout"
+        },
+        {
+          "id": "layout",
+          "label": "Layout"
+        },
+        {
+          "id": "stabilizer",
+          "label": "Stabilizer"
+        },
+        {
+          "id": "mounting_holes",
+          "label": "Mounting holes"
+        },
+        {
+          "id": "fastener",
+          "label": "Fastener"
+        },
+        {
+          "id": "battery",
+          "label": "Battery"
+        },
+        {
+          "id": "addressable_led",
+          "label": "Addressable led"
+        },
+        {
+          "id": "motor",
+          "label": "Motor"
+        },
+        {
+          "id": "jack",
+          "label": "Jack"
+        },
+        {
+          "id": "panel_access",
+          "label": "Panel access"
+        },
+        {
+          "id": "other",
+          "label": "Other"
+        },
+        {
+          "id": "unknown",
+          "label": "Unknown"
+        }
+      ],
+      "device_classes": [
+        {
+          "id": "input_device",
+          "label": "Input device"
+        },
+        {
+          "id": "wearable",
+          "label": "Wearable"
+        },
+        {
+          "id": "handheld",
+          "label": "Handheld"
+        },
+        {
+          "id": "display_device",
+          "label": "Display device"
+        },
+        {
+          "id": "sensor_station",
+          "label": "Sensor station"
+        },
+        {
+          "id": "audio",
+          "label": "Audio"
+        },
+        {
+          "id": "robot",
+          "label": "Robot"
+        },
+        {
+          "id": "vehicle",
+          "label": "Vehicle"
+        },
+        {
+          "id": "tool",
+          "label": "Tool"
+        },
+        {
+          "id": "lighting",
+          "label": "Lighting"
+        },
+        {
+          "id": "home",
+          "label": "Home"
+        },
+        {
+          "id": "computer",
+          "label": "Computer"
+        },
+        {
+          "id": "radio",
+          "label": "Radio"
+        },
+        {
+          "id": "instrument",
+          "label": "Instrument"
+        },
+        {
+          "id": "other",
+          "label": "Other"
+        },
+        {
+          "id": "unknown",
+          "label": "Unknown"
+        }
+      ],
+      "stages": [
+        {
+          "id": "classify",
+          "label": "Understand",
+          "budget_ms": 50
+        },
+        {
+          "id": "reuse",
+          "label": "Find design",
+          "budget_ms": 30
+        },
+        {
+          "id": "compose",
+          "label": "Choose parts",
+          "budget_ms": 1500
+        },
+        {
+          "id": "place",
+          "label": "Place",
+          "budget_ms": 50
+        },
+        {
+          "id": "enclose",
+          "label": "Case",
+          "budget_ms": 100
+        },
+        {
+          "id": "board",
+          "label": "Board",
+          "budget_ms": 100
+        },
+        {
+          "id": "firmware",
+          "label": "Firmware",
+          "budget_ms": 50
+        },
+        {
+          "id": "render",
+          "label": "Scene",
+          "budget_ms": 50
+        },
+        {
+          "id": "edit",
+          "label": "Edit",
+          "budget_ms": 50
+        }
+      ],
+      "check_rules": [
+        {
+          "id": "elec.power.voltage_range",
+          "label": "Supply voltage within input range",
+          "severity": "critical"
+        },
+        {
+          "id": "elec.power.current_budget",
+          "label": "Total current within supply limit",
+          "severity": "error"
+        },
+        {
+          "id": "elec.logic.level_mismatch",
+          "label": "Logic levels match",
+          "severity": "error"
+        },
+        {
+          "id": "elec.i2c.address_clash",
+          "label": "No two I2C devices share an address",
+          "severity": "error"
+        },
+        {
+          "id": "elec.i2c.address_range",
+          "label": "I2C address supported by the device",
+          "severity": "error"
+        },
+        {
+          "id": "elec.spi.cs_available",
+          "label": "A chip select pin is free for each SPI device",
+          "severity": "error"
+        },
+        {
+          "id": "elec.gpio.pins_available",
+          "label": "Enough free MCU pins",
+          "severity": "error"
+        },
+        {
+          "id": "elec.uart.pairing",
+          "label": "UART TX goes to RX",
+          "severity": "error"
+        },
+        {
+          "id": "elec.usb.present",
+          "label": "Device has a USB port for power or flashing",
+          "severity": "warning"
+        },
+        {
+          "id": "elec.battery.charger_present",
+          "label": "A battery has a charger",
+          "severity": "error"
+        },
+        {
+          "id": "mech.switch.family_match",
+          "label": "Switches fit the sockets",
+          "severity": "critical"
+        },
+        {
+          "id": "mech.keycap.stem_match",
+          "label": "Keycaps fit the switch stems",
+          "severity": "error"
+        },
+        {
+          "id": "mech.layout.match",
+          "label": "Switch count matches key positions",
+          "severity": "error"
+        },
+        {
+          "id": "mech.plate.thickness",
+          "label": "Plate thickness suits the switch clips",
+          "severity": "warning"
+        },
+        {
+          "id": "mech.mount.hole_pattern",
+          "label": "Mounting holes line up",
+          "severity": "error"
+        },
+        {
+          "id": "mech.fit.collision",
+          "label": "No parts overlap",
+          "severity": "error"
+        },
+        {
+          "id": "mech.fit.enclosure",
+          "label": "Parts fit inside the case",
+          "severity": "error"
+        },
+        {
+          "id": "mech.access.panel",
+          "label": "Ports and controls reachable through the case",
+          "severity": "warning"
+        },
+        {
+          "id": "mech.stabilizer.required",
+          "label": "Keys 2u and wider have stabilizers",
+          "severity": "warning"
+        },
+        {
+          "id": "board.drc",
+          "label": "Board passes design rule check",
+          "severity": "error"
+        },
+        {
+          "id": "board.routing.complete",
+          "label": "All nets routed",
+          "severity": "error"
+        },
+        {
+          "id": "fw.driver.available",
+          "label": "A driver exists for each part",
+          "severity": "error"
+        },
+        {
+          "id": "fw.compile",
+          "label": "Firmware compiles",
+          "severity": "error"
+        },
+        {
+          "id": "lic.commercial_ok",
+          "label": "Licences allow commercial use",
+          "severity": "warning"
+        },
+        {
+          "id": "lic.attribution",
+          "label": "Attribution recorded where required",
+          "severity": "info"
+        },
+        {
+          "id": "data.dims_verified",
+          "label": "Dimensions come from a verified source",
+          "severity": "info"
+        },
+        {
+          "id": "data.interface_unknown",
+          "label": "Every interface has a known type",
+          "severity": "warning"
+        },
+        {
+          "id": "slot.critical_filled",
+          "label": "Every critical slot has a part",
+          "severity": "critical"
+        },
+        {
+          "id": "slot.optional_missing",
+          "label": "Optional slots left empty",
+          "severity": "info"
+        }
+      ],
+      "warning_codes": [
+        {
+          "id": "optional_part_missing",
+          "label": "Optional part missing"
+        },
+        {
+          "id": "licence_unknown",
+          "label": "Licence unknown"
+        },
+        {
+          "id": "licence_noncommercial",
+          "label": "Licence noncommercial"
+        },
+        {
+          "id": "dims_third_party",
+          "label": "Dims third party"
+        },
+        {
+          "id": "data_unverified",
+          "label": "Data unverified"
+        },
+        {
+          "id": "constraint_relaxed",
+          "label": "Constraint relaxed"
+        },
+        {
+          "id": "substitute_used",
+          "label": "Substitute used"
+        },
+        {
+          "id": "llm_fallback",
+          "label": "Llm fallback"
+        },
+        {
+          "id": "llm_degraded",
+          "label": "Llm degraded"
+        },
+        {
+          "id": "slow_stage",
+          "label": "Slow stage"
+        },
+        {
+          "id": "asset_missing",
+          "label": "Asset missing"
+        },
+        {
+          "id": "compile_skipped",
+          "label": "Compile skipped"
+        },
+        {
+          "id": "assumption_made",
+          "label": "Assumption made"
+        },
+        {
+          "id": "other",
+          "label": "Other"
+        },
+        {
+          "id": "unknown",
+          "label": "Unknown"
+        }
+      ],
+      "error_codes": [
+        {
+          "id": "E_BAD_MESSAGE",
+          "label": "Bad message"
+        },
+        {
+          "id": "E_UNSUPPORTED_VERSION",
+          "label": "Unsupported version"
+        },
+        {
+          "id": "E_NOT_FOUND",
+          "label": "Not found"
+        },
+        {
+          "id": "E_UNKNOWN_BUILD",
+          "label": "Unknown build"
+        },
+        {
+          "id": "E_BUILD_NOT_READY",
+          "label": "Build not ready"
+        },
+        {
+          "id": "E_STALE_REVISION",
+          "label": "Stale revision"
+        },
+        {
+          "id": "E_UNKNOWN_PART",
+          "label": "Unknown part"
+        },
+        {
+          "id": "E_UNKNOWN_INSTANCE",
+          "label": "Unknown instance"
+        },
+        {
+          "id": "E_UNKNOWN_INTERFACE",
+          "label": "Unknown interface"
+        },
+        {
+          "id": "E_INVALID_EDIT",
+          "label": "Invalid edit"
+        },
+        {
+          "id": "E_INCOMPATIBLE",
+          "label": "Incompatible"
+        },
+        {
+          "id": "E_CRITICAL_PART_MISSING",
+          "label": "Critical part missing"
+        },
+        {
+          "id": "E_CLASSIFY_FAILED",
+          "label": "Classify failed"
+        },
+        {
+          "id": "E_LLM_UNAVAILABLE",
+          "label": "Llm unavailable"
+        },
+        {
+          "id": "E_LLM_TIMEOUT",
+          "label": "Llm timeout"
+        },
+        {
+          "id": "E_SOLVER_INFEASIBLE",
+          "label": "Solver infeasible"
+        },
+        {
+          "id": "E_SOLVER_TIMEOUT",
+          "label": "Solver timeout"
+        },
+        {
+          "id": "E_ENCLOSURE_FAILED",
+          "label": "Enclosure failed"
+        },
+        {
+          "id": "E_BOARD_FAILED",
+          "label": "Board failed"
+        },
+        {
+          "id": "E_FIRMWARE_FAILED",
+          "label": "Firmware failed"
+        },
+        {
+          "id": "E_ASSET_MISSING",
+          "label": "Asset missing"
+        },
+        {
+          "id": "E_LICENCE_BLOCKED",
+          "label": "Licence blocked"
+        },
+        {
+          "id": "E_RESUME_GAP",
+          "label": "Resume gap"
+        },
+        {
+          "id": "E_CANCELLED",
+          "label": "Cancelled"
+        },
+        {
+          "id": "E_CLARIFY_NOT_PENDING",
+          "label": "Clarify not pending"
+        },
+        {
+          "id": "E_INVALID_ANSWER",
+          "label": "Invalid answer"
+        },
+        {
+          "id": "E_OUT_OF_SCOPE",
+          "label": "Out of scope"
+        },
+        {
+          "id": "E_RATE_LIMITED",
+          "label": "Rate limited"
+        },
+        {
+          "id": "E_INTERNAL",
+          "label": "Internal"
+        },
+        {
+          "id": "E_UNKNOWN",
+          "label": "Unknown"
+        }
+      ]
+    }
+  }
+}

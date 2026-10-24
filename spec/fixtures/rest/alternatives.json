@@ -1,0 +1,124 @@
+{
+  "fixture": "alternatives",
+  "spec_version": "1.1.0",
+  "kind": "rest",
+  "description": "Swap drawer contents for the switches slot.",
+  "body_def": "Alternatives",
+  "request": {
+    "method": "GET",
+    "path": "/v1/builds/b_exact001A/slots/switches/alternatives",
+    "query": {
+      "instance_id": "u_sw_l"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "spec_version": "1.1.0",
+      "build_id": "b_exact001A",
+      "slot_id": "switches",
+      "instance_id": "u_sw_l",
+      "current_part_id": "sw:gateron_yellow_mx",
+      "items": [
+        {
+          "card": {
+            "part_id": "sw:cherry_mx2a_brown",
+            "display_name": "Cherry MX2A Brown",
+            "kind": "component",
+            "primary_function": "input.key",
+            "summary": "Tactile MX switch, 55 gf.",
+            "key_specs": [
+              {
+                "label": "Family",
+                "value": "MX",
+                "unit": null
+              },
+              {
+                "label": "Type",
+                "value": "tactile",
+                "unit": null
+              },
+              {
+                "label": "Force",
+                "value": 55,
+                "unit": "gf"
+              }
+            ],
+            "thumbnail_url": "/assets/parts/cherry_mx2a_brown.png",
+            "licence_spdx": "CC-BY-4.0",
+            "commercial_ok": "yes",
+            "verified": "geometry",
+            "source_url": null
+          },
+          "compatible": true,
+          "failed_checks": [],
+          "deltas": [
+            {
+              "label": "Feel",
+              "from": "linear",
+              "to": "tactile"
+            },
+            {
+              "label": "Force",
+              "from": "50 gf",
+              "to": "55 gf"
+            }
+          ]
+        },
+        {
+          "card": {
+            "part_id": "sw:kailh_choc_red",
+            "display_name": "Kailh Choc v1 Red",
+            "kind": "component",
+            "primary_function": "input.key",
+            "summary": "Low profile linear switch, Choc v1 footprint.",
+            "key_specs": [
+              {
+                "label": "Family",
+                "value": "Choc v1",
+                "unit": null
+              },
+              {
+                "label": "Type",
+                "value": "linear",
+                "unit": null
+              },
+              {
+                "label": "Force",
+                "value": 50,
+                "unit": "gf"
+              }
+            ],
+            "thumbnail_url": "/assets/parts/kailh_choc_red.png",
+            "licence_spdx": "CC-BY-4.0",
+            "commercial_ok": "yes",
+            "verified": "geometry",
+            "source_url": null
+          },
+          "compatible": false,
+          "failed_checks": [
+            {
+              "check_key": "mech.switch.family_match:u_sw_l",
+              "rule_id": "mech.switch.family_match",
+              "status": "fail",
+              "severity": "critical",
+              "message": "Choc v1 switches do not fit MX hotswap sockets.",
+              "subjects": [
+                {
+                  "instance_id": "u_sw_l"
+                }
+              ]
+            }
+          ],
+          "deltas": [
+            {
+              "label": "Family",
+              "from": "MX",
+              "to": "Choc v1"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,332 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://app.invalid/spec/v1/ws_client.schema.json",
+  "x-spec-version": "1.1.0",
+  "title": "WebSocket client messages",
+  "description": "Every message the UI may send. Six types in v1.1 (clarify.answer added).",
+  "$defs": {
+    "BuildOptions": {
+      "type": "object",
+      "required": [],
+      "properties": {
+        "force_tier": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "exact",
+            "substitute",
+            "compose",
+            null
+          ],
+          "description": "Debug and demo only. null: the reuse stage decides."
+        },
+        "commercial_only": {
+          "type": "boolean",
+          "default": false,
+          "description": "Drop candidates whose commercial_ok is no (and unknown, flagged)."
+        },
+        "seed": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Makes tie breaks and model sampling repeatable."
+        },
+        "mock_fixture": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Mock mode only: fixture name to replay."
+        }
+      }
+    },
+    "C_build_start": {
+      "type": "object",
+      "description": "Start a new build from a prompt. The server answers ack (with build_id) and then streams events.",
+      "required": [
+        "spec_version",
+        "type",
+        "msg_id",
+        "payload"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "type": {
+          "const": "build.start"
+        },
+        "msg_id": {
+          "$ref": "common.schema.json#/$defs/MsgId"
+        },
+        "ts": {
+          "$ref": "common.schema.json#/$defs/Timestamp"
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "prompt"
+          ],
+          "properties": {
+            "prompt": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            },
+            "options": {
+              "$ref": "#/$defs/BuildOptions"
+            }
+          }
+        }
+      }
+    },
+    "C_build_resume": {
+      "type": "object",
+      "description": "Re-attach to a build after reconnect. The server replays every event with seq > last_seq, or sends error E_RESUME_GAP plus build.snapshot.",
+      "required": [
+        "spec_version",
+        "type",
+        "msg_id",
+        "payload"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "type": {
+          "const": "build.resume"
+        },
+        "msg_id": {
+          "$ref": "common.schema.json#/$defs/MsgId"
+        },
+        "ts": {
+          "$ref": "common.schema.json#/$defs/Timestamp"
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "build_id",
+            "last_seq"
+          ],
+          "properties": {
+            "build_id": {
+              "$ref": "common.schema.json#/$defs/BuildId"
+            },
+            "last_seq": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      }
+    },
+    "C_edit_apply": {
+      "type": "object",
+      "description": "Apply edit ops atomically. Allowed once the build has reached build.done (otherwise E_BUILD_NOT_READY).",
+      "required": [
+        "spec_version",
+        "type",
+        "msg_id",
+        "payload"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "type": {
+          "const": "edit.apply"
+        },
+        "msg_id": {
+          "$ref": "common.schema.json#/$defs/MsgId"
+        },
+        "ts": {
+          "$ref": "common.schema.json#/$defs/Timestamp"
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "build_id",
+            "ops"
+          ],
+          "properties": {
+            "build_id": {
+              "$ref": "common.schema.json#/$defs/BuildId"
+            },
+            "base_revision": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0,
+              "description": "When set and not equal to the current revision, the edit is rejected with E_STALE_REVISION. null: apply to whatever is current."
+            },
+            "ops": {
+              "type": "array",
+              "items": {
+                "$ref": "edit.schema.json#/$defs/EditOp"
+              },
+              "minItems": 1,
+              "maxItems": 20
+            }
+          }
+        }
+      }
+    },
+    "C_build_cancel": {
+      "type": "object",
+      "description": "Stop a running build. The server ends the stream with build.failed (E_CANCELLED).",
+      "required": [
+        "spec_version",
+        "type",
+        "msg_id",
+        "payload"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "type": {
+          "const": "build.cancel"
+        },
+        "msg_id": {
+          "$ref": "common.schema.json#/$defs/MsgId"
+        },
+        "ts": {
+          "$ref": "common.schema.json#/$defs/Timestamp"
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "build_id"
+          ],
+          "properties": {
+            "build_id": {
+              "$ref": "common.schema.json#/$defs/BuildId"
+            }
+          }
+        }
+      }
+    },
+    "C_ping": {
+      "type": "object",
+      "description": "Keepalive. The server answers pong with the same msg_id.",
+      "required": [
+        "spec_version",
+        "type",
+        "msg_id",
+        "payload"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "type": {
+          "const": "ping"
+        },
+        "msg_id": {
+          "$ref": "common.schema.json#/$defs/MsgId"
+        },
+        "ts": {
+          "$ref": "common.schema.json#/$defs/Timestamp"
+        },
+        "payload": {
+          "type": "object",
+          "required": [],
+          "properties": {}
+        }
+      }
+    },
+    "C_clarify_answer": {
+      "type": "object",
+      "description": "Answer the open clarify.request: exactly one of option_id, free_text or skip. Free text that only asks the engine to choose (for example just pick) is treated as skip. Wrong question_id or no open question: ack accepted false with E_CLARIFY_NOT_PENDING; an option_id not in the question: E_INVALID_ANSWER.",
+      "required": [
+        "spec_version",
+        "type",
+        "msg_id",
+        "payload"
+      ],
+      "properties": {
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "type": {
+          "const": "clarify.answer"
+        },
+        "msg_id": {
+          "$ref": "common.schema.json#/$defs/MsgId"
+        },
+        "ts": {
+          "$ref": "common.schema.json#/$defs/Timestamp"
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "build_id",
+            "question_id"
+          ],
+          "properties": {
+            "build_id": {
+              "$ref": "common.schema.json#/$defs/BuildId"
+            },
+            "question_id": {
+              "type": "string",
+              "pattern": "^q_[a-z0-9_]{1,31}$"
+            },
+            "option_id": {
+              "type": "string",
+              "pattern": "^o_[a-z0-9_]{1,31}$"
+            },
+            "free_text": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            },
+            "skip": {
+              "const": true
+            }
+          },
+          "oneOf": [
+            {
+              "required": [
+                "option_id"
+              ]
+            },
+            {
+              "required": [
+                "free_text"
+              ]
+            },
+            {
+              "required": [
+                "skip"
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/C_build_start"
+    },
+    {
+      "$ref": "#/$defs/C_build_resume"
+    },
+    {
+      "$ref": "#/$defs/C_edit_apply"
+    },
+    {
+      "$ref": "#/$defs/C_build_cancel"
+    },
+    {
+      "$ref": "#/$defs/C_ping"
+    },
+    {
+      "$ref": "#/$defs/C_clarify_answer"
+    }
+  ]
+}

@@ -1,0 +1,2469 @@
+{
+  "fixture": "resume_gap",
+  "spec_version": "1.1.0",
+  "kind": "stream",
+  "description": "Reconnect: ping/pong, build.resume with an old last_seq gets E_RESUME_GAP then build.snapshot; a resent resume is acked as duplicate. build.snapshot carries seq equal to build.last_seq and does not advance the sequence.",
+  "requires_fixture": "exact_keyboard",
+  "steps": [
+    {
+      "dir": "server",
+      "delay_ms": 20,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "hello",
+        "seq": 0,
+        "build_id": null,
+        "ts": "2026-10-24T20:00:40.287Z",
+        "payload": {
+          "server_version": "0.1.0",
+          "session_id": "s_demo01",
+          "mock": true,
+          "limits": {
+            "max_prompt_chars": 2000,
+            "max_ops_per_edit": 20,
+            "msg_id_ttl_s": 600
+          },
+          "capabilities": [
+            "compile",
+            "solver"
+          ]
+        }
+      }
+    },
+    {
+      "dir": "client",
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "ping",
+        "msg_id": "m_ping_000001",
+        "ts": "2026-10-24T20:00:40.287Z",
+        "payload": {}
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 3,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "pong",
+        "seq": 0,
+        "build_id": null,
+        "ts": "2026-10-24T20:00:40.290Z",
+        "payload": {
+          "msg_id": "m_ping_000001",
+          "server_time": "2026-10-24T20:00:40.287Z"
+        }
+      }
+    },
+    {
+      "dir": "client",
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "build.resume",
+        "msg_id": "m_resume_0001",
+        "ts": "2026-10-24T20:00:40.290Z",
+        "payload": {
+          "build_id": "b_exact001A",
+          "last_seq": 3
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 3,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "ack",
+        "seq": 0,
+        "build_id": "b_exact001A",
+        "ts": "2026-10-24T20:00:40.293Z",
+        "payload": {
+          "msg_id": "m_resume_0001",
+          "accepted": true,
+          "duplicate": false,
+          "build_id": "b_exact001A",
+          "edit_id": null,
+          "error": null
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 2,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "error",
+        "seq": 0,
+        "build_id": "b_exact001A",
+        "ts": "2026-10-24T20:00:40.295Z",
+        "payload": {
+          "error": {
+            "code": "E_RESUME_GAP",
+            "message": "Events after seq 3 are no longer kept; sending a snapshot.",
+            "retryable": false,
+            "details": {
+              "oldest_seq": 40
+            }
+          },
+          "msg_id": "m_resume_0001"
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 6,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "build.snapshot",
+        "seq": 62,
+        "build_id": "b_exact001A",
+        "ts": "2026-10-24T20:00:40.301Z",
+        "revision": 1,
+        "payload": {
+          "build": {
+            "build_id": "b_exact001A",
+            "prompt": "a keyboard",
+            "status": "done",
+            "revision": 1,
+            "tier": "exact",
+            "spec": {
+              "spec_id": "sp_exact01",
+              "prompt": "a keyboard",
+              "normalized_prompt": "keyboard",
+              "device_class": "input_device",
+              "taxonomy_path": [
+                "input_device",
+                "keyboard"
+              ],
+              "functions": [
+                {
+                  "function_id": "input.key_matrix",
+                  "required": true,
+                  "count": 1,
+                  "source": "explicit"
+                },
+                {
+                  "function_id": "compute.mcu",
+                  "required": true,
+                  "count": 1,
+                  "source": "default"
+                }
+              ],
+              "hard_requirements": [],
+              "soft_requirements": [],
+              "leftover_text": null,
+              "classifier": {
+                "stage": "cache",
+                "confidence": 0.99,
+                "margin": 0.8,
+                "model": null,
+                "latency_ms": 1
+              }
+            },
+            "design_id": "corne",
+            "slots": [
+              {
+                "slot_id": "pcb",
+                "label": "PCB",
+                "function_id": "interconnect.pcb",
+                "criticality": "critical",
+                "quantity": 2,
+                "side": "none",
+                "order": 0,
+                "state": "decided",
+                "candidates_total": null,
+                "candidates_left": null,
+                "chosen_part_id": "pcb:corne_v3_l",
+                "instance_ids": [
+                  "u_pcb_l",
+                  "u_pcb_r"
+                ],
+                "from_design": true
+              },
+              {
+                "slot_id": "controller",
+                "label": "Controller",
+                "function_id": "compute.mcu",
+                "criticality": "critical",
+                "quantity": 2,
+                "side": "none",
+                "order": 1,
+                "state": "decided",
+                "candidates_total": null,
+                "candidates_left": null,
+                "chosen_part_id": "mod:pro_micro_32u4",
+                "instance_ids": [
+                  "u_mcu_l",
+                  "u_mcu_r"
+                ],
+                "from_design": true
+              },
+              {
+                "slot_id": "switches",
+                "label": "Switches",
+                "function_id": "input.key",
+                "criticality": "critical",
+                "quantity": 42,
+                "side": "none",
+                "order": 2,
+                "state": "decided",
+                "candidates_total": null,
+                "candidates_left": null,
+                "chosen_part_id": "sw:gateron_yellow_mx",
+                "instance_ids": [
+                  "u_sw_l",
+                  "u_sw_r"
+                ],
+                "from_design": true
+              },
+              {
+                "slot_id": "keycaps",
+                "label": "Keycaps",
+                "function_id": "mech.keycap",
+                "criticality": "critical",
+                "quantity": 42,
+                "side": "none",
+                "order": 3,
+                "state": "decided",
+                "candidates_total": null,
+                "candidates_left": null,
+                "chosen_part_id": "cap:dsa_1u_pbt",
+                "instance_ids": [
+                  "u_cap_l",
+                  "u_cap_r"
+                ],
+                "from_design": true
+              },
+              {
+                "slot_id": "plate",
+                "label": "Plate",
+                "function_id": "mech.plate",
+                "criticality": "optional",
+                "quantity": 2,
+                "side": "none",
+                "order": 4,
+                "state": "decided",
+                "candidates_total": null,
+                "candidates_left": null,
+                "chosen_part_id": "mech:corne_plate_fr4_l",
+                "instance_ids": [
+                  "u_plate_l",
+                  "u_plate_r"
+                ],
+                "from_design": true
+              },
+              {
+                "slot_id": "display",
+                "label": "Display",
+                "function_id": "display.oled",
+                "criticality": "optional",
+                "quantity": 2,
+                "side": "none",
+                "order": 5,
+                "state": "decided",
+                "candidates_total": null,
+                "candidates_left": null,
+                "chosen_part_id": "disp:ssd1306_128x32",
+                "instance_ids": [
+                  "u_oled_l",
+                  "u_oled_r"
+                ],
+                "from_design": true
+              },
+              {
+                "slot_id": "link",
+                "label": "Half link",
+                "function_id": "interconnect.jack",
+                "criticality": "critical",
+                "quantity": 3,
+                "side": "none",
+                "order": 6,
+                "state": "decided",
+                "candidates_total": null,
+                "candidates_left": null,
+                "chosen_part_id": "conn:pj320a_trrs",
+                "instance_ids": [
+                  "u_trrs_l",
+                  "u_trrs_r",
+                  "u_cable"
+                ],
+                "from_design": true
+              }
+            ],
+            "decisions": [
+              {
+                "decision_id": "d1",
+                "slot_id": "pcb",
+                "step": 0,
+                "method": "design",
+                "chosen_part_id": "pcb:corne_v3_l",
+                "chosen_short_id": null,
+                "survivors": 1,
+                "reason": "From the Corne design.",
+                "model": null,
+                "propagated": []
+              },
+              {
+                "decision_id": "d2",
+                "slot_id": "controller",
+                "step": 0,
+                "method": "design",
+                "chosen_part_id": "mod:pro_micro_32u4",
+                "chosen_short_id": null,
+                "survivors": 1,
+                "reason": "From the Corne design.",
+                "model": null,
+                "propagated": []
+              },
+              {
+                "decision_id": "d3",
+                "slot_id": "switches",
+                "step": 0,
+                "method": "design",
+                "chosen_part_id": "sw:gateron_yellow_mx",
+                "chosen_short_id": null,
+                "survivors": 1,
+                "reason": "From the Corne design.",
+                "model": null,
+                "propagated": []
+              },
+              {
+                "decision_id": "d4",
+                "slot_id": "keycaps",
+                "step": 0,
+                "method": "design",
+                "chosen_part_id": "cap:dsa_1u_pbt",
+                "chosen_short_id": null,
+                "survivors": 1,
+                "reason": "From the Corne design.",
+                "model": null,
+                "propagated": []
+              },
+              {
+                "decision_id": "d5",
+                "slot_id": "plate",
+                "step": 0,
+                "method": "design",
+                "chosen_part_id": "mech:corne_plate_fr4_l",
+                "chosen_short_id": null,
+                "survivors": 1,
+                "reason": "From the Corne design.",
+                "model": null,
+                "propagated": []
+              },
+              {
+                "decision_id": "d6",
+                "slot_id": "display",
+                "step": 0,
+                "method": "design",
+                "chosen_part_id": "disp:ssd1306_128x32",
+                "chosen_short_id": null,
+                "survivors": 1,
+                "reason": "From the Corne design.",
+                "model": null,
+                "propagated": []
+              },
+              {
+                "decision_id": "d7",
+                "slot_id": "link",
+                "step": 0,
+                "method": "design",
+                "chosen_part_id": "conn:pj320a_trrs",
+                "chosen_short_id": null,
+                "survivors": 1,
+                "reason": "From the Corne design.",
+                "model": null,
+                "propagated": []
+              }
+            ],
+            "parts": [
+              {
+                "instance_id": "u_pcb_l",
+                "part_id": "pcb:corne_v3_l",
+                "slot_id": "pcb",
+                "label": "PCB left",
+                "quantity": 1,
+                "side": "left",
+                "color": null,
+                "placement": {
+                  "mode": "single",
+                  "position_mm": [
+                    -132.0,
+                    40.0,
+                    0.0
+                  ],
+                  "rotation_deg": [
+                    0,
+                    0,
+                    0
+                  ],
+                  "explode_offset_mm": [
+                    0,
+                    0,
+                    0.0
+                  ],
+                  "source": "design",
+                  "locked": false
+                },
+                "card": {
+                  "part_id": "pcb:corne_v3_l",
+                  "display_name": "Corne v3 PCB (left)",
+                  "kind": "pcb",
+                  "primary_function": "interconnect.pcb",
+                  "summary": "Left half PCB of the Corne, 3x6+3, MX hotswap, Pro Micro footprint.",
+                  "key_specs": [
+                    {
+                      "label": "Keys",
+                      "value": 21,
+                      "unit": null
+                    },
+                    {
+                      "label": "Switches",
+                      "value": "MX hotswap",
+                      "unit": null
+                    },
+                    {
+                      "label": "Controller",
+                      "value": "Pro Micro",
+                      "unit": null
+                    }
+                  ],
+                  "thumbnail_url": "/assets/parts/corne_v3_l.png",
+                  "licence_spdx": "MIT",
+                  "commercial_ok": "yes",
+                  "verified": "geometry",
+                  "source_url": "https://github.com/foostan/crkbd"
+                },
+                "assets": [
+                  {
+                    "asset_id": "a_corne_v3_l_glb",
+                    "kind": "glb",
+                    "role": "model",
+                    "url": "/assets/parts/corne_v3_l.glb",
+                    "status": "ready"
+                  },
+                  {
+                    "asset_id": "a_corne_v3_l_png",
+                    "kind": "png",
+                    "role": "thumbnail",
+                    "url": "/assets/parts/corne_v3_l.png",
+                    "status": "ready"
+                  }
+                ],
+                "origin": "design",
+                "status": "ok"
+              },
+              {
+                "instance_id": "u_mcu_l",
+                "part_id": "mod:pro_micro_32u4",
+                "slot_id": "controller",
+                "label": "Controller left",
+                "quantity": 1,
+                "side": "left",
+                "color": null,
+                "placement": {
+                  "mode": "single",
+                  "position_mm": [
+                    -14.0,
+                    28.0,
+                    6.0
+                  ],
+                  "rotation_deg": [
+                    0,
+                    0,
+                    0
+                  ],
+                  "explode_offset_mm": [
+                    0,
+                    0,
+                    15.0
+                  ],
+                  "source": "design",
+                  "locked": false
+                },
+                "card": {
+                  "part_id": "mod:pro_micro_32u4",
+                  "display_name": "Pro Micro (ATmega32U4)",
+                  "kind": "module",
+                  "primary_function": "compute.mcu",
+                  "summary": "Wired USB keyboard controller, Pro Micro form factor.",
+                  "key_specs": [
+                    {
+                      "label": "MCU",
+                      "value": "ATmega32U4",
+                      "unit": null
+                    },
+                    {
+                      "label": "Logic",
+                      "value": 5,
+                      "unit": "V"
+                    },
+                    {
+                      "label": "USB",
+                      "value": "micro B",
+                      "unit": null
+                    }
+                  ],
+                  "thumbnail_url": "/assets/parts/pro_micro_32u4.png",
+                  "licence_spdx": "CC-BY-SA-4.0",
+                  "commercial_ok": "yes",
+                  "verified": "third_party",
+                  "source_url": "https://github.com/sparkfun/Pro_Micro"
+                },
+                "assets": [
+                  {
+                    "asset_id": "a_pro_micro_32u4_glb",
+                    "kind": "glb",
+                    "role": "model",
+                    "url": "/assets/parts/pro_micro_32u4.glb",
+                    "status": "ready"
+                  },
+                  {
+                    "asset_id": "a_pro_micro_32u4_png",
+                    "kind": "png",
+                    "role": "thumbnail",
+                    "url": "/assets/parts/pro_micro_32u4.png",
+                    "status": "ready"
+                  }
+                ],
+                "origin": "design",
+                "status": "ok"
+              },
+              {
+                "instance_id": "u_plate_l",
+                "part_id": "mech:corne_plate_fr4_l",
+                "slot_id": "plate",
+                "label": "Plate left",
+                "quantity": 1,
+                "side": "left",
+                "color": null,
+                "placement": {
+                  "mode": "single",
+                  "position_mm": [
+                    -132.0,
+                    40.0,
+                    5.0
+                  ],
+                  "rotation_deg": [
+                    0,
+                    0,
+                    0
+                  ],
+                  "explode_offset_mm": [
+                    0,
+                    0,
+                    20.0
+                  ],
+                  "source": "design",
+                  "locked": false
+                },
+                "card": {
+                  "part_id": "mech:corne_plate_fr4_l",
+                  "display_name": "Corne switch plate (left)",
+                  "kind": "mechanical",
+                  "primary_function": "mech.plate",
+                  "summary": "1.5 mm FR4 plate for the Corne left half.",
+                  "key_specs": [
+                    {
+                      "label": "Thickness",
+                      "value": 1.5,
+                      "unit": "mm"
+                    }
+                  ],
+                  "thumbnail_url": "/assets/parts/corne_plate_fr4_l.png",
+                  "licence_spdx": "MIT",
+                  "commercial_ok": "yes",
+                  "verified": "geometry",
+                  "source_url": "https://github.com/foostan/crkbd"
+                },
+                "assets": [
+                  {
+                    "asset_id": "a_corne_plate_fr4_l_glb",
+                    "kind": "glb",
+                    "role": "model",
+                    "url": "/assets/parts/corne_plate_fr4_l.glb",
+                    "status": "ready"
+                  },
+                  {
+                    "asset_id": "a_corne_plate_fr4_l_png",
+                    "kind": "png",
+                    "role": "thumbnail",
+                    "url": "/assets/parts/corne_plate_fr4_l.png",
+                    "status": "ready"
+                  }
+                ],
+                "origin": "design",
+                "status": "ok"
+              },
+              {
+                "instance_id": "u_sw_l",
+                "part_id": "sw:gateron_yellow_mx",
+                "slot_id": "switches",
+                "label": "Switches left",
+                "quantity": 21,
+                "side": "left",
+                "color": null,
+                "placement": {
+                  "mode": "layout",
+                  "position_mm": [
+                    -132.0,
+                    40.0,
+                    1.6
+                  ],
+                  "rotation_deg": [
+                    0,
+                    0,
+                    0
+                  ],
+                  "explode_offset_mm": [
+                    0,
+                    0,
+                    35.0
+                  ],
+                  "source": "design",
+                  "locked": false,
+                  "layout_id": "lay_corne_l"
+                },
+                "card": {
+                  "part_id": "sw:gateron_yellow_mx",
+                  "display_name": "Gateron Yellow (MX)",
+                  "kind": "component",
+                  "primary_function": "input.key",
+                  "summary": "Linear MX style switch, 50 gf.",
+                  "key_specs": [
+                    {
+                      "label": "Family",
+                      "value": "MX",
+                      "unit": null
+                    },
+                    {
+                      "label": "Type",
+                      "value": "linear",
+                      "unit": null
+                    },
+                    {
+                      "label": "Force",
+                      "value": 50,
+                      "unit": "gf"
+                    }
+                  ],
+                  "thumbnail_url": "/assets/parts/gateron_yellow_mx.png",
+                  "licence_spdx": "CC-BY-4.0",
+                  "commercial_ok": "yes",
+                  "verified": "geometry",
+                  "source_url": null
+                },
+                "assets": [
+                  {
+                    "asset_id": "a_gateron_yellow_mx_glb",
+                    "kind": "glb",
+                    "role": "model",
+                    "url": "/assets/parts/gateron_yellow_mx.glb",
+                    "status": "ready"
+                  },
+                  {
+                    "asset_id": "a_gateron_yellow_mx_png",
+                    "kind": "png",
+                    "role": "thumbnail",
+                    "url": "/assets/parts/gateron_yellow_mx.png",
+                    "status": "ready"
+                  }
+                ],
+                "origin": "design",
+                "status": "ok"
+              },
+              {
+                "instance_id": "u_cap_l",
+                "part_id": "cap:dsa_1u_pbt",
+                "slot_id": "keycaps",
+                "label": "Keycaps left",
+                "quantity": 21,
+                "side": "left",
+                "color": {
+                  "hex": "#E8E4DA",
+                  "material": "plastic",
+                  "node": null
+                },
+                "placement": {
+                  "mode": "layout",
+                  "position_mm": [
+                    -132.0,
+                    40.0,
+                    13.0
+                  ],
+                  "rotation_deg": [
+                    0,
+                    0,
+                    0
+                  ],
+                  "explode_offset_mm": [
+                    0,
+                    0,
+                    55.0
+                  ],
+                  "source": "design",
+                  "locked": false,
+                  "layout_id": "lay_corne_l"
+                },
+                "card": {
+                  "part_id": "cap:dsa_1u_pbt",
+                  "display_name": "DSA 1u keycap (PBT)",
+                  "kind": "mechanical",
+                  "primary_function": "mech.keycap",
+                  "summary": "Uniform profile 1u keycap, MX cross stem.",
+                  "key_specs": [
+                    {
+                      "label": "Profile",
+                      "value": "DSA",
+                      "unit": null
+                    },
+                    {
+                      "label": "Stem",
+                      "value": "MX",
+                      "unit": null
+                    }
+                  ],
+                  "thumbnail_url": "/assets/parts/dsa_1u_pbt.png",
+                  "licence_spdx": "CC0-1.0",
+                  "commercial_ok": "yes",
+                  "verified": "geometry",
+                  "source_url": null
+                },
+                "assets": [
+                  {
+                    "asset_id": "a_dsa_1u_pbt_glb",
+                    "kind": "glb",
+                    "role": "model",
+                    "url": "/assets/parts/dsa_1u_pbt.glb",
+                    "status": "ready"
+                  },
+                  {
+                    "asset_id": "a_dsa_1u_pbt_png",
+                    "kind": "png",
+                    "role": "thumbnail",
+                    "url": "/assets/parts/dsa_1u_pbt.png",
+                    "status": "ready"
+                  }
+                ],
+                "origin": "design",
+                "status": "ok"
+              },
+              {
+                "instance_id": "u_oled_l",
+                "part_id": "disp:ssd1306_128x32",
+                "slot_id": "display",
+                "label": "OLED left",
+                "quantity": 1,
+                "side": "left",
+                "color": null,
+                "placement": {
+                  "mode": "single",
+                  "position_mm": [
+                    -14.0,
+                    28.0,
+                    12.0
+                  ],
+                  "rotation_deg": [
+                    0,
+                    0,
+                    0
+                  ],
+                  "explode_offset_mm": [
+                    0,
+                    0,
+                    30.0
+                  ],
+                  "source": "design",
+                  "locked": false
+                },
+                "card": {
+                  "part_id": "disp:ssd1306_128x32",
+                  "display_name": "SSD1306 OLED 128x32 (I2C)",
+                  "kind": "module",
+                  "primary_function": "display.oled",
+                  "summary": "0.91 in monochrome OLED on a 4 pin I2C header.",
+                  "key_specs": [
+                    {
+                      "label": "Resolution",
+                      "value": "128x32",
+                      "unit": null
+                    },
+                    {
+                      "label": "Bus",
+                      "value": "I2C 0x3C",
+                      "unit": null
+                    },
+                    {
+                      "label": "Logic",
+                      "value": "3.3 to 5",
+                      "unit": "V"
+                    }
+                  ],
+                  "thumbnail_url": "/assets/parts/ssd1306_128x32.png",
+                  "licence_spdx": "NOASSERTION",
+                  "commercial_ok": "unknown",
+                  "verified": "third_party",
+                  "source_url": null
+                },
+                "assets": [
+                  {
+                    "asset_id": "a_ssd1306_128x32_glb",
+                    "kind": "glb",
+                    "role": "model",
+                    "url": "/assets/parts/ssd1306_128x32.glb",
+                    "status": "ready"
+                  },
+                  {
+                    "asset_id": "a_ssd1306_128x32_png",
+                    "kind": "png",
+                    "role": "thumbnail",
+                    "url": "/assets/parts/ssd1306_128x32.png",
+                    "status": "ready"
+                  }
+                ],
+                "origin": "design",
+                "status": "ok"
+              },
+              {
+                "instance_id": "u_trrs_l",
+                "part_id": "conn:pj320a_trrs",
+                "slot_id": "link",
+                "label": "TRRS jack left",
+                "quantity": 1,
+                "side": "left",
+                "color": null,
+                "placement": {
+                  "mode": "single",
+                  "position_mm": [
+                    -6.0,
+                    44.0,
+                    1.6
+                  ],
+                  "rotation_deg": [
+                    0,
+                    0,
+                    0
+                  ],
+                  "explode_offset_mm": [
+                    0,
+                    0,
+                    10.0
+                  ],
+                  "source": "design",
+                  "locked": false
+                },
+                "card": {
+                  "part_id": "conn:pj320a_trrs",
+                  "display_name": "PJ-320A TRRS jack",
+                  "kind": "component",
+                  "primary_function": "interconnect.jack",
+                  "summary": "3.5 mm TRRS jack for the wired link between halves.",
+                  "key_specs": [
+                    {
+                      "label": "Poles",
+                      "value": 4,
+                      "unit": null
+                    }
+                  ],
+                  "thumbnail_url": "/assets/parts/pj320a_trrs.png",
+                  "licence_spdx": "CC-BY-SA-4.0",
+                  "commercial_ok": "yes",
+                  "verified": "geometry",
+                  "source_url": null
+                },
+                "assets": [
+                  {
+                    "asset_id": "a_pj320a_trrs_glb",
+                    "kind": "glb",
+                    "role": "model",
+                    "url": "/assets/parts/pj320a_trrs.glb",
+                    "status": "ready"
+                  },
+                  {
+                    "asset_id": "a_pj320a_trrs_png",
+                    "kind": "png",
+                    "role": "thumbnail",
+                    "url": "/assets/parts/pj320a_trrs.png",
+                    "status": "ready"
+                  }
+                ],
+                "origin": "design",
+                "status": "ok"
+              },
+              {
+                "instance_id": "u_pcb_r",
+                "part_id": "pcb:corne_v3_r",
+                "slot_id": "pcb",
+                "label": "PCB right",
+                "quantity": 1,
+                "side": "right",
+                "color": null,
+                "placement": {
+                  "mode": "single",
+                  "position_mm": [
+                    20.0,
+                    40.0,
+                    0.0
+                  ],
+                  "rotation_deg": [
+                    0,
+                    0,
+                    0
+                  ],
+                  "explode_offset_mm": [
+                    0,
+                    0,
+                    0.0
+                  ],
+                  "source": "design",
+                  "locked": false
+                },
+                "card": {
+                  "part_id": "pcb:corne_v3_r",
+                  "display_name": "Corne v3 PCB (right)",
+                  "kind": "pcb",
+                  "primary_function": "interconnect.pcb",
+                  "summary": "Right half PCB of the Corne, 3x6+3, MX hotswap, Pro Micro footprint.",
+                  "key_specs": [
+                    {
+                      "label": "Keys",
+                      "value": 21,
+                      "unit": null
+                    },
+                    {
+                      "label": "Switches",
+                      "value": "MX hotswap",
+                      "unit": null
+                    },
+                    {
+                      "label": "Controller",
+                      "value": "Pro Micro",
+                      "unit": null
+                    }
+                  ],
+                  "thumbnail_url": "/assets/parts/corne_v3_r.png",
+                  "licence_spdx": "MIT",
+                  "commercial_ok": "yes",
+                  "verified": "geometry",
+                  "source_url": "https://github.com/foostan/crkbd"
+                },
+                "assets": [
+                  {
+                    "asset_id": "a_corne_v3_r_glb",
+                    "kind": "glb",
+                    "role": "model",
+                    "url": "/assets/parts/corne_v3_r.glb",
+                    "status": "ready"
+                  },
+                  {
+                    "asset_id": "a_corne_v3_r_png",
+                    "kind": "png",
+                    "role": "thumbnail",
+                    "url": "/assets/parts/corne_v3_r.png",
+                    "status": "ready"
+                  }
+                ],
+                "origin": "design",
+                "status": "ok"
+              },
+              {
+                "instance_id": "u_mcu_r",
+                "part_id": "mod:pro_micro_32u4",
+                "slot_id": "controller",
+                "label": "Controller right",
+                "quantity": 1,
+                "side": "right",
+                "color": null,
+                "placement": {
+                  "mode": "single",
+                  "position_mm": [
+                    14.0,
+                    28.0,
+                    6.0
+                  ],
+                  "rotation_deg": [
+                    0,
+                    0,
+                    0
+                  ],
+                  "explode_offset_mm": [
+                    0,
+                    0,
+                    15.0
+                  ],
+                  "source": "design",
+                  "locked": false
+                },
+                "card": {
+                  "part_id": "mod:pro_micro_32u4",
+                  "display_name": "Pro Micro (ATmega32U4)",
+                  "kind": "module",
+                  "primary_function": "compute.mcu",
+                  "summary": "Wired USB keyboard controller, Pro Micro form factor.",
+                  "key_specs": [
+                    {
+                      "label": "MCU",
+                      "value": "ATmega32U4",
+                      "unit": null
+                    },
+                    {
+                      "label": "Logic",
+                      "value": 5,
+                      "unit": "V"
+                    },
+                    {
+                      "label": "USB",
+                      "value": "micro B",
+                      "unit": null
+                    }
+                  ],
+                  "thumbnail_url": "/assets/parts/pro_micro_32u4.png",
+                  "licence_spdx": "CC-BY-SA-4.0",
+                  "commercial_ok": "yes",
+                  "verified": "third_party",
+                  "source_url": "https://github.com/sparkfun/Pro_Micro"
+                },
+                "assets": [
+                  {
+                    "asset_id": "a_pro_micro_32u4_glb",
+                    "kind": "glb",
+                    "role": "model",
+                    "url": "/assets/parts/pro_micro_32u4.glb",
+                    "status": "ready"
+                  },
+                  {
+                    "asset_id": "a_pro_micro_32u4_png",
+                    "kind": "png",
+                    "role": "thumbnail",
+                    "url": "/assets/parts/pro_micro_32u4.png",
+                    "status": "ready"
+                  }
+                ],
+                "origin": "design",
+                "status": "ok"
+              },
+              {
+                "instance_id": "u_plate_r",
+                "part_id": "mech:corne_plate_fr4_r",
+                "slot_id": "plate",
+                "label": "Plate right",
+                "quantity": 1,
+                "side": "right",
+                "color": null,
+                "placement": {
+                  "mode": "single",
+                  "position_mm": [
+                    20.0,
+                    40.0,
+                    5.0
+                  ],
+                  "rotation_deg": [
+                    0,
+                    0,
+                    0
+                  ],
+                  "explode_offset_mm": [
+                    0,
+                    0,
+                    20.0
+                  ],
+                  "source": "design",
+                  "locked": false
+                },
+                "card": {
+                  "part_id": "mech:corne_plate_fr4_r",
+                  "display_name": "Corne switch plate (right)",
+                  "kind": "mechanical",
+                  "primary_function": "mech.plate",
+                  "summary": "1.5 mm FR4 plate for the Corne right half.",
+                  "key_specs": [
+                    {
+                      "label": "Thickness",
+                      "value": 1.5,
+                      "unit": "mm"
+                    }
+                  ],
+                  "thumbnail_url": "/assets/parts/corne_plate_fr4_r.png",
+                  "licence_spdx": "MIT",
+                  "commercial_ok": "yes",
+                  "verified": "geometry",
+                  "source_url": "https://github.com/foostan/crkbd"
+                },
+                "assets": [
+                  {
+                    "asset_id": "a_corne_plate_fr4_r_glb",
+                    "kind": "glb",
+                    "role": "model",
+                    "url": "/assets/parts/corne_plate_fr4_r.glb",
+                    "status": "ready"
+                  },
+                  {
+                    "asset_id": "a_corne_plate_fr4_r_png",
+                    "kind": "png",
+                    "role": "thumbnail",
+                    "url": "/assets/parts/corne_plate_fr4_r.png",
+                    "status": "ready"
+                  }
+                ],
+                "origin": "design",
+                "status": "ok"
+              },
+              {
+                "instance_id": "u_sw_r",
+                "part_id": "sw:gateron_yellow_mx",
+                "slot_id": "switches",
+                "label": "Switches right",
+                "quantity": 21,
+                "side": "right",
+                "color": null,
+                "placement": {
+                  "mode": "layout",
+                  "position_mm": [
+                    20.0,
+                    40.0,
+                    1.6
+                  ],
+                  "rotation_deg": [
+                    0,
+                    0,
+                    0
+                  ],
+                  "explode_offset_mm": [
+                    0,
+                    0,
+                    35.0
+                  ],
+                  "source": "design",
+                  "locked": false,
+                  "layout_id": "lay_corne_r"
+                },
+                "card": {
+                  "part_id": "sw:gateron_yellow_mx",
+                  "display_name": "Gateron Yellow (MX)",
+                  "kind": "component",
+                  "primary_function": "input.key",
+                  "summary": "Linear MX style switch, 50 gf.",
+                  "key_specs": [
+                    {
+                      "label": "Family",
+                      "value": "MX",
+                      "unit": null
+                    },
+                    {
+                      "label": "Type",
+                      "value": "linear",
+                      "unit": null
+                    },
+                    {
+                      "label": "Force",
+                      "value": 50,
+                      "unit": "gf"
+                    }
+                  ],
+                  "thumbnail_url": "/assets/parts/gateron_yellow_mx.png",
+                  "licence_spdx": "CC-BY-4.0",
+                  "commercial_ok": "yes",
+                  "verified": "geometry",
+                  "source_url": null
+                },
+                "assets": [
+                  {
+                    "asset_id": "a_gateron_yellow_mx_glb",
+                    "kind": "glb",
+                    "role": "model",
+                    "url": "/assets/parts/gateron_yellow_mx.glb",
+                    "status": "ready"
+                  },
+                  {
+                    "asset_id": "a_gateron_yellow_mx_png",
+                    "kind": "png",
+                    "role": "thumbnail",
+                    "url": "/assets/parts/gateron_yellow_mx.png",
+                    "status": "ready"
+                  }
+                ],
+                "origin": "design",
+                "status": "ok"
+              },
+              {
+                "instance_id": "u_cap_r",
+                "part_id": "cap:dsa_1u_pbt",
+                "slot_id": "keycaps",
+                "label": "Keycaps right",
+                "quantity": 21,
+                "side": "right",
+                "color": {
+                  "hex": "#E8E4DA",
+                  "material": "plastic",
+                  "node": null
+                },
+                "placement": {
+                  "mode": "layout",
+                  "position_mm": [
+                    20.0,
+                    40.0,
+                    13.0
+                  ],
+                  "rotation_deg": [
+                    0,
+                    0,
+                    0
+                  ],
+                  "explode_offset_mm": [
+                    0,
+                    0,
+                    55.0
+                  ],
+                  "source": "design",
+                  "locked": false,
+                  "layout_id": "lay_corne_r"
+                },
+                "card": {
+                  "part_id": "cap:dsa_1u_pbt",
+                  "display_name": "DSA 1u keycap (PBT)",
+                  "kind": "mechanical",
+                  "primary_function": "mech.keycap",
+                  "summary": "Uniform profile 1u keycap, MX cross stem.",
+                  "key_specs": [
+                    {
+                      "label": "Profile",
+                      "value": "DSA",
+                      "unit": null
+                    },
+                    {
+                      "label": "Stem",
+                      "value": "MX",
+                      "unit": null
+                    }
+                  ],
+                  "thumbnail_url": "/assets/parts/dsa_1u_pbt.png",
+                  "licence_spdx": "CC0-1.0",
+                  "commercial_ok": "yes",
+                  "verified": "geometry",
+                  "source_url": null
+                },
+                "assets": [
+                  {
+                    "asset_id": "a_dsa_1u_pbt_glb",
+                    "kind": "glb",
+                    "role": "model",
+                    "url": "/assets/parts/dsa_1u_pbt.glb",
+                    "status": "ready"
+                  },
+                  {
+                    "asset_id": "a_dsa_1u_pbt_png",
+                    "kind": "png",
+                    "role": "thumbnail",
+                    "url": "/assets/parts/dsa_1u_pbt.png",
+                    "status": "ready"
+                  }
+                ],
+                "origin": "design",
+                "status": "ok"
+              },
+              {
+                "instance_id": "u_oled_r",
+                "part_id": "disp:ssd1306_128x32",
+                "slot_id": "display",
+                "label": "OLED right",
+                "quantity": 1,
+                "side": "right",
+                "color": null,
+                "placement": {
+                  "mode": "single",
+                  "position_mm": [
+                    14.0,
+                    28.0,
+                    12.0
+                  ],
+                  "rotation_deg": [
+                    0,
+                    0,
+                    0
+                  ],
+                  "explode_offset_mm": [
+                    0,
+                    0,
+                    30.0
+                  ],
+                  "source": "design",
+                  "locked": false
+                },
+                "card": {
+                  "part_id": "disp:ssd1306_128x32",
+                  "display_name": "SSD1306 OLED 128x32 (I2C)",
+                  "kind": "module",
+                  "primary_function": "display.oled",
+                  "summary": "0.91 in monochrome OLED on a 4 pin I2C header.",
+                  "key_specs": [
+                    {
+                      "label": "Resolution",
+                      "value": "128x32",
+                      "unit": null
+                    },
+                    {
+                      "label": "Bus",
+                      "value": "I2C 0x3C",
+                      "unit": null
+                    },
+                    {
+                      "label": "Logic",
+                      "value": "3.3 to 5",
+                      "unit": "V"
+                    }
+                  ],
+                  "thumbnail_url": "/assets/parts/ssd1306_128x32.png",
+                  "licence_spdx": "NOASSERTION",
+                  "commercial_ok": "unknown",
+                  "verified": "third_party",
+                  "source_url": null
+                },
+                "assets": [
+                  {
+                    "asset_id": "a_ssd1306_128x32_glb",
+                    "kind": "glb",
+                    "role": "model",
+                    "url": "/assets/parts/ssd1306_128x32.glb",
+                    "status": "ready"
+                  },
+                  {
+                    "asset_id": "a_ssd1306_128x32_png",
+                    "kind": "png",
+                    "role": "thumbnail",
+                    "url": "/assets/parts/ssd1306_128x32.png",
+                    "status": "ready"
+                  }
+                ],
+                "origin": "design",
+                "status": "ok"
+              },
+              {
+                "instance_id": "u_trrs_r",
+                "part_id": "conn:pj320a_trrs",
+                "slot_id": "link",
+                "label": "TRRS jack right",
+                "quantity": 1,
+                "side": "right",
+                "color": null,
+                "placement": {
+                  "mode": "single",
+                  "position_mm": [
+                    6.0,
+                    44.0,
+                    1.6
+                  ],
+                  "rotation_deg": [
+                    0,
+                    0,
+                    0
+                  ],
+                  "explode_offset_mm": [
+                    0,
+                    0,
+                    10.0
+                  ],
+                  "source": "design",
+                  "locked": false
+                },
+                "card": {
+                  "part_id": "conn:pj320a_trrs",
+                  "display_name": "PJ-320A TRRS jack",
+                  "kind": "component",
+                  "primary_function": "interconnect.jack",
+                  "summary": "3.5 mm TRRS jack for the wired link between halves.",
+                  "key_specs": [
+                    {
+                      "label": "Poles",
+                      "value": 4,
+                      "unit": null
+                    }
+                  ],
+                  "thumbnail_url": "/assets/parts/pj320a_trrs.png",
+                  "licence_spdx": "CC-BY-SA-4.0",
+                  "commercial_ok": "yes",
+                  "verified": "geometry",
+                  "source_url": null
+                },
+                "assets": [
+                  {
+                    "asset_id": "a_pj320a_trrs_glb",
+                    "kind": "glb",
+                    "role": "model",
+                    "url": "/assets/parts/pj320a_trrs.glb",
+                    "status": "ready"
+                  },
+                  {
+                    "asset_id": "a_pj320a_trrs_png",
+                    "kind": "png",
+                    "role": "thumbnail",
+                    "url": "/assets/parts/pj320a_trrs.png",
+                    "status": "ready"
+                  }
+                ],
+                "origin": "design",
+                "status": "ok"
+              },
+              {
+                "instance_id": "u_cable",
+                "part_id": "cable:trrs_1m",
+                "slot_id": "link",
+                "label": "TRRS cable",
+                "quantity": 1,
+                "side": "center",
+                "color": null,
+                "placement": {
+                  "mode": "single",
+                  "position_mm": [
+                    0.0,
+                    60.0,
+                    5.0
+                  ],
+                  "rotation_deg": [
+                    0,
+                    0,
+                    0
+                  ],
+                  "explode_offset_mm": [
+                    0,
+                    20.0,
+                    0
+                  ],
+                  "source": "design",
+                  "locked": false
+                },
+                "card": {
+                  "part_id": "cable:trrs_1m",
+                  "display_name": "TRRS cable, 1 m",
+                  "kind": "cable",
+                  "primary_function": "interconnect.cable",
+                  "summary": "3.5 mm TRRS to TRRS cable.",
+                  "key_specs": [
+                    {
+                      "label": "Length",
+                      "value": 1000,
+                      "unit": "mm"
+                    }
+                  ],
+                  "thumbnail_url": "/assets/parts/trrs_1m.png",
+                  "licence_spdx": "CC0-1.0",
+                  "commercial_ok": "yes",
+                  "verified": "none",
+                  "source_url": null
+                },
+                "assets": [
+                  {
+                    "asset_id": "a_trrs_1m_glb",
+                    "kind": "glb",
+                    "role": "model",
+                    "url": "/assets/parts/trrs_1m.glb",
+                    "status": "ready"
+                  },
+                  {
+                    "asset_id": "a_trrs_1m_png",
+                    "kind": "png",
+                    "role": "thumbnail",
+                    "url": "/assets/parts/trrs_1m.png",
+                    "status": "ready"
+                  }
+                ],
+                "origin": "design",
+                "status": "ok"
+              }
+            ],
+            "connections": [
+              {
+                "connection_id": "c_mcu_pcb_l",
+                "type": "module_footprint",
+                "kind": "mechanical",
+                "from": {
+                  "instance_id": "u_pcb_l",
+                  "interface_id": "mcu_socket",
+                  "index": null
+                },
+                "to": {
+                  "instance_id": "u_mcu_l",
+                  "interface_id": "footprint",
+                  "index": null
+                },
+                "via_instance_id": null,
+                "nets": [],
+                "resolved": {},
+                "origin": "design",
+                "status": "ok"
+              },
+              {
+                "connection_id": "c_oled_l",
+                "type": "i2c",
+                "kind": "electrical",
+                "from": {
+                  "instance_id": "u_mcu_l",
+                  "interface_id": "i2c0",
+                  "index": null
+                },
+                "to": {
+                  "instance_id": "u_oled_l",
+                  "interface_id": "i2c",
+                  "index": null
+                },
+                "via_instance_id": "u_pcb_l",
+                "nets": [],
+                "resolved": {
+                  "address": 60,
+                  "v_logic_v": 5.0
+                },
+                "origin": "design",
+                "status": "ok",
+                "label": "I2C 0x3C"
+              },
+              {
+                "connection_id": "c_sw_l",
+                "type": "switch_socket",
+                "kind": "mechanical",
+                "from": {
+                  "instance_id": "u_pcb_l",
+                  "interface_id": "sw_socket",
+                  "index": null
+                },
+                "to": {
+                  "instance_id": "u_sw_l",
+                  "interface_id": "pins",
+                  "index": null
+                },
+                "via_instance_id": null,
+                "nets": [],
+                "resolved": {},
+                "origin": "design",
+                "status": "ok"
+              },
+              {
+                "connection_id": "c_cap_l",
+                "type": "switch_stem",
+                "kind": "mechanical",
+                "from": {
+                  "instance_id": "u_sw_l",
+                  "interface_id": "stem",
+                  "index": null
+                },
+                "to": {
+                  "instance_id": "u_cap_l",
+                  "interface_id": "stem",
+                  "index": null
+                },
+                "via_instance_id": null,
+                "nets": [],
+                "resolved": {},
+                "origin": "design",
+                "status": "ok"
+              },
+              {
+                "connection_id": "c_trrs_l",
+                "type": "jack",
+                "kind": "mechanical",
+                "from": {
+                  "instance_id": "u_trrs_l",
+                  "interface_id": "socket",
+                  "index": null
+                },
+                "to": {
+                  "instance_id": "u_cable",
+                  "interface_id": "plug_l",
+                  "index": null
+                },
+                "via_instance_id": null,
+                "nets": [],
+                "resolved": {},
+                "origin": "design",
+                "status": "ok"
+              },
+              {
+                "connection_id": "c_mcu_pcb_r",
+                "type": "module_footprint",
+                "kind": "mechanical",
+                "from": {
+                  "instance_id": "u_pcb_r",
+                  "interface_id": "mcu_socket",
+                  "index": null
+                },
+                "to": {
+                  "instance_id": "u_mcu_r",
+                  "interface_id": "footprint",
+                  "index": null
+                },
+                "via_instance_id": null,
+                "nets": [],
+                "resolved": {},
+                "origin": "design",
+                "status": "ok"
+              },
+              {
+                "connection_id": "c_oled_r",
+                "type": "i2c",
+                "kind": "electrical",
+                "from": {
+                  "instance_id": "u_mcu_r",
+                  "interface_id": "i2c0",
+                  "index": null
+                },
+                "to": {
+                  "instance_id": "u_oled_r",
+                  "interface_id": "i2c",
+                  "index": null
+                },
+                "via_instance_id": "u_pcb_r",
+                "nets": [],
+                "resolved": {
+                  "address": 60,
+                  "v_logic_v": 5.0
+                },
+                "origin": "design",
+                "status": "ok",
+                "label": "I2C 0x3C"
+              },
+              {
+                "connection_id": "c_sw_r",
+                "type": "switch_socket",
+                "kind": "mechanical",
+                "from": {
+                  "instance_id": "u_pcb_r",
+                  "interface_id": "sw_socket",
+                  "index": null
+                },
+                "to": {
+                  "instance_id": "u_sw_r",
+                  "interface_id": "pins",
+                  "index": null
+                },
+                "via_instance_id": null,
+                "nets": [],
+                "resolved": {},
+                "origin": "design",
+                "status": "ok"
+              },
+              {
+                "connection_id": "c_cap_r",
+                "type": "switch_stem",
+                "kind": "mechanical",
+                "from": {
+                  "instance_id": "u_sw_r",
+                  "interface_id": "stem",
+                  "index": null
+                },
+                "to": {
+                  "instance_id": "u_cap_r",
+                  "interface_id": "stem",
+                  "index": null
+                },
+                "via_instance_id": null,
+                "nets": [],
+                "resolved": {},
+                "origin": "design",
+                "status": "ok"
+              },
+              {
+                "connection_id": "c_trrs_r",
+                "type": "jack",
+                "kind": "mechanical",
+                "from": {
+                  "instance_id": "u_trrs_r",
+                  "interface_id": "socket",
+                  "index": null
+                },
+                "to": {
+                  "instance_id": "u_cable",
+                  "interface_id": "plug_r",
+                  "index": null
+                },
+                "via_instance_id": null,
+                "nets": [],
+                "resolved": {},
+                "origin": "design",
+                "status": "ok"
+              },
+              {
+                "connection_id": "c_link",
+                "type": "uart",
+                "kind": "electrical",
+                "from": {
+                  "instance_id": "u_mcu_l",
+                  "interface_id": "serial",
+                  "index": null
+                },
+                "to": {
+                  "instance_id": "u_mcu_r",
+                  "interface_id": "serial",
+                  "index": null
+                },
+                "via_instance_id": "u_cable",
+                "nets": [
+                  {
+                    "signal": "DATA",
+                    "from_pin": "D2",
+                    "to_pin": "D2"
+                  }
+                ],
+                "resolved": {},
+                "origin": "design",
+                "status": "ok",
+                "label": "Serial over TRRS"
+              }
+            ],
+            "layouts": [
+              {
+                "layout_id": "lay_corne_l",
+                "name": "Corne 3x6+3 left",
+                "pitch_x_mm": 19.05,
+                "pitch_y_mm": 19.05,
+                "keys": [
+                  {
+                    "i": 0,
+                    "x_u": 0.0,
+                    "y_u": 0.375,
+                    "matrix": [
+                      0,
+                      0
+                    ]
+                  },
+                  {
+                    "i": 1,
+                    "x_u": 1.0,
+                    "y_u": 0.375,
+                    "matrix": [
+                      0,
+                      1
+                    ]
+                  },
+                  {
+                    "i": 2,
+                    "x_u": 2.0,
+                    "y_u": 0.125,
+                    "matrix": [
+                      0,
+                      2
+                    ]
+                  },
+                  {
+                    "i": 3,
+                    "x_u": 3.0,
+                    "y_u": 0.0,
+                    "matrix": [
+                      0,
+                      3
+                    ]
+                  },
+                  {
+                    "i": 4,
+                    "x_u": 4.0,
+                    "y_u": 0.125,
+                    "matrix": [
+                      0,
+                      4
+                    ]
+                  },
+                  {
+                    "i": 5,
+                    "x_u": 5.0,
+                    "y_u": 0.25,
+                    "matrix": [
+                      0,
+                      5
+                    ]
+                  },
+                  {
+                    "i": 6,
+                    "x_u": 0.0,
+                    "y_u": 1.375,
+                    "matrix": [
+                      1,
+                      0
+                    ]
+                  },
+                  {
+                    "i": 7,
+                    "x_u": 1.0,
+                    "y_u": 1.375,
+                    "matrix": [
+                      1,
+                      1
+                    ]
+                  },
+                  {
+                    "i": 8,
+                    "x_u": 2.0,
+                    "y_u": 1.125,
+                    "matrix": [
+                      1,
+                      2
+                    ]
+                  },
+                  {
+                    "i": 9,
+                    "x_u": 3.0,
+                    "y_u": 1.0,
+                    "matrix": [
+                      1,
+                      3
+                    ]
+                  },
+                  {
+                    "i": 10,
+                    "x_u": 4.0,
+                    "y_u": 1.125,
+                    "matrix": [
+                      1,
+                      4
+                    ]
+                  },
+                  {
+                    "i": 11,
+                    "x_u": 5.0,
+                    "y_u": 1.25,
+                    "matrix": [
+                      1,
+                      5
+                    ]
+                  },
+                  {
+                    "i": 12,
+                    "x_u": 0.0,
+                    "y_u": 2.375,
+                    "matrix": [
+                      2,
+                      0
+                    ]
+                  },
+                  {
+                    "i": 13,
+                    "x_u": 1.0,
+                    "y_u": 2.375,
+                    "matrix": [
+                      2,
+                      1
+                    ]
+                  },
+                  {
+                    "i": 14,
+                    "x_u": 2.0,
+                    "y_u": 2.125,
+                    "matrix": [
+                      2,
+                      2
+                    ]
+                  },
+                  {
+                    "i": 15,
+                    "x_u": 3.0,
+                    "y_u": 2.0,
+                    "matrix": [
+                      2,
+                      3
+                    ]
+                  },
+                  {
+                    "i": 16,
+                    "x_u": 4.0,
+                    "y_u": 2.125,
+                    "matrix": [
+                      2,
+                      4
+                    ]
+                  },
+                  {
+                    "i": 17,
+                    "x_u": 5.0,
+                    "y_u": 2.25,
+                    "matrix": [
+                      2,
+                      5
+                    ]
+                  },
+                  {
+                    "i": 18,
+                    "x_u": 3.5,
+                    "y_u": 3.3,
+                    "r_deg": 0,
+                    "rx_u": 4.0,
+                    "ry_u": 3.8,
+                    "matrix": [
+                      3,
+                      3
+                    ]
+                  },
+                  {
+                    "i": 19,
+                    "x_u": 4.5,
+                    "y_u": 3.4,
+                    "r_deg": 0,
+                    "rx_u": 5.0,
+                    "ry_u": 3.9,
+                    "matrix": [
+                      3,
+                      4
+                    ]
+                  },
+                  {
+                    "i": 20,
+                    "x_u": 5.6,
+                    "y_u": 3.6,
+                    "r_deg": 15,
+                    "rx_u": 6.1,
+                    "ry_u": 4.1,
+                    "matrix": [
+                      3,
+                      5
+                    ]
+                  }
+                ]
+              },
+              {
+                "layout_id": "lay_corne_r",
+                "name": "Corne 3x6+3 right",
+                "pitch_x_mm": 19.05,
+                "pitch_y_mm": 19.05,
+                "keys": [
+                  {
+                    "i": 0,
+                    "x_u": 6.0,
+                    "y_u": 0.375,
+                    "matrix": [
+                      4,
+                      0
+                    ]
+                  },
+                  {
+                    "i": 1,
+                    "x_u": 5.0,
+                    "y_u": 0.375,
+                    "matrix": [
+                      4,
+                      1
+                    ]
+                  },
+                  {
+                    "i": 2,
+                    "x_u": 4.0,
+                    "y_u": 0.125,
+                    "matrix": [
+                      4,
+                      2
+                    ]
+                  },
+                  {
+                    "i": 3,
+                    "x_u": 3.0,
+                    "y_u": 0.0,
+                    "matrix": [
+                      4,
+                      3
+                    ]
+                  },
+                  {
+                    "i": 4,
+                    "x_u": 2.0,
+                    "y_u": 0.125,
+                    "matrix": [
+                      4,
+                      4
+                    ]
+                  },
+                  {
+                    "i": 5,
+                    "x_u": 1.0,
+                    "y_u": 0.25,
+                    "matrix": [
+                      4,
+                      5
+                    ]
+                  },
+                  {
+                    "i": 6,
+                    "x_u": 6.0,
+                    "y_u": 1.375,
+                    "matrix": [
+                      5,
+                      0
+                    ]
+                  },
+                  {
+                    "i": 7,
+                    "x_u": 5.0,
+                    "y_u": 1.375,
+                    "matrix": [
+                      5,
+                      1
+                    ]
+                  },
+                  {
+                    "i": 8,
+                    "x_u": 4.0,
+                    "y_u": 1.125,
+                    "matrix": [
+                      5,
+                      2
+                    ]
+                  },
+                  {
+                    "i": 9,
+                    "x_u": 3.0,
+                    "y_u": 1.0,
+                    "matrix": [
+                      5,
+                      3
+                    ]
+                  },
+                  {
+                    "i": 10,
+                    "x_u": 2.0,
+                    "y_u": 1.125,
+                    "matrix": [
+                      5,
+                      4
+                    ]
+                  },
+                  {
+                    "i": 11,
+                    "x_u": 1.0,
+                    "y_u": 1.25,
+                    "matrix": [
+                      5,
+                      5
+                    ]
+                  },
+                  {
+                    "i": 12,
+                    "x_u": 6.0,
+                    "y_u": 2.375,
+                    "matrix": [
+                      6,
+                      0
+                    ]
+                  },
+                  {
+                    "i": 13,
+                    "x_u": 5.0,
+                    "y_u": 2.375,
+                    "matrix": [
+                      6,
+                      1
+                    ]
+                  },
+                  {
+                    "i": 14,
+                    "x_u": 4.0,
+                    "y_u": 2.125,
+                    "matrix": [
+                      6,
+                      2
+                    ]
+                  },
+                  {
+                    "i": 15,
+                    "x_u": 3.0,
+                    "y_u": 2.0,
+                    "matrix": [
+                      6,
+                      3
+                    ]
+                  },
+                  {
+                    "i": 16,
+                    "x_u": 2.0,
+                    "y_u": 2.125,
+                    "matrix": [
+                      6,
+                      4
+                    ]
+                  },
+                  {
+                    "i": 17,
+                    "x_u": 1.0,
+                    "y_u": 2.25,
+                    "matrix": [
+                      6,
+                      5
+                    ]
+                  },
+                  {
+                    "i": 18,
+                    "x_u": 3.5,
+                    "y_u": 3.3,
+                    "r_deg": 0,
+                    "rx_u": 4.0,
+                    "ry_u": 3.8,
+                    "matrix": [
+                      7,
+                      3
+                    ]
+                  },
+                  {
+                    "i": 19,
+                    "x_u": 2.5,
+                    "y_u": 3.4,
+                    "r_deg": 0,
+                    "rx_u": 3.0,
+                    "ry_u": 3.9,
+                    "matrix": [
+                      7,
+                      4
+                    ]
+                  },
+                  {
+                    "i": 20,
+                    "x_u": 1.4,
+                    "y_u": 3.6,
+                    "r_deg": -15,
+                    "rx_u": 1.9,
+                    "ry_u": 4.1,
+                    "matrix": [
+                      7,
+                      5
+                    ]
+                  }
+                ]
+              }
+            ],
+            "enclosures": [
+              {
+                "enclosure_id": "e_case_l",
+                "kind": "design",
+                "side": "left",
+                "for_instance_ids": [
+                  "u_pcb_l"
+                ],
+                "params": {
+                  "split": "none"
+                },
+                "outer_size_mm": [
+                  136.0,
+                  96.0,
+                  8.0
+                ],
+                "position_mm": [
+                  -71.0,
+                  0.0,
+                  -4.0
+                ],
+                "rotation_deg": [
+                  0,
+                  0,
+                  0
+                ],
+                "explode_offset_mm": [
+                  0,
+                  0,
+                  -25.0
+                ],
+                "cutouts": [],
+                "color": null,
+                "material": "plastic",
+                "color_source": "design",
+                "assets": [
+                  {
+                    "asset_id": "a_corne_case_l",
+                    "kind": "glb",
+                    "role": "model",
+                    "url": "/assets/designs/corne/case_l.glb",
+                    "status": "ready"
+                  }
+                ],
+                "status": "ok",
+                "duration_ms": 0,
+                "revision": 1
+              },
+              {
+                "enclosure_id": "e_case_r",
+                "kind": "design",
+                "side": "right",
+                "for_instance_ids": [
+                  "u_pcb_r"
+                ],
+                "params": {
+                  "split": "none"
+                },
+                "outer_size_mm": [
+                  136.0,
+                  96.0,
+                  8.0
+                ],
+                "position_mm": [
+                  71.0,
+                  0.0,
+                  -4.0
+                ],
+                "rotation_deg": [
+                  0,
+                  0,
+                  0
+                ],
+                "explode_offset_mm": [
+                  0,
+                  0,
+                  -25.0
+                ],
+                "cutouts": [],
+                "color": null,
+                "material": "plastic",
+                "color_source": "design",
+                "assets": [
+                  {
+                    "asset_id": "a_corne_case_r",
+                    "kind": "glb",
+                    "role": "model",
+                    "url": "/assets/designs/corne/case_r.glb",
+                    "status": "ready"
+                  }
+                ],
+                "status": "ok",
+                "duration_ms": 0,
+                "revision": 1
+              }
+            ],
+            "boards": [
+              {
+                "board_id": "pcb_l",
+                "source": "design",
+                "side": "left",
+                "part_instance_id": "u_pcb_l",
+                "for_instance_ids": [
+                  "u_mcu_l",
+                  "u_sw_l"
+                ],
+                "size_mm": [
+                  132.0,
+                  93.0
+                ],
+                "thickness_mm": 1.6,
+                "layers": 2,
+                "nets": [],
+                "routing": {
+                  "status": "routed",
+                  "unrouted_nets": [],
+                  "duration_ms": 0,
+                  "method": "design",
+                  "cache_key": null,
+                  "cache_hit": false,
+                  "router": null
+                },
+                "drc": "pass",
+                "assets": [],
+                "status": "ok",
+                "revision": 1
+              },
+              {
+                "board_id": "pcb_r",
+                "source": "design",
+                "side": "right",
+                "part_instance_id": "u_pcb_r",
+                "for_instance_ids": [
+                  "u_mcu_r",
+                  "u_sw_r"
+                ],
+                "size_mm": [
+                  132.0,
+                  93.0
+                ],
+                "thickness_mm": 1.6,
+                "layers": 2,
+                "nets": [],
+                "routing": {
+                  "status": "routed",
+                  "unrouted_nets": [],
+                  "duration_ms": 0,
+                  "method": "design",
+                  "cache_key": null,
+                  "cache_hit": false,
+                  "router": null
+                },
+                "drc": "pass",
+                "assets": [],
+                "status": "ok",
+                "revision": 1
+              }
+            ],
+            "firmware": {
+              "firmware_id": "fw_main",
+              "framework": "qmk",
+              "origin": "design",
+              "mode": "prebuilt",
+              "mode_reason": "Known design with its own prebuilt image.",
+              "targets": [
+                {
+                  "target_id": "crkbd_rev1",
+                  "mcu_instance_id": "u_mcu_l",
+                  "side": "none",
+                  "label": "Both halves (same image)"
+                }
+              ],
+              "files": [
+                {
+                  "path": "keyboards/crkbd/keymaps/default/keymap.c",
+                  "language": "c",
+                  "content": null,
+                  "asset": {
+                    "asset_id": "a_corne_keymap",
+                    "kind": "json",
+                    "role": "source",
+                    "url": "/assets/designs/corne/keymap.c",
+                    "status": "ready"
+                  },
+                  "bytes": 4210
+                }
+              ],
+              "drivers": [],
+              "pin_map": [],
+              "compile": {
+                "status": "skipped",
+                "duration_ms": 0,
+                "message": "Using the design's prebuilt image.",
+                "binaries": [
+                  {
+                    "asset_id": "a_corne_hex",
+                    "kind": "firmware_bin",
+                    "role": "binary",
+                    "url": "/assets/designs/corne/crkbd_rev1_default.hex",
+                    "status": "ready",
+                    "origin": "design"
+                  }
+                ],
+                "log": null
+              },
+              "revision": 1
+            },
+            "checks": [
+              {
+                "check_key": "slot.critical_filled:build",
+                "rule_id": "slot.critical_filled",
+                "status": "pass",
+                "severity": "critical",
+                "message": "All 5 critical slots filled.",
+                "subjects": [],
+                "measured": 5,
+                "limit": 5
+              },
+              {
+                "check_key": "mech.switch.family_match:u_sw_l",
+                "rule_id": "mech.switch.family_match",
+                "status": "pass",
+                "severity": "critical",
+                "message": "MX switches on MX hotswap sockets.",
+                "subjects": [
+                  {
+                    "instance_id": "u_sw_l"
+                  }
+                ]
+              },
+              {
+                "check_key": "mech.switch.family_match:u_sw_r",
+                "rule_id": "mech.switch.family_match",
+                "status": "pass",
+                "severity": "critical",
+                "message": "MX switches on MX hotswap sockets.",
+                "subjects": [
+                  {
+                    "instance_id": "u_sw_r"
+                  }
+                ]
+              },
+              {
+                "check_key": "lic.commercial_ok:build",
+                "rule_id": "lic.commercial_ok",
+                "status": "pass",
+                "severity": "warning",
+                "message": "All parts allow commercial use.",
+                "subjects": []
+              }
+            ],
+            "warnings": [],
+            "scene": {
+              "camera": {
+                "position_mm": [
+                  0.0,
+                  -260.0,
+                  220.0
+                ],
+                "target_mm": [
+                  0.0,
+                  0.0,
+                  0.0
+                ],
+                "fov_deg": 35
+              },
+              "assembly_bbox_mm": {
+                "min": [
+                  -140.0,
+                  -48.0,
+                  -8.0
+                ],
+                "max": [
+                  140.0,
+                  66.0,
+                  21.0
+                ]
+              },
+              "render": {
+                "asset_id": "a_corne_render",
+                "kind": "png",
+                "role": "render",
+                "url": "/assets/designs/corne/render.png",
+                "status": "ready"
+              },
+              "preload": [
+                "/assets/designs/corne/case_l.glb",
+                "/assets/designs/corne/case_r.glb",
+                "/assets/parts/corne_v3_l.glb",
+                "/assets/parts/corne_v3_r.glb"
+              ]
+            },
+            "timings_ms": {
+              "classify": 11,
+              "reuse": 123,
+              "compose": 0,
+              "place": 11,
+              "enclose": 15,
+              "board": 13,
+              "firmware": 10,
+              "render": 13
+            },
+            "error": null,
+            "clarify": null,
+            "clarifications": [],
+            "last_seq": 62,
+            "created_at": "2026-10-24T20:00:00.020Z"
+          },
+          "reason": "resume_gap"
+        }
+      }
+    },
+    {
+      "dir": "client",
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "build.resume",
+        "msg_id": "m_resume_0001",
+        "ts": "2026-10-24T20:00:40.301Z",
+        "payload": {
+          "build_id": "b_exact001A",
+          "last_seq": 3
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 3,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "ack",
+        "seq": 0,
+        "build_id": "b_exact001A",
+        "ts": "2026-10-24T20:00:40.304Z",
+        "payload": {
+          "msg_id": "m_resume_0001",
+          "accepted": true,
+          "duplicate": true,
+          "build_id": "b_exact001A",
+          "edit_id": null,
+          "error": null
+        }
+      }
+    }
+  ]
+}

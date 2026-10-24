@@ -1,0 +1,159 @@
+{
+  "fixture": "edit_remove_part",
+  "spec_version": "1.1.0",
+  "kind": "stream",
+  "description": "Edit: remove the left OLED (optional slot). connection.removed comes before part.removed. Starts from exact_keyboard.",
+  "requires_fixture": "exact_keyboard",
+  "steps": [
+    {
+      "dir": "client",
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "edit.apply",
+        "msg_id": "m_edit_rm_01",
+        "ts": "2026-10-24T20:00:30.267Z",
+        "payload": {
+          "build_id": "b_exact001A",
+          "base_revision": 1,
+          "ops": [
+            {
+              "op": "remove_part",
+              "instance_id": "u_oled_l"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 4,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "ack",
+        "seq": 0,
+        "build_id": "b_exact001A",
+        "ts": "2026-10-24T20:00:30.271Z",
+        "payload": {
+          "msg_id": "m_edit_rm_01",
+          "accepted": true,
+          "duplicate": false,
+          "build_id": "b_exact001A",
+          "edit_id": "ed_1",
+          "error": null
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 2,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "stage.started",
+        "seq": 63,
+        "build_id": "b_exact001A",
+        "ts": "2026-10-24T20:00:30.273Z",
+        "stage": "edit",
+        "cause": {
+          "msg_id": "m_edit_rm_01",
+          "edit_id": "ed_1"
+        },
+        "payload": {
+          "stage": "edit",
+          "label": "Removing the left OLED",
+          "budget_ms": 50
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 3,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "connection.removed",
+        "seq": 64,
+        "build_id": "b_exact001A",
+        "ts": "2026-10-24T20:00:30.276Z",
+        "stage": "edit",
+        "revision": 2,
+        "cause": {
+          "msg_id": "m_edit_rm_01",
+          "edit_id": "ed_1"
+        },
+        "payload": {
+          "connection_id": "c_oled_l",
+          "reason": "Part removed"
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 3,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "part.removed",
+        "seq": 65,
+        "build_id": "b_exact001A",
+        "ts": "2026-10-24T20:00:30.279Z",
+        "stage": "edit",
+        "revision": 2,
+        "cause": {
+          "msg_id": "m_edit_rm_01",
+          "edit_id": "ed_1"
+        },
+        "payload": {
+          "instance_id": "u_oled_l",
+          "reason": "Removed by user"
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 5,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "stage.completed",
+        "seq": 66,
+        "build_id": "b_exact001A",
+        "ts": "2026-10-24T20:00:30.284Z",
+        "stage": "edit",
+        "cause": {
+          "msg_id": "m_edit_rm_01",
+          "edit_id": "ed_1"
+        },
+        "payload": {
+          "stage": "edit",
+          "status": "ok",
+          "duration_ms": 11
+        }
+      }
+    },
+    {
+      "dir": "server",
+      "delay_ms": 2,
+      "msg": {
+        "spec_version": "1.1.0",
+        "type": "edit.applied",
+        "seq": 67,
+        "build_id": "b_exact001A",
+        "ts": "2026-10-24T20:00:30.286Z",
+        "revision": 2,
+        "cause": {
+          "msg_id": "m_edit_rm_01",
+          "edit_id": "ed_1"
+        },
+        "payload": {
+          "edit_id": "ed_1",
+          "msg_id": "m_edit_rm_01",
+          "ops": [
+            {
+              "op": "remove_part",
+              "instance_id": "u_oled_l"
+            }
+          ],
+          "revision": 2,
+          "duration_ms": 9
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,559 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://app.invalid/spec/v1/interface.schema.json",
+  "x-spec-version": "1.1.0",
+  "title": "Interface",
+  "description": "A typed port on a part. params shape depends on type (see vocab.schema.json Params_<type>). Unknown params keys are ignored by clients.",
+  "type": "object",
+  "required": [
+    "id",
+    "type",
+    "role",
+    "params"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "Unique within the part, for example i2c0, vin, sw_socket."
+    },
+    "type": {
+      "$ref": "vocab.schema.json#/$defs/InterfaceType"
+    },
+    "role": {
+      "$ref": "vocab.schema.json#/$defs/Role"
+    },
+    "label": {
+      "type": "string",
+      "maxLength": 60,
+      "description": "Human label for the UI, for example Qwiic port A."
+    },
+    "params": {
+      "type": "object"
+    },
+    "pins": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Pin numbers (keys of Part.pins) that carry this interface. Empty for mechanical interfaces."
+    },
+    "signals": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Signal name to pin number, for example {SDA: '2', SCL: '3'}."
+    },
+    "optional": {
+      "type": "boolean",
+      "default": false,
+      "description": "true when a requires port may stay unconnected without failing slot.critical_filled."
+    },
+    "max_connections": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1,
+      "description": "How many peers this port can take. null means limited only by type rules (I2C addresses, current budget)."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "power_in"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "params": {
+            "$ref": "vocab.schema.json#/$defs/Params_power_in"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "power_out"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "params": {
+            "$ref": "vocab.schema.json#/$defs/Params_power_out"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "gpio"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "params": {
+            "$ref": "vocab.schema.json#/$defs/Params_gpio"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "analog"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "params": {
+            "$ref": "vocab.schema.json#/$defs/Params_analog"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "i2c"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "params": {
+            "$ref": "vocab.schema.json#/$defs/Params_i2c"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "spi"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "params": {
+            "$ref": "vocab.schema.json#/$defs/Params_spi"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "uart"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "params": {
+            "$ref": "vocab.schema.json#/$defs/Params_uart"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "i2s"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "params": {
+            "$ref": "vocab.schema.json#/$defs/Params_i2s"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "usb"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "params": {
+            "$ref": "vocab.schema.json#/$defs/Params_usb"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "qwiic"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "params": {
+            "$ref": "vocab.schema.json#/$defs/Params_qwiic"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "radio"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "params": {
+            "$ref": "vocab.schema.json#/$defs/Params_radio"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "module_footprint"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "params": {
+            "$ref": "vocab.schema.json#/$defs/Params_module_footprint"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "switch_socket"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "params": {
+            "$ref": "vocab.schema.json#/$defs/Params_switch_socket"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "switch_stem"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "params": {
+            "$ref": "vocab.schema.json#/$defs/Params_switch_stem"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "plate_cutout"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "params": {
+            "$ref": "vocab.schema.json#/$defs/Params_plate_cutout"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "layout"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "params": {
+            "$ref": "vocab.schema.json#/$defs/Params_layout"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "stabilizer"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "params": {
+            "$ref": "vocab.schema.json#/$defs/Params_stabilizer"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "mounting_holes"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "params": {
+            "$ref": "vocab.schema.json#/$defs/Params_mounting_holes"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "fastener"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "params": {
+            "$ref": "vocab.schema.json#/$defs/Params_fastener"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "battery"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "params": {
+            "$ref": "vocab.schema.json#/$defs/Params_battery"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "addressable_led"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "params": {
+            "$ref": "vocab.schema.json#/$defs/Params_addressable_led"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "motor"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "params": {
+            "$ref": "vocab.schema.json#/$defs/Params_motor"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "jack"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "params": {
+            "$ref": "vocab.schema.json#/$defs/Params_jack"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "panel_access"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "params": {
+            "$ref": "vocab.schema.json#/$defs/Params_panel_access"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "other"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "params": {
+            "$ref": "vocab.schema.json#/$defs/Params_other"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "unknown"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "then": {
+        "properties": {
+          "params": {
+            "$ref": "vocab.schema.json#/$defs/Params_unknown"
+          }
+        }
+      }
+    }
+  ]
+}

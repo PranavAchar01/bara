@@ -1,0 +1,170 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://app.invalid/spec/v1/fixture.schema.json",
+  "x-spec-version": "1.1.0",
+  "title": "Fixture",
+  "description": "A recorded exchange used by mock mode and the contract tests.",
+  "$defs": {
+    "StreamFixture": {
+      "type": "object",
+      "required": [
+        "fixture",
+        "spec_version",
+        "kind",
+        "description",
+        "steps"
+      ],
+      "properties": {
+        "fixture": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$"
+        },
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "kind": {
+          "const": "stream"
+        },
+        "description": {
+          "type": "string"
+        },
+        "match_prompts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Mock mode replays this fixture when the build.start prompt equals one of these (case and space insensitive)."
+        },
+        "requires_fixture": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Fixture whose stream must be replayed first (edit fixtures start from a finished build)."
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "required": [
+                  "dir",
+                  "msg"
+                ],
+                "properties": {
+                  "dir": {
+                    "const": "client"
+                  },
+                  "msg": {
+                    "$ref": "ws_client.schema.json"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": [
+                  "dir",
+                  "msg"
+                ],
+                "properties": {
+                  "dir": {
+                    "const": "server"
+                  },
+                  "msg": {
+                    "$ref": "ws_server.schema.json"
+                  },
+                  "delay_ms": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Mock replay delay after the previous step, before the speed factor."
+                  }
+                }
+              }
+            ]
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "RestFixture": {
+      "type": "object",
+      "required": [
+        "fixture",
+        "spec_version",
+        "kind",
+        "description",
+        "request",
+        "response"
+      ],
+      "properties": {
+        "fixture": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+$"
+        },
+        "spec_version": {
+          "$ref": "common.schema.json#/$defs/SpecVersion"
+        },
+        "kind": {
+          "const": "rest"
+        },
+        "description": {
+          "type": "string"
+        },
+        "body_def": {
+          "type": "string",
+          "description": "rest.schema.json $defs name the response body validates against."
+        },
+        "request": {
+          "type": "object",
+          "required": [
+            "method",
+            "path"
+          ],
+          "properties": {
+            "method": {
+              "type": "string",
+              "enum": [
+                "GET",
+                "POST"
+              ]
+            },
+            "path": {
+              "type": "string"
+            },
+            "query": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "body": {}
+          }
+        },
+        "response": {
+          "type": "object",
+          "required": [
+            "status",
+            "body"
+          ],
+          "properties": {
+            "status": {
+              "type": "integer"
+            },
+            "body": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/StreamFixture"
+    },
+    {
+      "$ref": "#/$defs/RestFixture"
+    }
+  ]
+}
