@@ -12,6 +12,15 @@ export const MOCK_EDIT_MESSAGE = "not available in mock mode";
 export interface MockOptions {
   speed?: number;
   forcedFixture?: string | null;
+  /** Appended to every build id this server sends, so two builds of one fixture stay apart (MockHub). */
+  buildIdSuffix?: string;
+}
+
+/** What a FakeSocket talks to: one MockServer, or a MockHub of them. */
+export interface MockEndpoint {
+  attach(sock: FakeSocket): void;
+  detach(sock: FakeSocket): void;
+  receive(msg: ClientEnvelope): void;
 }
 
 export function normalizePrompt(p: string): string {
@@ -49,6 +58,60 @@ export function selectEditFixture(fx: FixtureSet, ops: EditOp[]): string | null 
   return null;
 }
 
+/**
+ * The fixtures stream a whole build in about a second, which is too fast to
+ * watch: the bot on stage (bot/AgentStage.tsx) ends up acting the build out
+ * long after it finished. Build events get at least this much time before them
+ * (ms at mock_speed=1), so a build takes about 12 to 20 s, roughly what the real
+ * server takes. Edits, acks and anything after the build ends keep the
+ * fixture's own delays (the trailing firmware compile is already slow).
+ */
+export const BUILD_PACE_MS: Record<string, number> = {
+  "stage.started": 300,
+  "stage.completed": 120,
+  "stage.progress": 80,
+  "spec.ready": 700,
+  "reuse.decided": 600,
+  "slots.ready": 400,
+  "layout.added": 100,
+  "candidates.ready": 380,
+  "decision.made": 240,
+  "slot.updated": 40,
+  "part.added": 180,
+  "connection.added": 100,
+  "placement.updated": 700,
+  "enclosure.updated": 600,
+  "board.updated": 800,
+  "firmware.progress": 500,
+  "firmware.ready": 800,
+  "check.result": 120,
+  warning: 300,
+  "clarify.request": 400,
+  "scene.ready": 400,
+  "build.done": 300,
+  "build.failed": 300,
+};
+
+/**
+ * Delay before each step (ms at mock_speed=1): the fixture's delay_ms, raised to
+ * BUILD_PACE_MS for events of a build in progress (after a client build.start and
+ * before its build.done or build.failed).
+ */
+export function pacedDelays(steps: FixtureStep[], building = true): number[] {
+  let on = building;
+  return steps.map((s) => {
+    if (s.dir === "client") {
+      if (s.msg.type === "build.start") on = true;
+      return 0;
+    }
+    const raw = s.delay_ms ?? 0;
+    const type = s.msg.type;
+    const d = on ? Math.max(raw, BUILD_PACE_MS[type] ?? 0) : raw;
+    if (type === "build.done" || type === "build.failed") on = false;
+    return d;
+  });
+}
+
 function clone<T>(v: T): T {
   return JSON.parse(JSON.stringify(v)) as T;
 }
@@ -75,6 +138,8 @@ const NO_REWRITE: Rewrite = {
 
 interface Replay {
   steps: FixtureStep[];
+  /** Delay before each step at mock_speed=1 (pacedDelays). */
+  delays: number[];
   /** Index of the first step of each fixture segment, with its rewrite. */
   segments: { start: number; rewrite: Rewrite }[];
   pos: number;
@@ -86,10 +151,11 @@ interface Replay {
   stage: string | null;
 }
 
-export class MockServer {
+export class MockServer implements MockEndpoint {
   private readonly fx: FixtureSet;
   private readonly speed: number;
   private readonly forced: string | null;
+  private readonly suffix: string | null;
   private socket: FakeSocket | null = null;
   private replay: Replay | null = null;
   private readonly idMap = new Map<string, string>();
@@ -104,21 +170,37 @@ export class MockServer {
     this.fx = fx;
     this.speed = opts.speed && opts.speed > 0 ? opts.speed : 1;
     this.forced = opts.forcedFixture ?? null;
+    this.suffix = opts.buildIdSuffix ?? null;
   }
 
-  attach(sock: FakeSocket): void {
+  /** Has this server been given a build.start yet. */
+  get started(): boolean {
+    return this.replay !== null || this.buildId !== null;
+  }
+
+  get awaitingReconnect(): boolean {
+    return this.replay?.awaitingReconnect ?? false;
+  }
+
+  owns(buildId: string): boolean {
+    return this.buildId === buildId || this.log.has(buildId);
+  }
+
+  /** `greet` false joins a socket another server already said hello on (MockHub). */
+  attach(sock: FakeSocket, greet = true): void {
     this.socket = sock;
     if (this.replay?.awaitingReconnect) {
       const r = this.replay;
       r.awaitingReconnect = false;
       const step = r.steps[r.pos];
       r.pos += 1;
-      this.later(step.dir === "server" ? (step.delay_ms ?? 0) : 0, () => {
+      this.later(step.dir === "server" ? (r.delays[r.pos - 1] ?? step.delay_ms ?? 0) : 0, () => {
         this.emit(step.msg as ServerEnvelope, NO_REWRITE);
         this.advance();
       });
       return;
     }
+    if (!greet) return;
     const name = this.forced && this.fx.streams.has(this.forced) ? this.forced : DEFAULT_FIXTURE;
     const hello = this.firstHello(name);
     this.later(hello?.delay_ms ?? 20, () => {
@@ -260,7 +342,17 @@ export class MockServer {
     this.terminal = false;
     this.editCount = 0;
     this.buildId = null;
-    this.replay = { steps, segments, pos: 0, timer: null, awaiting: null, buffered: [], awaitingReconnect: false, stage: null };
+    this.replay = {
+      steps,
+      delays: pacedDelays(steps),
+      segments,
+      pos: 0,
+      timer: null,
+      awaiting: null,
+      buffered: [],
+      awaitingReconnect: false,
+      stage: null,
+    };
     this.advance();
   }
 
@@ -296,8 +388,10 @@ export class MockServer {
       fromEditId,
       rejectMessage: matched ? null : MOCK_EDIT_MESSAGE,
     };
+    const steps = f.steps.slice(firstClient + 1);
     this.replay = {
-      steps: f.steps.slice(firstClient + 1),
+      steps,
+      delays: pacedDelays(steps, false),
       segments: [{ start: 0, rewrite }],
       pos: 0,
       timer: null,
@@ -395,7 +489,7 @@ export class MockServer {
       return;
     }
     const rewrite = this.segmentOf(r).rewrite;
-    r.timer = this.later(step.delay_ms ?? 0, () => {
+    r.timer = this.later(r.delays[r.pos] ?? step.delay_ms ?? 0, () => {
       r.timer = null;
       if (this.replay !== r) return;
       r.pos += 1;
@@ -424,6 +518,14 @@ export class MockServer {
     if (env.type === "edit.rejected" && rw.rejectMessage) {
       const err = p.error as Record<string, unknown> | undefined;
       if (err) err.message = rw.rejectMessage;
+    }
+    if (this.suffix) {
+      const sfx = this.suffix;
+      const tag = (id: unknown): unknown => (typeof id === "string" && !id.endsWith(sfx) ? id + sfx : id);
+      if (env.build_id) env.build_id = tag(env.build_id) as string;
+      if ("build_id" in p) p.build_id = tag(p.build_id);
+      const nested = p.build as { build_id?: unknown } | undefined;
+      if (nested && typeof nested === "object" && "build_id" in nested) nested.build_id = tag(nested.build_id);
     }
     if (env.type === "ack" && typeof p.build_id === "string" && !this.buildId) this.buildId = p.build_id;
     if (!CONNECTION_SCOPED.has(env.type) && env.build_id) {
@@ -454,16 +556,73 @@ export class MockServer {
   }
 }
 
-/** WebSocket stand-in that talks to a MockServer. */
+/** Mock build ids carry `~tag` so they stay unique across canvases and reloads; REST stubs drop it. */
+export function fixtureBuildPath(path: string): string {
+  return path.replace(/~[a-z0-9]+/g, "");
+}
+
+/**
+ * Several mock builds at once, one per canvas: each build.start after the first gets a MockServer
+ * of its own, and later messages go to the server that owns their build_id. Every build id gets a
+ * suffix unique to this page, so a canvas restored after a reload never shares an id with a new build.
+ */
+export class MockHub implements MockEndpoint {
+  private readonly fx: FixtureSet;
+  private readonly opts: MockOptions;
+  private readonly lanes: MockServer[];
+  private readonly tag = Date.now().toString(36);
+  private socket: FakeSocket | null = null;
+
+  constructor(fx: FixtureSet, opts: MockOptions = {}) {
+    this.fx = fx;
+    this.opts = opts;
+    this.lanes = [this.lane(0)];
+  }
+
+  private lane(n: number): MockServer {
+    return new MockServer(this.fx, { ...this.opts, buildIdSuffix: `~${this.tag}${n}` });
+  }
+
+  attach(sock: FakeSocket): void {
+    this.socket = sock;
+    // one hello per socket: from a lane picking up a mid-fixture reconnect, else from the first lane
+    const resuming = this.lanes.some((l) => l.awaitingReconnect);
+    this.lanes.forEach((l, i) => l.attach(sock, !resuming && i === 0));
+  }
+
+  detach(sock: FakeSocket): void {
+    if (this.socket === sock) this.socket = null;
+    for (const l of this.lanes) l.detach(sock);
+  }
+
+  receive(msg: ClientEnvelope): void {
+    const last = this.lanes[this.lanes.length - 1];
+    if (msg.type === "build.start") {
+      let lane = last;
+      if (lane.started) {
+        lane = this.lane(this.lanes.length);
+        this.lanes.push(lane);
+        if (this.socket) lane.attach(this.socket, false);
+      }
+      lane.receive(msg);
+      return;
+    }
+    const id = (msg.payload as { build_id?: unknown } | null)?.build_id;
+    const owner = typeof id === "string" ? this.lanes.find((l) => l.owns(id)) : undefined;
+    (owner ?? last).receive(msg);
+  }
+}
+
+/** WebSocket stand-in that talks to a MockServer (or a MockHub). */
 export class FakeSocket implements SocketLike {
   onopen: (() => void) | null = null;
   onmessage: ((ev: { data: string }) => void) | null = null;
   onclose: (() => void) | null = null;
   onerror: (() => void) | null = null;
   private closed = false;
-  private readonly server: MockServer;
+  private readonly server: MockEndpoint;
 
-  constructor(server: MockServer) {
+  constructor(server: MockEndpoint) {
     this.server = server;
     queueMicrotask(() => {
       if (this.closed) return;

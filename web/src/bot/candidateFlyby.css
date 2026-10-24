@@ -1,0 +1,182 @@
+/* The candidate fly-by (CandidateFlyby.tsx): option cards beside the bot while
+   it compares parts. Just under the agent stage (55) so the bot and its box
+   stay on top. Never takes a click. Positioned per frame by translate. */
+.cflyby {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 184px;
+  z-index: 54;
+  pointer-events: none;
+  will-change: transform;
+  transition: opacity 260ms ease;
+  --ox: 0px;
+  --oy: 0px;
+}
+.cflyby[data-phase="fade"] {
+  opacity: 0;
+}
+
+.cf-card {
+  position: absolute;
+  left: 0;
+  width: 184px;
+  height: 46px;
+  box-sizing: border-box;
+  padding: 6px 9px 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-pop);
+  color: var(--text);
+  font: 500 11.5px/1.3 var(--font-sans);
+  transform-origin: 50% 50%;
+  transition:
+    transform 380ms cubic-bezier(0.2, 0.9, 0.3, 1.2),
+    opacity 240ms ease,
+    border-color 90ms ease,
+    box-shadow 90ms ease;
+}
+
+/* Stacked on the bot, small and clear, before they fan out. */
+.cflyby[data-phase="enter"] .cf-card {
+  opacity: 0;
+  transform: translate(calc(var(--ox) - 92px), calc(var(--oy) - var(--top) - 23px)) scale(0.3);
+  transition: none;
+}
+.cflyby[data-phase="fan"] .cf-card {
+  transition-delay: calc(var(--i) * 45ms);
+}
+
+/* Comparing: the highlight flashes through the cards. */
+.cflyby[data-phase="shuffle"] .cf-card {
+  opacity: 0.6;
+}
+.cflyby[data-phase="shuffle"] .cf-card[data-hot] {
+  opacity: 1;
+  border-color: var(--accent);
+  box-shadow:
+    0 0 0 2px var(--accent-soft),
+    var(--shadow-pop);
+  transform: scale(1.04);
+}
+
+/* Settled: the losers drop away, the winner pops and gets its tick. */
+.cflyby:is([data-phase="settle"], [data-phase="fly"], [data-phase="fade"]) .cf-card:not([data-win]) {
+  opacity: 0;
+  transform: translateY(18px) rotate(var(--rot)) scale(0.94);
+  transition:
+    transform 420ms cubic-bezier(0.4, 0, 0.8, 0.6),
+    opacity 320ms ease;
+  transition-delay: calc(var(--i) * 30ms);
+}
+.cflyby:is([data-phase="settle"], [data-phase="fly"], [data-phase="fade"]) .cf-card[data-win] {
+  border-color: var(--ok);
+  box-shadow:
+    0 0 0 2px var(--ok-soft),
+    var(--shadow-pop);
+}
+.cflyby[data-phase="settle"] .cf-card[data-win] {
+  animation: cf-pop 420ms cubic-bezier(0.3, 1.5, 0.5, 1);
+}
+.cflyby[data-phase="fly"] .cf-card[data-win] {
+  transition:
+    transform 450ms cubic-bezier(0.5, 0, 0.2, 1),
+    opacity 450ms cubic-bezier(0.6, 0, 1, 1);
+}
+@keyframes cf-pop {
+  0% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.cf-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+.cf-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+.cf-kind {
+  flex: none;
+  font-size: 9.5px;
+  letter-spacing: var(--track-label, 0.04em);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.cf-specs {
+  margin-top: 1px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font: 400 10.5px/1.3 var(--font-mono);
+  color: var(--text-2);
+}
+.cf-score {
+  position: absolute;
+  left: 9px;
+  right: 9px;
+  bottom: 5px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--sunken);
+  overflow: hidden;
+}
+.cf-score i {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+}
+.cf-card[data-win] .cf-score i {
+  background: var(--ok);
+}
+
+.cf-tick {
+  position: absolute;
+  right: -6px;
+  top: -6px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--ok);
+  color: var(--surface);
+  box-shadow: 0 0 0 2px var(--surface);
+  transform: scale(0);
+  transition: transform 260ms cubic-bezier(0.3, 1.6, 0.5, 1) 120ms;
+}
+.cflyby:is([data-phase="settle"], [data-phase="fly"], [data-phase="fade"]) .cf-tick {
+  transform: scale(1);
+}
+
+/* Reduced motion: the cards just appear, the winner highlighted, nothing moves. */
+.cflyby[data-mode="static"] .cf-card,
+.cflyby[data-mode="static"] .cf-tick {
+  transition: none !important;
+  animation: none !important;
+}
+.cflyby[data-mode="static"] .cf-card:not([data-win]) {
+  opacity: 0.55 !important;
+  transform: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cf-card,
+  .cf-tick {
+    animation: none !important;
+  }
+}

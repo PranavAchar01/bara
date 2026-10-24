@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useApp } from "./state/store";
 import { ConnectionBanner, EngineNotice, FileHeader, TopBar } from "./components/TopBar";
-import { PromptBar } from "./components/PromptBar";
+import { ExampleChips, PromptBar } from "./components/PromptBar";
 import { StepPlayer } from "./components/LeftColumn";
 import { BuildProgress, EditStatus, EventLog, FailureCard, LatencyHUD, Toast, WarningBanner } from "./components/Status";
 import { PartsList, RightColumn } from "./components/RightColumn";
@@ -13,6 +13,12 @@ import { AgentSteps, LandingHero } from "./components/Landing";
 import { startAutosave } from "./library/autosave";
 import { Viewport3D } from "./three/Viewport3D";
 import { BotLab } from "./bot/BotLab";
+import { CanvasTabs } from "./components/CanvasTabs";
+import { startCanvasPersist } from "./state/canvases";
+import { AgentStage } from "./bot/AgentStage";
+import { ThoughtTrace } from "./bot/ThoughtTrace";
+import { Explainer } from "./bot/Explainer";
+import { CandidateFlyby } from "./bot/CandidateFlyby";
 
 function useKeys() {
   useEffect(() => {
@@ -65,8 +71,37 @@ function RightOverlay() {
   return null;
 }
 
+/** A canvas with no build yet (or one still being fetched after a reload): just the prompt. */
+function EmptyCanvas() {
+  const restoring = useApp((s) => s.canvasRestoring.includes(s.activeCanvas));
+  return (
+    <main className="workspace">
+      <aside className="leftcol" aria-label="Layers">
+        <FileHeader />
+      </aside>
+      <section className="centre">
+        <CanvasTabs />
+        <div className="canvas-empty">
+          {restoring ? (
+            <p className="muted">Loading this canvas's build again…</p>
+          ) : (
+            <div className="canvas-empty-inner">
+              <h2>Describe a device for this canvas.</h2>
+              <PromptBar autoFocus />
+              <ExampleChips />
+            </div>
+          )}
+        </div>
+      </section>
+      <aside className="rightcol-wrap" aria-label="Details" />
+    </main>
+  );
+}
+
 function Workspace() {
   const overlay = useApp((s) => s.overlay);
+  const empty = useApp((s) => s.build === null);
+  if (empty) return <EmptyCanvas />;
   return (
     <main className="workspace">
       <aside className="leftcol" aria-label="Layers">
@@ -75,6 +110,7 @@ function Workspace() {
         <PartsList />
       </aside>
       <section className="centre">
+        <CanvasTabs />
         <Viewport3D />
         <div className="centre-top">
           <BuildProgress />
@@ -96,6 +132,10 @@ function Workspace() {
       </aside>
       {overlay === "connect" && <ConnectDialog />}
       {overlay === "addpart" && <AddPartPicker />}
+      <AgentStage />
+      <ThoughtTrace />
+      <CandidateFlyby />
+      <Explainer />
     </main>
   );
 }
@@ -111,6 +151,7 @@ function Main() {
   useKeys();
   useEffect(() => bindVoiceKeys(), []);
   useEffect(() => startAutosave(), []);
+  useEffect(() => startCanvasPersist(), []);
   const screen = useApp((s) => s.screen);
   return (
     <div className="app">

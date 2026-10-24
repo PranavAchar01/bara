@@ -1,0 +1,61 @@
+/* Replay control in the workspace file header (bot/ReplayControl.tsx). */
+.replay {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 4px;
+}
+.replay-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.replay-speed {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--radius);
+  background: var(--paper-2);
+}
+.replay-speed button {
+  border: 1px solid transparent;
+  background: none;
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.replay-speed button.active {
+  background: var(--paper);
+  border-color: var(--line);
+  color: var(--text);
+}
+.replay-speed button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.replay-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--line);
+  overflow: hidden;
+}
+.replay-progress span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transform-origin: left center;
+  transition: transform 120ms linear;
+}
+@media (prefers-reduced-motion: reduce) {
+  .replay-progress span {
+    transition: none;
+  }
+}

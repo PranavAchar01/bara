@@ -13,7 +13,7 @@ from typing import Any
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
-from bara import SERVER_VERSION, SPEC_VERSION, geometry, part_ask, voice
+from bara import SERVER_VERSION, SPEC_VERSION, geometry, intent, part_ask, voice
 from bara.edits import Reject
 from bara.library import BUILD_ID_RE
 from bara.llm import providers_configured
@@ -220,6 +220,20 @@ def build_router(svc: Services) -> APIRouter:
             },
             201,
         )
+
+    words = intent.part_words(cat, svc.router.keywords.get("function_words", {}))
+
+    @api.post("/v1/intent")
+    async def prompt_intent(request: Request) -> JSONResponse:
+        """Over an open build: does the prompt add a device beside it, change it, or start over."""
+        try:
+            data = await request.json()
+        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+            raise ApiError("E_BAD_MESSAGE", "Body is not JSON.") from exc
+        prompt = data.get("prompt")
+        if not isinstance(prompt, str) or not prompt.strip():
+            raise ApiError("E_BAD_MESSAGE", "Send prompt.")
+        return body(intent.classify(prompt, bool(data.get("has_build")), words))
 
     @api.get("/v1/library")
     def library_list() -> JSONResponse:

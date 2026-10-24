@@ -15,6 +15,8 @@ export interface LabelAnchor {
 export const stage = {
   /** Root group holding parts, boards and enclosures (framing and floor use it). */
   root: null as THREE.Group | null,
+  /** Devices standing beside the build on the same canvas (Viewport3D CompanionRow); framed with it. */
+  companions: null as THREE.Group | null,
   /** Displayed explode factor, eased toward the slider value. */
   explode: 0,
   /** Explode layer gap in mm for the current build. */
@@ -52,5 +54,16 @@ export function stageBox(): THREE.Box3 | null {
   if (!stage.root) return null;
   stage.root.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(stage.root);
+  const side = companionBox();
+  if (side) box.union(side);
+  return box.isEmpty() ? null : box;
+}
+
+/** The devices beside the build, or null when there are none on screen. */
+export function companionBox(): THREE.Box3 | null {
+  const g = stage.companions;
+  if (!g || !g.children.length) return null;
+  g.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(g);
   return box.isEmpty() ? null : box;
 }

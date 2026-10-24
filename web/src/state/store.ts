@@ -12,6 +12,8 @@ export interface LogEntry {
   dir: "in" | "out" | "drop";
   type: string;
   seq?: number;
+  /** Build the event belongs to: with canvas tabs, not always the one on screen. */
+  buildId?: string;
   msgId?: string;
   note?: string;
   unknown?: boolean;
@@ -37,6 +39,39 @@ export interface PendingStart {
   ts: string;
   at: number;
 }
+
+/** One canvas tab in the workspace. `name` is null until renamed: the tab then shows the build's prompt. */
+export interface CanvasMeta {
+  id: string;
+  name: string | null;
+}
+
+/** What each canvas keeps for itself; the active canvas's copy lives in the top-level fields (state/canvases.ts). */
+export type CanvasSnapshot = Pick<
+  AppState,
+  | "build"
+  | "view"
+  | "pendingStart"
+  | "clarifySending"
+  | "clarifyError"
+  | "selection"
+  | "inspectPartId"
+  | "moving"
+  | "focusKey"
+  | "openedFromLibrary"
+  | "hoverConnection"
+  | "explode"
+  | "preset"
+  | "toggles"
+  | "rightTab"
+  | "codeTab"
+  | "overlay"
+  | "colorTarget"
+  | "resizeTarget"
+  | "dismissedWarnings"
+  | "dragPose"
+  | "companions"
+>;
 
 export interface AppState {
   mode: Mode;
@@ -78,6 +113,25 @@ export interface AppState {
   toast: string | null;
   /** Local pose shown while a move is committing (C20). */
   dragPose: { instance_id: string; position_mm: number[]; rotation_deg: number[] } | null;
+  /** Other canvases whose devices stand beside this one ("add a mouse to the keyboard"). */
+  companions: string[];
+  /** Canvas tabs in order; there is always at least one. */
+  canvases: CanvasMeta[];
+  activeCanvas: string;
+  /** Saved state of every canvas but the active one, by canvas id. Background builds keep folding in here. */
+  canvasStash: Record<string, CanvasSnapshot>;
+  /** Canvas ids whose build is being fetched again after a reload. */
+  canvasRestoring: string[];
+  /** Part the on-stage agent is working on; the viewport outlines it (bot/agent.ts). */
+  agentFocus: string | null;
+  /** The bot has left the prompt bar and is working on the canvas. */
+  agentOut: boolean;
+  /** Part under the pointer in the viewport (the bot explains it). */
+  hoverPart: string | null;
+  /** Exploded-view label under the pointer: its part is outlined (three/labels.tsx). */
+  hoverLabel: string | null;
+  /** A finished build is being re-performed (bot/replay.ts). */
+  replaying: boolean;
 }
 
 let logId = 0;
@@ -117,6 +171,16 @@ export const useApp = create<AppState>(() => ({
   dismissedWarnings: [],
   toast: null,
   dragPose: null,
+  companions: [],
+  canvases: [{ id: "c1", name: null }],
+  activeCanvas: "c1",
+  canvasStash: {},
+  canvasRestoring: [],
+  agentFocus: null,
+  agentOut: false,
+  hoverPart: null,
+  hoverLabel: null,
+  replaying: false,
 }));
 
 export function pushLog(entry: Omit<LogEntry, "id" | "t">): void {

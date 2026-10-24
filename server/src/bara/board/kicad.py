@@ -303,15 +303,18 @@ def run_drc(board: Path, timeout: float = 180) -> dict:
         }
     )
     by_type: dict[str, int] = {}
+    titles: dict[str, str] = {}
     for v in viol:
         key = f"{v.get('severity')}:{v.get('type')}"
         by_type[key] = by_type.get(key, 0) + 1
+        titles.setdefault(key, str(v.get("description") or v.get("type")))
     return {
         "errors": len(errors),
         "warnings": len(warnings),
         "unconnected": len(unconnected),
         "unconnected_nets": open_nets,
         "by_type": by_type,
+        "titles": titles,
         "report": str(report),
     }
 
@@ -353,9 +356,20 @@ def export_glb(
     shutil.rmtree(work, ignore_errors=True)
 
 
+SEGMENT = re.compile(
+    r"\(segment\s+\(start ([-\d.]+) ([-\d.]+)\)\s+\(end ([-\d.]+) ([-\d.]+)\)"
+    r"\s+\(width [-\d.]+\)\s+\(layer \"([^\"]+)\"\)"
+)
+
+
 def count_routing(board: Path) -> dict:
     text = board.read_text()
+    length: dict[str, float] = {}
+    for x0, y0, x1, y1, layer in SEGMENT.findall(text):
+        d = ((float(x1) - float(x0)) ** 2 + (float(y1) - float(y0)) ** 2) ** 0.5
+        length[layer] = length.get(layer, 0.0) + d
     return {
         "segments": len(re.findall(r"^\s*\(segment\b", text, re.M)),
         "vias": len(re.findall(r"^\s*\(via\b", text, re.M)),
+        "track_mm": {k: round(v, 1) for k, v in sorted(length.items())},
     }

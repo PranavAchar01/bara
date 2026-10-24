@@ -1,3 +1,4 @@
+/* global document, HTMLInputElement */
 // Records the landing page's hero video: a real build, start to finish, in the real app.
 //
 //   node scripts/record-demo.mjs [--url http://localhost:5173/] [--prompt "…"] [--out public/landing] [--headed]

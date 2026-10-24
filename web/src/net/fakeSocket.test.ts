@@ -3,7 +3,7 @@ import { loadFixtures } from "../spec/fixtures";
 import type { Build, ClientEnvelope, EditOp, ServerEnvelope, ServerPayloads } from "../spec/types";
 import { createBuild, reduceBuild } from "../state/reducer";
 import { Connection } from "./connection";
-import { FakeSocket, MockServer, MOCK_EDIT_MESSAGE, selectEditFixture, selectFixture } from "./fakeSocket";
+import { FakeSocket, fixtureBuildPath, MockHub, MockServer, MOCK_EDIT_MESSAGE, pacedDelays, selectEditFixture, selectFixture } from "./fakeSocket";
 import { RestClient, paths, stubFetcher } from "./rest";
 
 const fx = await loadFixtures();
@@ -187,5 +187,92 @@ describe("REST stub", () => {
     const missing = await rest.get(paths.part("mod:nope"));
     expect(missing.ok).toBe(false);
     if (!missing.ok) expect(missing.error.code).toBe("E_NOT_FOUND");
+  });
+});
+
+describe("mock hub (several canvases)", () => {
+  it("runs two builds of one fixture at once under different build ids", async () => {
+    const hub = new MockHub(fx, { speed: 1 });
+    const builds = new Map<string, Build>();
+    const starts = new Map<string, string>();
+    const conn: Connection = new Connection({
+      url: "mock",
+      socketFactory: () => new FakeSocket(hub),
+      resumeTarget: () => null,
+      onEnvelope: (env) => {
+        if (env.type === "ack") {
+          const p = env.payload as ServerPayloads["ack"];
+          const prompt = starts.get(p.msg_id);
+          if (prompt && p.build_id) {
+            builds.set(p.build_id, createBuild(p.build_id, prompt));
+            conn.setCursor(p.build_id, 0);
+          }
+          return;
+        }
+        const b = env.build_id ? builds.get(env.build_id) : undefined;
+        if (b && env.seq > 0) builds.set(b.build_id, reduceBuild(b, env));
+      },
+    });
+    conn.connect();
+    starts.set(conn.send("build.start", { prompt: "a toaster that tweets" }), "a");
+    await run(300);
+    starts.set(conn.send("build.start", { prompt: "a toaster that tweets" }), "b");
+    await run();
+    const ids = [...builds.keys()];
+    expect(ids).toHaveLength(2);
+    expect(ids[0]).not.toBe(ids[1]);
+    expect(ids.map((id) => id.split("~")[0])).toEqual([ids[0].split("~")[0], ids[0].split("~")[0]]);
+    expect(fixtureBuildPath(paths.build(ids[1]))).toBe(paths.build(ids[0].split("~")[0]));
+    for (const b of builds.values()) {
+      expect(b.status).toBe("done");
+      expect(b.parts.length).toBeGreaterThan(0);
+    }
+    expect(builds.get(ids[0])?.parts.length).toBe(builds.get(ids[1])?.parts.length);
+  });
+});
+
+describe("mock pacing", () => {
+  const buildTime = (name: string) => {
+    const f = fx.streams.get(name);
+    if (!f) throw new Error(name);
+    const start = f.steps.findIndex((s) => s.dir === "client" && s.msg.type === "build.start");
+    const steps = f.steps.slice(start + 1);
+    const delays = pacedDelays(steps);
+    const end = steps.findIndex((s) => s.dir === "server" && (s.msg.type === "build.done" || s.msg.type === "build.failed"));
+    return delays.slice(0, end + 1).reduce((a, b) => a + b, 0);
+  };
+
+  it("spaces a build out to a watchable 12 to 21 s at mock_speed=1", () => {
+    for (const name of ["exact_keyboard", "compose_wireless_split_oled"]) {
+      const ms = buildTime(name);
+      expect(ms, name).toBeGreaterThanOrEqual(12_000);
+      expect(ms, name).toBeLessThanOrEqual(21_000);
+    }
+  });
+
+  it("keeps the fixture's own delays after the build ends and for edits", () => {
+    const f = fx.streams.get("compose_wireless_split_oled");
+    const steps = f?.steps.slice(f.steps.findIndex((s) => s.dir === "client") + 1) ?? [];
+    const delays = pacedDelays(steps);
+    const done = steps.findIndex((s) => s.dir === "server" && s.msg.type === "build.done");
+    steps.slice(done + 1).forEach((s, i) => expect(delays[done + 1 + i]).toBe(s.dir === "server" ? (s.delay_ms ?? 0) : 0));
+    const edit = fx.streams.get("edit_swap_switches")?.steps ?? [];
+    expect(pacedDelays(edit, false)).toEqual(edit.map((s) => (s.dir === "server" ? (s.delay_ms ?? 0) : 0)));
+  });
+
+  it("is still building after a few seconds and done after the paced time; mock_speed scales it", async () => {
+    const h = harness();
+    await run(100);
+    h.start("a keyboard");
+    await run(4_000);
+    expect(h.state.build?.status).toBe("running");
+    await run(20_000);
+    expect(h.state.build?.status).toBe("done");
+
+    const fast = harness({ speed: 0.1 });
+    await run(100);
+    fast.start("a keyboard");
+    await run(2_500);
+    expect(fast.state.build?.status).toBe("done");
   });
 });

@@ -417,9 +417,29 @@ export interface Board {
     router?: string | null;
   };
   drc?: CheckStatus;
+  /** KiCad's own evaluation: DRC counts, net integrity and the routing benchmark. */
+  evaluation?: BoardEvaluation;
   assets?: AssetRef[];
   status: BuildObjStatus;
   revision: number;
+}
+
+export interface BoardEvaluation {
+  drc_errors: number;
+  drc_warnings: number;
+  unconnected: number;
+  nets: number;
+  dangling_nets: number;
+  routed_pct: number;
+  segments?: number | null;
+  vias?: number | null;
+  track_mm?: Record<string, number>;
+  track_total_mm?: number | null;
+  strategy?: string | null;
+  attempts: number;
+  route_s?: number | null;
+  drc_s?: number | null;
+  total_s?: number | null;
 }
 
 export interface FirmwareFile {
