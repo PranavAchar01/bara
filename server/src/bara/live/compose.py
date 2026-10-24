@@ -1417,9 +1417,21 @@ class Composer:
             part, via = await self._find(slot)
         if part is None:
             part = self.resolver.composed(slot.need)
-            if part is None or not await self.vet(slot, [part]):
+            if part is not None and not await self.vet(slot, [part]):
+                part = None
+            via = f"a composed {part['composed']} (KiCad library)" if part else ""
+        if part is None:
+            # nothing by name: a catalog part serving the function, spec-checked (a near miss
+            # is still taken later) beats a device missing it
+            pool = [
+                p
+                for p in self.source.query(function=slot.function_id, limit=500)
+                if p["part_id"] not in self.resolver.rejected
+            ]
+            kept = await self.vet(slot, pool)
+            if not kept:
                 return
-            via = f"a composed {part['composed']} (KiCad library)"
+            part, via = kept[0], "the catalog, by function"
         self.extra.setdefault(slot.slot_id, []).append(part)
         emit(
             "warning",
