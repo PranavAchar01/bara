@@ -95,6 +95,13 @@ def board_brief(
     }
 
 
+def pending_board(entry: dict[str, Any]) -> dict[str, Any]:
+    """SPEC Board (status pending, outline and footprints) for one planned board."""
+    board, _ = board_module()
+    assert board is not None  # only called after plan_board succeeded
+    return board.pending_board(entry)
+
+
 def plan_board(
     brief: dict[str, Any], parts: list[dict[str, Any]], build_id: str
 ) -> tuple[dict[str, Any] | None, str | None]:
