@@ -1175,3 +1175,277 @@
 .vp-toolbar > * {
   flex: none;
 }
+
+/* Landing (Figma: Landing C2). Step 1 is the prompt; the product window plays a recorded build. */
+.home.landing {
+  display: block;
+  padding: 0;
+}
+.landing > section,
+.landing > figure,
+.landing > .library {
+  width: min(1328px, calc(100% - 64px));
+  margin-left: auto;
+  margin-right: auto;
+}
+.ld-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 600px);
+  gap: 48px;
+  align-items: end;
+  padding: 44px 0 30px;
+}
+.ld-copy h1 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(40px, 4.6vw, 66px);
+  line-height: 0.96;
+  letter-spacing: var(--track-display);
+}
+.ld-copy p {
+  margin: 14px 0 0;
+  font-size: 17px;
+  color: var(--text-2);
+  max-width: 560px;
+}
+.ld-ask {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+.ld-one {
+  font: 800 66px/0.8 var(--font-sans);
+  letter-spacing: -0.05em;
+}
+.ld-field .promptbar {
+  border: 1.5px solid var(--ink);
+  border-radius: 2px;
+  background: var(--paper);
+  padding: 8px;
+  gap: 10px;
+}
+.ld-field .promptbar .prompt-input {
+  border: 0;
+  background: transparent;
+  font-family: var(--font-display);
+  font-size: 21px;
+  letter-spacing: -0.02em;
+  height: 44px;
+  padding: 0 4px;
+}
+.ld-field .promptbar .prompt-input:focus {
+  box-shadow: none;
+  outline: none;
+}
+.ld-field .promptbar .btn.primary {
+  border-radius: 2px;
+  height: 40px;
+}
+.ld-foot {
+  display: flex;
+  justify-content: space-between;
+  border: 1.5px solid var(--ink);
+  border-top: 1px solid var(--line);
+  margin-top: -1.5px;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.ld-field .example-chips {
+  margin-top: 12px;
+  gap: 6px 14px;
+}
+.ld-field .example-chip {
+  border: 0;
+  border-bottom: 1px solid var(--ink-faint);
+  border-radius: 0;
+  background: none;
+  padding: 0 0 1px;
+  font-size: 13px;
+}
+.ld-window {
+  margin-top: 6px;
+  margin-bottom: 0;
+}
+.ld-frame {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  border: 1px solid #c9c9c6;
+  background: #ececec;
+  overflow: hidden;
+  box-shadow: 0 30px 60px -40px rgba(0, 0, 0, 0.35);
+  /* a recording, not a control: nothing in it can be clicked, selected or dragged */
+  pointer-events: none;
+  user-select: none;
+}
+.demo-media {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.ld-window figcaption {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+.ld-steps {
+  margin-top: 64px;
+  border-top: 1.5px solid var(--ink);
+  padding-top: 16px;
+}
+.ld-sh {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.ld-sh h2,
+.landing .lib-head h2 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(32px, 3vw, 44px);
+  letter-spacing: var(--track-display);
+}
+.ld-steps ol {
+  list-style: none;
+  margin: 20px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
+}
+.ld-still {
+  position: relative;
+  background: #ececec;
+  overflow: hidden;
+}
+.ld-still img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.ld-sel {
+  position: absolute;
+  border: 1.5px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+  border-radius: 1px;
+}
+.ld-sel .h {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: var(--paper);
+  border: 1.5px solid var(--accent);
+}
+.ld-sel .tl { left: -4.75px; top: -4.75px; }
+.ld-sel .tr { right: -4.75px; top: -4.75px; }
+.ld-sel .bl { left: -4.75px; bottom: -4.75px; }
+.ld-sel .br { right: -4.75px; bottom: -4.75px; }
+.ld-chip {
+  position: absolute;
+  left: -1.5px;
+  bottom: calc(100% + 5px);
+  padding: 2px 7px;
+  border-radius: 3px;
+  background: var(--accent);
+  color: #fff;
+  font: 600 11px var(--font-sans);
+  white-space: nowrap;
+}
+.ld-chip.below {
+  bottom: auto;
+  top: calc(100% + 5px);
+}
+.ld-scan {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 46%;
+  height: 1.5px;
+  background: var(--accent);
+}
+.ld-cursor {
+  position: absolute;
+}
+.ld-trace {
+  position: absolute;
+  inset: 6px;
+  width: calc(100% - 12px);
+  height: calc(100% - 12px);
+}
+.ld-trace path {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  stroke-dasharray: 6 4;
+  vector-effect: non-scaling-stroke;
+}
+.ld-code {
+  position: absolute;
+  left: calc(100% + 8px);
+  top: 4px;
+  padding: 5px 8px;
+  border-radius: 4px;
+  background: var(--ink);
+  color: #fff;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.ld-code i {
+  display: inline-block;
+  width: 6px;
+  height: 12px;
+  margin-left: 2px;
+  vertical-align: -2px;
+  background: var(--accent);
+}
+.ld-st {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 12px;
+}
+.ld-n {
+  font: 800 34px/0.8 var(--font-sans);
+  letter-spacing: -0.05em;
+}
+.ld-st b {
+  font-size: 17px;
+  font-weight: 600;
+}
+.ld-steps li p {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: var(--text-2);
+}
+.landing .library {
+  margin-top: 64px;
+  border-top: 1.5px solid var(--ink);
+  padding-top: 16px;
+}
+@media (max-width: 980px) {
+  .ld-head {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+  .ld-steps ol {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 560px) {
+  .ld-steps ol {
+    grid-template-columns: 1fr;
+  }
+  .ld-one {
+    display: none;
+  }
+  .ld-ask {
+    grid-template-columns: 1fr;
+  }
+}
