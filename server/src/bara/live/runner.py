@@ -546,7 +546,7 @@ class LiveRunner:
                 pl["layout_id"] = {"left": "lay_l", "right": "lay_r"}.get(side, "lay_main")
             return {"instance_id": iid, "placement": pl}
 
-        for sid, up in (("switches", 12.0), ("keycaps", 25.0)):
+        for sid, up in (("switches", 12.0), ("stabilizers", 6.0), ("keycaps", 25.0)):
             slot = slots.get(sid)
             if slot is None or slot.chosen is None:
                 continue
@@ -556,7 +556,10 @@ class LiveRunner:
                 z = t
                 if sid == "keycaps":
                     z = t + self._cap_seat(slots, brief)
-                out.append(mk(inst.instance_id, [origin[0], origin[1], z], [0, 0, 0], "layout", up))
+                m = mk(inst.instance_id, [origin[0], origin[1], z], [0, 0, 0], "layout", up)
+                if inst.key_widths is not None:
+                    m["placement"]["key_widths_u"] = list(inst.key_widths)
+                out.append(m)
         by_role: dict[str, list[dict[str, Any]]] = {}
         for p in entry["placements"]:
             by_role.setdefault(p["role"], []).append(p)
