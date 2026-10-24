@@ -87,6 +87,88 @@ All four must be shared to "Anyone" before submitting.
 
 **Not done yet:** the real React app against the WebSocket contract. Plan: generate components from the Design frames with the Figma agent's design context, then wire them to the mock fixtures.
 
+## Design into the real app (log, newest last)
+
+Branch `figma-design-in-code`, pushed after each step so the backend work can continue alongside.
+
+### 21:09 · Tokens and fonts
+
+**Tools:** Figma agent `get_variable_defs` on the Build running frame, then hand-mapped into `web/src/styles/tokens.css`.
+
+**What moved:** every colour (paper, ink, accent `#0a6cff`, status, part greys), the Float shadow, radius 8, panel widths 248 and 300, and the three typefaces (Averia Serif Libre, Atkinson Hyperlegible Next and Mono) in `index.html`. The Figma names sit next to the app's older names (`--bg`, `--text`…), so all 1,700 lines of existing CSS restyled without edits.
+
+**Small CSS edits:** body 14 px / 1.5, Averia for the brand and the Home headline (−3% tracking, 0.95 leading), mono uppercase labels with 8% tracking for panel headings and status pills, amber fill for over-budget stage bars.
+
+**Friction:** the Figma warn colour `#e0a030` fails AA as text on white, so text uses a darker `#b7791f` and only bars use the Figma value. Dark mode no longer follows the OS; the plan says light only for the demo.
+
+**Minutes:** about 12. **Rating:** 5/5; the variable names carried straight over.
+
+### 21:14 · Workspace shell
+
+**Tools:** the Figma frames (02 Build running, 07 Build tab, 08 Code tab) as the reference, read through the Figma agent; code written by Claude Code against the existing React components. No component was rewritten, only moved.
+
+**What moved:**
+- Columns are now 248 / canvas / 300 px, as in Figma, with flat paper panels and hairlines between sections instead of cards (`web/src/styles/shell.css`, loaded after `app.css`).
+- Left panel: a compact **step player** (eight dots, the active one stretched into a bar, the stage name in mono caps) above **Layers**, which is the old Parts list.
+- Right panel: five tabs (Parts, Wiring, Board, Firmware, Checks) became Figma's three: **Design** (clarify, spec, design reuse, checks), **Build** (pipeline, decisions) and **Code** (a Wiring / Board / Firmware switch). ⌥1–⌥3 switch tabs; the failing-check badges now count per tab.
+- Layers rows show name and quantity; licence and provenance drop onto a second line on hover or selection, as the Figma row hover card does. The unverified flag stays in the hover line.
+
+**Checked:** typecheck, lint and the 45 web tests pass; a mock build (`?mock=1`) renders every tab.
+
+**Friction:** at 248 px the old rows (name, qty, provenance, licence, Remove) did not fit; the Figma answer, hover for detail, was the fix. The step player's "Done · 8 stages" label truncated, now "Done". New styles went in a separate file because another session is editing the end of `app.css`.
+
+**Not yet:** the top bar still holds build id, status, model and Export (Figma moves them into the panel headers); the floating bottom toolbar with Ask, the view cube and the part inspector are still the old components.
+
+**Minutes:** about 25. **Rating:** 4/5.
+
+### 21:24 · Top bar into the panel headers
+
+**Tools:** Figma frame 02 (left header "Build meta", right toolbar) as the reference; Claude Code split the existing `TopBar` into two components that reuse its pieces.
+
+**What moved:**
+- Left panel header (`FileHeader`): **Bara / prompt**, then **build id + status pill** (+ mock), then **connection dot · model**, with provider and fallback in the hover title. This is the live-site information the coverage audit found missing from the first Figma pass, now in the real app.
+- Right panel toolbar (`PanelToolbar`): Home, then **Export** as the one primary action. The Export menu and its seven formats are unchanged.
+- The top bar now shows only on Home, so the workspace canvas runs the full window height.
+- Primary buttons are ink, as in the Figma Button component; blue is kept for selection and live state.
+
+**Checked:** typecheck, lint, 45 tests; mock build renders both headers.
+
+**Friction:** none worth noting; the top bar was already split into small pieces.
+
+**Minutes:** about 10. **Rating:** 5/5.
+
+### 21:31 · Floating dock with the Ask field
+
+**Tools:** Figma Bottom Toolbar and Ask Field components as the reference. Instead of building the agent's eyes, we merged the teammate branch `bot-alive`, which already puts an animated BaraBot inside the prompt bar; that is the Figma Ask field with the eyes. Styling only after that; no JSX changed in this step.
+
+**What moved:**
+- The prompt bar is now the **Ask pill**: paper with a hairline and the Float shadow, BaraBot on the left, a soft paper-2 field, an ink Build button, all fully rounded.
+- The view toolbar under it matches the Figma toolbar: mono caps labels, ink explode slider, borderless segments with a paper-3 active state instead of blue.
+- Both float over the canvas with the same shadow, so they read as one dock.
+
+**Checked:** typecheck and 50 web tests (the merge brought 5 bot tests) pass; mock build renders the dock.
+
+**Friction (for the 3D owner):** after merging `bot-alive`, mock mode without a backend shows an empty canvas: every `/assets/parts/*.glb` request returns 500 and the viewer no longer falls back to boxes as it did before the merge. Not caused by this step (CSS only), not fixed here, because `Viewport3D.tsx` is being changed on the other branch. Why not a single bar as in Figma: the view toolbar lives inside `Viewport3D.tsx`, so it stays a separate pill to avoid conflicts.
+
+**Minutes:** about 12. **Rating:** 4/5.
+
+### 21:40 · Part inspector
+
+**Tools:** the Figma Inspector frame (focus screens 14–16) as the reference; Claude Code reordered the existing `PartInspector` with the same data and handlers.
+
+**What moved:**
+- Order now follows Figma: summary and key specs, three fact tiles (qty, placed by, locked or free), the action row, **Position**, **Why this part**, **Checks**, **Source**.
+- Actions show their keys (Swap `S`, Recolour `R`, Move `M`) and the keys work while the inspector is open on a finished build; Remove sits apart on the right.
+- Position is X / Y / Z mono fields plus rotation, instead of one comma list.
+- Source holds provenance, licence, attribution, links and interfaces (was "Details" at the bottom with provenance at the top).
+- Flat paper panel with hairline sections and mono caps headings, Averia for the part name.
+
+**Checked:** typecheck, lint, 50 web tests; mock build, selected a Layers row, pressed R and the colour picker opened inline.
+
+**Friction:** at 300 px the four actions wrapped; tighter button padding keeps them on one line. The mock canvas rendered placeholder blocks this time, so the earlier blank-canvas note may have been a cold start; worth a recheck by the 3D owner.
+
+**Minutes:** about 12. **Rating:** 4/5.
+
 ## Before and after
 
 | Change | Before | After |
