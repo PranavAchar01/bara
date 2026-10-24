@@ -527,6 +527,17 @@ def mesh_part(
     return MeshPart(name, v, np.asarray(mesh.tri_verts, dtype=np.int64), n, hex_color, roughness)
 
 
+OWN_HOLE_ROLES = ("trackball", "sensor")
+OPENING_ROLES = ("switch", "keycap", "encoder", "knob", "screen")
+
+
+def _hidden(f: Feature) -> bool:
+    """A top-side part the shell covers: it gets a blind pocket, never an opening."""
+    if f.side == "bottom" or f.role in OWN_HOLE_ROLES or f.role in OPENING_ROLES:
+        return False
+    return not (f.touch and f.role not in ("usb", "mcu", "battery"))
+
+
 def enclose_report(
     board: dict[str, Any], parts_with_poses: list[dict[str, Any]], brief: dict[str, Any]
 ) -> EncloseReport:
@@ -555,7 +566,10 @@ def enclose_report(
 
     top = t  # board top surface
     wall_top = top + H["wall_top_mm"]
-    bezel_top = top + H["bezel_top_mm"]
+    # the skin covers every part that gets no opening, so a tall hidden part lifts the top
+    plate = H["bezel_top_mm"] - H["wall_top_mm"]
+    covered = [f.z_range(t)[1] + H["part_opening_clearance_mm"] for f in feats if _hidden(f)]
+    bezel_top = max([top + H["bezel_top_mm"], *(z + plate for z in covered)])
 
     # Pockets for bottom-side parts; the floor goes under the deepest one.
     pockets: list[mf.Manifold] = []
@@ -732,7 +746,7 @@ def enclose_report(
     keycaps = [f for f in feats if f.role == "keycap"]
     for f in feats:
         z_lo, z_hi = f.z_range(t)
-        if f.side == "bottom" or f.role in ("trackball", "sensor"):
+        if f.side == "bottom" or f.role in OWN_HOLE_ROLES:
             continue
         if f.ref in site_feats.claimed:
             continue  # the form's anchor already gave it a sculpted feature
@@ -770,8 +784,7 @@ def enclose_report(
             # the soft corners must not clip the part: its own clearance box is cut too
             holes_cs.append(_rect_cs(f.x, f.y, f.w + c, f.d + c, f.rot_deg))
         elif z_hi > seat - 0.01:
-            # hidden, so it gets a blind pocket under the skin, not a hole a person sees; a part
-            # taller than the shell still breaks through and the fit checks report it
+            # hidden, so it gets a blind pocket under the skin, not a hole a person sees
             c = 2 * H["part_opening_clearance_mm"]
             pockets.append((_rect_cs(f.x, f.y, f.w + c, f.d + c, f.rot_deg), z_hi + c / 2))
     for g in ball_geo:
