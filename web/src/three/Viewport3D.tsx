@@ -23,7 +23,6 @@ import { LabelOverlay, LabelProjector, labelOpacity } from "./labels";
 import { defaultColor, ghost, presetFor, presetMaterial, tinted } from "./materials";
 import { registerAnchor, stage, stageBox } from "./stage";
 import { StudioEnvironment, StudioFloor, studioPalette, type StudioPalette } from "./studio";
-import { DemandDriver, StudioPost, postEnabled } from "./post";
 
 const DEG = Math.PI / 180;
 
@@ -206,11 +205,6 @@ interface PartNodeProps {
   labelKey: string | null;
 }
 
-/** PCBs and FR4 plates are kicad-cli board exports: their layers get the KiCad board look. */
-function isBoardPart(part: BuildPart): boolean {
-  return String(part.card.kind) === "pcb" || /plate_fr4/.test(part.part_id);
-}
-
 function PartNode(props: PartNodeProps) {
   const { part, theme } = props;
   const pose = props.pose;
@@ -219,7 +213,7 @@ function PartNode(props: PartNodeProps) {
     return elementPoses(placement, part.quantity, props.layout);
   }, [pose, part.placement, part.quantity, props.layout]);
   const asset = modelAsset(part.assets, poses.length > 1);
-  const model = useModel(asset?.url ?? null, isBoardPart(part));
+  const model = useModel(asset?.url ?? null);
   const catalog = useCatalogBbox(part.part_id);
   const box = useMemo(
     () => placeholderBox(part, { layouts: props.layouts, boards: props.boards, parts: props.parts, catalogBbox: catalog }),
@@ -233,9 +227,8 @@ function PartNode(props: PartNodeProps) {
   useEffect(() => () => placeholderGeom?.dispose(), [placeholderGeom]);
   const groups = useMemo<MeshGroup[]>(() => {
     if (loaded) {
-      // Keep the GLB's own PBR materials; a single flat-colour part takes the build's colour.
-      // A textured one (gltf-transform palette) carries its real colours in the texture, so it keeps them.
-      if (loaded.groups.length === 1 && part.color?.hex && !loaded.groups[0].material.map) {
+      // Keep the GLB's own PBR materials; a single-material part takes the build's colour.
+      if (loaded.groups.length === 1 && part.color?.hex) {
         const g = loaded.groups[0];
         return [{ ...g, material: tinted(g.material, part.color.hex) }];
       }
@@ -368,7 +361,7 @@ function boardModelUrl(board: Board): string | null {
 
 function BoardNode(props: { board: Board; labelKey: string | null }) {
   const { board } = props;
-  const model = useModel(boardModelUrl(board), true);
+  const model = useModel(boardModelUrl(board));
   const loaded = model.status === "ready" && model.model.groups.length > 0 ? model.model : null;
   const outline = useMemo(() => {
     if (loaded) return null;
@@ -579,7 +572,6 @@ function CameraRig() {
     }
     const a = anim.current;
     const ctl = controls as unknown as OrbitLike | null;
-    stage.animating = !!a;
     if (!a) return;
     a.t = Math.min(1, a.t + dt / 0.9);
     const k = 1 - Math.pow(1 - a.t, 3);
@@ -691,7 +683,7 @@ export function labelRows(build: Build | null): LabelRowData[] {
   return [...rows.values()];
 }
 
-function SceneContents(props: { gizmoMode: "translate" | "rotate"; theme: Theme; palette: StudioPalette; post: boolean }) {
+function SceneContents(props: { gizmoMode: "translate" | "rotate"; theme: Theme; palette: StudioPalette }) {
   const { theme } = props;
   const build = useApp((s) => s.build);
   const placeDone = useApp((s) => s.view.placeDone);
@@ -745,7 +737,7 @@ function SceneContents(props: { gizmoMode: "translate" | "rotate"; theme: Theme;
   const revision = `${build?.build_id ?? ""}:${build?.revision ?? 0}:${parts.length}:${toggles.case}:${toggles.board}:${toggles.keycaps}`;
   return (
     <>
-      <StudioEnvironment palette={props.palette} post={props.post} />
+      <StudioEnvironment palette={props.palette} />
       <StudioFloor palette={props.palette} revision={revision} />
       <ExplodeDriver />
       <group ref={rootRef}>
@@ -785,8 +777,6 @@ function SceneContents(props: { gizmoMode: "translate" | "rotate"; theme: Theme;
       <MoveGizmo mode={props.gizmoMode} />
       <CameraRig />
       <LabelProjector />
-      <DemandDriver />
-      {props.post && <StudioPost dark={props.palette.dark} />}
     </>
   );
 }
@@ -800,7 +790,6 @@ export function Viewport3D() {
   const theme = useTheme();
   const palette = useMemo(() => studioPalette(theme.dark), [theme.dark]);
   const [gizmoMode, setGizmoMode] = useState<"translate" | "rotate">("translate");
-  const post = useMemo(postEnabled, []);
   const overlayRows = useMemo(
     () => rows.map((r) => ({ key: r.key, title: `${r.title} x${r.quantity}`, detail: r.detail, sub: r.sub, generated: r.generated })),
     [rows],
@@ -809,15 +798,14 @@ export function Viewport3D() {
     <div className="viewport" style={{ background: palette.background }}>
       <Canvas
         dpr={[1, 2]}
-        frameloop="demand"
         shadows
         camera={{ up: [0, 0, 1], position: [-120, -380, 260], near: 1, far: 10000, fov: 32 }}
         onPointerMissed={(e) => {
           if (e.type === "click") select(null);
         }}
-        gl={{ antialias: !post, preserveDrawingBuffer: true, powerPreference: "high-performance" }}
+        gl={{ antialias: true, preserveDrawingBuffer: true, powerPreference: "high-performance" }}
       >
-        <SceneContents gizmoMode={gizmoMode} theme={theme} palette={palette} post={post} />
+        <SceneContents gizmoMode={gizmoMode} theme={theme} palette={palette} />
         <OrbitControls makeDefault enableDamping dampingFactor={0.12} />
       </Canvas>
       {hasParts && <LabelOverlay rows={overlayRows} color={theme.text} muted={theme.muted} line={theme.line} accent={theme.dark ? "#7BC08F" : "#2E7D46"} />}
