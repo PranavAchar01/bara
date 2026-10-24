@@ -337,6 +337,30 @@ The coverage audit of the live site found three places where the UI said two con
 
 **Minutes:** about 20. **Rating:** 4/5.
 
+### Landing page: the instruction-manual direction
+
+**Asked:** landing pages that don't look like the usual chat box with rounded cards; then, after a first round, "a LEGO manual, just based on how all of the stuff is laid out."
+
+**Tools:**
+- Claude Code wrote the layouts as HTML with real isometric geometry: a small generator draws the keyboard, its parts and partial assemblies as SVG.
+- Each page was checked in a local headless browser, then sent to Figma with `html_to_figma`.
+- Fixed in Figma with `use_figma`: the converter dropped the eye drawing's viewBox scale, so the eyes were cropped until regrouped and scaled.
+
+**First round (direction finding):** four metaphors. An engineering drawing sheet (title block as the input), a fill-in sentence, an assembly manual, and a receipt on a bench. The drawing sheet went to Figma ("Earlier · Drawing sheet"); the user chose the manual direction before the others were sent.
+
+**In Figma, page "Landing concepts":**
+- **Landing A, manual with a box-art cover.**
+  - The cover is the box: set number, piece count, "ages you+", a 1:1 size panel. The prompt is written on the box ("What's in the box?") with an "Open the box ↵" bar.
+  - "How Bara builds it" is a two-page spread of four numbered steps. Each has a parts callout (1×, 61×), fat arrows, a sub-build box (the KiCad routing) and a "turn it over" icon.
+  - An inventory page lists every piece with its licence; "Back on the shelf" shows past builds as set boxes.
+- **Landing B, page 1 of the manual.** Step 1 is your idea: the parts callout holds the input ("1× your idea"), an arrow points into a dashed outline of the device to be built, steps 2 to 4 wait faded at the side, and "Build it →" turns the page.
+
+**Kept from the brand:** Averia Serif Libre and Atkinson Hyperlegible, ink plus one blue, Bara's eyes. Corners stay square except the small 4 px manual callouts.
+
+**Next:** the user picks parts of A and B, then they are built into the app.
+
+**Minutes:** about 50. **Rating:** 4/5.
+
 ## Before and after
 
 | Change | Before | After |
