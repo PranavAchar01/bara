@@ -217,6 +217,26 @@ The coverage audit of the live site found three places where the UI said two con
 
 **Not done:** the Figma rule "hover a Layers row to show its label anyway". **Minutes:** about 20. **Rating:** 4/5.
 
+### Part focus with the agent card
+
+**Tools:** Figma frames 17 and 17a as the spec; Claude Code for the scene, store and card. The engine got a new route, `POST /v1/builds/{id}/ask`, which answers about one part from the build's own facts (card, why it was chosen, connections, checks). It is short and spoken-style, Cerebras first and Anthropic as backup.
+
+**What moved:**
+- Clicking a part in 3D, or its Layers row, pulls it out. It eases to just right of the view's centre and grows to fill about 60% of the view. Every other part shrinks onto a shelf down the left fifth, in stack order. The labels step aside, the floor hides, and the selection outline drops so the part isn't drowned in blue.
+- The right column becomes Bara's card: the eyes, the part, one question and three options. **Ask about it** (`A`) opens a question field. **Change it** (`S`) opens swap, or resize for the case and board. **Something else** (`O`) holds details, recolour, move and take it out. Three suggested questions start the chat, and the model's follow-ups replace them after each answer. `←` `→` step through parts; `Esc` closes a drawer first, then puts the part back.
+- Footprint models drawn from the KiCad board export (switches, diodes, MCU) focus as their own parts, not as "the board".
+
+**Checked:**
+- Typecheck, lint, and 65 tests: 3 new for the focus layout (centred and grown, shelf on the left, split halves kept together) and 3 server tests for the ask route.
+- In the browser, on two fresh keyboard builds from the live engine: pulled out the switches, asked "Why this one?", stepped to the keycaps and pressed Esc.
+
+**Friction:**
+- The exploded framing shifts the image 20% left for the label column. That shift now relaxes as focus eases in, or the shelf would land off-screen.
+- An InstancedMesh's cached bounds were stale after a remount, so focus measures instance by instance.
+- The engine on Pranav's machine still runs code without `/ask` (404). The card says when its answer came from the build rather than the model; the route goes live when the engine restarts on this commit.
+
+**Minutes:** about 60. **Rating:** 4/5.
+
 ## Before and after
 
 | Change | Before | After |

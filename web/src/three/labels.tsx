@@ -145,7 +145,8 @@ export function LabelProjector() {
   useFrame((_, dt) => {
     const el = overlayEl;
     if (!el) return;
-    const alpha = labelOpacity(stage.explode);
+    // labels step aside while a part is in focus
+    const alpha = labelOpacity(stage.explode) * (1 - stage.focusK);
     el.style.opacity = String(alpha);
     if (alpha <= 0) return;
     const w = size.width;
