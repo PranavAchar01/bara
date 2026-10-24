@@ -15,8 +15,11 @@ function make(preset: Preset, hex: string): THREE.MeshStandardMaterial {
       const sheen = color.clone().lerp(new THREE.Color("#ffffff"), 0.2);
       return new THREE.MeshPhysicalMaterial({ color, roughness: 0.62, metalness: 0, sheen: 0.15, sheenRoughness: 0.8, sheenColor: sheen, specularIntensity: 0.6 });
     }
-    case "case":
-      return new THREE.MeshPhysicalMaterial({ color, roughness: 0.58, metalness: 0, clearcoat: 0.08, clearcoatRoughness: 0.6, specularIntensity: 0.7 });
+    case "case": {
+      // Satin moulded plastic: a little sheen at grazing angles so the shell's shape shows against the floor.
+      const rim = color.clone().lerp(new THREE.Color("#ffffff"), 0.35);
+      return new THREE.MeshPhysicalMaterial({ color, roughness: 0.5, metalness: 0, clearcoat: 0.2, clearcoatRoughness: 0.45, specularIntensity: 0.8, sheen: 0.35, sheenRoughness: 0.6, sheenColor: rim });
+    }
     case "pcb":
       return new THREE.MeshPhysicalMaterial({ color, roughness: 0.45, metalness: 0, clearcoat: 0.35, clearcoatRoughness: 0.3 });
     case "switch":

@@ -183,6 +183,32 @@ The coverage audit of the live site found three places where the UI said two con
 
 **Minutes:** about 20. **Rating:** 4/5.
 
+### Four new features: Figma first
+
+**Tools:** Figma Design through the Figma agent (use_figma), reusing the Agent, Chip, Kbd and Ask Field components and the colour and type variables. Five new frames on the Screens page:
+- 17 Focus · isolated part, with 17a Focus · motion
+- 18 Explode · view-aware labels
+- 19 Voice · talk to Bara
+- 20 Case · match the library parts
+
+**What we decided in Figma before writing code:**
+- **Focus:** clicking a part pulls it to the centre and shrinks everything else onto a shelf on the left. The agent card asks one question with three plain options (Ask about it `A`, Change it `S`, Something else `O`) and three suggested questions. The motion is specified beat by beat (press, pull apart, centre, agent asks, put back).
+- **Labels:** a part gets a label only while a ray from the camera hits it first. The line lands on its nearest visible anchor, and hidden parts are counted under the column.
+- **Voice:** hold Space to talk; Bara answers out loud with live captions in the Ask pill.
+- **Case:** the exploded view showed it as a pale slab whose edges vanished; it becomes graphite with satin plastic, and its edges stay drawn.
+
+**Friction:** the part renders are 1x1 frames with overflowing vectors, so placement had to be measured from the leaf vectors. The case layers carried low layer opacity, which hid the first recolour.
+
+**Minutes:** about 35. **Rating:** 4/5.
+
+### Case on par with the library parts
+
+**What moved:** the default case colour is graphite `#4A4E55` instead of `#D3D1CB`, and the brief's colour still wins. The case material is satin plastic with a light clearcoat and a rim sheen. Crease lines stay drawn in ink when pulled apart instead of fading to nothing.
+
+**Checked:** typecheck; a real keyboard build against the live engine, exploded in ISO view. The case top and bottom read as solid shells next to the KiCad board and the sourced switches.
+
+**Not done:** the darker inner wall from the Figma spec; it needs per-face shading in the shader. **Minutes:** about 15. **Rating:** 4/5.
+
 ## Before and after
 
 | Change | Before | After |
