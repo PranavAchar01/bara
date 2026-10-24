@@ -734,10 +734,14 @@ def test_a_cap_without_a_key_switch_is_dropped_and_counts_reach_the_slots() -> N
     assert "mech.keycap" not in qty
 
 
-def test_ask_json_asks_again_when_the_answer_was_cut_off(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_ask_json_asks_again_when_the_answer_was_cut_off(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     import types
 
     from bara.live import ask
+
+    monkeypatch.setattr(ask, "CACHE", tmp_path)  # a cached answer would hide the retry
 
     budgets: list[int] = []
 
