@@ -577,8 +577,9 @@ def _clear_of(
     region: Polygon | None,
     anchored: bool,
 ) -> None:
-    """Move an off-board part to the nearest spot, on either side, where its envelope overlaps
-    no other module and, unless it is anchored to a feature, no board part on that side."""
+    """Move an off-board part to the nearest spot where its envelope overlaps no other module
+    and no board part on that side. Only an unanchored part may change sides: one anchored to
+    a face (a thumbstick on the front) moves along that face, never through the board."""
     others = {
         side: list(held[side]) + [o.footprint_poly() for o in on_board if o.side == side]
         for side in ("top", "bottom")
@@ -589,7 +590,8 @@ def _clear_of(
     best: tuple[float, float, float, str] | None = None
     step = 1.0
     reach = min(40, int(max(bx1 - bx0, by1 - by0) / step) + 1)
-    for side in (it.side, "top" if it.side == "bottom" else "bottom"):
+    sides = (it.side,) if anchored else (it.side, "top" if it.side == "bottom" else "bottom")
+    for side in sides:
         for ring in range(reach):
             hit = None
             for i in range(-ring, ring + 1):

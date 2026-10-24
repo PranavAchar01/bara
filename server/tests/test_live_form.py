@@ -978,3 +978,23 @@ def test_a_required_block_nothing_meets_takes_the_closest_real_part(monkeypatch:
     comp.take_closest(slot, lambda *a, **k: seen.append(a))
     assert comp.extra["sensor"] == [pmw] and "lcsc:pmw3360" not in comp.resolver.rejected
     assert "falls short" in seen[0][1]["warning"]["message"]
+
+
+def test_an_off_board_part_anchored_to_the_front_stays_on_the_front() -> None:
+    from shapely.geometry import box
+
+    from bara.board.generic import _clear_of
+    from bara.board.layout import Item
+
+    def cell(ref: str, side: str) -> Item:
+        return Item(ref, "module", None, 0, 0, 0, side, on_pcb=False, size_mm=(10.0, 10.0))
+
+    stick, under = cell("M1", "top"), cell("U1", "top")
+    _clear_of(stick, {"top": [], "bottom": []}, [under], box(-60, -60, 60, 60), True)
+    assert (
+        stick.side == "top"
+        and stick.footprint_poly().intersection(under.footprint_poly()).area < 0.01
+    )
+    loose = cell("M2", "top")
+    _clear_of(loose, {"top": [], "bottom": []}, [under], box(-60, -60, 60, 60), False)
+    assert loose.side == "bottom"  # an unanchored part may still use the back
