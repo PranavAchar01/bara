@@ -42,31 +42,6 @@ export interface LoadedModel {
   components: Component[];
   /** Per-mesh pieces, kept so a subset of components can be regrouped. */
   pieces: Piece[];
-  /** Board models: one box per footprint node (refdes), in build space, for hover. */
-  footprints: FootprintBox[];
-}
-
-export interface FootprintBox {
-  ref: string;
-  box: THREE.Box3;
-}
-
-/** KiCad reference designators (SW3, U1, USB-UART1, LED3A); not OpenCASCADE labels. */
-const REFDES = /^[A-Z][A-Za-z0-9]*([_-][A-Za-z0-9]+)*\d+[A-Za-z]?$/;
-
-/**
- * The footprint a mesh belongs to: the outermost refdes-named node above it.
- * Names nearer the mesh can look like refdes too (a switch model's STEP part
- * SW_Cherry_MX_PCB_cp_36 inside footprint SW5), so the one nearest the root wins.
- */
-function footprintOf(o: THREE.Object3D | null): string | null {
-  let ref: string | null = null;
-  for (let n = o; n; n = n.parent) {
-    // GLTFLoader makes repeated node names unique with a suffix: SW11, SW11_1.
-    const name = REFDES.test(n.name) ? n.name : n.name.replace(/_\d+$/, "");
-    if (REFDES.test(name)) ref = name;
-  }
-  return ref;
 }
 
 const cache = new Map<string, Promise<LoadedModel | null>>();
@@ -117,8 +92,9 @@ function boardMaterial(src: THREE.MeshStandardMaterial): THREE.MeshStandardMater
     m = new THREE.MeshPhysicalMaterial({
       color,
       transparent: true,
-      // KiCad exports mask at alpha .83; a palette pass drops it to 1. Either way, copper shows through faintly.
-      opacity: src.opacity < 1 ? Math.max(0.9, src.opacity) : 0.92,
+      // Thin enough that copper under it reads as lighter green lines, as on a real board and in
+      // KiCad's own 3D viewer; a palette pass drops alpha to 1, so cap it rather than trust it.
+      opacity: Math.min(src.opacity, 0.85),
       roughness: 0.45,
       metalness: 0,
       // Bara's studio environment is brighter than KiCad's: a lighter coat keeps the mask green at grazing angles.
@@ -134,7 +110,8 @@ function boardMaterial(src: THREE.MeshStandardMaterial): THREE.MeshStandardMater
   } else if (layer === "silk") {
     m = new THREE.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
   } else if (layer === "pad") {
-    m = new THREE.MeshStandardMaterial({ color: 0xdfb85e, metalness: 1, roughness: 0.24 });
+    // bright ENIG: exposed pads read gold, and tracks show through the mask as KiCad shows them
+    m = new THREE.MeshStandardMaterial({ color: 0xf0c869, metalness: 0.85, roughness: 0.3, emissive: 0x2a1e06 });
   } else if (layer === "copper") {
     m = new THREE.MeshStandardMaterial({ color, metalness: 0.5, roughness: 0.5 });
   } else {
@@ -359,7 +336,6 @@ function convert(gltf: GLTF, board: boolean): LoadedModel {
   const matCache = new Map<string, THREE.MeshStandardMaterial>();
   const pieces: Piece[] = [];
   const all: THREE.BufferGeometry[] = [];
-  const fpBoxes = new Map<string, THREE.Box3>();
   root.traverse((o) => {
     const mesh = o as THREE.Mesh;
     if (!mesh.isMesh) return;
@@ -405,13 +381,6 @@ function convert(gltf: GLTF, board: boolean): LoadedModel {
       const plain = g.clone();
       if (plain.attributes.uv) plain.deleteAttribute("uv");
       all.push(plain);
-      const ref = board ? footprintOf(mesh) : null;
-      if (ref) {
-        plain.computeBoundingBox();
-        const b = fpBoxes.get(ref) ?? new THREE.Box3();
-        if (plain.boundingBox) b.union(plain.boundingBox);
-        fpBoxes.set(ref, b);
-      }
     }
   });
   const merged = all.length ? mergeGeometries(sameIndexing(all), false) : null;
@@ -420,8 +389,7 @@ function convert(gltf: GLTF, board: boolean): LoadedModel {
     merged.computeBoundingBox();
     if (merged.boundingBox) bbox.copy(merged.boundingBox);
   }
-  const footprints = [...fpBoxes].map(([ref, box]) => ({ ref, box }));
-  return { groups: groupPieces(pieces), merged, bbox, components, pieces, footprints };
+  return { groups: groupPieces(pieces), merged, bbox, components, pieces };
 }
 
 /** `board`: a kicad-cli board export, whose layers get the KiCad board look. */

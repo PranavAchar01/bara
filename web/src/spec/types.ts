@@ -382,17 +382,6 @@ export interface Net {
   kind?: Open<"power" | "ground" | "signal" | "unknown">;
   members: { instance_id: string; pin: string; index?: number | null }[];
 }
-export interface BoardFootprint {
-  ref: string;
-  label?: string | null;
-  role?: string | null;
-  lib_id?: string | null;
-  instance_id?: string | null;
-  center_mm?: Vec2;
-  size_mm?: Vec2;
-  rot_deg?: number;
-}
-
 export interface Board {
   board_id: string;
   source: Open<"design" | "prerouted" | "tscircuit" | "none" | "unknown">;
@@ -406,7 +395,6 @@ export interface Board {
   position_mm?: Vec3;
   rotation_deg?: Vec3;
   nets?: Net[];
-  footprints?: BoardFootprint[];
   routing?: {
     status?: Open<"routed" | "partial" | "unrouted" | "skipped" | "unknown">;
     unrouted_nets?: string[];

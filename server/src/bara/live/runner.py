@@ -666,20 +666,6 @@ class LiveRunner:
             else:
                 st.done("skipped", "No KiCad board for this build.")
             return None
-        # The boards appear (outline and footprints, pending) before routing and the GLB
-        # export, which take most of this stage; the routed records replace them.
-        reports = ctx.get("reports") or {}
-        planned_ids = self._instance_map(board, result)
-        for entry in board["boards"]:
-            preview = A.pending_board(entry)
-            side = preview.get("side") or "none"
-            self._map_board_ids(preview, planned_ids, run, side)
-            report = reports.get(side) or reports.get("none")
-            if report is not None:
-                pos, rot = report.board_pose()
-                preview["position_mm"] = [round(v, 3) for v in pos]
-                preview["rotation_deg"] = [round(v, 3) for v in rot]
-            st.emit("board.updated", {"board": preview})
         routed, err = await A.route_board(board, st.progress)
         if routed is None:
             self._warn(run, "board", "w_board", "other", "warning", f"No KiCad board: {err}")
@@ -705,12 +691,14 @@ class LiveRunner:
             st.done("failed", f"No KiCad board: {err}")
             return None
         board = routed
+        reports = ctx.get("reports") or {}
         id_map = self._instance_map(board, result)
         results = []
         for entry in board["boards"]:
             spec_board = copy.deepcopy(entry["board"])
             side = spec_board.get("side") or "none"
-            self._map_board_ids(spec_board, id_map, run, side)
+            mine = [p["instance_id"] for p in run.state["parts"] if p.get("side") in (side, "none")]
+            spec_board["for_instance_ids"] = mine
             for net in spec_board.get("nets", []):
                 for m in net.get("members", []):
                     m["instance_id"] = id_map.get(m["instance_id"], m["instance_id"])
@@ -767,20 +755,6 @@ class LiveRunner:
             + (" (cached)" if all(e.get("cache_hit") for e in board["boards"]) else ""),
         )
         return board
-
-    @staticmethod
-    def _map_board_ids(
-        spec_board: dict[str, Any], id_map: dict[str, str], run: BuildRun, side: str
-    ) -> None:
-        """Board-local instance ids -> the build's, on for_instance_ids and footprints.
-        A footprint with no build part (diodes, sockets) keeps instance_id null."""
-        live = {p["instance_id"] for p in run.state["parts"]}
-        spec_board["for_instance_ids"] = [
-            p["instance_id"] for p in run.state["parts"] if p.get("side") in (side, "none")
-        ]
-        for fp in spec_board.get("footprints") or []:
-            mapped = id_map.get(fp.get("instance_id") or "")
-            fp["instance_id"] = mapped if mapped in live else None
 
     def _instance_map(self, board: dict[str, Any], result: ComposeResult) -> dict[str, str]:
         out: dict[str, str] = {}
