@@ -263,14 +263,16 @@ class Resolver:
 
     def fetch(self, need: Need) -> dict[str, Any] | None:
         """Search + download from LCSC. Returns the new catalog row, or None with a note."""
+        if need.mechanical:
+            # LCSC sells electronics: "scroll wheel" finds an encoder, and the part number a
+            # cap names is the stick it fits. The case makes a touched mechanical part.
+            self.notes[need.key] = "made by the case"
+            return None
         reasons: list[str] = []
         terms = list(need.terms)
-        if not need.mechanical:
-            # no MPN worked (or none was named): search by what the block is, in words. Not
-            # for a touched mechanical part: LCSC sells electronics, so "scroll wheel" finds
-            # an encoder, and the case makes the wheel
-            words = re.sub(r"[^\w/.+-]+", " ", f"{need.label} {need.requirement}").strip()
-            terms.append("keyword:" + re.sub(r"\s+", " ", words)[:60])
+        # no MPN worked (or none was named): search by what the block is, in words
+        words = re.sub(r"[^\w/.+-]+", " ", f"{need.label} {need.requirement}").strip()
+        terms.append("keyword:" + re.sub(r"\s+", " ", words)[:60])
         for term in terms:
             cached = self._cached(term, need)
             if cached is not None:

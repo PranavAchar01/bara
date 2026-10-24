@@ -150,7 +150,9 @@ def need_from_block(block: dict[str, Any], taken: set[str]) -> Need:
         groups=tuple(block.get("groups") or ()),
         requirement=str(block.get("requirement") or "")[:160],
         why=str(block.get("why") or "")[:200],
-        mechanical=block.get("category") == "mechanical" and bool(block.get("touchpoint")),
+        # a mech.* function is mechanical whatever category the model filed the block under
+        mechanical=(block.get("category") == "mechanical" or fid.startswith("mech."))
+        and bool(block.get("touchpoint")),
     )
 
 

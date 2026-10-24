@@ -554,6 +554,13 @@ def test_fetch_falls_back_to_a_description_when_no_part_number_matches(tmp_path:
     calls.clear()
     r.fetch(named)
     assert calls == ["X1", "keyword:Some IC"]  # then the block described in words
+    cap = cp.need_from_block(
+        {"function_id": "mech.knob", "label": "Thumbstick cap", "category": "input",
+         "touchpoint": True, "count": 2, "search_terms": ["RKJXV1224005"]}, set()
+    )  # fmt: skip
+    calls.clear()
+    assert cap.mechanical and r.fetch(cap) is None
+    assert calls == []  # the part number a cap names is the stick it fits
 
 
 def test_touched_mechanical_block_without_a_part_is_made_by_the_case() -> None:
