@@ -248,8 +248,9 @@ def plan_device_board(
             cx, cy = spot[0], spot[1]
             it.side = "bottom" if spot[2] == "back" else "top"
         it.x, it.y = cx, cy
-        if it.role == "module":
-            _clear_of(it, held, on_board, fitted, spot is not None)
+        # every off-board part (module or cell) moves clear of the parts on its side: a cell
+        # left at the centre sat over a mouse's downward-facing sensor
+        _clear_of(it, held, on_board, fitted, spot is not None)
         held[it.side].append(it.footprint_poly())
 
     # controller GPIO for every peripheral signal, nearest pad first
@@ -575,7 +576,7 @@ def _clear_of(
     region: Polygon | None,
     anchored: bool,
 ) -> None:
-    """Move an off-board module to the nearest spot, on either side, where its envelope overlaps
+    """Move an off-board part to the nearest spot, on either side, where its envelope overlaps
     no other module and, unless it is anchored to a feature, no board part on that side."""
     others = {
         side: list(held[side]) + [o.footprint_poly() for o in on_board if o.side == side]

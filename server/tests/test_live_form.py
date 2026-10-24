@@ -920,3 +920,16 @@ def test_a_cable_connector_sits_on_the_rim_with_its_mouth_out() -> None:
     nearest = region.exterior.interpolate(region.exterior.project(c))
     out = (nearest.x - pads.x, nearest.y - pads.y)
     assert (c.x - pads.x) * out[0] + (c.y - pads.y) * out[1] > 0  # mouth toward that edge
+
+
+def test_an_off_board_cell_moves_clear_of_the_parts_on_its_side() -> None:
+    from bara.board.generic import _clear_of
+
+    sensor = _item("U1", "sensor", "s", w=5.0)
+    sensor.side = "bottom"
+    cell = Item("BT1", "battery", None, 0.0, 0.0, 0.0, "bottom", on_pcb=False, size_mm=(12, 30))
+    region = Polygon([(-30, -60), (30, -60), (30, 60), (-30, 60)])
+    _clear_of(cell, {"top": [], "bottom": []}, [sensor], region, False)
+    # either side works: beside the sensor, or flipped above the board where nothing sits
+    clear = cell.footprint_poly().intersection(sensor.footprint_poly()).area < 0.01
+    assert clear or cell.side == "top"

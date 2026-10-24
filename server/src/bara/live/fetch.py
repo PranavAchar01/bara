@@ -228,8 +228,8 @@ class Resolver:
         the function (RECIPES), tagged so the audit chain shows it was composed."""
         found = recipe_for(need)
         search = getattr(self.source, "search", None)
-        if found is None or search is None:
-            return None
+        if found is None or search is None or need.mechanical:
+            return None  # recipes are electrical; the case makes a touched mechanical part
         name, steps = found
         for kind, exact in steps:
             try:
@@ -265,9 +265,12 @@ class Resolver:
         """Search + download from LCSC. Returns the new catalog row, or None with a note."""
         reasons: list[str] = []
         terms = list(need.terms)
-        # no MPN worked (or none was named): search by what the block is, in words
-        words = re.sub(r"[^\w/.+-]+", " ", f"{need.label} {need.requirement}").strip()
-        terms.append("keyword:" + re.sub(r"\s+", " ", words)[:60])
+        if not need.mechanical:
+            # no MPN worked (or none was named): search by what the block is, in words. Not
+            # for a touched mechanical part: LCSC sells electronics, so "scroll wheel" finds
+            # an encoder, and the case makes the wheel
+            words = re.sub(r"[^\w/.+-]+", " ", f"{need.label} {need.requirement}").strip()
+            terms.append("keyword:" + re.sub(r"\s+", " ", words)[:60])
         for term in terms:
             cached = self._cached(term, need)
             if cached is not None:

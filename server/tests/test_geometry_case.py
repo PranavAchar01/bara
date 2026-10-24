@@ -240,3 +240,8 @@ def test_a_board_side_role_reads_the_part_not_the_word_module():
     mov = {"role": "module", "lib_id": "", "label": "V275LA20AP varistor", "size_mm": [17, 5.6]}
     assert _feature_from_placement(jst).role == "other"
     assert _feature_from_placement(mov).role == "other"
+    # an ESD IC named USBLC6 is hidden, so it is no USB port; a touched module still reads
+    esd = {"role": "module", "lib_id": "", "label": "USBLC6-2SC6 (ST)", "size_mm": [2.8, 2.9]}
+    knob = {"role": "module", "label": "EC11E15244G1 encoder", "touch": True, "size_mm": [12, 14]}
+    assert _feature_from_placement(esd).role == "other"
+    assert _feature_from_placement(knob).role == "encoder"

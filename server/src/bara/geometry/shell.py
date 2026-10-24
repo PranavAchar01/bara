@@ -544,6 +544,7 @@ def build_features(
     out = Features()
     zmax = body.profile.z_top + body.profile.crown + 2.0
     done_groups: set[int] = set()
+    knobs = [k for k in sites if k.kind in ("stick", "knob") and k.mount == "front"]
     for s in sites:
         if s.ref:
             out.claimed.add(s.ref)
@@ -557,6 +558,8 @@ def build_features(
                 _shoulder(out, [t for t in sites if t.group == s.group], body, seat, clear)
             out.kinds[s.kind] = out.kinds.get(s.kind, 0) + 1
             continue
+        if s.kind == "button" and s.mount == "front" and _under_knob(s, knobs, clear):
+            continue  # pressed through the wheel or stick above it (a mouse's middle click)
         if s.kind == "port" or s.mount == "back":
             if s.kind == "port":
                 _port(out, s, body, wall_mm, port_w, port_h, z_port)
@@ -586,8 +589,16 @@ def _local_top(body: Body, x: float, y: float, r: float) -> tuple[float, float]:
     return min(zs), max(zs)
 
 
+def _stick_radius(s: Site, clear: float) -> float:
+    return max(max(s.w, s.d) / 2 + clear + 0.6, 7.0)
+
+
+def _under_knob(s: Site, knobs: list[Site], clear: float) -> bool:
+    return any(math.hypot(s.x - k.x, s.y - k.y) < _stick_radius(k, clear) for k in knobs)
+
+
 def _stick(out: Features, s: Site, body: Body, seat: float, zmax: float, clear: float) -> None:
-    r_h = max(max(s.w, s.d) / 2 + clear + 0.6, 7.0)
+    r_h = _stick_radius(s, clear)
     r_w = r_h + 5.5
     z_lo, z_hi = _local_top(body, s.x, s.y, r_w)
     zc = body.top_at(s.x, s.y)

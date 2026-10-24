@@ -259,6 +259,9 @@ def _ccw(poly: np.ndarray) -> np.ndarray:
 # ---------------------------------------------------------------- inputs
 
 
+HIDDEN_ROLES = {"battery", "mcu", "sensor", "other"}  # roles a part can have out of reach
+
+
 def infer_role(*texts: str | None) -> str:
     blob = " ".join(t.lower() for t in texts if t)
     for role, words in ROLE_KEYWORDS:
@@ -282,6 +285,8 @@ def _feature_from_placement(p: dict[str, Any]) -> Feature | None:
         # a board-side role (module, module_connector, connector) says where a part sits, not
         # what it is: read the part itself, so a connector to a module is not a controller
         role = infer_role(p.get("lib_id")) if p.get("lib_id") else infer_role(p.get("label"))
+        if not p.get("touch") and role not in HIDDEN_ROLES:
+            role = "other"  # a part nobody touches is no port or control (USBLC6 is an ESD IC)
     w, d = _num(size[0], 0.0), _num(size[1] if len(size) > 1 else size[0], 0.0)
     if w <= 0 or d <= 0:
         return None
