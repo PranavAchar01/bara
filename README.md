@@ -58,6 +58,17 @@ Mock mode needs no server and replays the spec fixtures in the browser:
 
 http://localhost:5173/?mock=1&mock_fixture=exact_keyboard
 
+### The deployed site
+
+The Vercel site is the web app only; the engine (pcbnew, Freerouting, kicad-cli, the model key) runs on a Mac. On that Mac:
+
+```
+scripts/serve-public.sh        # engine on :8791 + Cloudflare quick tunnel; publishes the tunnel URL
+scripts/serve-public.sh open   # opens the site with the access key, once per browser
+```
+
+The engine refuses every request without the access key (keychain item `bara-access-token`, also the Vercel env var `BARA_ACCESS_TOKEN`). The site asks `/api/engine` for the tunnel URL with that key, then talks to the engine directly. When the engine is down or the key is missing, the site says "Engine offline" or "Engine locked" and plays the recorded demo instead.
+
 ### Environment variables
 
 | Variable | Purpose | Default |
@@ -69,6 +80,7 @@ http://localhost:5173/?mock=1&mock_fixture=exact_keyboard
 | `BARA_SPEED` | replay playback rate; higher is faster, `0` skips delays | `1.0` |
 | `BARA_MOCK` | server replays fixture streams | on (`1`) |
 | `BARA_HOST`, `BARA_PORT` | bind address | `127.0.0.1`, `8790` |
+| `BARA_ACCESS_TOKEN` | when set, every request but `/v1/health` needs it (`X-Bara-Token` header or `?token=`) | unset |
 | `BARA_LLM_TIMEOUT_S` | per-call model timeout | `5.0` |
 | `BARA_DATA_DIR`, `BARA_SPEC_DIR` | catalog/assets and spec locations | `server/data`, `spec` |
 

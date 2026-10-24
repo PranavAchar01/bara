@@ -13,6 +13,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from bara.access import AccessTokenMiddleware
 from bara.config import Settings, load_settings
 from bara.rest import ApiError, build_router, error_response
 from bara.services import build_services
@@ -36,6 +37,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(title="Bara", version="0.1.0", lifespan=lifespan)
     app.state.services = svc
+    if settings.access_token:
+        # Added before CORS so CORS stays outermost and a 401 still carries CORS headers.
+        app.add_middleware(AccessTokenMiddleware, token=settings.access_token)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=CORS_ORIGINS,

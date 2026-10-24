@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useApp } from "../state/store";
 import { paths } from "../net/rest";
+import { serverUrl, storeKey } from "../net/mode";
 import { Icon } from "../ui/common";
 import type { ConnStatus } from "../net/connection";
 
@@ -32,8 +33,7 @@ export function TopBar() {
   return (
     <header className="topbar">
       <button type="button" className="brand" onClick={() => useApp.setState({ screen: "home" })} title="Home">
-        <BaraMark />
-        <span>Bara</span>
+        <span>Hardware builder</span>
       </button>
       {screen === "workspace" && build && (
         <div className="topbar-build">
@@ -66,7 +66,7 @@ export function TopBar() {
   );
 }
 
-/** Left panel header in the workspace (Figma file header): Bara / prompt, build id + status, connection · model. */
+/** Left panel header in the workspace (Figma file header): Builds / prompt, build id + status, connection · model. */
 export function FileHeader() {
   const conn = useApp((s) => s.conn);
   const hello = useApp((s) => s.hello);
@@ -79,7 +79,7 @@ export function FileHeader() {
     <header className="file-header">
       <div className="file-title">
         <button type="button" className="brand" onClick={() => useApp.setState({ screen: "home" })} title="Home">
-          Bara
+          Builds
         </button>
         <span className="sep">/</span>
         <span className="file-prompt" title={build?.prompt}>
@@ -119,17 +119,6 @@ export function PanelToolbar() {
       <span className="spacer" />
       <ExportMenu primary />
     </div>
-  );
-}
-
-function BaraMark() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden>
-      <rect x="1.5" y="1.5" width="17" height="17" rx="3.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
-      <rect x="5" y="5" width="4" height="4" rx="0.8" fill="var(--accent)" />
-      <rect x="11" y="5" width="4" height="4" rx="0.8" fill="currentColor" opacity="0.5" />
-      <rect x="5" y="11" width="10" height="4" rx="0.8" fill="currentColor" opacity="0.5" />
-    </svg>
   );
 }
 
@@ -179,7 +168,7 @@ export function ExportMenu(props: { primary?: boolean }) {
                 {f.label}
               </span>
             ) : (
-              <a key={f.id} className="menu-item" role="menuitem" href={paths.export(build.build_id, f.id)} download onClick={() => setOpen(false)}>
+              <a key={f.id} className="menu-item" role="menuitem" href={serverUrl(paths.export(build.build_id, f.id))} download onClick={() => setOpen(false)}>
                 {f.label}
               </a>
             );
@@ -207,6 +196,54 @@ export function ConnectionBanner() {
     <div className={`conn-banner tone-${conn === "offline" ? "fail" : "warn"}`} role="status">
       <span className="spinner" aria-hidden />
       {text}
+    </div>
+  );
+}
+
+/** Engine reachability for the deployed site: says plainly when it shows the demo instead of the engine. */
+export function EngineNotice() {
+  const engine = useApp((s) => s.engine);
+  const detail = useApp((s) => s.engineDetail);
+  const [key, setKey] = useState("");
+  if (engine === "local" || engine === "live") return null;
+  if (engine === "checking") {
+    return (
+      <div className="conn-banner tone-info" role="status">
+        <span className="spinner" aria-hidden />
+        Looking for the engine.
+      </div>
+    );
+  }
+  const unlock = (e: FormEvent) => {
+    e.preventDefault();
+    if (!key.trim()) return;
+    storeKey(key.trim());
+    window.location.reload();
+  };
+  return (
+    <div className={`conn-banner engine-notice tone-${engine === "locked" ? "warn" : "fail"}`} role="status">
+      <strong>{engine === "locked" ? "Engine locked." : "Engine offline."}</strong>
+      <span>{detail} Builds here are the recorded demo, not your engine.</span>
+      {engine === "locked" ? (
+        <form className="engine-key" onSubmit={unlock}>
+          <input
+            type="password"
+            className="engine-key-input"
+            placeholder="Access key"
+            autoComplete="current-password"
+            value={key}
+            onChange={(e) => setKey(e.target.value)}
+            aria-label="Access key"
+          />
+          <button type="submit" className="btn sm primary">
+            Unlock
+          </button>
+        </form>
+      ) : (
+        <button type="button" className="btn sm" onClick={() => window.location.reload()}>
+          Retry
+        </button>
+      )}
     </div>
   );
 }

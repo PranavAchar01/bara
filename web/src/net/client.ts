@@ -7,7 +7,8 @@ import { emptyView, editSent, reduceView } from "../state/view";
 import { pushLog, showToast, useApp } from "../state/store";
 import { Connection, type SocketLike } from "./connection";
 import { FakeSocket, MockServer } from "./fakeSocket";
-import { readMode, socketUrl, withPublishedServer, withServer, type Mode } from "./mode";
+import { readMode, readStoredKey, serverUrl, setAccessToken, setServer, socketUrl, splitKey, storeKey, type Mode } from "./mode";
+import { discoverEngine } from "./engine";
 import { DefaultLoadingManager } from "three";
 import { RestClient, httpFetcher, stubFetcher, paths } from "./rest";
 import { loadFixtures } from "../spec/fixtures";
@@ -112,8 +113,33 @@ function onDrop(env: ServerEnvelope, reason: string): void {
   pushLog({ dir: "drop", type: env.type, seq: env.seq, note: reason, raw: rawOf(env) });
 }
 
+type Env = { VITE_MOCK?: string; VITE_SERVER_URL?: string; VITE_ENGINE_DISCOVERY?: string };
+
+/** Mode for this page. The deployed site (VITE_ENGINE_DISCOVERY=1) looks up the live engine and
+ *  only falls back to the mock when it is offline or the key is missing, and says so on screen. */
+async function resolveMode(env: Env): Promise<Mode> {
+  const { key: urlKey, search } = splitKey(window.location.search);
+  if (urlKey) {
+    storeKey(urlKey);
+    window.history.replaceState(null, "", `${window.location.pathname}${search}${window.location.hash}`);
+  }
+  const key = urlKey ?? readStoredKey();
+  setAccessToken(key);
+  const mode = readMode(search, env);
+  if (env.VITE_ENGINE_DISCOVERY !== "1" || mode.mock || mode.server) return mode;
+  useApp.setState({ engine: "checking", engineDetail: null });
+  const found = await discoverEngine(key);
+  if (found.state === "live") {
+    useApp.setState({ engine: "live", engineDetail: null });
+    return { ...mode, server: found.url };
+  }
+  useApp.setState({ engine: found.state, engineDetail: found.detail });
+  return { ...mode, mock: true };
+}
+
 export async function startClient(): Promise<Mode> {
-  const mode = readMode(await withPublishedServer(window.location.search), import.meta.env as { VITE_MOCK?: string; VITE_SERVER_URL?: string });
+  const mode = await resolveMode(import.meta.env as Env);
+  setServer(mode.server);
   useApp.setState({ mode });
   let factory: (url: string) => SocketLike;
   if (mode.mock) {
@@ -124,7 +150,7 @@ export async function startClient(): Promise<Mode> {
   } else {
     rest = new RestClient(httpFetcher(mode.server));
     // GLB loaders resolve /assets/... against the page; send them to the remote server instead.
-    if (mode.server) DefaultLoadingManager.setURLModifier((u) => withServer(mode.server, u));
+    if (mode.server || readStoredKey()) DefaultLoadingManager.setURLModifier((u) => serverUrl(u));
     factory = (url) => new WebSocket(url) as unknown as SocketLike;
   }
   conn = new Connection({

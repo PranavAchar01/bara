@@ -178,6 +178,28 @@ mark {
   border-bottom: 1px solid var(--line);
   font-size: 12px;
 }
+.engine-notice {
+  flex-wrap: wrap;
+}
+.engine-notice > span {
+  color: var(--text-2);
+}
+.engine-key {
+  display: inline-flex;
+  gap: 6px;
+  margin-left: auto;
+}
+.engine-key-input {
+  height: 28px;
+  width: 200px;
+  max-width: 50vw;
+  padding: 0 8px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
 
 /* buttons */
 .btn {

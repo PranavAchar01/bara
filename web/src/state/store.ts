@@ -3,6 +3,7 @@ import { create } from "zustand";
 import type { Build, Health, ServerPayloads, Vocab } from "../spec/types";
 import type { ConnStatus } from "../net/connection";
 import type { Mode } from "../net/mode";
+import type { EngineState } from "../net/engine";
 import { emptyView, type ViewState } from "./view";
 
 export interface LogEntry {
@@ -39,6 +40,9 @@ export interface PendingStart {
 
 export interface AppState {
   mode: Mode;
+  /** How the deployed site reached the engine (net/engine.ts); "local" when no lookup ran. */
+  engine: EngineState;
+  engineDetail: string | null;
   conn: ConnStatus;
   hello: ServerPayloads["hello"] | null;
   screen: "home" | "workspace";
@@ -77,6 +81,8 @@ const LOG_CAP = 600;
 
 export const useApp = create<AppState>(() => ({
   mode: { mock: false, speed: 1, fixture: null, server: null },
+  engine: "local",
+  engineDetail: null,
   conn: "connecting",
   hello: null,
   screen: "home",
