@@ -289,11 +289,83 @@
   color: var(--text);
 }
 
-/* canvas floats */
-.centre-bottom .promptbar {
+/* Floating dock at the bottom of the canvas (Figma bottom toolbar): the Ask field with
+   Bara's eyes, and the view toolbar under it, both paper pills with the Float shadow. */
+.centre-bottom {
+  bottom: 68px;
+}
+.centre-bottom > .promptbar.docked {
+  width: min(560px, 100%);
+}
+.promptbar.docked {
+  gap: 6px;
+  padding: 4px 4px 4px 6px;
+  border-radius: 26px;
   background: var(--paper);
   border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 6px;
   box-shadow: var(--shadow);
+}
+.promptbar.docked .prompt-input {
+  height: 40px;
+  border: 0;
+  border-radius: 20px;
+  padding: 0 12px;
+  background: var(--paper-2);
+  font-size: 14px;
+}
+.promptbar.docked .prompt-input:focus {
+  box-shadow: none;
+  background: var(--paper);
+  outline: 1px solid var(--ink);
+}
+.promptbar.docked .prompt-input::placeholder {
+  color: var(--placeholder);
+}
+.promptbar.docked .btn {
+  height: 40px;
+  border-radius: 20px;
+  padding: 0 16px;
+}
+
+.vp-toolbar {
+  bottom: 16px;
+  gap: 6px;
+  padding: 5px 6px;
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+}
+.vp-explode .small {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+  color: var(--text-2);
+}
+.vp-explode input {
+  accent-color: var(--ink);
+}
+.vp-toolbar .seg {
+  border: 0;
+  gap: 2px;
+}
+.vp-toolbar .seg-btn {
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+  padding: 5px 7px;
+}
+.vp-toolbar .seg-btn + .seg-btn {
+  border-left: 0;
+}
+.vp-toolbar .seg-btn.active {
+  background: var(--paper-3);
+  color: var(--ink);
+}
+.vp-toolbar .btn.ghost {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
 }

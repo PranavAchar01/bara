@@ -137,6 +137,21 @@ Branch `figma-design-in-code`, pushed after each step so the backend work can co
 
 **Minutes:** about 10. **Rating:** 5/5.
 
+### 21:31 · Floating dock with the Ask field
+
+**Tools:** Figma Bottom Toolbar and Ask Field components as the reference. Instead of building the agent's eyes, we merged the teammate branch `bot-alive`, which already puts an animated BaraBot inside the prompt bar; that is the Figma Ask field with the eyes. Styling only after that; no JSX changed in this step.
+
+**What moved:**
+- The prompt bar is now the **Ask pill**: paper with a hairline and the Float shadow, BaraBot on the left, a soft paper-2 field, an ink Build button, all fully rounded.
+- The view toolbar under it matches the Figma toolbar: mono caps labels, ink explode slider, borderless segments with a paper-3 active state instead of blue.
+- Both float over the canvas with the same shadow, so they read as one dock.
+
+**Checked:** typecheck and 50 web tests (the merge brought 5 bot tests) pass; mock build renders the dock.
+
+**Friction (for the 3D owner):** after merging `bot-alive`, mock mode without a backend shows an empty canvas: every `/assets/parts/*.glb` request returns 500 and the viewer no longer falls back to boxes as it did before the merge. Not caused by this step (CSS only), not fixed here, because `Viewport3D.tsx` is being changed on the other branch. Why not a single bar as in Figma: the view toolbar lives inside `Viewport3D.tsx`, so it stays a separate pill to avoid conflicts.
+
+**Minutes:** about 12. **Rating:** 4/5.
+
 ## Before and after
 
 | Change | Before | After |
