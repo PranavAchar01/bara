@@ -17,6 +17,7 @@ from typing import Any
 from jsonschema import Draft202012Validator
 
 from bara.live.llm_json import _for_anthropic
+from bara.live.websearch import media_type
 
 log = logging.getLogger(__name__)
 DEFAULT_MODEL = "claude-sonnet-5-5"
@@ -70,7 +71,7 @@ async def ask_json(
             "type": "image",
             "source": {
                 "type": "base64",
-                "media_type": "image/png",
+                "media_type": media_type(img) or "image/png",
                 "data": base64.b64encode(img).decode(),
             },
         }

@@ -41,6 +41,7 @@ trap 'exit 0' INT TERM
 (
   cd "$repo/server"
   ANTHROPIC_API_KEY="$(security find-generic-password -a "$acct" -s bara-anthropic -w)" \
+    YOU_API_KEY="$(security find-generic-password -a "$acct" -s bara-you -w 2>/dev/null)" \
     BARA_MOCK=0 BARA_PORT="$port" \
     BARA_LLM_TIMEOUT_S="${BARA_LLM_TIMEOUT_S:-60}" exec uv run bara-server
 ) >"$log_dir/server.log" 2>&1 &
