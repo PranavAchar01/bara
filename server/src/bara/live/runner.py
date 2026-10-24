@@ -33,6 +33,7 @@ if TYPE_CHECKING:
     from bara.engine import BuildRun, Engine
 
 log = logging.getLogger(__name__)
+SHORT_PROMPT_WORDS = 6  # up to this many words the prompt is searched as typed
 
 MAX_CLARIFY_ROUNDS = 2
 
@@ -590,8 +591,12 @@ class LiveRunner:
         """Web pictures of the product (its name plus "3d model"), searched once per build and
         shared by the form and the identity judge."""
         if not hasattr(run, "web_photos"):
+            # a short prompt is the product's own name ("a game boy"); the brief generalises
+            # it ("handheld game console") and the search then finds lanterns
             brief = getattr(run, "live_brief", None) or {}
-            product = str(brief.get("device") or "") or run.prompt
+            words = run.prompt.split()
+            short = len(words) <= SHORT_PROMPT_WORDS
+            product = run.prompt if short else str(brief.get("device") or "") or run.prompt
             photos, sources, note = await websearch.reference_photos(product)
             run.web_photos = photos  # type: ignore[attr-defined]
             run.web_sources = sources  # type: ignore[attr-defined]

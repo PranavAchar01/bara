@@ -33,3 +33,8 @@ def test_cached_photos_need_no_key(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     assert imgs == [PNG] and sources == ["https://example.org/gb"] and note == "ok (cached)"
     imgs, _, note = asyncio.run(websearch.reference_photos("a walkie talkie"))
     assert imgs == [] and note == "no YOU_API_KEY"
+
+
+def test_the_query_is_the_product_name_plus_3d_model() -> None:
+    assert websearch._query("a game boy") == "game boy 3d model"
+    assert websearch._query("  Flipper Zero ") == "Flipper Zero 3d model"
