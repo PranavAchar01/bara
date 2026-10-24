@@ -221,3 +221,12 @@ Web: bara-merge agent merges Nithin's figma-design-in-code / agent-board-3d / fi
 - Tried and reverted: capping hidden pockets under the top skin (gamepad shoulders then collide with the case).
 - Open: mouse picks two vertical-shaft encoders (EC11 + PEC11R) for the scroll wheel; the shaft pokes through. Needs a horizontal mouse encoder in the part query.
 - Suite restarted on 803fc7c (pid 38817), which includes e9ab04c speedups; build times to be measured.
+
+### 11:55 iteration
+- Suite on 3b87218 (partial): controller PASS 224 s (lcsc 11, stock 1 of 22); mouse FAIL identity 207 s (lcsc 4, stock 4 of 16); gameboy FAIL form.fit 242 s (lcsc 3, stock 3 of 14).
+- Root causes found and fixed:
+  - bba2542: generated stock-KiCad parts carry `kicad:Lib:Name` footprint refs; the board could not resolve them, so every `kicadgen:` part (mouse main clicks, ESD, LDO, LED) was quietly left off the board.
+  - bba2542: two needs naming one block ("scroll_wheel", "scroll_wheel_encoder_with...") made two encoders with the same instance id; now one slot, and instance ids are always unique.
+  - 4b2c556: a through-hole part's opposite-side shadow is its lead pads, not their hull (the 2xAA holder blocked a 60 mm strip); unanchored through-hole holders may go on the back.
+  - 7104d07: one d-pad cross per slot (an 8-switch slot = arrows + face buttons); KiCad build reruns once on the intermittent wx traits assert (not reproducible on 25 cached plans).
+- Suite restarted on bba2542 (pid 64357). Known pre-existing failure: tests/test_live_form.py::test_ask_json_asks_again_when_the_answer_was_cut_off (ask_json cache).
