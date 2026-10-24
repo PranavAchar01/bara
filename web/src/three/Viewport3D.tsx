@@ -1,38 +1,58 @@
-// C10 Viewport3D: build space is Z up, mm (SPEC 3.2). Arrayed parts use one
-// instanced mesh per instance (SPEC 3.3). Missing assets render as translucent
-// boxes with a label; failing checks get a red hull outline.
+// C10 Viewport3D: build space is Z up, mm (SPEC 3.2). Arrayed parts draw as
+// one instanced mesh per material (SPEC 3.3). Studio look per the render
+// recipe: neutral tone mapping, room environment, off-white floor with baked
+// contact shadow, GLB materials kept, matte case in the build's colour.
+// Missing assets render as translucent boxes with a label (SPEC 11.4);
+// failing checks get a red hull outline. The explode slider eases every part
+// along Z by layer; when it is held open, one leader-line label per part.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
-import { Edges, Html, OrbitControls, TransformControls } from "@react-three/drei";
+import { Html, OrbitControls, TransformControls } from "@react-three/drei";
 import * as THREE from "three";
+import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { select, useApp, type ViewPreset } from "../state/store";
 import { applyEdit } from "../net/client";
 import { fetchPart } from "../components/Overlays";
-import type { BBox, Board, BuildPart, Enclosure, Layout } from "../spec/types";
+import type { BBox, Board, Build, BuildPart, Enclosure, Layout } from "../spec/types";
 import { failingByInstance } from "../ui/format";
-import { modelAsset, useModel } from "./assets";
+import { modelAsset, onModelsChanged, preloadModels, useModel, type MeshGroup } from "./assets";
 import { placeholderBox, type Box } from "./bbox";
-import { addScaled, elementPoses, type ElementPose, type V3 } from "./layout";
+import { LAYER_RANK, explodeZ, isKeycapPart, layerGap, layerOf, partLabel, type LayerId, type PartLabel } from "./explode";
+import { elementPoses, type ElementPose } from "./layout";
+import { LabelOverlay, LabelProjector, labelOpacity } from "./labels";
+import { defaultColor, ghost, presetFor, presetMaterial, tinted } from "./materials";
+import { registerAnchor, stage, stageBox } from "./stage";
+import { StudioEnvironment, StudioFloor, studioPalette, type StudioPalette } from "./studio";
 
 const DEG = Math.PI / 180;
 
 interface Theme {
   accent: string;
   fail: string;
-  grid: string;
-  grid2: string;
   text: string;
+  muted: string;
+  line: string;
+  dark: boolean;
+}
+
+function isDark(): boolean {
+  const attr = document.documentElement.getAttribute("data-theme");
+  if (attr === "dark") return true;
+  if (attr === "light") return false;
+  return window.matchMedia("(prefers-color-scheme: dark)").matches;
 }
 
 function readTheme(): Theme {
   const cs = getComputedStyle(document.documentElement);
   const v = (n: string, d: string) => cs.getPropertyValue(n).trim() || d;
+  const dark = isDark();
   return {
     accent: v("--accent", "#2f55d4"),
     fail: v("--fail", "#c2362f"),
-    grid: v("--grid-line", "#d9d9d3"),
-    grid2: v("--line-strong", "#c9c9c2"),
-    text: v("--text", "#1b1d1f"),
+    text: dark ? "#ECECEA" : "#1B1D1F",
+    muted: dark ? "#A3A5A8" : "#5D6166",
+    line: dark ? "#8D9095" : "#7C8086",
+    dark,
   };
 }
 
@@ -50,25 +70,6 @@ function useTheme(): Theme {
     };
   }, []);
   return t;
-}
-
-/** Default colours by catalog prefix, used when a part has no colour of its own. */
-function defaultColor(part: BuildPart): string {
-  const id = part.part_id;
-  if (part.color?.hex) return part.color.hex;
-  if (id.startsWith("cap:")) return "#E9E7E1";
-  if (id.startsWith("sw:")) return /brown/.test(id) ? "#7A5236" : /red/.test(id) ? "#B8423A" : "#3A3D40";
-  if (String(part.card.kind) === "pcb") return "#2F6B4F";
-  if (/plate/.test(id)) return "#8E949A";
-  if (id.startsWith("mod:")) return "#24324F";
-  if (id.startsWith("disp:")) return "#15171A";
-  if (id.startsWith("bat:")) return "#B9A65A";
-  if (id.startsWith("cable:")) return "#2A2C2E";
-  return "#7E858C";
-}
-
-function isKeycap(p: BuildPart): boolean {
-  return p.part_id.startsWith("cap:") || /keycap/.test(p.card.primary_function ?? "");
 }
 
 const catalogBoxes = new Map<string, BBox | null>();
@@ -92,11 +93,13 @@ function useCatalogBbox(partId: string): BBox | null {
   return b;
 }
 
+/** Placeholder solid: a rounded box so caps and modules read as objects, not wireframes. */
 function boxGeometry(box: Box): THREE.BufferGeometry {
   const sx = Math.max(0.2, box.max[0] - box.min[0]);
   const sy = Math.max(0.2, box.max[1] - box.min[1]);
   const sz = Math.max(0.2, box.max[2] - box.min[2]);
-  const g = new THREE.BoxGeometry(sx, sy, sz);
+  const r = Math.min(2, Math.min(sx, sy, sz) * 0.2);
+  const g = r > 0.15 ? new RoundedBoxGeometry(sx, sy, sz, 2, r) : new THREE.BoxGeometry(sx, sy, sz);
   g.translate((box.min[0] + box.max[0]) / 2, (box.min[1] + box.max[1]) / 2, (box.min[2] + box.max[2]) / 2);
   return g;
 }
@@ -114,12 +117,76 @@ function hullGeometry(src: THREE.BufferGeometry, pad: number): THREE.BufferGeome
   return g;
 }
 
-function elementMatrix(pose: ElementPose, explode: number[] | undefined, factor: number): THREE.Matrix4 {
-  const p = addScaled(pose.position, explode, factor);
+function elementMatrix(pose: ElementPose): THREE.Matrix4 {
+  const p = pose.position;
   const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(pose.rotation[0] * DEG, pose.rotation[1] * DEG, pose.rotation[2] * DEG, "XYZ"));
   const yaw = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), pose.yaw * DEG);
   q.multiply(yaw);
   return new THREE.Matrix4().compose(new THREE.Vector3(p[0], p[1], p[2]), q, new THREE.Vector3(1, 1, 1));
+}
+
+/** Moves a group along Z with the eased explode factor, and registers its label anchor. */
+function useLayerGroup(layer: LayerId, anchorKey: string | null, anchorLocal: THREE.Vector3) {
+  const ref = useRef<THREE.Group>(null);
+  useFrame(() => {
+    if (ref.current) ref.current.position.z = explodeZ(layer, stage.gap, stage.explode);
+  });
+  useEffect(() => {
+    if (!anchorKey) return;
+    const out = new THREE.Vector3();
+    return registerAnchor({
+      key: anchorKey,
+      world: () => {
+        const g = ref.current;
+        out.copy(anchorLocal);
+        if (g) out.z += g.position.z;
+        return out;
+      },
+    });
+  }, [anchorKey, anchorLocal]);
+  return ref;
+}
+
+/** One instanced mesh per material group; all share the same instance matrices. */
+function InstancedGroups(props: {
+  groups: MeshGroup[];
+  matrices: THREE.Matrix4[];
+  onClick?: (e: ThreeEvent<MouseEvent>) => void;
+}) {
+  const refs = useRef<(THREE.InstancedMesh | null)[]>([]);
+  useLayoutEffect(() => {
+    for (const ref of refs.current) {
+      if (!ref) continue;
+      props.matrices.forEach((m, i) => ref.setMatrixAt(i, m));
+      ref.instanceMatrix.needsUpdate = true;
+      ref.computeBoundingBox();
+      ref.computeBoundingSphere();
+    }
+  }, [props.matrices, props.groups]);
+  const n = props.matrices.length;
+  return (
+    <>
+      {props.groups.map((g, i) => (
+        <instancedMesh
+          key={`${g.geometry.uuid}:${g.material.uuid}:${n}`}
+          ref={(el) => {
+            refs.current[i] = el;
+          }}
+          args={[g.geometry, g.material, n]}
+          castShadow
+          onClick={props.onClick}
+          onPointerOver={(e) => {
+            if (!props.onClick) return;
+            e.stopPropagation();
+            document.body.style.cursor = "pointer";
+          }}
+          onPointerOut={() => {
+            document.body.style.cursor = "";
+          }}
+        />
+      ))}
+    </>
+  );
 }
 
 interface PartNodeProps {
@@ -128,7 +195,6 @@ interface PartNodeProps {
   layouts: Layout[];
   boards: Board[];
   parts: BuildPart[];
-  explode: number;
   provisional: boolean;
   selected: boolean;
   failing: boolean;
@@ -136,6 +202,7 @@ interface PartNodeProps {
   labels: boolean;
   theme: Theme;
   pose: { position_mm: number[]; rotation_deg: number[] } | null;
+  labelKey: string | null;
 }
 
 function PartNode(props: PartNodeProps) {
@@ -152,81 +219,79 @@ function PartNode(props: PartNodeProps) {
     () => placeholderBox(part, { layouts: props.layouts, boards: props.boards, parts: props.parts, catalogBbox: catalog }),
     [part, props.layouts, props.boards, props.parts, catalog],
   );
-  const ready = model.status === "ready" && model.model.merged !== null;
-  const geometry = useMemo(() => (ready && model.status === "ready" && model.model.merged ? model.model.merged : boxGeometry(box)), [ready, model, box]);
-  const hull = useMemo(() => hullGeometry(geometry, String(part.card.kind) === "pcb" ? 1.2 : 0.8), [geometry, part.card.kind]);
-  useEffect(
-    () => () => {
-      if (!ready) geometry.dispose();
-      hull.dispose();
-    },
-    [geometry, hull, ready],
+  const loaded = model.status === "ready" && model.model.groups.length > 0 ? model.model : null;
+  const missing = !loaded;
+  const color = defaultColor(part);
+  const preset = presetFor(part);
+  const placeholderGeom = useMemo(() => (loaded ? null : boxGeometry(box)), [loaded, box]);
+  useEffect(() => () => placeholderGeom?.dispose(), [placeholderGeom]);
+  const groups = useMemo<MeshGroup[]>(() => {
+    if (loaded) {
+      // Keep the GLB's own PBR materials; a single-material part takes the build's colour.
+      if (loaded.groups.length === 1 && part.color?.hex) {
+        const g = loaded.groups[0];
+        return [{ ...g, material: tinted(g.material, part.color.hex) }];
+      }
+      return loaded.groups;
+    }
+    const base = presetMaterial(preset, color);
+    const mat = props.provisional ? ghost(base, 0.5) : ghost(base, 0.72);
+    return placeholderGeom ? [{ geometry: placeholderGeom, material: mat, weight: 0 }] : [];
+  }, [loaded, part.color?.hex, preset, color, props.provisional, placeholderGeom]);
+  const provisionalGroups = useMemo(
+    () => (props.provisional && loaded ? groups.map((g) => ({ ...g, material: ghost(g.material, 0.5) })) : groups),
+    [props.provisional, loaded, groups],
   );
-  const matrices = useMemo(
-    () => poses.map((p) => elementMatrix(p, part.placement.explode_offset_mm, props.explode)),
-    [poses, part.placement.explode_offset_mm, props.explode],
-  );
+  const hullSrc = loaded?.merged ?? placeholderGeom;
+  const hull = useMemo(() => (hullSrc ? hullGeometry(hullSrc, String(part.card.kind) === "pcb" ? 1.2 : 0.8) : null), [hullSrc, part.card.kind]);
+  useEffect(() => () => hull?.dispose(), [hull]);
+  const matrices = useMemo(() => poses.map((p) => elementMatrix(p)), [poses]);
   const outline = props.failing ? theme.fail : props.selected || props.highlight ? theme.accent : null;
-  const meshRef = useRef<THREE.InstancedMesh>(null);
   const hullRef = useRef<THREE.InstancedMesh>(null);
   useLayoutEffect(() => {
-    for (const ref of [meshRef.current, hullRef.current]) {
-      if (!ref) continue;
-      matrices.forEach((m, i) => ref.setMatrixAt(i, m));
-      ref.instanceMatrix.needsUpdate = true;
-      ref.computeBoundingSphere();
-    }
-  }, [matrices, geometry, outline]);
-  const missing = !ready;
-  const opacity = props.provisional ? 0.5 : missing ? 0.62 : 1;
-  const transparent = opacity < 1;
-  const color = defaultColor(part);
+    const ref = hullRef.current;
+    if (!ref) return;
+    matrices.forEach((m, i) => ref.setMatrixAt(i, m));
+    ref.instanceMatrix.needsUpdate = true;
+    ref.computeBoundingSphere();
+  }, [matrices, hull, outline]);
   const onClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
     select(part.instance_id);
   };
-  const anchor = useMemo(() => {
+  const midZ = loaded ? (loaded.bbox.min.z + loaded.bbox.max.z) / 2 : (box.min[2] + box.max[2]) / 2;
+  const topZ = loaded ? loaded.bbox.max.z : box.max[2];
+  const centroid = useMemo(() => {
     const c = new THREE.Vector3();
     for (const m of matrices) c.add(new THREE.Vector3().setFromMatrixPosition(m));
-    c.divideScalar(Math.max(1, matrices.length));
-    c.z += box.max[2] + 2;
-    return c;
-  }, [matrices, box]);
-  const key = `${matrices.length}:${geometry.uuid}`;
+    return c.divideScalar(Math.max(1, matrices.length));
+  }, [matrices]);
+  const anchorLocal = useMemo(() => {
+    // Leader lines land on the element nearest the centroid, mid-height.
+    let best = centroid.clone();
+    let d = Infinity;
+    for (const m of matrices) {
+      const p = new THREE.Vector3().setFromMatrixPosition(m);
+      const dd = p.distanceToSquared(centroid);
+      if (dd < d) {
+        d = dd;
+        best = p;
+      }
+    }
+    return new THREE.Vector3(best.x, best.y, best.z + midZ);
+  }, [centroid, matrices, midZ]);
+  const htmlAnchor = useMemo(() => new THREE.Vector3(centroid.x, centroid.y, centroid.z + topZ + 2), [centroid, topZ]);
+  const ref = useLayerGroup(layerOf(part), props.labelKey, anchorLocal);
   return (
-    <group>
-      <instancedMesh
-        key={`m${key}`}
-        ref={meshRef}
-        args={[geometry, undefined, matrices.length]}
-        onClick={onClick}
-        onPointerOver={(e) => {
-          e.stopPropagation();
-          document.body.style.cursor = "pointer";
-        }}
-        onPointerOut={() => {
-          document.body.style.cursor = "";
-        }}
-        castShadow={false}
-      >
-        <meshStandardMaterial
-          color={color}
-          roughness={missing ? 0.85 : 0.55}
-          metalness={0.05}
-          transparent={transparent}
-          opacity={opacity}
-          depthWrite={!transparent}
-          emissive={props.selected ? theme.accent : "#000000"}
-          emissiveIntensity={props.selected ? 0.18 : 0}
-        />
-      </instancedMesh>
-      {outline && (
-        <instancedMesh key={`h${key}${outline}`} ref={hullRef} args={[hull, undefined, matrices.length]} raycast={() => null}>
-          <meshBasicMaterial color={outline} side={THREE.BackSide} transparent opacity={0.95} depthWrite={false} />
+    <group ref={ref}>
+      <InstancedGroups groups={provisionalGroups} matrices={matrices} onClick={onClick} />
+      {outline && hull && (
+        <instancedMesh key={`h${matrices.length}:${hull.uuid}${outline}`} ref={hullRef} args={[hull, undefined, matrices.length]} raycast={() => null}>
+          <meshBasicMaterial color={outline} side={THREE.BackSide} transparent opacity={0.95} depthWrite={false} toneMapped={false} />
         </instancedMesh>
       )}
       {(props.labels || props.selected) && (
-        <Html position={anchor} center zIndexRange={[20, 0]} style={{ pointerEvents: "none" }}>
+        <Html position={htmlAnchor} center zIndexRange={[20, 0]} style={{ pointerEvents: "none" }}>
           <span className={`vp-label ${missing ? "missing" : ""} ${props.failing ? "failing" : ""}`}>
             {part.label ?? part.card.display_name}
             {missing ? " (no model)" : ""}
@@ -237,42 +302,69 @@ function PartNode(props: PartNodeProps) {
   );
 }
 
-function EnclosureNode(props: { enc: Enclosure; explode: number; theme: Theme; selected: boolean; failing: boolean }) {
+function EnclosureNode(props: { enc: Enclosure; theme: Theme; selected: boolean; failing: boolean }) {
   const { enc, theme } = props;
   const asset = modelAsset(enc.assets, false);
   const model = useModel(asset?.url ?? null);
   const size = enc.outer_size_mm;
-  const geometry = useMemo(() => {
-    if (model.status === "ready" && model.model.merged) return model.model.merged;
-    if (!size || size.length < 3) return null;
-    return new THREE.BoxGeometry(Math.max(size[0], 0.5), Math.max(size[1], 0.5), Math.max(size[2], 0.5));
-  }, [model, size]);
-  if (!geometry || enc.kind === "none") return null;
-  const pos = addScaled([enc.position_mm?.[0] ?? 0, enc.position_mm?.[1] ?? 0, enc.position_mm?.[2] ?? 0] as V3, enc.explode_offset_mm, props.explode);
-  const rot = enc.rotation_deg ?? [0, 0, 0];
+  const loaded = model.status === "ready" && model.model.groups.length > 0 ? model.model : null;
   const pending = enc.status === "pending";
-  const color = enc.color?.hex ?? "#9E9E9E";
-  const edge = props.failing ? theme.fail : props.selected ? theme.accent : color;
+  const hex = enc.color?.hex ?? "#9E9E9E";
+  const placeholder = useMemo(() => {
+    if (loaded || !size || size.length < 3) return null;
+    const [x, y, z] = [Math.max(size[0], 0.5), Math.max(size[1], 0.5), Math.max(size[2], 0.5)];
+    return boxGeometry({ min: [-x / 2, -y / 2, -z / 2], max: [x / 2, y / 2, z / 2] });
+  }, [loaded, size]);
+  useEffect(() => () => placeholder?.dispose(), [placeholder]);
+  const material = useMemo(() => {
+    const base = presetMaterial("case", hex);
+    return loaded ? base : ghost(base, 0.55);
+  }, [hex, loaded]);
+  const anchorLocal = useMemo(() => {
+    const p = enc.position_mm ?? [0, 0, 0];
+    const h = loaded ? loaded.bbox.min.z + (loaded.bbox.max.z - loaded.bbox.min.z) * 0.35 : 0;
+    return new THREE.Vector3(p[0], p[1], p[2] + h);
+  }, [enc.position_mm, loaded]);
+  const ref = useLayerGroup("case", enc.kind === "none" ? null : "e:case", anchorLocal);
+  if (enc.kind === "none" || (!loaded && !placeholder)) return null;
+  const pos = enc.position_mm ?? [0, 0, 0];
+  const rot = enc.rotation_deg ?? [0, 0, 0];
+  const edge = props.failing ? theme.fail : props.selected ? theme.accent : null;
+  const onClick = (e: ThreeEvent<MouseEvent>) => {
+    e.stopPropagation();
+    useApp.setState({ resizeTarget: { enclosure_id: enc.enclosure_id }, overlay: "resize", selection: null });
+  };
+  // A loaded case takes the build's colour in the matte case preset; the GLB's own material is a default grey.
+  const geoms = loaded ? loaded.groups.map((g) => g.geometry) : placeholder ? [placeholder] : [];
   return (
-    <mesh
-      geometry={geometry}
-      position={pos}
-      rotation={new THREE.Euler(rot[0] * DEG, rot[1] * DEG, rot[2] * DEG, "XYZ")}
-      onClick={(e) => {
-        e.stopPropagation();
-        useApp.setState({ resizeTarget: { enclosure_id: enc.enclosure_id }, overlay: "resize", selection: null });
-      }}
-    >
-      <meshStandardMaterial color={color} wireframe={pending} transparent opacity={pending ? 0.6 : 0.3} depthWrite={false} roughness={0.8} />
-      {!pending && <Edges color={edge} threshold={20} />}
-    </mesh>
+    <group ref={ref}>
+      <group position={[pos[0], pos[1], pos[2]]} rotation={new THREE.Euler(rot[0] * DEG, rot[1] * DEG, rot[2] * DEG, "XYZ")}>
+        {geoms.map((g) => (
+          <mesh key={g.uuid} geometry={g} castShadow onClick={onClick}>
+            {pending ? <meshStandardMaterial color={hex} wireframe transparent opacity={0.6} /> : <primitive object={material} attach="material" />}
+          </mesh>
+        ))}
+        {edge && geoms[0] && (
+          <mesh geometry={geoms[0]} scale={1.01} raycast={() => null}>
+            <meshBasicMaterial color={edge} side={THREE.BackSide} transparent opacity={0.9} depthWrite={false} toneMapped={false} />
+          </mesh>
+        )}
+      </group>
+    </group>
   );
 }
 
-/** A board without its own PCB part instance: extrude its outline. */
-function BoardNode(props: { board: Board; theme: Theme }) {
+/** Board GLB from the board stage (kicad-cli export): drawn with KiCad's own materials. */
+function boardModelUrl(board: Board): string | null {
+  return modelAsset(board.assets, false)?.url ?? null;
+}
+
+function BoardNode(props: { board: Board; labelKey: string | null }) {
   const { board } = props;
-  const geometry = useMemo(() => {
+  const model = useModel(boardModelUrl(board));
+  const loaded = model.status === "ready" && model.model.groups.length > 0 ? model.model : null;
+  const outline = useMemo(() => {
+    if (loaded) return null;
     const pts: number[][] = board.outline_mm?.length
       ? board.outline_mm
       : board.size_mm
@@ -286,112 +378,213 @@ function BoardNode(props: { board: Board; theme: Theme }) {
     if (pts.length < 3) return null;
     const shape = new THREE.Shape(pts.map((p) => new THREE.Vector2(p[0], p[1])));
     return new THREE.ExtrudeGeometry(shape, { depth: board.thickness_mm ?? 1.6, bevelEnabled: false });
-  }, [board.outline_mm, board.size_mm, board.thickness_mm]);
-  if (!geometry) return null;
-  const pos = board.position_mm ?? [0, 0, 0];
-  const rot = board.rotation_deg ?? [0, 0, 0];
+  }, [loaded, board.outline_mm, board.size_mm, board.thickness_mm]);
+  useEffect(() => () => outline?.dispose(), [outline]);
+  const pos = useMemo(() => board.position_mm ?? [0, 0, 0], [board.position_mm]);
+  const rot = useMemo(() => board.rotation_deg ?? [0, 0, 0], [board.rotation_deg]);
+  const anchorLocal = useMemo(() => {
+    const c = loaded ? loaded.bbox.getCenter(new THREE.Vector3()) : new THREE.Vector3((board.size_mm?.[0] ?? 0) / 2, -(board.size_mm?.[1] ?? 0) / 2, 0.8);
+    c.applyEuler(new THREE.Euler(rot[0] * DEG, rot[1] * DEG, rot[2] * DEG, "XYZ"));
+    return c.add(new THREE.Vector3(pos[0], pos[1], pos[2]));
+  }, [loaded, board.size_mm, pos, rot]);
+  const ref = useLayerGroup("pcb", props.labelKey, anchorLocal);
+  const groups: MeshGroup[] = loaded
+    ? loaded.groups
+    : outline
+      ? [{ geometry: outline, material: board.status === "pending" ? ghost(presetMaterial("pcb", "#1F3D2B"), 0.5) : presetMaterial("pcb", "#1F3D2B"), weight: 0 }]
+      : [];
+  if (!groups.length) return null;
   return (
-    <mesh geometry={geometry} position={[pos[0], pos[1], pos[2]]} rotation={new THREE.Euler(rot[0] * DEG, rot[1] * DEG, rot[2] * DEG, "XYZ")}>
-      <meshStandardMaterial color="#2F6B4F" wireframe={board.status === "pending"} transparent opacity={0.85} />
-    </mesh>
+    <group ref={ref}>
+      <group position={[pos[0], pos[1], pos[2]]} rotation={new THREE.Euler(rot[0] * DEG, rot[1] * DEG, rot[2] * DEG, "XYZ")}>
+        {groups.map((g) => (
+          <mesh key={`${g.geometry.uuid}:${g.material.uuid}`} geometry={g.geometry} material={g.material} castShadow />
+        ))}
+      </group>
+    </group>
   );
 }
 
-function assemblyBox(): { center: THREE.Vector3; radius: number } {
+// ---------------------------------------------------------------- camera
+
+const HERO_DIR = new THREE.Vector3(-0.3, -1, 0.62).normalize();
+const EXPLODED_DIR = new THREE.Vector3(-0.22, -1, 0.42).normalize();
+/** Fraction of the view width the model may use while labels are shown. */
+const LABEL_MODEL_WIDTH = 0.5;
+/** How far the view shifts right (as a fraction of width) so the model sits left of the labels. */
+const LABEL_SHIFT = 0.2;
+
+function fallbackBox(): THREE.Box3 {
   const b = useApp.getState().build;
   const bb = b?.scene?.assembly_bbox_mm;
-  const box = new THREE.Box3();
-  if (bb?.min && bb?.max) {
-    box.set(new THREE.Vector3(bb.min[0], bb.min[1], bb.min[2]), new THREE.Vector3(bb.max[0], bb.max[1], bb.max[2]));
-  } else {
-    for (const p of b?.parts ?? []) {
-      const v = p.placement.position_mm;
-      box.expandByPoint(new THREE.Vector3(v[0], v[1], v[2]));
-    }
-    if (box.isEmpty()) box.set(new THREE.Vector3(-60, -40, 0), new THREE.Vector3(60, 40, 20));
-    box.expandByScalar(40);
-  }
-  const center = box.getCenter(new THREE.Vector3());
-  const radius = Math.max(40, box.getSize(new THREE.Vector3()).length() / 2);
-  return { center, radius };
+  if (bb?.min && bb?.max) return new THREE.Box3(new THREE.Vector3(bb.min[0], bb.min[1], bb.min[2]), new THREE.Vector3(bb.max[0], bb.max[1], bb.max[2]));
+  return new THREE.Box3(new THREE.Vector3(-80, -50, 0), new THREE.Vector3(80, 50, 25));
 }
 
-function presetPose(preset: ViewPreset, fovDeg: number): { pos: THREE.Vector3; target: THREE.Vector3 } {
-  const scene = useApp.getState().build?.scene;
-  if (preset === "scene" && scene?.camera) {
-    const p = scene.camera.position_mm;
-    const t = scene.camera.target_mm;
-    return { pos: new THREE.Vector3(p[0], p[1], p[2]), target: new THREE.Vector3(t[0], t[1], t[2]) };
-  }
-  const { center, radius } = assemblyBox();
-  const dist = radius / Math.sin((fovDeg * DEG) / 2) * 1.05;
+function fitPose(box: THREE.Box3, dir: THREE.Vector3, cam: THREE.PerspectiveCamera, widthFrac: number, margin: number) {
+  const sphere = box.getBoundingSphere(new THREE.Sphere());
+  const vf = cam.fov * DEG;
+  const hf = 2 * Math.atan(Math.tan(vf / 2) * cam.aspect * widthFrac);
+  const f = Math.min(vf, hf);
+  const dist = (Math.max(sphere.radius, 20) / Math.sin(f / 2)) * margin;
+  return { pos: sphere.center.clone().addScaledVector(dir, dist), target: sphere.center.clone(), dist };
+}
+
+type FrameKind = ViewPreset | "hero" | "exploded";
+
+function framePose(kind: FrameKind, cam: THREE.PerspectiveCamera, predictExplode: number | null) {
+  const box = stageBox() ?? fallbackBox();
+  if (predictExplode !== null) box.max.z += stage.gap * maxRank() * (predictExplode - stage.explode);
+  if (kind === "exploded") return fitPose(box, EXPLODED_DIR, cam, LABEL_MODEL_WIDTH, 0.82);
   const dir =
-    preset === "top"
+    kind === "top"
       ? new THREE.Vector3(0, -0.0001, 1)
-      : preset === "front"
+      : kind === "front"
         ? new THREE.Vector3(0, -1, 0.18)
-        : preset === "side"
+        : kind === "side"
           ? new THREE.Vector3(1, 0, 0.18)
-          : new THREE.Vector3(0.75, -1, 0.95);
-  dir.normalize();
-  return { pos: center.clone().addScaledVector(dir, dist), target: center };
+          : HERO_DIR;
+  return fitPose(box, dir.clone().normalize(), cam, 1, kind === "hero" || kind === "iso" || kind === "scene" ? 1.18 : 1.05);
 }
 
-interface OrbitLike {
+let rankMax = LAYER_RANK.keycaps;
+function maxRank(): number {
+  return rankMax;
+}
+
+interface OrbitLike extends THREE.EventDispatcher<{ start: object; change: object; end: object }> {
   target: THREE.Vector3;
   update: () => void;
 }
 
-/** Eases the camera to scene.camera (or a preset) whenever it changes. */
+/** Eases the explode factor toward the slider value; flags settle for shadows and framing. */
+function ExplodeDriver() {
+  const target = useApp((s) => s.explode);
+  useFrame((_, dt) => {
+    const d = target - stage.explode;
+    if (Math.abs(d) < 0.0015) {
+      if (stage.moving) {
+        stage.explode = target;
+        stage.moving = false;
+        stage.settleVersion++;
+      }
+      return;
+    }
+    stage.moving = true;
+    stage.explode += d * (1 - Math.exp(-dt * 5.5));
+  });
+  return null;
+}
+
+/**
+ * Hero 3/4 framing auto-fitted to the loaded assembly; re-fits as models load
+ * until the user orbits. The explode hold frames the whole stack, side-on,
+ * shifted left to leave room for the label column.
+ */
 function CameraRig() {
-  const { camera, controls } = useThree();
+  const { camera, controls, size } = useThree();
+  const cam = camera as THREE.PerspectiveCamera;
   const preset = useApp((s) => s.preset);
   const nonce = useApp((s) => s.cameraNonce);
   const sceneCam = useApp((s) => s.build?.scene?.camera ?? null);
   const buildId = useApp((s) => s.build?.build_id ?? null);
   const partsCount = useApp((s) => s.build?.parts.length ?? 0);
+  const explodeTarget = useApp((s) => s.explode);
+  const content = useApp((s) => `${s.build?.parts.length ?? 0}:${s.build?.enclosures?.length ?? 0}:${s.build?.boards?.length ?? 0}:${s.build?.revision ?? 0}`);
   const anim = useRef<{ fromP: THREE.Vector3; fromT: THREE.Vector3; toP: THREE.Vector3; toT: THREE.Vector3; t: number } | null>(null);
+  const userMoved = useRef(false);
   const framedFor = useRef<string | null>(null);
-  const start = (p: ViewPreset) => {
+  const shift = useRef(0);
+  const mode = useRef<"hero" | "exploded">("hero");
+  const start = (kind: FrameKind, predict: number | null = null) => {
     const ctl = controls as unknown as OrbitLike | null;
-    const fov = (camera as THREE.PerspectiveCamera).fov ?? 35;
-    const to = presetPose(p, fov);
-    anim.current = {
-      fromP: camera.position.clone(),
-      fromT: ctl?.target.clone() ?? new THREE.Vector3(),
-      toP: to.pos,
-      toT: to.target,
-      t: 0,
-    };
+    const to = framePose(kind, cam, predict);
+    cam.near = Math.max(0.5, to.dist * 0.02);
+    cam.far = to.dist * 20;
+    cam.updateProjectionMatrix();
+    anim.current = { fromP: cam.position.clone(), fromT: ctl?.target.clone() ?? new THREE.Vector3(), toP: to.pos, toT: to.target, t: 0 };
   };
+  const heroOrPreset = (): FrameKind => (preset === "scene" || preset === "iso" ? "hero" : preset);
   useEffect(() => {
-    if (sceneCam) start(preset === "scene" ? "scene" : preset);
+    const ctl = controls as unknown as OrbitLike | null;
+    if (!ctl) return;
+    const on = () => {
+      if (!anim.current) userMoved.current = true;
+    };
+    ctl.addEventListener("start", on);
+    return () => ctl.removeEventListener("start", on);
+  }, [controls]);
+  useEffect(() => {
+    if (sceneCam && !userMoved.current && stage.explode < 0.05) start(heroOrPreset());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sceneCam]);
   useEffect(() => {
-    start(preset);
+    userMoved.current = false;
+    start(stage.explode > 0.5 && (preset === "scene" || preset === "iso") ? "exploded" : heroOrPreset());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nonce]);
   useEffect(() => {
     // Frame the first parts of a new build before scene.ready arrives.
     if (!buildId || partsCount === 0 || framedFor.current === buildId) return;
     framedFor.current = buildId;
-    if (!sceneCam) start("iso");
+    userMoved.current = false;
+    const id = requestAnimationFrame(() => start("hero"));
+    return () => cancelAnimationFrame(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [buildId, partsCount]);
+  useEffect(() => {
+    // Parts, cases and boards keep arriving while the build streams: re-fit until the user orbits.
+    if (userMoved.current || stage.moving || framedFor.current === null) return;
+    const id = requestAnimationFrame(() => start(mode.current === "exploded" ? "exploded" : heroOrPreset()));
+    return () => cancelAnimationFrame(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [content]);
+  useEffect(() => {
+    // Re-fit as real meshes replace placeholders (boxes are a guess at size).
+    let raf = 0;
+    const off = onModelsChanged(() => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        if (!userMoved.current && !stage.moving) start(mode.current === "exploded" ? "exploded" : heroOrPreset());
+      });
+    });
+    return () => {
+      off();
+      cancelAnimationFrame(raf);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preset]);
+  useEffect(() => {
+    const next = explodeTarget >= 0.9 ? "exploded" : explodeTarget <= 0.1 ? "hero" : null;
+    if (!next || next === mode.current) return;
+    mode.current = next;
+    userMoved.current = false;
+    start(next === "exploded" ? "exploded" : heroOrPreset(), explodeTarget);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [explodeTarget]);
   useFrame((_, dt) => {
+    // Label column room: shift the projection, not the camera, so orbit stays centred on the model.
+    const want = labelOpacity(stage.explode) * LABEL_SHIFT;
+    if (Math.abs(want - shift.current) > 1e-4) {
+      shift.current = want;
+      if (want > 0) cam.setViewOffset(size.width, size.height, size.width * want, 0, size.width, size.height);
+      else cam.clearViewOffset();
+    }
     const a = anim.current;
     const ctl = controls as unknown as OrbitLike | null;
     if (!a) return;
-    a.t = Math.min(1, a.t + dt / 0.7);
+    a.t = Math.min(1, a.t + dt / 0.9);
     const k = 1 - Math.pow(1 - a.t, 3);
-    camera.position.lerpVectors(a.fromP, a.toP, k);
+    cam.position.lerpVectors(a.fromP, a.toP, k);
     if (ctl) {
       ctl.target.lerpVectors(a.fromT, a.toT, k);
       ctl.update();
-    } else camera.lookAt(a.toT);
+    } else cam.lookAt(a.toT);
     if (a.t >= 1) anim.current = null;
   });
+  useEffect(() => {
+    if (shift.current > 0) cam.setViewOffset(size.width, size.height, size.width * shift.current, 0, size.width, size.height);
+  }, [size.width, size.height, cam]);
   return null;
 }
 
@@ -435,17 +628,80 @@ function MoveGizmo(props: { mode: "translate" | "rotate" }) {
   );
 }
 
-function SceneContents(props: { gizmoMode: "translate" | "rotate" }) {
+// ---------------------------------------------------------------- scene
+
+/** PCB part instances drawn by a board GLB instead (avoids a double board). */
+function boardDrawnPcbs(build: Build | null): Set<string> {
+  const out = new Set<string>();
+  for (const b of build?.boards ?? []) if (b.part_instance_id && boardModelUrl(b)) out.add(b.part_instance_id);
+  return out;
+}
+
+function footprintMm(build: Build | null): number {
+  const bb = build?.scene?.assembly_bbox_mm;
+  const sides = new Set((build?.parts ?? []).map((p) => p.side).filter((s) => s === "left" || s === "right"));
+  if (bb?.min && bb?.max) {
+    const x = (bb.max[0] - bb.min[0]) / (sides.size === 2 ? 2 : 1);
+    return Math.max(x, bb.max[1] - bb.min[1]);
+  }
+  return 120;
+}
+
+export interface LabelRowData extends PartLabel {
+  quantity: number;
+}
+
+/** One label per catalog part, plus the case and any board drawn from its GLB. */
+export function labelRows(build: Build | null): LabelRowData[] {
+  if (!build) return [];
+  const hidden = boardDrawnPcbs(build);
+  const rows = new Map<string, LabelRowData>();
+  for (const p of build.parts) {
+    if (hidden.has(p.instance_id)) continue;
+    const l = partLabel(p);
+    const prev = rows.get(l.key);
+    if (prev) prev.quantity += p.quantity;
+    else rows.set(l.key, { ...l, quantity: p.quantity });
+  }
+  const boards = build.boards?.filter((b) => !b.part_instance_id || hidden.has(b.part_instance_id)) ?? [];
+  if (boards.length) {
+    const routed = boards.some((b) => b.routing?.method === "autorouted" || b.routing?.status === "routed");
+    rows.set("b:board", {
+      key: "b:board",
+      title: "PCB",
+      detail: routed ? "routed, KiCad" : "",
+      sub: boards.some((b) => b.source === "design") ? "from the source design" : "designed by us",
+      generated: boards.every((b) => b.source !== "design"),
+      quantity: boards.length,
+    });
+  }
+  const encs = (build.enclosures ?? []).filter((e) => e.kind !== "none");
+  if (encs.length) {
+    const generated = encs.some((e) => e.kind === "generated");
+    rows.set("e:case", { key: "e:case", title: "Case", detail: "", sub: generated ? "designed by us" : "from the source design", generated, quantity: encs.length });
+  }
+  return [...rows.values()];
+}
+
+function SceneContents(props: { gizmoMode: "translate" | "rotate"; theme: Theme; palette: StudioPalette }) {
+  const { theme } = props;
   const build = useApp((s) => s.build);
   const placeDone = useApp((s) => s.view.placeDone);
   const selection = useApp((s) => s.selection);
   const resizeTarget = useApp((s) => s.resizeTarget);
   const overlay = useApp((s) => s.overlay);
   const hoverConn = useApp((s) => s.hoverConnection);
-  const explode = useApp((s) => s.explode);
   const toggles = useApp((s) => s.toggles);
   const dragPose = useApp((s) => s.dragPose);
-  const theme = useTheme();
+  const rootRef = useRef<THREE.Group>(null);
+  useLayoutEffect(() => {
+    stage.root = rootRef.current;
+    return () => {
+      stage.root = null;
+    };
+  }, []);
+  const preload = build?.scene?.preload;
+  useEffect(() => preloadModels(preload), [preload]);
   const failing = useMemo(() => failingByInstance(build), [build]);
   const failingEnclosures = useMemo(() => {
     const out = new Set<string>();
@@ -459,48 +715,68 @@ function SceneContents(props: { gizmoMode: "translate" | "rotate" }) {
     const c = build?.connections.find((x) => x.connection_id === hoverConn);
     return new Set(c ? [c.from.instance_id, c.to.instance_id] : []);
   }, [build?.connections, hoverConn]);
-  const parts = build?.parts ?? [];
+  const parts = useMemo(() => build?.parts ?? [], [build?.parts]);
   const layouts = build?.layouts ?? [];
   const boards = build?.boards ?? [];
-  const visible = parts.filter((p) => (toggles.keycaps || !isKeycap(p)) && (toggles.board || String(p.card.kind) !== "pcb"));
+  const hiddenPcbs = useMemo(() => boardDrawnPcbs(build), [build]);
+  stage.gap = layerGap(footprintMm(build));
+  rankMax = parts.reduce((m, p) => Math.max(m, LAYER_RANK[layerOf(p)]), LAYER_RANK.case);
+  // The first instance of each catalog part carries its label anchor.
+  const anchorOwner = useMemo(() => {
+    const owner = new Map<string, string>();
+    for (const p of parts) {
+      if (hiddenPcbs.has(p.instance_id)) continue;
+      const k = partLabel(p).key;
+      if (!owner.has(k)) owner.set(k, p.instance_id);
+    }
+    return owner;
+  }, [parts, hiddenPcbs]);
+  const visible = parts.filter(
+    (p) => !hiddenPcbs.has(p.instance_id) && (toggles.keycaps || !isKeycapPart(p)) && (toggles.board || String(p.card.kind) !== "pcb"),
+  );
+  const revision = `${build?.build_id ?? ""}:${build?.revision ?? 0}:${parts.length}:${toggles.case}:${toggles.board}:${toggles.keycaps}`;
   return (
     <>
-      <ambientLight intensity={0.75} />
-      <directionalLight position={[200, -300, 500]} intensity={1.6} />
-      <directionalLight position={[-300, 200, 200]} intensity={0.5} />
-      <gridHelper args={[1000, 50, theme.grid2, theme.grid]} rotation={[Math.PI / 2, 0, 0]} position={[0, 0, -0.05]} />
-      {visible.map((p) => (
-        <PartNode
-          key={p.instance_id}
-          part={p}
-          layout={layouts.find((l) => l.layout_id === p.placement.layout_id)}
-          layouts={layouts}
-          boards={boards}
-          parts={parts}
-          explode={explode}
-          provisional={!placeDone}
-          selected={selection === p.instance_id}
-          failing={failing.has(p.instance_id)}
-          highlight={hoverEnds.has(p.instance_id)}
-          labels={toggles.labels}
-          theme={theme}
-          pose={dragPose && dragPose.instance_id === p.instance_id ? dragPose : null}
-        />
-      ))}
-      {toggles.case &&
-        (build?.enclosures ?? []).map((e) => (
-          <EnclosureNode
-            key={e.enclosure_id}
-            enc={e}
-            explode={explode}
+      <StudioEnvironment palette={props.palette} />
+      <StudioFloor palette={props.palette} revision={revision} />
+      <ExplodeDriver />
+      <group ref={rootRef}>
+        {visible.map((p) => (
+          <PartNode
+            key={p.instance_id}
+            part={p}
+            layout={layouts.find((l) => l.layout_id === p.placement.layout_id)}
+            layouts={layouts}
+            boards={boards}
+            parts={parts}
+            provisional={!placeDone}
+            selected={selection === p.instance_id}
+            failing={failing.has(p.instance_id)}
+            highlight={hoverEnds.has(p.instance_id)}
+            labels={toggles.labels}
             theme={theme}
-            selected={overlay === "resize" && resizeTarget?.enclosure_id === e.enclosure_id}
-            failing={failingEnclosures.has(e.enclosure_id)}
+            pose={dragPose && dragPose.instance_id === p.instance_id ? dragPose : null}
+            labelKey={anchorOwner.get(partLabel(p).key) === p.instance_id ? partLabel(p).key : null}
           />
         ))}
-      {toggles.board && boards.filter((b) => !b.part_instance_id).map((b) => <BoardNode key={b.board_id} board={b} theme={theme} />)}
+        {toggles.case &&
+          (build?.enclosures ?? []).map((e) => (
+            <EnclosureNode
+              key={e.enclosure_id}
+              enc={e}
+              theme={theme}
+              selected={overlay === "resize" && resizeTarget?.enclosure_id === e.enclosure_id}
+              failing={failingEnclosures.has(e.enclosure_id)}
+            />
+          ))}
+        {toggles.board &&
+          boards
+            .filter((b) => !b.part_instance_id || hiddenPcbs.has(b.part_instance_id))
+            .map((b, i) => <BoardNode key={b.board_id} board={b} labelKey={i === 0 ? "b:board" : null} />)}
+      </group>
       <MoveGizmo mode={props.gizmoMode} />
       <CameraRig />
+      <LabelProjector />
     </>
   );
 }
@@ -509,20 +785,30 @@ export function Viewport3D() {
   const hasParts = useApp((s) => (s.build?.parts.length ?? 0) > 0);
   const status = useApp((s) => s.build?.status);
   const missingCount = useApp((s) => (s.build?.parts ?? []).filter((p) => !modelAsset(p.assets, p.quantity > 1)).length);
+  const build = useApp((s) => s.build);
+  const rows = useMemo(() => labelRows(build), [build]);
+  const theme = useTheme();
+  const palette = useMemo(() => studioPalette(theme.dark), [theme.dark]);
   const [gizmoMode, setGizmoMode] = useState<"translate" | "rotate">("translate");
+  const overlayRows = useMemo(
+    () => rows.map((r) => ({ key: r.key, title: `${r.title} x${r.quantity}`, detail: r.detail, sub: r.sub, generated: r.generated })),
+    [rows],
+  );
   return (
-    <div className="viewport">
+    <div className="viewport" style={{ background: palette.background }}>
       <Canvas
         dpr={[1, 2]}
-        camera={{ up: [0, 0, 1], position: [180, -260, 220], near: 1, far: 10000, fov: 35 }}
+        shadows
+        camera={{ up: [0, 0, 1], position: [-120, -380, 260], near: 1, far: 10000, fov: 32 }}
         onPointerMissed={(e) => {
           if (e.type === "click") select(null);
         }}
-        gl={{ antialias: true, preserveDrawingBuffer: true }}
+        gl={{ antialias: true, preserveDrawingBuffer: true, powerPreference: "high-performance" }}
       >
-        <SceneContents gizmoMode={gizmoMode} />
+        <SceneContents gizmoMode={gizmoMode} theme={theme} palette={palette} />
         <OrbitControls makeDefault enableDamping dampingFactor={0.12} />
       </Canvas>
+      {hasParts && <LabelOverlay rows={overlayRows} color={theme.text} muted={theme.muted} line={theme.line} accent={theme.dark ? "#7BC08F" : "#2E7D46"} />}
       {!hasParts && (
         <div className="vp-empty">
           {status === "running" || status === "awaiting_input" ? "Parts appear here as they are chosen." : status === "failed" ? "No parts were placed." : "Describe a device to start."}
@@ -561,7 +847,7 @@ function ViewportToolbar(props: { gizmoMode: "translate" | "rotate"; setGizmoMod
           </button>
         ))}
       </div>
-      <button type="button" className="btn ghost sm" disabled={!hasScene} onClick={() => setPreset("scene")} title="Reset to the scene camera">
+      <button type="button" className="btn ghost sm" disabled={!hasScene} onClick={() => setPreset("scene")} title="Reset to the hero view">
         Reset
       </button>
       <span className="vp-sep" />
