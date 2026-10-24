@@ -407,6 +407,49 @@ def test_optional_slot_without_a_part_is_dropped_not_failed() -> None:
     assert rows["slot.critical_filled:mcu"]["status"] == "fail"
 
 
+def test_drc_errors_from_tight_copper_get_one_wide_rules_pass(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    from types import SimpleNamespace
+
+    import bara.board as B
+    from bara.board import kicad as K
+
+    seen: list[float] = []
+    state = {"rules": K.RULES}
+
+    def build(plan_path: Path) -> None:
+        state["rules"] = json.loads(plan_path.read_text())["rules"]
+        plan_path.with_name("main.kicad_pcb").write_text(str(state["rules"]["clearance_mm"]))
+
+    def drc(board: Path) -> dict[str, Any]:
+        wide = state["rules"]["clearance_mm"] > K.RULES["clearance_mm"]
+        seen.append(state["rules"]["clearance_mm"])
+        errors = 0 if wide else 2
+        return {
+            "errors": errors,
+            "warnings": 0,
+            "unconnected": 0,
+            "unconnected_nets": [],
+            "by_type": {"error:clearance": errors} if errors else {},
+        }
+
+    monkeypatch.setattr(K, "plan_json", lambda plan, pcb, dsn: {"rules": K.RULES, "footprints": []})
+    monkeypatch.setattr(K, "build_pcb", build)
+    monkeypatch.setattr(K, "freeroute", lambda *a, **k: {"seconds": 0.1, "passes": 1})
+    monkeypatch.setattr(K, "import_ses", lambda *a: None)
+    monkeypatch.setattr(K, "run_drc", drc)
+    monkeypatch.setattr(K, "export_glb", lambda *a, **k: None)
+    monkeypatch.setattr(K, "count_routing", lambda pcb: {"tracks": 1})
+    res = B._route_one(
+        SimpleNamespace(name="b"), tmp_path / "w", tmp_path / "g", (0.0, 0.0), 600.0, 5,
+        lambda *a, **k: None,
+    )  # fmt: skip
+    assert res["drc"]["errors"] == 0
+    assert res["routing"]["strategy"] == "wide_rules"
+    assert seen[-1] == K.WIDE_RULES["clearance_mm"] and len(seen) == len(K.ROUTE_STRATEGIES) + 1
+
+
 # ---------------------------------------------------------------- hero renderer
 
 

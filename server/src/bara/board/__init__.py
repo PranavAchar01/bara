@@ -14,6 +14,7 @@ from __future__ import annotations
 import fcntl
 import hashlib
 import json
+import shutil
 import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -220,12 +221,22 @@ def _route_one(
         deadline = time.monotonic() + route_timeout_s
         drc: dict = {}
         route: dict = {}
-        for i, (strategy, extra) in enumerate(K.ROUTE_STRATEGIES):
+        strategies: list[tuple[str, list[str], dict | None]] = [
+            (name, extra, None) for name, extra in K.ROUTE_STRATEGIES
+        ]
+        best: tuple[int, dict, Path] | None = None  # (score, drc, saved board)
+        widened = False
+        i = 0
+        while i < len(strategies):
+            strategy, extra, rules = strategies[i]
             remaining = deadline - time.monotonic()
             if i and remaining < 10:
                 break
             for stale in (pcb, dsn, ses):
                 stale.unlink(missing_ok=True)
+            if rules is not None:
+                widened_plan = {**plan_data, "rules": rules}
+                plan_path.write_text(json.dumps(widened_plan, indent=1))
             progress(f"{plan.name}: writing KiCad board", 0.1)
             t = time.monotonic()
             K.build_pcb(plan_path)
@@ -256,11 +267,27 @@ def _route_one(
                     "unconnected": drc["unconnected"],
                 }
             )
+            score = drc["errors"] + 3 * drc["unconnected"]
+            if best is None or score < best[0]:
+                saved = work / "best.kicad_pcb"
+                shutil.copyfile(pcb, saved)
+                best = (score, drc, saved)
             if drc["errors"] == 0 and drc["unconnected"] == 0:
                 break
-            progress(
-                f"{plan.name}: {drc['unconnected']} unconnected after {strategy}, retrying", 0.3
-            )
+            if (
+                i == len(strategies) - 1
+                and not widened
+                and best is not None
+                and best[1]["unconnected"] == 0
+                and any(k.removeprefix("error:") in K.WIDENABLE for k in best[1].get("by_type", {}))
+            ):
+                strategies.append(("wide_rules", [], K.WIDE_RULES))
+                widened = True
+            progress(f"{plan.name}: {drc['errors']} DRC errors after {strategy}, retrying", 0.3)
+            i += 1
+        if best is not None and best[1] is not drc:  # the last pass was worse than an earlier one
+            shutil.copyfile(best[2], pcb)
+            drc = best[1]
 
         progress(f"{plan.name}: exporting GLB", 0.85)
         t = time.monotonic()

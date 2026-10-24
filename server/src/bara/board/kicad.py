@@ -55,6 +55,18 @@ ROUTE_STRATEGIES: list[tuple[str, list[str]]] = [
     ("ripup_50", ["--router.scoring.start_ripup_costs=50"]),
     ("ripup_200", ["--router.scoring.start_ripup_costs=200"]),
 ]
+# DRC errors that come from copper being too close, not from the parts: one more pass with
+# wider rules (clearance, track, edge) before the board is reported with them.
+WIDENABLE = ("clearance", "copper_edge_clearance", "solder_mask_bridge", "annular_width")
+WIDE_RULES = {
+    **RULES,
+    "clearance_mm": 0.2,
+    "track_mm": 0.25,
+    "min_track_mm": 0.2,
+    "via_mm": 0.6,
+    "via_drill_mm": 0.35,
+    "edge_clearance_mm": 0.45,
+}
 # Board items are shifted by this much in KiCad. Large enough that the build-space origin,
 # passed to `export glb --user-origin`, is always positive (kicad-cli rejects negatives).
 KICAD_OFFSET = (400.0, 400.0)
