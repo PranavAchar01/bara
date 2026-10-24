@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useApp } from "./state/store";
-import { ConnectionBanner, FileHeader, TopBar } from "./components/TopBar";
+import { ConnectionBanner, EngineNotice, FileHeader, TopBar } from "./components/TopBar";
 import { ExampleChips, PromptBar } from "./components/PromptBar";
 import { StepPlayer } from "./components/LeftColumn";
 import { EditStatus, EventLog, FailureCard, LatencyHUD, Toast, WarningBanner } from "./components/Status";
@@ -34,7 +34,7 @@ function Home() {
   return (
     <main className="home">
       <div className="home-inner">
-        <h1>Describe a device. Bara builds it from open hardware.</h1>
+        <h1>Describe a device. It gets built from open hardware.</h1>
         <p className="muted">
           It reuses an open design when one fits, otherwise composes one from open source parts, and shows every decision, part, case, board and firmware
           as it goes.
@@ -107,6 +107,7 @@ function Main() {
   return (
     <div className="app">
       {screen === "home" && <TopBar />}
+      <EngineNotice />
       <ConnectionBanner />
       {screen === "home" ? <Home /> : <Workspace />}
       <EventLog />

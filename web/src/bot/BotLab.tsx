@@ -69,12 +69,12 @@ export function BotLab() {
   return (
     <div className="botlab">
       <header className="botlab-head">
-        <h1>Bara bot</h1>
+        <h1>Bot</h1>
         <label className="botlab-toggle">
           <input type="checkbox" checked={bubbles} onChange={(e) => setBubbles(e.target.checked)} /> Thought and speech bubbles
         </label>
         <a href="/" className="btn ghost sm">
-          Back to Bara
+          Back to the app
         </a>
       </header>
       <section className="botlab-stage">
