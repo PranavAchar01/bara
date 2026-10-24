@@ -337,6 +337,22 @@ def test_unresolved_block_is_retried_with_relaxed_names(monkeypatch: Any) -> Non
     assert seen == ["gen:Nope", "gen:Nope,Family"]
 
 
+def test_optional_slot_without_a_part_is_dropped_not_failed() -> None:
+    from bara.live import compose as cmp
+
+    rows = {
+        c["check_key"]: c
+        for c in (
+            cmp.slot_check(cmp.Slot("mount", "Mount", "mech.mount", "optional", 1, [])),
+            cmp.slot_check(cmp.Slot("mcu", "MCU", "component.ic", "critical", 2, [])),
+        )
+        if c is not None
+    }
+    assert rows["slot.optional_missing:mount"]["status"] == "unknown"
+    assert "left out" in rows["slot.optional_missing:mount"]["message"]
+    assert rows["slot.critical_filled:mcu"]["status"] == "fail"
+
+
 # ---------------------------------------------------------------- hero renderer
 
 

@@ -334,6 +334,35 @@ def _shares_typed_interface(cand: dict[str, Any], chosen: dict[str, Any]) -> boo
     return False
 
 
+def slot_check(slot: Slot) -> dict[str, Any] | None:
+    """The check row for one slot: a critical slot must be filled; an optional one that cannot
+    be filled is left out with a note (unknown), never a failure."""
+    ok = slot.chosen is not None or slot.covered_by is not None
+    critical = slot.criticality == "critical"
+    if not critical and ok:
+        return None
+    rule = "slot.critical_filled" if critical else "slot.optional_missing"
+    if ok and slot.chosen:
+        message = f"{slot.label}: {slot.chosen.get('display_name')}"
+    elif ok:
+        message = f"{slot.label}: covered by the {slot.covered_by} part"
+    elif slot.unresolved:
+        message = f"{slot.label}: REQUIRED, no part ({slot.unresolved})"
+    elif not critical:
+        message = f"{slot.label}: optional, left out (no catalog part passes)"
+    else:
+        message = f"{slot.label}: no catalog part passes the filters"
+    return {
+        "check_key": f"{rule}:{slot.slot_id}",
+        "rule_id": rule,
+        "status": "pass" if ok else ("fail" if critical else "unknown"),
+        "severity": "critical" if critical else "info",
+        "message": message[:300],
+        "subjects": [{"slot_id": slot.slot_id}],
+        "stage": "compose",
+    }
+
+
 class Composer:
     def __init__(
         self,
@@ -1455,33 +1484,7 @@ class Composer:
 
     def checks(self) -> list[dict[str, Any]]:
         out: list[dict[str, Any]] = []
-        for slot in self.slots:
-            ok = slot.chosen is not None or slot.covered_by is not None
-            if slot.criticality == "critical" or not ok:
-                rule = (
-                    "slot.critical_filled"
-                    if slot.criticality == "critical"
-                    else "slot.optional_missing"
-                )
-                out.append(
-                    {
-                        "check_key": f"{rule}:{slot.slot_id}",
-                        "rule_id": rule,
-                        "status": "pass" if ok else "fail",
-                        "severity": "critical" if slot.criticality == "critical" else "info",
-                        "message": (
-                            f"{slot.label}: {slot.chosen.get('display_name')}"
-                            if ok and slot.chosen
-                            else f"{slot.label}: covered by the {slot.covered_by} part"
-                            if ok
-                            else f"{slot.label}: REQUIRED, no part ({slot.unresolved})"
-                            if slot.unresolved
-                            else f"{slot.label}: no catalog part passes the filters"
-                        )[:300],
-                        "subjects": [{"slot_id": slot.slot_id}],
-                        "stage": "compose",
-                    }
-                )
+        out.extend(c for slot in self.slots if (c := slot_check(slot)) is not None)
         ctrl = next((s for s in self.slots if s.slot_id == "controller"), None)
         if ctrl is not None and ctrl.chosen is not None:
             have = self.controller_gpio(ctrl.chosen)
