@@ -83,6 +83,12 @@ PERIPHERAL_KIND = {
 COMPAT_PARAMS = ("family", "stem", "form_factor", "chemistry")
 
 
+# LCSC category in the product URL: a driver, controller or bridge chip, never a panel
+DRIVER_CATEGORY = re.compile(
+    r"lcsc\.com/product-detail/[^/_]*(Driver|Controller|Interface|Bridge)", re.I
+)
+
+
 @dataclass
 class Instance:
     instance_id: str
@@ -269,7 +275,15 @@ def derive_slots(
                 feature=feature,
             )
         )
+    seen: list[Any] = []
     for need in comp.needs.values() if comp else []:
+        if any(
+            n.function_id == need.function_id
+            and (n.key.startswith(need.key) or need.key.startswith(n.key))
+            for n in seen
+        ):  # one block named twice ("scroll_wheel" and "scroll_wheel_encoder_with...")
+            continue
+        seen.append(need)
         slots.append(
             Slot(
                 slot_id=need.key,
@@ -281,6 +295,13 @@ def derive_slots(
                 need=need,
             )
         )
+    ids: set[str] = set()
+    for slot in slots:  # ten-letter prefixes can collide; every instance id is unique
+        for inst in slot.instances:
+            base, n = inst.instance_id, 2
+            while inst.instance_id in ids:
+                inst.instance_id, n = f"{base}{n}", n + 1
+            ids.add(inst.instance_id)
     rank = {
         "charger": 84,
         "switches": 0,
@@ -1268,6 +1289,11 @@ class Composer:
     async def vet(self, slot: Slot, parts: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Parts that meet the block's key numbers (size, connector standard, rating). The ones
         that do not are rejected for good, so the next lookup moves on."""
+        if slot.function_id.startswith("display.") and slot.function_id != "display.indicator_led":
+            chips = [p for p in parts if DRIVER_CATEGORY.search(str(p.get("datasheet") or ""))]
+            for p in chips:  # a panel's driver chip is not the panel
+                self.resolver.rejected.add(p["part_id"])
+            parts = [p for p in parts if p not in chips]
         need = slot.need
         if need is None or not need.requirement or not parts:
             return parts

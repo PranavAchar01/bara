@@ -561,6 +561,7 @@ def build_features(
     out = Features()
     zmax = body.profile.z_top + body.profile.crown + 2.0
     done_groups: set[int] = set()
+    cross: dict[int, list[Site]] = {}
     knobs = [k for k in sites if k.kind in ("stick", "knob", "wheel") and k.mount == "front"]
     for s in sites:
         if s.ref:
@@ -588,9 +589,11 @@ def build_features(
         elif s.kind == "screen":
             _screen(out, s, body, seat, zmax, clear)
         elif s.kind == "dpad":
-            if s.group not in done_groups:
-                done_groups.add(s.group)
-                _dpad(out, [t for t in sites if t.group == s.group], body, seat, zmax, clear)
+            if s.group not in cross:
+                cross[s.group] = _cross_sites([t for t in sites if t.group == s.group])
+                _dpad(out, cross[s.group], body, seat, zmax, clear)
+            elif not any(t is s for t in cross[s.group]):
+                _button(out, s, body, seat, zmax, clear)  # the slot's other switches (A/B, start)
         elif s.kind == "light":
             _light(out, s, body, seat, zmax)
         elif s.kind == "wheel":
@@ -676,8 +679,8 @@ def _button(out: Features, s: Site, body: Body, seat: float, zmax: float, clear:
     out.cuts.append(_cyl(r_h + cham, zc, zmax + 4, s.x, s.y))
     rc = r_h - 0.5
     z0 = max(seat + 0.3, zc - 1.4)
-    prof = [(0.0, z0), (rc, z0), (rc, zc + 0.5), *_arc((rc - 0.8, zc + 0.5), 0.8, 0, 90, 4),
-            (0.0, zc + 1.3)]  # fmt: skip
+    prof = [(0.0, z0), (rc, z0), (rc, zc + 1.4), *_arc((rc - 0.8, zc + 1.4), 0.8, 0, 90, 4),
+            (0.0, zc + 2.2)]  # fmt: skip
     out.caps.append(_revolve(prof, s.x, s.y, 48))
     out.cutouts.append(_cut("button", s.x, s.y, zc, 2 * r_h, "circle"))
 
@@ -689,6 +692,25 @@ def _light(out: Features, s: Site, body: Body, seat: float, zmax: float) -> None
     out.cuts.append(_cyl(r, seat - 1.0, zmax + 4, s.x, s.y))
     out.caps.append(_cyl(r - 0.15, max(seat + 0.3, zc - 1.4), zc, s.x, s.y))
     out.cutouts.append(_cut("light", s.x, s.y, zc, 2 * r, "circle"))
+
+
+def _cross_sites(group: list[Site]) -> list[Site]:
+    """One cross per anchor: a slot of eight switches is the four arrows plus the face
+    buttons, so only the tightest cluster of at most four becomes the pad."""
+    if len(group) <= 4:
+        return group
+    foot = max(max(s.w, s.d) for s in group) or 8.0
+    clusters: list[list[Site]] = []
+    for s in group:  # single linkage: switches within two footprints are one cluster
+        near = [
+            c for c in clusters if any(math.hypot(s.x - t.x, s.y - t.y) < 2.2 * foot for t in c)
+        ]
+        merged = [s] + [t for c in near for t in c]
+        clusters = [c for c in clusters if c not in near] + [merged]
+    best = max(clusters, key=len)
+    cx = sum(s.x for s in best) / len(best)
+    cy = sum(s.y for s in best) / len(best)
+    return sorted(best, key=lambda s: math.hypot(s.x - cx, s.y - cy))[:4]
 
 
 def _dpad(
@@ -760,7 +782,9 @@ def _screen(out: Features, s: Site, body: Body, seat: float, zmax: float, clear:
     else:
         win = _rrect(s.x, s.y, w, d, s.rot, 2.0)
     ledge = win.offset(2.2, mf.JoinType.Round)
-    out.cuts.append(_flare(win, seat - 1.0, zmax + 4, 0.55 * (zmax + 5 - seat)))
+    zf = max(seat - 1.0, zc - 4.5)  # straight shaft below, a bevel only through the last few mm
+    out.cuts.append(_prism(win, seat - 1.0, zf + 0.01))
+    out.cuts.append(_flare(win, zf, zmax + 4, 0.55 * (zmax + 4 - zf)))
     out.cuts.append(_prism(ledge, zc - 1.0, zmax + 4))
     lip = ledge.offset(1.4, mf.JoinType.Round) - ledge.offset(0.2, mf.JoinType.Round)
     out.adds.append(_prism(lip, zc - 1.6, zc + 0.5))

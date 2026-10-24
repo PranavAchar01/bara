@@ -136,3 +136,18 @@ def test_sensors_stay_inside_and_leds_get_a_light_pipe() -> None:
     assert shell.classify(sensor) == "inner"  # not a d-pad cut through the top
     assert shell.classify({"name": "DPI status LED", "purpose": "shows selected DPI"}) == "light"
     assert shell.classify({"name": "fingerprint sensor"}) == "touch"
+
+
+def test_eight_switch_dpad_slot_builds_one_cross():
+    from bara.geometry.shell import Site, _cross_sites
+
+    arrows = [
+        Site("dpad", 0, -30 + dx, dy, "front", 0, 6, 6)
+        for dx, dy in ((0, -8), (0, 8), (-8, 0), (8, 0))
+    ]
+    faces = [
+        Site("dpad", 0, 30 + dx, dy, "front", 0, 6, 6)
+        for dx, dy in ((0, -8), (0, 8), (-8, 0), (8, 0))
+    ]
+    pad = _cross_sites(arrows + faces)
+    assert len(pad) == 4 and all(s.x < 0 for s in pad)

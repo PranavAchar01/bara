@@ -536,7 +536,7 @@ def _hidden(f: Feature) -> bool:
     """A top-side part the shell covers: it gets a blind pocket, never an opening."""
     if f.side == "bottom" or f.role in OWN_HOLE_ROLES or f.role in OPENING_ROLES:
         return False
-    return not (f.touch and f.role not in ("usb", "mcu", "battery"))
+    return True  # a touched part with no opening role still needs the skin over it
 
 
 def enclose_report(

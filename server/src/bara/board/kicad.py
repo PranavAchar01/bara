@@ -192,9 +192,11 @@ def board_region(plan: BoardPlan) -> Polygon:
 
 
 def build_pcb(plan_path: Path, timeout: float = 120) -> None:
-    proc = _run(
-        [str(KICAD_PYTHON), str(SCRIPT), "build", str(plan_path)], timeout, cwd=plan_path.parent
-    )
+    cmd = [str(KICAD_PYTHON), str(SCRIPT), "build", str(plan_path)]
+    proc = _run(cmd, timeout, cwd=plan_path.parent)
+    if proc.returncode != 0 and "create wxApp" in proc.stderr:
+        # pcbnew's wx traits assert fires now and then under parallel builds; a rerun clears it
+        proc = _run(cmd, timeout, cwd=plan_path.parent)
     if proc.returncode != 0:
         raise ToolError(f"kicad build failed: {proc.stderr[-2000:]}")
 
