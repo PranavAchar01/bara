@@ -152,6 +152,23 @@ Branch `figma-design-in-code`, pushed after each step so the backend work can co
 
 **Minutes:** about 12. **Rating:** 4/5.
 
+### 21:40 · Part inspector
+
+**Tools:** the Figma Inspector frame (focus screens 14–16) as the reference; Claude Code reordered the existing `PartInspector` with the same data and handlers.
+
+**What moved:**
+- Order now follows Figma: summary and key specs, three fact tiles (qty, placed by, locked or free), the action row, **Position**, **Why this part**, **Checks**, **Source**.
+- Actions show their keys (Swap `S`, Recolour `R`, Move `M`) and the keys work while the inspector is open on a finished build; Remove sits apart on the right.
+- Position is X / Y / Z mono fields plus rotation, instead of one comma list.
+- Source holds provenance, licence, attribution, links and interfaces (was "Details" at the bottom with provenance at the top).
+- Flat paper panel with hairline sections and mono caps headings, Averia for the part name.
+
+**Checked:** typecheck, lint, 50 web tests; mock build, selected a Layers row, pressed R and the colour picker opened inline.
+
+**Friction:** at 300 px the four actions wrapped; tighter button padding keeps them on one line. The mock canvas rendered placeholder blocks this time, so the earlier blank-canvas note may have been a cold start; worth a recheck by the 3D owner.
+
+**Minutes:** about 12. **Rating:** 4/5.
+
 ## Before and after
 
 | Change | Before | After |

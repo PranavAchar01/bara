@@ -369,3 +369,134 @@
   text-transform: uppercase;
   letter-spacing: var(--track-label);
 }
+
+/* Part inspector (Figma Inspector): summary and fact tiles, actions with key hints,
+   then Position, Why this part, Checks and Source, each under a mono caps heading
+   with a hairline between sections. */
+.side-overlay {
+  background: var(--paper);
+  box-shadow: none;
+  border-left: 1px solid var(--line);
+}
+.side-h {
+  height: 52px;
+  padding: 0 12px 0 16px;
+}
+.side-title h2 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 18px;
+  letter-spacing: var(--track-display);
+}
+.side-title .small {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.side-b {
+  padding: 0;
+  gap: 0;
+}
+.side-b > section,
+.side-b > .insp-actions {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.side-b > section:last-child {
+  border-bottom: 0;
+}
+.side-b h3 {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: var(--track-label);
+  color: var(--text-2);
+  margin: 0 0 8px;
+}
+.insp-part {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.insp-summary {
+  margin: 0;
+  color: var(--text);
+}
+.insp-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.insp-fact {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--paper-2);
+}
+.insp-fact b {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.insp-fact span {
+  font-size: 11px;
+  color: var(--text-2);
+}
+.insp-actions {
+  gap: 4px;
+  flex-wrap: nowrap;
+}
+.insp-actions .btn {
+  gap: 5px;
+  padding: 0 7px;
+  white-space: nowrap;
+}
+.insp-actions kbd {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 4px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  color: var(--text-2);
+  background: var(--paper);
+}
+.insp-actions .danger {
+  margin-left: auto;
+}
+.insp-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.insp-field {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.insp-field > span {
+  color: var(--ink-faint);
+}
+.insp-field:last-child {
+  grid-column: 1 / -1;
+}
+.insp-why .reason {
+  margin: 0;
+}
+.insp-meta {
+  gap: 8px;
+}
