@@ -781,12 +781,13 @@ class Composer:
             f"Brief: {self.brief.get('summary')}\n"
             f"Slot: {slot.label} ({slot.function_id}), quantity {slot.quantity}.\n"
             "Every candidate below already passed the compatibility filters. "
-            "Pick the best fit for the request.\n" + "\n".join(lines)
+            "Pick the best fit for the request. Answer NONE when no candidate is the part the "
+            "slot names (a screw terminal is not an HDMI receptacle).\n" + "\n".join(lines)
         )
         schema = {
             "type": "object",
             "properties": {
-                "choice": {"type": "string", "enum": ids},
+                "choice": {"type": "string", "enum": [*ids, "NONE"]},
                 "reason": {"type": "string"},
             },
             "required": ["choice", "reason"],
@@ -803,7 +804,8 @@ class Composer:
         )
         if result is None:
             return 0, "default", "No model answered; used the highest score.", None, notes
-        idx = ids.index(result.data["choice"])
+        none = result.data["choice"] == "NONE"
+        idx = 0 if none else ids.index(result.data["choice"])
         model = {
             "provider": result.provider,
             "model": result.model,
@@ -811,7 +813,8 @@ class Composer:
             "cached": False,
             "fallback": result.fallback,
         }
-        return idx, "model_pick", str(result.data["reason"])[:280], model, notes
+        method = "model_none" if none else "model_pick"
+        return idx, method, str(result.data["reason"])[:280], model, notes
 
     # ---- events -------------------------------------------------------------------
     def next_decision(self) -> str:
@@ -1066,6 +1069,20 @@ class Composer:
                 stage="compose",
             )
             idx, method, reason, model, notes = await self.pick(slot, ranked)
+            if method == "model_none":
+                # nothing in the catalog is the named part: look further (KiCad, LCSC) before
+                # settling for the closest catalog part
+                had = len(self.extra.get(slot.slot_id, []))
+                await self.resolve_missing(slot, emit)
+                new = self.extra.get(slot.slot_id, [])[had:]
+                cands, ranked, applied = self.narrow(slot)
+                hit = next(
+                    (i for i, p in enumerate(ranked) for n in new if p["part_id"] == n["part_id"]),
+                    None,
+                )
+                if hit is not None:
+                    idx, reason = hit, f"No catalog part is a {slot.label.lower()}; looked further."
+                method = "model_pick"
             if notes and method != "model_pick" and self.use_model:
                 emit(
                     "warning",

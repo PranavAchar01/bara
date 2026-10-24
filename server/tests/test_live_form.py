@@ -998,3 +998,24 @@ def test_an_off_board_part_anchored_to_the_front_stays_on_the_front() -> None:
     loose = cell("M2", "top")
     _clear_of(loose, {"top": [], "bottom": []}, [under], box(-60, -60, 60, 60), False)
     assert loose.side == "bottom"  # an unanchored part may still use the back
+
+
+def test_a_pick_can_say_no_candidate_is_the_named_part(monkeypatch: Any) -> None:
+    from bara.live import compose as cmp
+
+    async def none_fits(system: str, user: str, schema: Any, **kw: Any) -> Any:
+        assert "NONE" in schema["properties"]["choice"]["enum"]
+        data = {"choice": "NONE", "reason": "a screw terminal is not an HDMI receptacle"}
+        res = type("Res", (), {"data": data, "provider": "x", "model": "m", "latency_ms": 1})
+        return type("Res", (res,), {"fallback": False})(), []
+
+    monkeypatch.setattr(cmp, "call_json", none_fits)
+    comp = object.__new__(cmp.Composer)
+    comp.use_model, comp.spec, comp.brief = True, {"prompt": "a monitor"}, {}
+    comp.settings = type(
+        "S", (), {"cerebras_model": "", "anthropic_model": "", "llm_timeout_s": 1}
+    )()
+    slot = cmp.Slot("hdmi", "HDMI receptacle", "interconnect.connector", "critical", 1, [])
+    ranked = [{"display_name": "Screw terminal 3-pin"}, {"display_name": "Screw terminal 2-pin"}]
+    idx, method, *_ = asyncio.run(comp.pick(slot, ranked))
+    assert (idx, method) == (0, "model_none")
