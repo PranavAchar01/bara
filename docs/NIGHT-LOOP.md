@@ -122,3 +122,8 @@ Web: bara-merge agent merges Nithin's figma-design-in-code / agent-board-3d / fi
 - Mouse DRC root cause: every asymmetric bottom-side footprint sat half a turn from its plan. KiCad stores a flipped footprint mirrored in y, and SetOrientationDegrees(rot) dropped the 180 deg that makes it the packer's x mirror (layout.Item.world). SW4 (bottom) landed on J_M8.
 - f853f67: kicad_script adds 180 deg for bottom parts. New tests/test_kicad_flip.py runs real pcbnew at 0/90/30 deg: 3 passed with the fix, 3 failed without. The board cache key hashes the script, so boards rebuild.
 - Suite restarted on f853f67 (server 15812, suite 15876).
+
+### 06:42-07:00 iter
+- Suite on f853f67, controller FAIL mech.fit.floating (bezel 2 pieces, board 83% on the floor). Not the flip fix (the case reads plan features, not the board). Cause: the "thumbstick cap" block (mech.knob, filed by the model as input) fetched RKJXV1224005, the stick it fits, by its part number, so the build had four sticks and two hung 21.8 mm off the underside.
+- 37c0712: completeness: a touched mech.* block is mechanical whatever its category. fetch: a mechanical need never searches LCSC (made by the case). Test extended; live_form 42 + fetch_lcsc 13 passed, ruff clean.
+- Suite restarted on 37c0712 (server 39014, suite 39065). Mouse result on f853f67 never came in (suite stopped first).
