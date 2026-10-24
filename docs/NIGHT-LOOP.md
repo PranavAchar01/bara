@@ -58,3 +58,6 @@ Engine-level, applies to every build; a build that misses a row reports a failin
 | E12 | Case | openings follow the feature shape (round wells, cross, round buttons, slots) with clearance, never square pocket holes; real caps (domed buttons, concave stick top with ring, cross d-pad, triggers/bumpers); screen glass under a bezel; split-line seam; satin plastic PBR | vision judge + geometry tests |
 | E13 | Exploded view | pieces separate along the assembly axis in order: bottom shell, bottom parts, board, top parts, top shell, caps/glass; case and board share one frame (fix the y-down mirror at the source) | explode tests + screenshots |
 | E14 | Presentation | studio light, soft contact shadow, AA, no z-fighting or black faces; comparable to the etch explore tiles (scratchpad ref/etch-explore.png) | contact sheet vs Etch + real photos |
+
+### 2026-10-24 ~01:25 PT
+- His verdict: form inference is accurate, shell is ugly. Shell surface rules (solid skin, parting line, continuous fillets, blended bosses, taper from thickness profile, satin two-tone, decimated GLB) assigned to bara-quality under E12.
