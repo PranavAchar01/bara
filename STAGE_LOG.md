@@ -103,6 +103,24 @@ Branch `figma-design-in-code`, pushed after each step so the backend work can co
 
 **Minutes:** about 12. **Rating:** 5/5; the variable names carried straight over.
 
+### 21:14 · Workspace shell
+
+**Tools:** the Figma frames (02 Build running, 07 Build tab, 08 Code tab) as the reference, read through the Figma agent; code written by Claude Code against the existing React components. No component was rewritten, only moved.
+
+**What moved:**
+- Columns are now 248 / canvas / 300 px, as in Figma, with flat paper panels and hairlines between sections instead of cards (`web/src/styles/shell.css`, loaded after `app.css`).
+- Left panel: a compact **step player** (eight dots, the active one stretched into a bar, the stage name in mono caps) above **Layers**, which is the old Parts list.
+- Right panel: five tabs (Parts, Wiring, Board, Firmware, Checks) became Figma's three: **Design** (clarify, spec, design reuse, checks), **Build** (pipeline, decisions) and **Code** (a Wiring / Board / Firmware switch). ⌥1–⌥3 switch tabs; the failing-check badges now count per tab.
+- Layers rows show name and quantity; licence and provenance drop onto a second line on hover or selection, as the Figma row hover card does. The unverified flag stays in the hover line.
+
+**Checked:** typecheck, lint and the 45 web tests pass; a mock build (`?mock=1`) renders every tab.
+
+**Friction:** at 248 px the old rows (name, qty, provenance, licence, Remove) did not fit; the Figma answer, hover for detail, was the fix. The step player's "Done · 8 stages" label truncated, now "Done". New styles went in a separate file because another session is editing the end of `app.css`.
+
+**Not yet:** the top bar still holds build id, status, model and Export (Figma moves them into the panel headers); the floating bottom toolbar with Ask, the view cube and the part inspector are still the old components.
+
+**Minutes:** about 25. **Rating:** 4/5.
+
 ## Before and after
 
 | Change | Before | After |
