@@ -265,3 +265,15 @@ Web: bara-merge agent merges Nithin's figma-design-in-code / agent-board-3d / fi
   limit stopped the rest, rerun later), render.models check (0680a2f). G8 sim merged 655d070, G4
   landing agent ae9c061. Engine restarted, tunnel agenda-ohio-greetings-levitra; Vercel deploy
   blocked by the 100/day cap until tomorrow.
+
+- 16:05 3D models, round 2. Audit run 2 = run 1 (only RK097 pot + VZ30C motor boxed in the
+  controller; render.models check names them). Source fixes: (1) the catalog build never used
+  the KiCad lender, so 10 parts with a same-package library model drew as boxes; plan_entry now
+  borrows it (BQ24075, MAX17048, DRV8833, micro-USB, barrel jack, CR2032 holder now ready,
+  d12aa6c). (2) Name-alike lenders must match courtyard (1.2x) and pin grid, shared by the
+  generated tier: 3386P no longer borrows the smaller 3339P, SMD JST no longer a 3-pin THT.
+  (3) EasyEDA 403 is an IP block, not a miss: RateLimited error, backfill paces 20 s and stops on
+  a block (35691a9); Ra-01 added; waiter scratchpad/backfill-wait.sh retries every 20 min.
+  (4) GET /v1/parts/{id} read only the 21 fixtures; now falls back to the live source (715ab87).
+  Engine restarted alone behind the same tunnel (scratchpad/engine-only.sh), URL unchanged.
+  205/243 catalog parts have a mesh (was 198).
