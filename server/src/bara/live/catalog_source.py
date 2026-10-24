@@ -155,13 +155,64 @@ class WithFetched:
         return found[:limit]
 
 
+class WithGenerated:
+    """Adds the generated tier (every KiCad symbol and footprint, bara.kicad_generated) to a
+    source. query() is unchanged, so curated parts are all that function queries return;
+    search() lists curated hits first and generated ones after them."""
+
+    def __init__(self, base: Any, index: Any) -> None:
+        self.base = base
+        self.name = base.name
+        self.generated = index
+
+    def __getattr__(self, attr: str) -> Any:
+        return getattr(self.base, attr)
+
+    def get_part(self, part_id: str) -> dict[str, Any]:
+        if part_id.startswith("kicadgen:"):
+            try:
+                return self.generated.get_part(part_id)
+            except KeyError:
+                raise KeyError(part_id) from None
+        return self.base.get_part(part_id)
+
+    def search(self, text: str, kind: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
+        """Parts matching free text. kind = "symbol" | "footprint" restricts to the generated
+        tier (curated parts are components, not library entries). Curated parts always rank
+        above generated ones for the same query."""
+        found: list[dict[str, Any]] = []
+        if kind is None:
+            base_search = getattr(self.base, "search", None)
+            if base_search is not None:
+                found = list(base_search(text, limit))
+            else:
+                words = text.lower().split()
+                for part in self.base.query(limit=10_000):
+                    blob = f"{part.get('part_id', '')} {part.get('display_name', '')}".lower()
+                    if words and all(w in blob for w in words):
+                        found.append(part)
+        found = found[:limit]
+        seen = {p["part_id"] for p in found}
+        for part in self.generated.search(text, kind=kind, limit=limit):
+            if len(found) >= limit:
+                break
+            if part["part_id"] not in seen:
+                found.append(part)
+        return found
+
+
 def open_part_source(catalog: Catalog, catalog_dir: Path) -> PartSource:
     """The real CatalogDB when its module and sqlite file exist, else the stub.
-    Fetched LCSC parts are added to either."""
+    Fetched LCSC parts and the generated KiCad tier (when built) are added to either."""
     fetched = load_fetched(catalog_dir)
     merge_into_catalog(catalog, fetched)
     source = _open_base(catalog, catalog_dir)
-    return WithFetched(source, fetched) if fetched and source.name != "stub" else source
+    if fetched and source.name != "stub":
+        source = WithFetched(source, fetched)
+    from bara.kicad_generated import KicadIndex
+
+    index = KicadIndex.open(catalog_dir / "kicad_index.sqlite")
+    return WithGenerated(source, index) if index else source
 
 
 def _open_base(catalog: Catalog, catalog_dir: Path) -> PartSource:
