@@ -132,3 +132,8 @@ Web: bara-merge agent merges Nithin's figma-design-in-code / agent-board-3d / fi
 - Suite on 37c0712: MONITOR PASS (707 s). Controller FAIL mech.fit.floating again (bezel 2 pieces, board 93% on the floor). The sticks are off-board module cells; the left one, anchored to the front, overlapped a top part, and `_clear_of` jumped it to the back (side change cost only 2 mm), so it hung 21.8 mm under the board.
 - c0684e6: generic._clear_of: an anchored part moves only along its own face; unanchored parts may still use the back. Test added; live_form 43, board_layout + geometry_case 26 passed, ruff clean.
 - Suite restarted on c0684e6 (server 63384, suite 63439).
+
+### 07:29-07:32 iter
+- Suite on c0684e6: CONTROLLER PASS (439 s, BOM: 2 RKJXV sticks, 13 TL3342, 2 trigger pots, rumble, IMU), MONITOR PASS (718 s). Mouse running.
+- Monitor gap even though it passes: HDMI and DisplayPort receptacles resolved to Phoenix screw terminals; the model said "no candidate is an HDMI receptacle" and had to pick anyway.
+- 3323217: compose pick may answer NONE; the slot then runs resolve_missing (KiCad generated, LCSC fetch) and takes the new part if it passes the filters. Test added; live_form 44 passed. Not restarted yet so the mouse result on c0684e6 lands first.
