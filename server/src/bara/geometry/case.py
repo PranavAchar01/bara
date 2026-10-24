@@ -406,6 +406,8 @@ def board_side(board: dict[str, Any], outline: np.ndarray) -> str | None:
     side = board.get("side")
     if side in ("left", "right"):
         return side
+    if "side" in board:  # explicit "none"/null: a single board, never guess a half
+        return None
     bid = str(board.get("board_id") or "")
     if bid.endswith(("_l", "_left")):
         return "left"
@@ -442,27 +444,6 @@ def _union(items: list[mf.Manifold]) -> mf.Manifold:
     if not items:
         return mf.Manifold()
     return mf.Manifold.batch_boolean(items, mf.OpType.Add) if len(items) > 1 else items[0]
-
-
-def _nearest_face(x: float, y: float, outline: np.ndarray) -> str:
-    """Face (pos_x / neg_x / pos_y / neg_y) of the outline edge nearest to (x, y)."""
-    best, face = math.inf, "pos_y"
-    for i in range(len(outline)):
-        a, b = outline[i], outline[(i + 1) % len(outline)]
-        ab = b - a
-        L2 = float(ab @ ab) or 1e-9
-        s = max(0.0, min(1.0, float((np.array([x, y]) - a) @ ab) / L2))
-        q = a + s * ab
-        dist = math.hypot(x - q[0], y - q[1])
-        if dist < best:
-            n = np.array([ab[1], -ab[0]])  # outward normal for a ccw polygon
-            best = dist
-            face = (
-                ("pos_x" if n[0] > 0 else "neg_x")
-                if abs(n[0]) >= abs(n[1])
-                else ("pos_y" if n[1] > 0 else "neg_y")
-            )
-    return face
 
 
 FACE_DIR = {"pos_x": (1, 0), "neg_x": (-1, 0), "pos_y": (0, 1), "neg_y": (0, -1)}
@@ -553,6 +534,10 @@ def enclose_report(
                 "pocket_bottom": pocket_bottom,
                 "sw": (sensor.w if sensor else H["sensor_window_d_mm"] + 4),
                 "sd": (sensor.d if sensor else H["sensor_window_d_mm"] + 4),
+                # the sensor body's own centre and angle (its lens sits under the ball)
+                "sx": sensor.x if sensor else b.x,
+                "sy": sensor.y if sensor else b.y,
+                "srot": sensor.rot_deg if sensor else 0.0,
             }
         )
         cup_bottom = cz - r - H["ball_clearance_mm"] - H["cup_wall_mm"]
@@ -579,7 +564,9 @@ def enclose_report(
         )
         c = H["pocket_clearance_mm"] * 2
         tray = tray - _prism(
-            _rect_cs(g["x"], g["y"], g["sw"] + c, g["sd"] + c, 0.0), g["pocket_bottom"], g["lens_z"]
+            _rect_cs(g["sx"], g["sy"], g["sw"] + c, g["sd"] + c, g["srot"]),
+            g["pocket_bottom"],
+            g["lens_z"],
         )
 
     # ---- bezel openings
@@ -630,11 +617,11 @@ def enclose_report(
     cutouts: list[dict[str, Any]] = []
     usb_feats = [f for f in feats if f.role == "usb"] or [f for f in feats if f.role == "mcu"]
     for f in usb_feats:
-        face = _nearest_face(f.x, f.y, outline)
+        face, exit_s = _port_exit(f.x, f.y, outer_cs)
         dx, dy = FACE_DIR[face]
         z_lo, z_hi = f.z_range(t)
         zc = (top + max(z_hi, top + 1.0)) / 2 if f.side == "top" else (z_lo + 0.0) / 2
-        reach = 200.0
+        reach = exit_s + 1.0  # through the wall and no further
         w, h = H["usb_opening_w_mm"], H["usb_opening_h_mm"]
         if dx:
             cs = mf.CrossSection([[[0, -w / 2], [reach, -w / 2], [reach, w / 2], [0, w / 2]]])
@@ -645,7 +632,7 @@ def enclose_report(
         cutter = _prism(cs, zc - h / 2, zc + h / 2)
         tray = tray - cutter
         bezel = bezel - cutter
-        wall_hit = _wall_point(f.x, f.y, dx, dy, outer_cs)
+        wall_hit = (f.x + dx * exit_s, f.y + dy * exit_s)
         center = [round(wall_hit[0], 3), round(wall_hit[1], 3), round(zc, 3)]
         openings["usb"].append({"ref": f.ref, "face": face, "center": center, "z": zc})
         cutouts.append(
@@ -848,13 +835,13 @@ def enclose_report(
     return report
 
 
-def _wall_point(x: float, y: float, dx: int, dy: int, outer: mf.CrossSection) -> list[float]:
-    """Where a ray from (x, y) along (dx, dy) leaves the outer plan outline."""
-    pts = [np.asarray(p) for p in outer.to_polygons()]
-    best = None
-    for poly in pts:
-        for i in range(len(poly)):
-            a, b = poly[i], poly[(i + 1) % len(poly)]
+def _crossings(x: float, y: float, dx: int, dy: int, outer: mf.CrossSection) -> list[float]:
+    """Distances along a ray from (x, y) at which it crosses the outer plan outline."""
+    out = []
+    for poly in outer.to_polygons():
+        p = np.asarray(poly)
+        for i in range(len(p)):
+            a, b = p[i], p[(i + 1) % len(p)]
             e = b - a
             den = dx * e[1] - dy * e[0]
             if abs(den) < 1e-12:
@@ -862,10 +849,26 @@ def _wall_point(x: float, y: float, dx: int, dy: int, outer: mf.CrossSection) ->
             w = a - np.array([x, y])
             s = (w[0] * e[1] - w[1] * e[0]) / den
             u = (w[0] * dy - w[1] * dx) / den
-            if s >= 0 and 0 <= u <= 1 and (best is None or s > best):
-                best = s
-    s = best or 0.0
-    return [x + dx * s, y + dy * s]
+            if s >= 0 and 0 <= u < 1:
+                out.append(float(s))
+    return sorted(out)
+
+
+def _port_exit(x: float, y: float, outer: mf.CrossSection) -> tuple[str, float]:
+    """Face and distance for a port at (x, y): the axis ray that leaves the case for good
+    soonest. A ray that leaves and re-enters (across a notch) would cut the case it crosses,
+    so a single-crossing ray wins over a shorter re-entering one."""
+    best: tuple[int, float, str] | None = None
+    for face, (dx, dy) in FACE_DIR.items():
+        hits = _crossings(x, y, dx, dy, outer)
+        if not hits:
+            continue
+        cand = (0 if len(hits) == 1 else 1, hits[-1], face)
+        if best is None or cand < best:
+            best = cand
+    if best is None:
+        return "pos_y", 0.0
+    return best[2], best[1]
 
 
 def _slug(text: str) -> str:

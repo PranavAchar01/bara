@@ -182,3 +182,47 @@ def test_timing(tmp_path, monkeypatch):
     assert rep.timings_ms["geometry"] < 500
     assert rep.timings_ms["total"] < 3000
     assert enclose(board, [], brief)["enclosure_id"] == rep.enclosure["enclosure_id"]
+
+
+def test_usb_slot_never_crosses_a_notch(tmp_path, monkeypatch):
+    """MCU beside a notch: the nearest edge faces -x across the notch, but that ray re-enters
+    the case. The slot must exit through the top wall and leave the bezel in one piece."""
+    monkeypatch.setenv("BARA_DATA_DIR", str(tmp_path))
+    outline = [[0, 0], [100, 0], [100, 60], [60, 60], [60, 40], [50, 40], [50, 60], [0, 60]]
+    board = {
+        "board_id": "pcb_main",
+        "side": "none",
+        "outline": outline,
+        "thickness_mm": 1.6,
+        "placements": [
+            {
+                "ref": "U1",
+                "lib_id": "Module:nice_nano",
+                "role": "mcu",
+                "x_mm": 66.0,
+                "y_mm": 48.0,
+                "rot_deg": 0,
+                "side": "top",
+                "height_mm": 3.2,
+                "size_mm": [8.0, 12.0],
+            },
+            {
+                "ref": "EN1",
+                "lib_id": "Rotary_Encoder:RotaryEncoder_Alps_EC11E-Switch_Vertical_H20mm",
+                "role": "encoder",
+                "x_mm": 25.0,
+                "y_mm": 45.0,
+                "rot_deg": 0,
+                "side": "top",
+                "height_mm": 20.0,
+                "size_mm": [12.0, 13.0],
+            },
+        ],
+    }
+    rep = enclose_report(board, [], {"features": ["knob"]})
+    (usb,) = rep.openings["usb"]
+    assert usb["face"] == "pos_y"
+    assert len(rep.bezel.decompose()) == 1 and len(rep.tray.decompose()) == 1
+    assert rep.enclosure["enclosure_id"] == "e_case_pcb_main"  # side "none": no half guessed
+    failed = [c["message"] for c in rep.checks if c["status"] != "pass"]
+    assert not failed, failed
