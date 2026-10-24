@@ -213,3 +213,11 @@ Web: bara-merge agent merges Nithin's figma-design-in-code / agent-board-3d / fi
 - 11:16 correction from him: "I just meant everything should be derived from like actual libraries... not open source... a figure of speech". Real library parts (KiCad stock, LCSC/EasyEDA real parts) are fine; the rule is no self-made assets. cea883c reverts c29a78a. Stock KiCad still preferred first. Suite restarted on cea883c.
 - 11:30 his ask: "figure out how to make the construction of any piece almost instant". Controller profile on cea883c (303 s, 4 shards): classify 100 s (3 sequential Sonnet calls: blocks, block_audit, block_names), compose 91 s (15 sequential 4-9 s model steps), board 42 s (freerouting), place 28 s, render 25 s (identity judge), enclose 17 s. e9ab04c: ask_json answers cached on disk by question (model+system+prompt+schema+images; data/cache/llm, ignored), spec_check/relax_names/block_names on the fast model, all slots' spec checks run in parallel before the pick loop. Next levers: stream the device to the viewer before board/judge finish (board + identity as background checks), one combined blocks call, reuse a prior design for a near-duplicate prompt.
 - 11:30 mp3 on cea883c: only identity fails now (screen + DRC fixed).
+
+### 11:33 iteration
+- cea883c rows: controller PASS 303 s (lcsc 9, stock 2 of 18); mp3, calculator FAIL identity; mouse FAIL identity + board.built + mech.access.panel (lcsc 6, stock 2 of 14). calculator lcsc 3, stock 1 of 9.
+- Cause 1 (calculator): graphite keycaps rendered near-black, 1.3 mm proud, so the judge saw holes. 2c963df: caps 2.2 mm proud, hero render lifts dark albedo. Re-render confirms keys read as keys.
+- Cause 2 (mp3, calculator): screen-window bevel grew 0.55 mm/mm from the board seat, about 9 mm/side on deep cases, eating the whole top. 803fc7c: straight shaft, bevel only through the last 4.5 mm.
+- Tried and reverted: capping hidden pockets under the top skin (gamepad shoulders then collide with the case).
+- Open: mouse picks two vertical-shaft encoders (EC11 + PEC11R) for the scroll wheel; the shaft pokes through. Needs a horizontal mouse encoder in the part query.
+- Suite restarted on 803fc7c (pid 38817), which includes e9ab04c speedups; build times to be measured.
