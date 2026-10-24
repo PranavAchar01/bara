@@ -140,10 +140,13 @@ def _place_footprint(board, nets: dict, spec: dict) -> None:
         mod.m_Scale = pcbnew.VECTOR3D(sc[0], sc[1], sc[2])
         models.push_back(mod)
     board.Add(fp)
-    if spec.get("side") == "bottom":
+    bottom = spec.get("side") == "bottom"
+    if bottom:
         fp.Flip(fp.GetPosition(), pcbnew.FLIP_DIRECTION_LEFT_RIGHT)
     fp.SetPosition(_vec(spec["x"], spec["y"]))
-    fp.SetOrientationDegrees(float(spec.get("rot", 0.0)))
+    # A flip stores the pads mirrored in y; the extra half turn makes it the x
+    # mirror the packer laid out (layout.Item.world), so pads land where planned.
+    fp.SetOrientationDegrees(float(spec.get("rot", 0.0)) + (180.0 if bottom else 0.0))
     pads = spec.get("pads", {})
     for pad in fp.Pads():
         net_name = pads.get(pad.GetNumber())
