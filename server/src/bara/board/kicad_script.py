@@ -101,9 +101,11 @@ def _rule_area(board, outer: list, holes: list, layers: list, name: str) -> None
     for x, y in outer:
         poly.Append(_mm(x), _mm(y))
     for hole in holes:
-        poly.NewHole()
+        # Append's hole index -1 means the outline itself: name the new hole, or its points
+        # extend the outer ring into a self-crossing band that covers the board's middle
+        h = poly.NewHole()
         for x, y in hole:
-            poly.Append(_mm(x), _mm(y), -1, -1)
+            poly.Append(_mm(x), _mm(y), -1, h)
     board.Add(zone)
 
 
