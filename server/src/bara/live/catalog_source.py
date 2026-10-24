@@ -134,12 +134,12 @@ class WithFetched:
         self.base = base
         self.name = base.name
         self.extra = {p["part_id"]: p for p in parts}
-        # vendor downloads are never offered: only the open-source library part they name
-        self.served: dict[str, dict[str, Any]] = {}
+        self.served = dict(self.extra)
         if stock is not None:
             for part in parts:
                 lib = stock_symbol(stock, part.get("mpn") or "")
                 if lib is not None:
+                    del self.served[part["part_id"]]
                     # two reels of one chip share the library part: it serves both roles
                     self.served[lib["part_id"]] = _in_role(
                         self.served.get(lib["part_id"], lib), part

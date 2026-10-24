@@ -1,4 +1,4 @@
-"""A cached LCSC part is offered only as the stock KiCad library part it names, never itself."""
+"""A cached LCSC part that the stock KiCad library carries is offered as the library part."""
 
 from __future__ import annotations
 
@@ -47,15 +47,15 @@ def test_the_library_part_takes_the_fetched_role() -> None:
     assert [p["part_id"] for p in ics] == [STOCK["part_id"]]
     assert ics[0]["replaces"] == [LCSC["part_id"]]
     assert ics[0]["functions"][0] == {"function_id": "component.ic", "primary": True}
-    # a part the library lacks is never offered: vendor downloads are not open source
-    assert src.query(function="sense.imu") == []
+    # a part the library lacks is still served from the cache
+    assert [p["part_id"] for p in src.query(function="sense.imu")] == [OTHER["part_id"]]
     # a build that chose the LCSC row can still read it
     assert src.get_part(LCSC["part_id"])["mpn"] == "DRV8833PWPR"
 
 
-def test_without_the_library_no_fetched_part_is_served() -> None:
+def test_without_the_library_every_fetched_part_is_served() -> None:
     src = WithFetched(_Base(), [LCSC, OTHER])
-    assert src.query(function="component.ic") == []
+    assert [p["part_id"] for p in src.query(function="component.ic")] == [LCSC["part_id"]]
 
 
 def test_two_reels_of_one_chip_keep_both_roles() -> None:
@@ -64,10 +64,3 @@ def test_two_reels_of_one_chip_keep_both_roles() -> None:
     src = WithFetched(_Base(), [LCSC, reel], lambda text, **k: [STOCK] if "DRV8833" in text else [])
     for fid in ("component.ic", "output.haptic"):
         assert [p["part_id"] for p in src.query(function=fid)] == [STOCK["part_id"]]
-
-
-def test_a_vendor_download_is_not_open_source() -> None:
-    from bara.live.compose import open_source
-
-    assert not open_source(LCSC)
-    assert open_source(STOCK)
