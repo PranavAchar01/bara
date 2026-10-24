@@ -20,7 +20,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from bara.live.completeness import Need
+from bara.live.completeness import SPECIFIC, Need
 
 log = logging.getLogger(__name__)
 
@@ -54,7 +54,8 @@ def run_cli(term: str, function: str, timeout_s: float) -> tuple[int, str]:
     """The real fetcher: uv run ... python -m catalog_build.fetch_lcsc --mpn TERM."""
     uv = shutil.which("uv") or str(Path.home() / ".local/bin/uv")
     cmd = [uv, "run", *UV_ARGS, "python", "-m", "catalog_build.fetch_lcsc"]
-    cmd += ["--mpn", term, "--function", function]
+    flag, _, value = term.partition(":") if term.startswith("keyword:") else ("mpn", "", term)
+    cmd += [f"--{flag}", value, "--function", function]
     try:
         done = subprocess.run(  # noqa: S603 - fixed argv, term is passed as one argument
             cmd, cwd=SERVER, capture_output=True, text=True, timeout=timeout_s, check=False
@@ -200,7 +201,10 @@ class Resolver:
     def fetch(self, need: Need) -> dict[str, Any] | None:
         """Search + download from LCSC. Returns the new catalog row, or None with a note."""
         reasons: list[str] = []
-        for term in need.terms:
+        terms = list(need.terms)
+        if need.function_id not in SPECIFIC:  # no MPN worked: search by what the block is
+            terms.append("keyword:" + re.sub(r"\s+", " ", need.label)[:60])
+        for term in terms:
             cached = self._cached(term, need)
             if cached is not None:
                 self.source.add(cached)

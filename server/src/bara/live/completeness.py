@@ -34,6 +34,7 @@ class Need:
     touch: bool = False  # a person touches, sees or plugs into it (the form stage anchors it)
     groups: tuple[str, ...] = ()  # the merged blocks, "label xN", so the form can place each
     requirement: str = ""  # key numbers the part must meet (size, connector standard, rating)
+    mechanical: bool = False  # a touched mechanical block: the shell makes it when no part exists
 
     @property
     def inst_prefix(self) -> str:
@@ -133,6 +134,7 @@ def need_from_block(block: dict[str, Any], taken: set[str]) -> Need:
         touch=bool(block.get("touchpoint")),
         groups=tuple(block.get("groups") or ()),
         requirement=str(block.get("requirement") or "")[:160],
+        mechanical=block.get("category") == "mechanical" and bool(block.get("touchpoint")),
     )
 
 

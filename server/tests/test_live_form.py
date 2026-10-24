@@ -494,3 +494,68 @@ def test_footprintless_module_becomes_an_off_board_item_with_a_board_connector()
     mods = [i for i in plan.items if i.role == "module"]
     assert len(mods) == 1 and not mods[0].on_pcb and mods[0].size_mm == (60.0, 40.0)
     assert any(i.role == "module_connector" for i in plan.items)
+
+
+def test_fetch_falls_back_to_a_description_when_no_part_number_matches(tmp_path: Path) -> None:
+    class Source:
+        name = "stub"
+
+        def query(self, *a: Any, **k: Any) -> list[dict[str, Any]]:
+            return []
+
+    calls: list[str] = []
+
+    def cli(term: str, function: str, timeout: float) -> tuple[int, str]:
+        calls.append(term)
+        return 1, "no match"
+
+    r = Resolver(Overlay(Source()), cli=cli, fetched_path=tmp_path / "f.jsonl")
+    need = cp.Need("v", "output.motor", "ERM rumble motor", terms=("RF-300",))
+    assert r.fetch(need) is None
+    assert calls == ["RF-300", "keyword:ERM rumble motor"]
+    named = cp.Need("c", "component.ic", "Some IC", terms=("X1",))
+    calls.clear()
+    r.fetch(named)
+    assert calls == ["X1"]  # an IC is only ever a named part
+
+
+def test_touched_mechanical_block_without_a_part_is_made_by_the_case() -> None:
+    need = cp.need_from_block(
+        {"function_id": "mech.knob", "label": "Trigger levers", "category": "mechanical",
+         "touchpoint": True, "count": 2}, set()
+    )  # fmt: skip
+    assert need.mechanical
+    hidden = cp.need_from_block(
+        {"function_id": "mech.fastener", "label": "Spring", "category": "mechanical",
+         "touchpoint": False, "count": 2}, set()
+    )  # fmt: skip
+    assert not hidden.mechanical
+
+
+def test_off_board_modules_do_not_share_a_spot() -> None:
+    from bara.board.generic import plan_device_board
+
+    def mod(i: str) -> dict[str, Any]:
+        box = {"min": [0, 0, 0], "max": [20, 20, 5]}
+        rec = {
+            "display_name": i,
+            "role": "module",
+            "kind": "module",
+            "mechanical": {"bbox_mm": box},
+        }
+        return {
+            "instance_id": i,
+            "part_id": i,
+            "slot_id": i,
+            "quantity": 1,
+            "label": i,
+            "record": rec,
+        }
+
+    plan = plan_device_board([mod("a"), mod("b"), mod("c")], [], {})
+    mods = [i for i in plan.items if i.role == "module"]
+    assert len(mods) == 3
+    for k, a in enumerate(mods):
+        for b in mods[k + 1 :]:
+            if a.side == b.side:
+                assert a.footprint_poly().intersection(b.footprint_poly()).area < 0.01

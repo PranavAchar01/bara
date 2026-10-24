@@ -345,7 +345,11 @@ def slot_check(slot: Slot) -> dict[str, Any] | None:
     if ok and slot.chosen:
         message = f"{slot.label}: {slot.chosen.get('display_name')}"
     elif ok:
-        message = f"{slot.label}: covered by the {slot.covered_by} part"
+        message = (
+            f"{slot.label}: made by the case"
+            if slot.covered_by == "case"
+            else f"{slot.label}: covered by the {slot.covered_by} part"
+        )
     elif slot.unresolved:
         message = f"{slot.label}: REQUIRED, no part ({slot.unresolved})"
     elif not critical:
@@ -1071,7 +1075,11 @@ class Composer:
                     },
                     stage="compose",
                 )
-            if idx is None:
+            if idx is None and slot.need is not None and slot.need.mechanical:
+                # caps, levers and wells the case geometry grows from the form's anchors
+                slot.state, slot.covered_by = "none", "case"
+                reason = f"{slot.label}: made by the case, not a catalog part."
+            elif idx is None:
                 slot.state = "none"
                 if slot.need is not None:
                     slot.unresolved = self.resolver.notes.get(slot.slot_id) or (
