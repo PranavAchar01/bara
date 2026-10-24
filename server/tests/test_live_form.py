@@ -850,3 +850,37 @@ def test_an_upright_product_is_stood_up_for_the_hero_view() -> None:
         return float(d[2] / np.linalg.norm(d))
 
     assert elevation("upright") < elevation("face_up")  # nearer eye height for a standing face
+
+
+def test_a_cable_connector_sits_on_the_rim_with_its_mouth_out() -> None:
+    """A receptacle with no anchor still goes to the edge, not the middle of the board, turned so
+    the body (which runs past the pads toward the mouth) faces out."""
+    mcu = _item("U1", "mcu", "controller", 12.0)
+    usb = Item(
+        "J1",
+        "usb_in",
+        FootprintInfo(
+            "t",
+            Path("t.pretty"),
+            "J1",
+            [Pad(str(i), "smd", -3 + i, -3.0, 0.6, 1.2, ["F.Cu"]) for i in range(6)],
+            (-4.5, -3.8, 4.5, 4.0),  # body runs to +y: the mouth is at +y
+            None,
+            [],
+        ),
+        0,
+        0,
+        0,
+        "top",
+        meta={"slot_id": "power"},
+    )
+    pf = {"silhouette": [[-40, -25], [40, -25], [40, 25], [-40, 25]], "anchors": []}
+    place_in_form([mcu, usb], mcu, pf, [])
+    region = form_region(pf, 1.0)
+    body = usb.world(usb.local_poly())
+    assert region.exterior.distance(body) < 1.0  # against the edge
+    pads = usb.world(usb.local_poly("pads")).centroid
+    c = body.centroid
+    nearest = region.exterior.interpolate(region.exterior.project(c))
+    out = (nearest.x - pads.x, nearest.y - pads.y)
+    assert (c.x - pads.x) * out[0] + (c.y - pads.y) * out[1] > 0  # mouth toward that edge

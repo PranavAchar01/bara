@@ -826,6 +826,30 @@ def _attempt(
     return True
 
 
+CABLE_ROLES = ("usb_in", "jack", "usb_device", "usb_host")  # a plug enters from outside
+
+
+def _face_the_rim(it: Item, region: Polygon, target: tuple[float, float]) -> tuple[float, float]:
+    """A part a cable plugs into goes to the rim point nearest its target, turned so its mouth
+    faces out. The mouth is the side the body extends past its pads (the courtyard centre lies
+    toward it), which holds for receptacles and jacks alike."""
+    rim = region.exterior
+    d = rim.project(Point(target))
+    p = rim.interpolate(d)
+    a, b = rim.interpolate(d - 0.5), rim.interpolate(d + 0.5)
+    tx, ty = b.x - a.x, b.y - a.y
+    n = (ty, -tx) if not region.contains(Point(p.x + ty, p.y - tx)) else (-ty, tx)
+    best = (-math.inf, it.rot)
+    for rot in (0.0, 90.0, 180.0, 270.0):
+        it.rot = rot
+        body = it.world(it.local_poly()).centroid
+        pads = it.world(it.local_poly("pads")).centroid
+        score = (body.x - pads.x) * n[0] + (body.y - pads.y) * n[1]
+        best = max(best, (score, rot))
+    it.rot = best[1]
+    return (p.x, p.y)
+
+
 def place_in_form(
     on_board: list[Item], mcu: Item | None, pf: dict[str, Any], log: list[str]
 ) -> Polygon:
@@ -844,9 +868,14 @@ def place_in_form(
     hub = (centre.x, centre.y)
     targets: dict[int, tuple[float, float]] = {}
     gaps: dict[int, float] = {}
-    first: list[Item] = [it for it in on_board if id(it) in anchored]
+    rim: dict[int, tuple[float, float]] = {}
+    for it in on_board:
+        if it.role in CABLE_ROLES and it.fp is not None:
+            t = anchored.get(id(it))
+            rim[id(it)] = _face_the_rim(it, region, (t[0], t[1]) if t else hub)
+    first: list[Item] = [it for it in on_board if id(it) in anchored or id(it) in rim]
     first.sort(key=lambda it: -_area(it))
-    rest = [it for it in on_board if id(it) not in anchored]
+    rest = [it for it in on_board if id(it) not in anchored and id(it) not in rim]
     if mcu is not None and mcu in rest:
         rest.remove(mcu)
         rest.insert(0, mcu)
@@ -862,10 +891,16 @@ def place_in_form(
             it.side = "bottom" if tgt[2] == "back" else "top"
         else:
             targets[id(it)] = hub
+        if id(it) in rim:
+            targets[id(it)] = rim[id(it)]
         gaps[id(it)] = PASSIVE_GAP if it.meta.get("near") is not None else PART_GAP
     # unanchored surface-mount parts may use the back of the board
-    flippable = {id(it) for it in on_board if id(it) not in anchored and it is not mcu}
-    ok = _attempt_with_follow(order, region, targets, gaps, mcu, set(anchored), flippable)
+    flippable = {
+        id(it) for it in on_board if id(it) not in anchored and id(it) not in rim and it is not mcu
+    }
+    ok = _attempt_with_follow(
+        order, region, targets, gaps, mcu, set(anchored) | set(rim), flippable
+    )
     areas = sorted(((_area(it), it) for it in on_board), key=lambda a: -a[0])
     widest = max(on_board, key=lambda it: max(_extent(it)), default=None)
     pf["fit_report"] = {
