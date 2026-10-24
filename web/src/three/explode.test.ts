@@ -36,3 +36,19 @@ describe("exploded layers", () => {
     expect(humanGroupName(part("conn:pj320a_trrs", "component", "interconnect.jack"))).toBe("Jack");
   });
 });
+
+describe("role names", () => {
+  const slot = (p: ReturnType<typeof part>, label: string) => ({ ...p, label });
+  it("uses the plan's slot label, not a keyword guess", () => {
+    const led = slot(part("lcsc:kt_0603r_c2286", "component", "display.indicator_led", "KT-0603R"), "Player/status LEDs");
+    expect(humanGroupName(led)).toBe("Player/status LEDs");
+    expect(layerOf(led)).toBe("board_parts");
+    const enc = slot(part("enc:alps_ec11e", "component", "input.rotary_encoder"), "Rotary encoder");
+    const cap = slot(part("knob:knobby", "mechanical", "mech.knob"), "Thumbstick caps");
+    expect(humanGroupName(enc)).not.toBe(humanGroupName(cap));
+  });
+  it("keeps a slide power switch off the key switch layer", () => {
+    expect(layerOf(part("sw:power_msk12c02", "component", "power.switch"))).toBe("board_parts");
+    expect(layerOf(part("sw:kailh_choc_red", "component", "input.key"))).toBe("switches");
+  });
+});

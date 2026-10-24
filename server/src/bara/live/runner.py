@@ -203,6 +203,59 @@ def _seat_on_footprints(board: dict[str, Any], parts: list[dict[str, Any]]) -> l
     return out
 
 
+SHAFT_FUNCTIONS = {"input.joystick", "input.rotary_encoder", "input.potentiometer"}
+
+
+def _primary(record: dict[str, Any]) -> str:
+    fns = record.get("functions") or []
+    return next((f["function_id"] for f in fns if f.get("primary")), "")
+
+
+def _seat_caps(
+    parts: list[dict[str, Any]], moves: dict[str, dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """A cap (knob, keycap) is not on the board: it sits on top of the shaft part it caps.
+    The host is the placed shaft part whose slot label shares the most words with the cap's
+    ("Thumbstick caps" -> "Analog thumbsticks"), then the one with the same count."""
+    hosts = [
+        p for p in parts if p["instance_id"] in moves and _primary(p["record"]) in SHAFT_FUNCTIONS
+    ]
+    out = []
+    for cap in parts:
+        if _primary(cap.get("record") or {}) not in ("mech.knob", "mech.keycap") or not hosts:
+            continue
+
+        def words(p: dict[str, Any]) -> set[str]:
+            return {w.rstrip("s") for w in str(p.get("label") or "").lower().split() if len(w) > 3}
+
+        host = max(
+            hosts,
+            key=lambda h: (len(words(cap) & words(h)), h.get("quantity") == cap.get("quantity")),
+        )
+        hp = moves[host["instance_id"]]["placement"]
+        lo, hi = _zspan(host["record"])
+        pos = list(hp["position_mm"])
+        flipped = abs(float(hp["rotation_deg"][0]) % 360 - 180) < 1
+        pos[2] = pos[2] - (hi - lo) if flipped else pos[2] + (hi - lo)
+        out.append(
+            {
+                "instance_id": cap["instance_id"],
+                "placement": {
+                    **hp,
+                    "position_mm": [round(v, 3) for v in pos],
+                    "explode_offset_mm": [0.0, 0.0, -25.0 if flipped else 25.0],
+                },
+            }
+        )
+    return out
+
+
+def _zspan(record: dict[str, Any]) -> tuple[float, float]:
+    bbox = (record.get("mechanical") or {}).get("bbox_mm") or {}
+    lo, hi = bbox.get("min") or [0, 0, 0], bbox.get("max") or [0, 0, 8.0]
+    return float(lo[2]), float(hi[2])
+
+
 def _product_name(run: BuildRun, brief: dict[str, Any]) -> str:
     """The product the prompt names, as typed: the request words in front and the tweaks after
     it ("with", "that", a comma) cut off. "create a gameboy with a backlit screen" is "gameboy".
@@ -340,11 +393,81 @@ class LiveRunner:
                 await self.identity(run, ctx, final=True)
         self.firmware(run, brief, plan, result, board)
         self.render(run, result, board, ctx)
-        failure = self.gate(run)
+        failure = await self.repair(run, brief, plan, result, board, ctx)
         if failure is not None:
             run.emit("build.failed", {"error": failure})
             return
         run.emit("build.done", self.engine._done_payload(run, {}))
+
+    MAX_REPAIRS = 3
+
+    async def repair(
+        self,
+        run: BuildRun,
+        brief: dict[str, Any],
+        plan: Any,
+        result: ComposeResult,
+        board: dict[str, Any] | None,
+        ctx: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        """Every failing required check goes back through place, case and board with the
+        failures as the repair notes, until the build passes. A round that leaves the same
+        failures as one before it means the request cannot be built this way: stop and say why."""
+        seen: set[tuple[tuple[str, str], ...]] = set()
+        for n in range(1, self.MAX_REPAIRS + 1):
+            bad = self._failing(run, (*self.REQUIRED, *self.REPAIRABLE))
+            if not bad:
+                return None
+            key = tuple(sorted((rid, str(c.get("message", ""))) for rid, c in bad))
+            if key in seen:
+                break
+            seen.add(key)
+            notes = "; ".join(
+                f"{rid}: {c.get('message', '')[:160]}"
+                + (f" (fix: {c['fix']})" if c.get("fix") else "")
+                for rid, c in bad
+            )
+            self._warn(
+                run, "render", f"w_repair_{n}", "other", "info",
+                f"Repair round {n}: sending back {notes}",
+            )  # fmt: skip
+            run.repair = f"The last attempt failed these checks; fix them: {notes}"  # type: ignore[attr-defined]
+            board = await self.place(run, brief, plan, result, ctx)
+            await self.enclose(run, brief, plan, result, board, ctx)
+            board = await self.board_stage(run, board, result, ctx)
+            if plan is None and any(rid == "identity.reads_as_device" for rid, _ in bad):
+                await self.identity(run, ctx, final=True)  # judge the redraw again
+            self.firmware(run, brief, plan, result, board)
+            self.render(run, result, board, ctx)
+        failure = self.gate(run)
+        if failure is not None:
+            failure["message"] = (
+                f"Could not be built after {len(seen)} repair round(s); still failing. "
+                + failure["message"]
+            )[:500]
+        return failure
+
+    # faults a redraw can fix (blocked access, wrong look): sent back, reported if they stay
+    REPAIRABLE = ("mech.access.panel", "identity.reads_as_device")
+
+    def _failing(
+        self, run: BuildRun, rules: tuple[str, ...] | None = None
+    ) -> list[tuple[str, dict[str, Any]]]:
+        """Failing checks per rule, latest result per check_key: one rule can hold a check
+        per part, and a later pass on one part must not hide a failure on another."""
+        rules = rules or tuple(self.REQUIRED)
+        latest: dict[str, dict[str, Any]] = {}
+        for check in run.state["checks"]:
+            latest[check.get("check_key") or check.get("rule_id") or ""] = check
+        bad: dict[str, list[dict[str, Any]]] = {}
+        for check in latest.values():
+            rid = check.get("rule_id") or ""
+            if rid in rules and check.get("status") == "fail":
+                bad.setdefault(rid, []).append(check)
+        return [
+            (rid, {**cs[0], "message": " | ".join(str(c.get("message", "")) for c in cs)})
+            for rid, cs in bad.items()
+        ]
 
     # checks that decide whether the product exists: any one failing ends the build as failed
     FIT_REPAIRS = 2
@@ -363,14 +486,7 @@ class LiveRunner:
     def gate(self, run: BuildRun) -> dict[str, Any] | None:
         """A failing required check is a failed build, never a clean DONE. The artefacts stay
         in the build state so the failure can be looked at."""
-        latest: dict[str, dict[str, Any]] = {}
-        for check in run.state["checks"]:
-            latest[check.get("rule_id") or check.get("check_key") or ""] = check
-        bad = [
-            (rid, latest[rid])
-            for rid in self.REQUIRED
-            if latest.get(rid, {}).get("status") == "fail"
-        ]
+        bad = self._failing(run)
         if not bad:
             return None
         text = "; ".join(f"{rid}: {c.get('message', '')[:140]}" for rid, c in bad)
@@ -1025,6 +1141,7 @@ class LiveRunner:
                     },
                 }
             )
+        moves += _seat_caps(parts, {m["instance_id"]: m for m in moves})
         if moves:
             st.emit("placement.updated", {"placements": moves})
         ctx["moves"] = {m["instance_id"]: m for m in moves}
