@@ -306,8 +306,15 @@ function PartNode(props: PartNodeProps) {
   }, [centroid, matrices, midZ]);
   const htmlAnchor = useMemo(() => new THREE.Vector3(centroid.x, centroid.y, centroid.z + topZ + 2), [centroid, topZ]);
   const ref = useLayerGroup(layerOf(part), props.labelKey, anchorLocal);
+  // A placeholder's "(no model)" tag shows on hover or when the parts panel points at it, never by
+  // default: a tag pinned in the hero sat on top of real parts (battery under the OLED).
+  const [hover, setHover] = useState(false);
   return (
-    <group ref={ref}>
+    <group
+      ref={ref}
+      onPointerOver={missing ? () => setHover(true) : undefined}
+      onPointerOut={missing ? () => setHover(false) : undefined}
+    >
       {!props.covered && <InstancedGroups groups={provisionalGroups} matrices={matrices} onClick={onClick} />}
       {!props.covered &&
         placeholderEdges &&
@@ -321,7 +328,7 @@ function PartNode(props: PartNodeProps) {
           <meshBasicMaterial color={outline} side={THREE.BackSide} transparent opacity={0.95} depthWrite={false} toneMapped={false} />
         </instancedMesh>
       )}
-      {(props.labels || props.selected || (missing && !props.covered && assembled)) && (
+      {(props.labels || props.selected || (missing && !props.covered && assembled && (hover || props.highlight))) && (
         <Html position={htmlAnchor} center zIndexRange={[20, 0]} style={{ pointerEvents: "none" }}>
           <span className={`vp-label ${missing ? "missing" : ""} ${props.failing ? "failing" : ""}`}>
             {part.label ?? part.card.display_name}
@@ -924,6 +931,7 @@ export function labelRows(build: Build | null): LabelRowData[] {
   for (const p of build.parts) {
     if (hidden.has(p.instance_id)) continue;
     const l = partLabel(p);
+    if (!modelAsset(p.assets, p.quantity > 1)) l.sub += " · no 3D model yet";
     const prev = rows.get(l.key);
     if (prev) prev.quantity += p.quantity;
     else rows.set(l.key, { ...l, quantity: p.quantity });
@@ -1094,13 +1102,23 @@ export function Viewport3D() {
   const palette = useMemo(() => studioPalette(), []);
   const [gizmoMode, setGizmoMode] = useState<"translate" | "rotate">("translate");
   const [boardOnly, setBoardOnly] = useState(false);
+  // Narrow viewports get a compact toolbar so it stays one row and never covers the prompt bar.
+  const vpRef = useRef<HTMLDivElement>(null);
+  const [compact, setCompact] = useState(false);
+  useEffect(() => {
+    const el = vpRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([e]) => setCompact(e.contentRect.width < 760));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const post = useMemo(postEnabled, []);
   const overlayRows = useMemo(
     () => rows.map((r) => ({ key: r.key, title: `${r.title} x${r.quantity}`, detail: r.detail, sub: r.sub, generated: r.generated })),
     [rows],
   );
   return (
-    <div className="viewport" style={{ background: palette.background }}>
+    <div ref={vpRef} className="viewport" style={{ background: palette.background }}>
       <Canvas
         dpr={[1, 2]}
         frameloop="demand"
@@ -1124,10 +1142,22 @@ export function Viewport3D() {
           {missingCount} of the parts drawn as boxes (no model)
         </div>
       )}
-      <ViewportToolbar gizmoMode={gizmoMode} setGizmoMode={setGizmoMode} boardOnly={boardOnly} setBoardOnly={setBoardOnly} />
+      <ViewportToolbar gizmoMode={gizmoMode} setGizmoMode={setGizmoMode} boardOnly={boardOnly} setBoardOnly={setBoardOnly} compact={compact} />
     </div>
   );
 }
+
+/** Centre without the translate trick so the bar can use the full viewport width instead of half of it. */
+const TOOLBAR_FIT: React.CSSProperties = {
+  left: 12,
+  right: 12,
+  transform: "none",
+  width: "fit-content",
+  maxWidth: "calc(100% - 24px)",
+  marginInline: "auto",
+  overflowX: "auto",
+  scrollbarWidth: "none",
+};
 
 /** C11 ViewportToolbar. */
 function ViewportToolbar(props: {
@@ -1135,6 +1165,7 @@ function ViewportToolbar(props: {
   setGizmoMode: (m: "translate" | "rotate") => void;
   boardOnly: boolean;
   setBoardOnly: (v: boolean) => void;
+  compact: boolean;
 }) {
   const explode = useApp((s) => s.explode);
   const toggles = useApp((s) => s.toggles);
@@ -1144,10 +1175,10 @@ function ViewportToolbar(props: {
   const setPreset = (p: ViewPreset) => useApp.setState((s) => ({ preset: p, cameraNonce: s.cameraNonce + 1 }));
   const toggle = (k: keyof typeof toggles) => useApp.setState((s) => ({ toggles: { ...s.toggles, [k]: !s.toggles[k] } }));
   return (
-    <div className="vp-toolbar" role="toolbar" aria-label="View">
+    <div className="vp-toolbar" role="toolbar" aria-label="View" style={props.compact ? { ...TOOLBAR_FIT, gap: 4, padding: "4px 6px" } : TOOLBAR_FIT}>
       <label className="vp-explode">
-        <span className="small">Explode</span>
-        <input type="range" min={0} max={1} step={0.01} value={explode} onChange={(e) => useApp.setState({ explode: Number(e.target.value) })} aria-label="Explode" />
+        {!props.compact && <span className="small">Explode</span>}
+        <input style={props.compact ? { width: 56 } : undefined} type="range" min={0} max={1} step={0.01} value={explode} onChange={(e) => useApp.setState({ explode: Number(e.target.value) })} aria-label="Explode" />
       </label>
       <span className="vp-sep" />
       <div className="seg">
@@ -1174,7 +1205,7 @@ function ViewportToolbar(props: {
           title="Show only the populated board"
           onClick={() => props.setBoardOnly(!props.boardOnly)}
         >
-          board only
+          {props.compact ? "pcb only" : "board only"}
         </button>
       </div>
       {moving && (
