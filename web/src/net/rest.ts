@@ -3,7 +3,6 @@
 import type { ErrorObject, ErrorResponse, RestFixture } from "../spec/types";
 import { SPEC_VERSION } from "../spec/types";
 import { authHeaders, withServer } from "./mode";
-import { fixtureBuildPath } from "./fakeSocket";
 
 export type RestResult<T> = { ok: true; status: number; body: T } | { ok: false; status: number; error: ErrorObject };
 
@@ -37,7 +36,7 @@ function pathOnly(p: string): string {
 /** Fixture-backed fetcher: match by method and path, otherwise E_NOT_FOUND. */
 export function stubFetcher(fixtures: RestFixture[]): Fetcher {
   return async (method, path) => {
-    const want = fixtureBuildPath(pathOnly(path));
+    const want = pathOnly(path);
     const hit = fixtures.find((f) => f.request.method === method && pathOnly(f.request.path) === want);
     if (hit) return { status: hit.response.status, body: JSON.parse(JSON.stringify(hit.response.body)) as unknown };
     const body: ErrorResponse = {
@@ -90,7 +89,6 @@ export const paths = {
   library: () => "/v1/library",
   libraryBuild: (id: string) => `/v1/library/${encodeURIComponent(id)}`,
   build: (id: string) => `/v1/builds/${encodeURIComponent(id)}`,
-  events: (id: string, afterSeq = 0) => `/v1/builds/${encodeURIComponent(id)}/events?after_seq=${afterSeq}`,
   part: (partId: string) => `/v1/parts/${encodeURIComponent(partId)}`,
   parts: (q: string) => `/v1/parts${q ? `?q=${encodeURIComponent(q)}` : ""}`,
   design: (id: string) => `/v1/designs/${encodeURIComponent(id)}`,

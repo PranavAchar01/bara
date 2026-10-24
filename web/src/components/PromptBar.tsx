@@ -3,13 +3,9 @@ import { useApp } from "../state/store";
 import { focusKeyOf } from "../three/Viewport3D";
 import { setReplies, startListening, stopListening, useVoice } from "../voice/voice";
 import { BaraBot, botBubbles } from "../bot/BaraBot";
-import { toggleTrace, useTrace } from "../bot/traceState";
-import { cancelBuild, routePrompt, startBuild } from "../net/client";
+import { cancelBuild, startBuild } from "../net/client";
 import { demoPrompts } from "../spec/fixtures";
 import { Icon } from "../ui/common";
-
-/** A press shorter than this on the docked bot is a tap. */
-const HOLD_MS = 220;
 
 /** C02 PromptBar: Enter sends build.start; Stop (build.cancel) while running. */
 export function PromptBar(props: { docked?: boolean; autoFocus?: boolean }) {
@@ -32,15 +28,11 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean }) {
   const focusKey = useApp((s) => s.focusKey);
   const focusName = useApp((s) => (s.focusKey ? (s.build?.parts.find((p) => focusKeyOf(s.build, p) === s.focusKey)?.card.display_name ?? null) : null));
   const inputRef = useRef<HTMLInputElement>(null);
-  const traceOpen = useTrace((s) => s.open) && !!props.docked;
-  // The docked bot is two buttons in one: a quick tap opens its thoughts, a hold talks. The mic
-  // starts once the press has lasted HOLD_MS, so a tap never flashes the listening state.
-  const hold = useRef(0);
   const submit = () => {
     if (disabled || pending || !text.trim()) return;
     // with a part in focus the pill asks about it; it never throws the build away for a new one
     if (focusKey) window.dispatchEvent(new CustomEvent("bara:ask", { detail: text.trim() }));
-    else void routePrompt(text.slice(0, maxChars));
+    else startBuild(text.slice(0, maxChars));
     setText("");
   };
   useEffect(() => {
@@ -63,7 +55,7 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean }) {
       const t = (e as CustomEvent<string>).detail;
       if (!t || disabled || pending) return;
       setText(t);
-      void routePrompt(t.slice(0, maxChars));
+      startBuild(t.slice(0, maxChars));
       setText("");
     };
     window.addEventListener("bara:prompt", onPrompt);
@@ -83,35 +75,17 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean }) {
         className={`bot-mic ${listening ? "on" : ""}`}
         onPointerDown={(e) => {
           e.preventDefault();
-          if (!props.docked) {
-            void startListening();
-            return;
-          }
-          window.clearTimeout(hold.current);
-          hold.current = window.setTimeout(() => {
-            hold.current = 0;
-            void startListening();
-          }, HOLD_MS);
+          void startListening();
         }}
-        onPointerUp={() => {
-          if (hold.current) {
-            window.clearTimeout(hold.current);
-            hold.current = 0;
-            toggleTrace();
-          } else stopListening();
-        }}
-        onPointerLeave={() => {
-          window.clearTimeout(hold.current);
-          hold.current = 0;
-          if (listening) stopListening();
-        }}
-        title={props.docked ? "Tap for my thoughts, hold to talk (or hold Space)" : "Hold to talk (or hold Space)"}
+        onPointerUp={() => stopListening()}
+        onPointerLeave={() => listening && stopListening()}
+        title="Hold to talk (or hold Space)"
         aria-label={listening ? "Listening, release to send" : "Hold to talk"}
         aria-pressed={listening}
       >
         <BaraBot
           size={props.docked ? 36 : 46}
-          typing={(focused && text.length > 0) || traceOpen}
+          typing={focused && text.length > 0}
           typingNonce={keys}
           bubbles={bubbles || !!say}
           say={say}

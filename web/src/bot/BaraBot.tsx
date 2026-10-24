@@ -148,8 +148,7 @@ export function BaraBot(props: BaraBotProps) {
     let n = 0;
     let lastSpoke = 0;
     return useApp.subscribe((s) => {
-      // events of a build on another canvas tab are not this canvas's news
-      const fresh = s.log.filter((e) => e.id > seen && e.dir === "in" && (!e.buildId || e.buildId === s.build?.build_id));
+      const fresh = s.log.filter((e) => e.id > seen && e.dir === "in");
       if (!fresh.length) return;
       seen = s.log.at(-1)?.id ?? seen;
       setQuietSince(performance.now());

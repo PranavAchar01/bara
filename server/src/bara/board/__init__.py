@@ -203,8 +203,6 @@ def _route_one(
                 K.export_glb(
                     work / "main.kicad_pcb", glb, (origin_plan[0] + ox, origin_plan[1] + oy)
                 )
-            if "track_mm" not in cached["routing"] and (work / "main.kicad_pcb").exists():
-                cached["routing"].update(K.count_routing(work / "main.kicad_pcb"))
             cached["cache_hit"] = True
             progress(f"{plan.name}: cached board {key}", 1.0)
             return cached

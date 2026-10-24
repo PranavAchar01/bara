@@ -5,7 +5,7 @@ import { ClarifyCard, DecisionTrace, ReuseCard, SpecCard, StageTimeline } from "
 import { PanelToolbar } from "./TopBar";
 import { applyEdit } from "../net/client";
 import { serverUrl } from "../net/mode";
-import type { Board, BoardEvaluation, BuildPart, CheckResult, Connection, FirmwareFile } from "../spec/types";
+import type { Board, BuildPart, CheckResult, Connection, FirmwareFile } from "../spec/types";
 import { Badge, Chip, Dot, Empty, Panel, ProvenanceBadge } from "../ui/common";
 import { checkArea, checkInstances, checkTone, fmtMm, fmtMs, fmtValue, instanceTone, known, severityRank, vlabel } from "../ui/format";
 import { elementPoses } from "../three/layout";
@@ -367,7 +367,6 @@ export function BoardView() {
           {board.routing?.method ?? ""} {fmtMs(board.routing?.duration_ms)} {board.routing?.cache_hit ? "cached" : ""}
         </span>
       </div>
-      {board.evaluation && <BoardEvaluationView ev={board.evaluation} />}
       {(board.routing?.unrouted_nets ?? []).length > 0 && (
         <div className="chips">
           {board.routing?.unrouted_nets?.map((n) => (
@@ -387,41 +386,6 @@ export function BoardView() {
         </ul>
       )}
     </Panel>
-  );
-}
-
-/** KiCad's evaluation of the routed board: DRC, net integrity and the routing benchmark. */
-function BoardEvaluationView({ ev }: { ev: BoardEvaluation }) {
-  const layers = Object.entries(ev.track_mm ?? {});
-  return (
-    <div className="board-eval">
-      <h3 className="small muted">KiCad evaluation</h3>
-      <div className="kv">
-        <span>DRC</span>
-        <span className="mono">
-          {ev.drc_errors} errors, {ev.drc_warnings} warnings, {ev.unconnected} unconnected
-        </span>
-        <span>Nets</span>
-        <span className="mono">
-          {ev.nets} nets, {ev.dangling_nets} on one pin
-        </span>
-        <span>Routed</span>
-        <span className="mono">{ev.routed_pct}%</span>
-        <span>Copper</span>
-        <span className="mono">
-          {ev.segments ?? 0} tracks, {ev.vias ?? 0} vias
-          {ev.track_total_mm ? `, ${fmtMm(ev.track_total_mm)}` : ""}
-          {layers.length ? ` (${layers.map(([l, mm]) => `${l} ${fmtMm(mm)}`).join(", ")})` : ""}
-        </span>
-        <span>Benchmark</span>
-        <span className="mono">
-          {ev.attempts} attempt(s){ev.strategy ? `, ${ev.strategy}` : ""}
-          {ev.route_s != null ? `, route ${ev.route_s.toFixed(1)} s` : ""}
-          {ev.drc_s != null ? `, DRC ${ev.drc_s.toFixed(1)} s` : ""}
-          {ev.total_s != null ? `, total ${ev.total_s.toFixed(1)} s` : ""}
-        </span>
-      </div>
-    </div>
   );
 }
 

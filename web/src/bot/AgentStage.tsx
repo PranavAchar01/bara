@@ -18,7 +18,6 @@ import { agentEnabled, type AgentTarget, type Beat, type Rect } from "./agent";
 import { onAgentDo, setAgentPos } from "./agentBus";
 import { beatsFor, enqueue, paceFor } from "./director";
 import { speechFor } from "./mood";
-import { toggleTrace, useTrace } from "./traceState";
 import { canvasRect, partRect } from "../three/agentTargets";
 import { clamp, lerp, PRESETS, reducedMotion, Spring, wander, type SpringCfg } from "./spring";
 import "./agentStage.css";
@@ -170,7 +169,6 @@ export function AgentStage() {
 function Stage() {
   const [beat, setBeat] = useState<Beat | null>(null);
   const [phase, setPhase] = useState<Phase>("home");
-  const traceOpen = useTrace((s) => s.open);
   const stage = useRef<HTMLDivElement>(null);
   const boxEl = useRef<HTMLDivElement>(null);
   const cursorEl = useRef<HTMLDivElement>(null);
@@ -606,9 +604,9 @@ function Stage() {
           <path d="M1.5 1.5v15.2l4.1-3.9 2.7 6.1 2.6-1.1-2.7-6h5.7z" />
         </svg>
       </div>
-      <div ref={botEl} className="as-bot" data-phase={phase} onClick={toggleTrace}>
+      <div ref={botEl} className="as-bot" data-phase={phase}>
         <div ref={botBody} className="as-bot-body">
-          {phase !== "home" && <BaraBot size={BOT} bubbles say={say} typing={traceOpen} />}
+          {phase !== "home" && <BaraBot size={BOT} bubbles say={say} />}
         </div>
       </div>
     </div>

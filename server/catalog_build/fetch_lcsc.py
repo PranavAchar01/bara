@@ -36,28 +36,6 @@ LCSC_RE = re.compile(r"^C\d{2,10}$")
 DEFAULT_FUNCTION = "component.ic"
 FUNCTION_RE = re.compile(r"^[a-z_]+\.[a-z0-9_]+$")
 
-
-class RateLimited(RuntimeError):
-    """EasyEDA refused the request (HTTP 403 for every id): retrying soon only extends the block."""
-
-
-def _refused(api: Any, lcsc_id: str) -> bool:
-    """easyeda2kicad turns every failure into {}; ask once more to tell a block from a miss."""
-    import urllib.error
-    import urllib.request
-
-    from easyeda2kicad.easyeda.easyeda_api import API_ENDPOINT
-
-    req = urllib.request.Request(API_ENDPOINT.format(lcsc_id=lcsc_id), headers=api.headers)
-    try:
-        urllib.request.urlopen(req, timeout=30, context=api.ssl_context).close()  # noqa: S310
-    except urllib.error.HTTPError as exc:
-        return exc.code in (403, 429)
-    except urllib.error.URLError:
-        return False
-    return False
-
-
 LICENCE = {
     "spdx": "NOASSERTION",
     "name": "EasyEDA / LCSC community library (no licence stated)",
@@ -326,8 +304,6 @@ def fetch(lcsc_id: str, function: str = DEFAULT_FUNCTION) -> dict[str, Any]:
     api = EasyedaApi()
     cad = api.get_cad_data_of_component(lcsc_id=lcsc_id)
     if not cad:
-        if _refused(api, lcsc_id):
-            raise RateLimited(f"{lcsc_id}: EasyEDA is refusing requests (rate limit), retry later")
         raise RuntimeError(f"{lcsc_id}: EasyEDA returned no component")
 
     symbol = EasyedaSymbolImporter(easyeda_cp_cad_data=cad).get_symbol()

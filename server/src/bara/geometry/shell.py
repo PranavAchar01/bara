@@ -323,7 +323,6 @@ KIND_WORDS: list[tuple[str, str]] = [
     # parts with no control surface: pocketed under the shell, nothing cut through it
     ("inner", r"sensor|\bimu\b|gyro|accelerometer|magnetometer|antenna|\bchip\b"),
     ("light", r"\bleds?\b|indicator|status light|light ?pipe"),
-    ("grille", r"speaker|grille|buzzer|microphone|\bmic\b"),
     ("stick", r"stick|joy|analog|trackpoint"),
     ("dpad", r"d-?pad|directional|\bcross\b|arrow|navigation"),
     ("shoulder", r"shoulder|trigger|bumper|\blb\b|\brb\b|\blt\b|\brt\b"),
@@ -334,16 +333,13 @@ KIND_WORDS: list[tuple[str, str]] = [
 
 
 def classify(anchor: dict[str, Any]) -> str:
-    """The anchor's name decides first ("Status LEDs" whose purpose mentions the display is a
-    light); the purpose and slot only when the name says nothing."""
-    full = " ".join(str(anchor.get(k) or "") for k in ("name", "purpose", "slot_id")).lower()
-    pressed = re.search(r"touch|finger|button|key|\bpad\b", full)
-    for text in (str(anchor.get("name") or "").lower(), full):
-        for kind, pat in KIND_WORDS:
-            if kind == "inner" and pressed:
-                continue  # a touch or fingerprint sensor is still a surface the finger meets
-            if re.search(pat, text):
-                return kind
+    text = " ".join(str(anchor.get(k) or "") for k in ("name", "purpose", "slot_id")).lower()
+    pressed = re.search(r"touch|finger|button|key|\bpad\b", text)
+    for kind, pat in KIND_WORDS:
+        if kind == "inner" and pressed:
+            continue  # a touch or fingerprint sensor is still a surface the finger meets
+        if re.search(pat, text):
+            return kind
     return "touch"
 
 
@@ -354,7 +350,7 @@ class Site:
     x: float
     y: float
     mount: str
-    normal_deg: float  # board frame
+    normal_deg: float  # board frame (y down)
     w: float = 0.0
     d: float = 0.0
     rot: float = 0.0
@@ -365,13 +361,9 @@ class Site:
 
 
 def sites_from_anchors(
-    anchors: list[dict[str, Any]], feats: list[Any], board_top: float = 0.0, y_down: bool = True
+    anchors: list[dict[str, Any]], feats: list[Any], board_top: float = 0.0
 ) -> list[Site]:
-    """One site per anchor instance, sized from the nearest unclaimed part footprint.
-
-    Anchors are y-up (form frame); y_down says the board record is in KiCad's y-down frame, so
-    the anchors are mirrored into it. A record already in build space (y-up) takes them as is."""
-    sy = -1.0 if y_down else 1.0
+    """One site per anchor instance, sized from the nearest unclaimed part footprint."""
     from bara.live.form import expand  # local: live imports geometry
 
     sites: list[Site] = []
@@ -386,9 +378,9 @@ def sites_from_anchors(
                 kind=kind,
                 group=gi,
                 x=float(x),
-                y=sy * float(y),
+                y=-float(y),
                 mount=str(a.get("mount") or "front"),
-                normal_deg=sy * float(a.get("edge_normal_deg") or 0.0),
+                normal_deg=-float(a.get("edge_normal_deg") or 0.0),
                 pitch=pitch,
                 round_window=bool(re.search(r"round|circular", text)),
             )
@@ -604,8 +596,6 @@ def build_features(
                 _button(out, s, body, seat, zmax, clear)  # the slot's other switches (A/B, start)
         elif s.kind == "light":
             _light(out, s, body, seat, zmax)
-        elif s.kind == "grille":
-            _grille(out, s, body, seat, zmax)
         elif s.kind == "wheel":
             _wheel(out, s, body, seat, zmax, clear)
         elif s.kind in ("stick", "knob"):
@@ -693,28 +683,6 @@ def _button(out: Features, s: Site, body: Body, seat: float, zmax: float, clear:
             (0.0, zc + 2.2)]  # fmt: skip
     out.caps.append(_revolve(prof, s.x, s.y, 48))
     out.cutouts.append(_cut("button", s.x, s.y, zc, 2 * r_h, "circle"))
-
-
-GRILLE_SLOT_MM, GRILLE_PITCH_MM = 1.6, 3.4  # sound slots: narrow enough to keep a finger out
-
-
-def _grille(out: Features, s: Site, body: Body, seat: float, zmax: float) -> None:
-    """Sound slots over a speaker or microphone: parallel slots across its footprint, not one
-    finger hole. With no part under it, a small speaker's size."""
-    w, d = (s.w, s.d) if s.w and s.d else (12.0, 12.0)
-    span, length = max(w, d), max(4.0, min(w, d) - 1.0)
-    n = max(2, int(span // GRILLE_PITCH_MM))
-    zc = body.top_at(s.x, s.y)
-    ang = math.radians(s.rot)
-    ux, uy = math.cos(ang), math.sin(ang)  # slots step along the footprint's long side
-    if d > w:
-        ux, uy = -uy, ux
-    for i in range(n):
-        off = (i - (n - 1) / 2) * GRILLE_PITCH_MM
-        slot = _rrect(s.x + ux * off, s.y + uy * off, GRILLE_SLOT_MM, length,
-                      math.degrees(math.atan2(uy, ux)), GRILLE_SLOT_MM / 2 - 0.05)  # fmt: skip
-        out.cuts.append(_prism(slot, seat - 1.0, zmax + 4))
-    out.cutouts.append(_cut("grille", s.x, s.y, zc, n * GRILLE_PITCH_MM, "slot", length))
 
 
 def _light(out: Features, s: Site, body: Body, seat: float, zmax: float) -> None:

@@ -98,8 +98,8 @@ export function Library() {
     <section className="library" aria-labelledby="lib-h">
       <header className="lib-head">
         <div>
-          <h2 id="lib-h">Your builds</h2>
-          <span className="lib-kicker">{cards.length ? `${cards.length} saved in this browser · pick one back up` : "Every build you make is saved here"}</span>
+          <span className="lib-kicker">Your builds · {cards.length}</span>
+          <h2 id="lib-h">{cards.length ? "Pick up where you left off" : "Your builds will live here"}</h2>
         </div>
         {cards.length > 3 && (
           <input className="lib-search" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search your builds" aria-label="Search your builds" />

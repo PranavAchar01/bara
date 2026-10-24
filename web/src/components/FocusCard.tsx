@@ -154,8 +154,7 @@ export function FocusCard() {
 
   if (!key || !row) return null;
   const qty = row.quantity;
-  // a sourced part is named by its model; the board's and case's detail is a note ("routed, KiCad"), not a name
-  const name = (key.startsWith("p:") && row.detail) || row.title;
+  const name = row.detail || row.title;
   const them = qty > 1 || /s$/i.test(row.title) ? "them" : "it";
   const suggestions = followUps ?? (isCase ? CASE_QUESTIONS : START_QUESTIONS);
   const lastAnswer = [...turns].reverse().find((t) => t.a !== null);

@@ -12,7 +12,6 @@ import { GizmoHelper, GizmoViewcube, Html, OrbitControls, TransformControls } fr
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { focusPart, select, setView, useApp, type ViewPreset } from "../state/store";
-import { switchCanvas } from "../state/canvases";
 import { applyEdit } from "../net/client";
 import { fetchPart } from "../components/Overlays";
 import type { BBox, Board, Build, BuildPart, Enclosure, Layout } from "../spec/types";
@@ -30,11 +29,6 @@ import { DemandDriver, StudioPost, postEnabled } from "./post";
 import { BoardPlaceholder, BoardStatus, FootprintHover, footprintBoxes } from "./board";
 import { AgentTargetProbe, partWorldBox, registerPart } from "./agentTargets";
 import { agentPose, easeOut } from "./agentCam";
-import { caps } from "../sim/press";
-import { pressKeyOf, type SimInput } from "../sim/inputMap";
-import { canSimulate, enterSimulation, exitSimulation, useSim } from "../sim/simStore";
-import { SimOverlay } from "../sim/SimOverlay";
-import { inputHandlers, SimCaps, SimDriver, SimScreens } from "./sim3d";
 
 const DEG = Math.PI / 180;
 
@@ -198,13 +192,9 @@ function InstancedGroups(props: {
   matrices: THREE.Matrix4[];
   onClick?: (e: ThreeEvent<MouseEvent>) => void;
   onHover?: (on: boolean) => void;
-  /** Simulation: the press key of each element and the inputs they stand for. */
-  sim?: { keys: string[]; inputs: Map<string, SimInput> };
 }) {
   const refs = useRef<(THREE.InstancedMesh | null)[]>([]);
-  const capSeen = useRef(-1);
   useLayoutEffect(() => {
-    capSeen.current = -1;
     for (const ref of refs.current) {
       if (!ref) continue;
       props.matrices.forEach((m, i) => ref.setMatrixAt(i, m));
@@ -212,25 +202,7 @@ function InstancedGroups(props: {
       ref.computeBoundingBox();
       ref.computeBoundingSphere();
     }
-  }, [props.matrices, props.groups, props.sim]);
-  // A pressed key or button sinks along its own up axis.
-  const lift = useMemo(() => new THREE.Matrix4(), []);
-  const pressed = useMemo(() => new THREE.Matrix4(), []);
-  useFrame(() => {
-    const sim = props.sim;
-    if (!sim || capSeen.current === caps.version) return;
-    capSeen.current = caps.version;
-    props.matrices.forEach((m, j) => {
-      const depth = caps.depth.get(sim.keys[j]) ?? 0;
-      const mat = depth > 0 ? pressed.copy(m).multiply(lift.makeTranslation(0, 0, -depth)) : m;
-      for (const ref of refs.current) ref?.setMatrixAt(j, mat);
-    });
-    for (const ref of refs.current) if (ref) ref.instanceMatrix.needsUpdate = true;
-  });
-  const simHandlers = useMemo(() => {
-    const sim = props.sim;
-    return sim ? inputHandlers((e) => (e.instanceId === undefined ? null : (sim.inputs.get(sim.keys[e.instanceId]) ?? null))) : null;
-  }, [props.sim]);
+  }, [props.matrices, props.groups]);
   const n = props.matrices.length;
   return (
     <>
@@ -243,12 +215,7 @@ function InstancedGroups(props: {
           args={[g.geometry, g.material, n]}
           castShadow
           onClick={props.onClick}
-          {...simHandlers}
           onPointerOver={(e) => {
-            if (simHandlers) {
-              simHandlers.onPointerOver(e);
-              return;
-            }
             if (!props.onClick) return;
             e.stopPropagation();
             document.body.style.cursor = "pointer";
@@ -256,8 +223,7 @@ function InstancedGroups(props: {
           }}
           onPointerOut={() => {
             document.body.style.cursor = "";
-            if (simHandlers) simHandlers.onPointerOut();
-            else props.onHover?.(false);
+            props.onHover?.(false);
           }}
         />
       ))}
@@ -356,13 +322,6 @@ function PartNode(props: PartNodeProps) {
     select(part.instance_id);
     focusPart(partLabel(part).key);
   };
-  const simActive = useSim((s) => s.active);
-  const simInputs = useSim((s) => s.byPressKey);
-  const pressKeys = useMemo(() => poses.map((p, j) => pressKeyOf(part, p.index, j)), [poses, part]);
-  const sim = useMemo(
-    () => (simActive && pressKeys.some((k) => simInputs.has(k)) ? { keys: pressKeys, inputs: simInputs } : undefined),
-    [simActive, simInputs, pressKeys],
-  );
   const midZ = loaded ? (loaded.bbox.min.z + loaded.bbox.max.z) / 2 : (box.min[2] + box.max[2]) / 2;
   const topZ = loaded ? loaded.bbox.max.z : box.max[2];
   const centroid = useMemo(() => {
@@ -415,7 +374,7 @@ function PartNode(props: PartNodeProps) {
       onPointerOver={missing ? () => setHover(true) : undefined}
       onPointerOut={missing ? () => setHover(false) : undefined}
     >
-      {!props.covered && <InstancedGroups groups={provisionalGroups} matrices={matrices} onClick={simActive ? undefined : onClick} onHover={onHover} sim={sim} />}
+      {!props.covered && <InstancedGroups groups={provisionalGroups} matrices={matrices} onClick={onClick} onHover={onHover} />}
       {!props.covered &&
         placeholderEdges &&
         matrices.map((m, i) => (
@@ -612,7 +571,6 @@ function EnclosureNode(props: { enc: Enclosure; theme: Theme; selected: boolean;
   if (enc.kind === "none" || !pieces.length) return null;
   const edge = props.failing ? theme.fail : props.selected ? theme.accent : null;
   const onClick = (e: ThreeEvent<MouseEvent>) => {
-    if (useSim.getState().active) return;
     e.stopPropagation();
     useApp.setState({ resizeTarget: { enclosure_id: enc.enclosure_id }, overlay: "resize", selection: null });
   };
@@ -703,11 +661,11 @@ function BoardPiece(props: {
   layer: LayerId;
   labelKey: string | null;
   anchor: THREE.Vector3;
-  /** The part this piece draws (a footprint's 3D model), or the bare board. */
-  focusKey?: string;
   /** Registers the piece as an agent target under this id, bounded by `targetBox` (board space). */
   targetId?: string;
   targetBox?: THREE.Box3 | null;
+  /** The part this piece draws (a footprint's 3D model), or the bare board. */
+  focusKey?: string;
   onClick?: (e: ThreeEvent<MouseEvent>) => void;
   children?: ReactNode;
 }) {
@@ -779,12 +737,6 @@ function BoardNode(props: {
     b.max.z = board.thickness_mm ?? 1.6;
     return b;
   }, [loaded, board.outline_mm, board.size_mm, board.thickness_mm]);
-  // the bare board picks as the board, like its row in the label column
-  const onBoardClick = (e: ThreeEvent<MouseEvent>) => {
-    e.stopPropagation();
-    if (board.part_instance_id) select(board.part_instance_id);
-    focusPart("b:board");
-  };
   if (!pieces) {
     // No GLB yet (routing, exporting or loading): the board drawn from its record.
     return (
@@ -800,7 +752,7 @@ function BoardNode(props: {
   return (
     <>
       <group userData={{ fit: `board:${board.board_id}` }}>
-        <BoardPiece groups={pieces.base} board={board} layer="pcb" labelKey={props.labelKey} anchor={anchorLocal} targetId={targetId} targetBox={targetBox} onClick={onBoardClick}>
+        <BoardPiece groups={pieces.base} board={board} layer="pcb" labelKey={props.labelKey} anchor={anchorLocal} targetId={targetId} targetBox={targetBox}>
           {hover}
         </BoardPiece>
       </group>
@@ -950,34 +902,12 @@ function fitPose(box: THREE.Box3, dir: THREE.Vector3, cam: THREE.PerspectiveCame
   return { pos: target.clone().addScaledVector(dir, dist), target, dist };
 }
 
-type FrameKind = ViewPreset | "hero" | "exploded" | "sim";
-
-/** Diagonal (mm) of a full-size keyboard: a device this big gets the whole `fill`. */
-const FULL_SIZE_DIAG_MM = 330;
-
-/**
- * How much of the view a device spans, by its real size: a handheld sits small in the frame and
- * a keyboard larger, so the scene reads as an object on a desk, not a poster. Square root so a
- * thumb-sized part still shows its features; never below 55% of `fill`.
- */
-export function sizedFill(box: THREE.Box3, fill: number): number {
-  const diag = box.getSize(new THREE.Vector3()).length();
-  return fill * Math.min(1, Math.max(0.55, Math.sqrt(diag / FULL_SIZE_DIAG_MM)));
-}
+type FrameKind = ViewPreset | "hero" | "exploded";
 
 function framePose(kind: FrameKind, cam: THREE.PerspectiveCamera, predictExplode: number | null) {
   const box = stageBox() ?? fallbackBox();
   if (predictExplode !== null) box.max.z += stage.gap * maxRank() * (predictExplode - stage.explode);
-  if (kind === "exploded") return fitPose(box, EXPLODED_DIR, cam, LABEL_MODEL_WIDTH, Math.max(0.7, sizedFill(box, 0.88)), 0.04);
-  if (kind === "sim") {
-    // The operating view: straight at the control face, the device filling most of the viewport.
-    // A typing device leaves room above for the terminal; a handheld, a narrow strip.
-    const { view, map } = useSim.getState();
-    const typing = map?.mode === "typing";
-    return fitPose(box, new THREE.Vector3(...view.dir).normalize(), cam, 1, typing ? 0.58 : 0.8, typing ? -0.1 : 0.05);
-  }
-  const row = kind === "hero" || kind === "iso" || kind === "scene" ? rowDir() : null;
-  if (row) return fitPose(box, row, cam, 1, sizedFill(box, 0.78), 0.05);
+  if (kind === "exploded") return fitPose(box, EXPLODED_DIR, cam, LABEL_MODEL_WIDTH, 0.92, 0.04);
   const dir =
     kind === "top"
       ? new THREE.Vector3(0, -0.0001, 1)
@@ -989,25 +919,8 @@ function framePose(kind: FrameKind, cam: THREE.PerspectiveCamera, predictExplode
         : kind === "side"
           ? new THREE.Vector3(1, 0, 0.18)
           : HERO_DIR;
-  // Hero: a full-size device spans about half of the tighter axis; smaller ones less (sizedFill).
-  return fitPose(box, dir.clone().normalize(), cam, 1, sizedFill(box, kind === "hero" || kind === "iso" || kind === "scene" ? 0.5 : 0.7), 0.05);
-}
-
-/**
- * Several devices on one canvas stand in a row along x, so they are looked at from the front with
- * the row across the screen, the way they would sit on a desk. Flat devices (a keyboard, a mouse)
- * are seen from higher up so their tops read; tall ones from lower, so their faces do.
- */
-function rowDir(): THREE.Vector3 | null {
-  const side = stage.companions;
-  if (!stage.root || !side?.children.length) return null;
-  const boxes = [new THREE.Box3().setFromObject(stage.root), ...side.children.map((c) => new THREE.Box3().setFromObject(c))].filter((b) => !b.isEmpty());
-  if (boxes.length < 2) return null;
-  const size = new THREE.Vector3();
-  const ratio = boxes.reduce((sum, b) => (b.getSize(size), sum + size.z / Math.max(1, Math.min(size.x, size.y))), 0) / boxes.length;
-  const t = Math.min(1, Math.max(0, (ratio - 0.15) / 0.45));
-  const elev = (55 - 35 * t) * DEG;
-  return new THREE.Vector3(0, -Math.cos(elev), Math.sin(elev));
+  // Hero: the assembly spans about 60% of the tighter axis, as in the Etch explore tiles.
+  return fitPose(box, dir.clone().normalize(), cam, 1, kind === "hero" || kind === "iso" || kind === "scene" ? 0.6 : 0.8, 0.05);
 }
 
 let rankMax = LAYER_RANK.keycaps;
@@ -1059,14 +972,9 @@ function CameraRig() {
   const framedFor = useRef<string | null>(null);
   const shift = useRef(0);
   const mode = useRef<"hero" | "exploded">("hero");
-  const simActive = useSim((s) => s.active);
-  const savedCam = useRef<{ pos: THREE.Vector3; target: THREE.Vector3 } | null>(null);
-  const start = (asked: FrameKind, predict: number | null = null) => {
+  const start = (kind: FrameKind, predict: number | null = null) => {
     const ctl = controls as unknown as OrbitLike | null;
-    // while simulating, every refit (models loading, content changing) keeps the operating view
-    const sim = useSim.getState().active;
-    const kind = sim ? "sim" : asked;
-    const to = framePose(kind, cam, sim ? 0 : predict);
+    const to = framePose(kind, cam, predict);
     cam.near = Math.max(0.5, to.dist * 0.02);
     cam.far = to.dist * 20;
     cam.updateProjectionMatrix();
@@ -1082,18 +990,6 @@ function CameraRig() {
     ctl.addEventListener("start", on);
     return () => ctl.removeEventListener("start", on);
   }, [controls]);
-  useEffect(() => {
-    const ctl = controls as unknown as OrbitLike | null;
-    if (simActive) {
-      savedCam.current = { pos: cam.position.clone(), target: ctl?.target.clone() ?? new THREE.Vector3() };
-      start("sim");
-    } else if (savedCam.current) {
-      const back = savedCam.current;
-      savedCam.current = null;
-      anim.current = { fromP: cam.position.clone(), fromT: ctl?.target.clone() ?? new THREE.Vector3(), toP: back.pos, toT: back.target, t: 0 };
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [simActive]);
   useEffect(() => {
     if (sceneCam && !userMoved.current && stage.explode < 0.05) start(heroOrPreset());
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1370,198 +1266,6 @@ export function labelRows(build: Build | null): LabelRowData[] {
   return [...rows.values()];
 }
 
-const NO_COVER = new Set<string>();
-
-// ---------------------------------------------------------------- companion devices
-
-/** Space between devices standing side by side on one canvas. */
-const COMPANION_GAP_MM = 40;
-
-function assemblyBox(build: Build | null): THREE.Box3 | null {
-  const bb = build?.scene?.assembly_bbox_mm;
-  if (!bb?.min || !bb?.max) return null;
-  return new THREE.Box3(new THREE.Vector3(bb.min[0], bb.min[1], bb.min[2]), new THREE.Vector3(bb.max[0], bb.max[1], bb.max[2]));
-}
-
-interface CompanionPick {
-  onClick: (e: ThreeEvent<MouseEvent>) => void;
-  onHover: (on: boolean) => void;
-}
-
-/** One part of a device standing beside the build: its model where the build placed it, nothing else. */
-function CompanionPart(props: { part: BuildPart; build: Build; pick: CompanionPick }) {
-  const { part, build } = props;
-  const layout = (build.layouts ?? []).find((l) => l.layout_id === part.placement.layout_id);
-  const poses = useMemo(() => elementPoses(part.placement, part.quantity, layout), [part.placement, part.quantity, layout]);
-  const model = useModel(modelAsset(part.assets, poses.length > 1)?.url ?? null, isBoardPart(part));
-  const loaded = model.status === "ready" && model.model.groups.length > 0 ? model.model : null;
-  const preset = presetFor(part);
-  const color = defaultColor(part);
-  const groups = useMemo<MeshGroup[]>(() => {
-    if (!loaded) return [];
-    if (usesPreset(preset)) {
-      const mat = presetMaterial(preset, color);
-      return loaded.groups.map((g) => ({ ...g, material: mat }));
-    }
-    if (loaded.groups.length === 1 && part.color?.hex && !loaded.groups[0].material.map) return [{ ...loaded.groups[0], material: tinted(loaded.groups[0].material, part.color.hex) }];
-    return loaded.groups;
-  }, [loaded, preset, color, part.color?.hex]);
-  const matrices = useMemo(() => poses.map((p) => elementMatrix(p)), [poses]);
-  if (!groups.length) return null;
-  return <InstancedGroups groups={groups} matrices={matrices} onClick={props.pick.onClick} onHover={props.pick.onHover} />;
-}
-
-function CompanionBoard(props: { board: Board; pick: CompanionPick }) {
-  const model = useModel(boardModelUrl(props.board), true);
-  const loaded = model.status === "ready" && model.model.groups.length > 0 ? model.model : null;
-  const pos = props.board.position_mm ?? [0, 0, 0];
-  const rot = props.board.rotation_deg ?? [0, 0, 0];
-  if (!loaded) return null;
-  return (
-    <group position={[pos[0], pos[1], pos[2]]} rotation={new THREE.Euler(rot[0] * DEG, rot[1] * DEG, rot[2] * DEG, "XYZ")}>
-      {loaded.groups.map((g) => (
-        <mesh key={`${g.geometry.uuid}:${g.material.uuid}`} geometry={g.geometry} material={g.material} onClick={props.pick.onClick} onPointerOver={(e) => (e.stopPropagation(), props.pick.onHover(true))} onPointerOut={() => props.pick.onHover(false)} />
-      ))}
-    </group>
-  );
-}
-
-/** The case as the assembled build shows it: a translucent shell with its creases drawn. */
-function CompanionCase(props: { enc: Enclosure; pick: CompanionPick }) {
-  const { enc } = props;
-  const model = useModel(modelAsset(enc.assets, false)?.url ?? null);
-  const loaded = model.status === "ready" && model.model.groups.length > 0 ? model.model : null;
-  const geoms = useMemo(() => (loaded ? casePieces(loaded).flatMap((p) => p.geoms) : []), [loaded]);
-  const hex = caseHex(enc);
-  const material = useMemo(() => {
-    const m = presetMaterial("case", hex).clone();
-    m.transparent = true;
-    m.opacity = 0.3;
-    m.depthWrite = false;
-    return m;
-  }, [hex]);
-  useEffect(() => () => material.dispose(), [material]);
-  const edges = useMemo(() => geoms.map((g) => new THREE.EdgesGeometry(g, 40)), [geoms]);
-  useEffect(() => () => edges.forEach((e) => e.dispose()), [edges]);
-  const edgeMat = useMemo(() => new THREE.LineBasicMaterial({ color: "#1F2226", transparent: true, opacity: 0.3, depthWrite: false, toneMapped: false }), []);
-  useEffect(() => () => edgeMat.dispose(), [edgeMat]);
-  const pos = enc.position_mm ?? [0, 0, 0];
-  const rot = enc.rotation_deg ?? [0, 0, 0];
-  return (
-    <group position={[pos[0], pos[1], pos[2]]} rotation={new THREE.Euler(rot[0] * DEG, rot[1] * DEG, rot[2] * DEG, "XYZ")}>
-      {geoms.map((g) => (
-        <mesh key={g.uuid} geometry={g} material={material} renderOrder={2} onClick={props.pick.onClick} onPointerOver={(e) => (e.stopPropagation(), props.pick.onHover(true))} onPointerOut={() => props.pick.onHover(false)} />
-      ))}
-      {edges.map((e) => (
-        <lineSegments key={e.uuid} geometry={e} material={edgeMat} raycast={() => null} renderOrder={3} />
-      ))}
-    </group>
-  );
-}
-
-/** Another device in this canvas's scene, display only: clicking it opens its own canvas. */
-function CompanionDevice(props: { canvasId: string; build: Build; offset: THREE.Vector3; name: string }) {
-  const { build } = props;
-  const [hover, setHover] = useState(false);
-  const pick = useMemo<CompanionPick>(
-    () => ({
-      onClick: (e) => {
-        e.stopPropagation();
-        document.body.style.cursor = "";
-        switchCanvas(props.canvasId);
-      },
-      onHover: (on) => {
-        setHover(on);
-        document.body.style.cursor = on ? "pointer" : "";
-      },
-    }),
-    [props.canvasId],
-  );
-  const boardGlb = (build.boards ?? []).some((b) => boardModelUrl(b));
-  const hiddenPcbs = boardDrawnPcbs(build);
-  // with the routed board drawn, what it already carries (its parts, the bare PCB) is not drawn twice
-  const parts = build.parts.filter((p) => !hiddenPcbs.has(p.instance_id) && !(boardGlb && (layerOf(p) === "board_parts" || layerOf(p) === "pcb" || layerOf(p) === "under")));
-  const box = assemblyBox(build);
-  const tag = box ? new THREE.Vector3((box.min.x + box.max.x) / 2, (box.min.y + box.max.y) / 2, box.max.z + 6) : new THREE.Vector3(0, 0, 30);
-  return (
-    <group position={props.offset} userData={{ companion: props.canvasId }}>
-      {parts.map((p) => (
-        <CompanionPart key={p.instance_id} part={p} build={build} pick={pick} />
-      ))}
-      {(build.boards ?? []).map((b) => (
-        <CompanionBoard key={b.board_id} board={b} pick={pick} />
-      ))}
-      {(build.enclosures ?? [])
-        .filter((e) => e.kind !== "none")
-        .map((e) => (
-          <CompanionCase key={e.enclosure_id} enc={e} pick={pick} />
-        ))}
-      <Html position={tag} center zIndexRange={[4, 0]} style={{ pointerEvents: "none" }}>
-        <span className={`companion-tag ${hover ? "on" : ""}`}>{hover ? `Open ${props.name}` : props.name}</span>
-      </Html>
-    </group>
-  );
-}
-
-/**
- * The other devices of this canvas's scene ("add a mouse to the keyboard"), stood to the right of
- * it on the same floor, centres in line, a gap apart. They step away while the build is pulled
- * apart or a part is in focus: those views are about this one device.
- */
-function CompanionRow() {
-  const ids = useApp(useShallow((s) => s.companions));
-  const others = useApp(useShallow((s) => s.companions.map((id) => s.canvasStash[id]?.build ?? null)));
-  const names = useApp(useShallow((s) => s.companions.map((id) => s.canvases.find((c) => c.id === id)?.name ?? s.canvasStash[id]?.build?.prompt ?? "")));
-  const active = useApp((s) => s.build);
-  const away = useApp((s) => s.focusKey !== null || s.explode > 0.5);
-  const ref = useRef<THREE.Group>(null);
-  useLayoutEffect(() => {
-    stage.companions = ref.current;
-    return () => {
-      stage.companions = null;
-    };
-  }, []);
-  const activeId = useApp((s) => s.activeCanvas);
-  const order = useApp(useShallow((s) => s.canvases.map((c) => c.id)));
-  const slots = useMemo(() => {
-    // the row keeps tab order whichever device is open, so switching never swaps their places
-    const here = assemblyBox(active) ?? fallbackBox();
-    const cy = (here.min.y + here.max.y) / 2;
-    const rank = (id: string) => order.indexOf(id);
-    const sized = ids.map((id, i) => ({ id, build: others[i], bb: assemblyBox(others[i]) ?? new THREE.Box3(new THREE.Vector3(-40, -40, 0), new THREE.Vector3(40, 40, 20)) }));
-    const place = (d: (typeof sized)[number], x: number) => new THREE.Vector3(x, cy - (d.bb.min.y + d.bb.max.y) / 2, here.min.z - d.bb.min.z);
-    const out: { id: string; build: Build | null; offset: THREE.Vector3 }[] = [];
-    let right = here.max.x + COMPANION_GAP_MM;
-    for (const d of sized.filter((d) => rank(d.id) > rank(activeId)).sort((a, b) => rank(a.id) - rank(b.id))) {
-      out.push({ id: d.id, build: d.build, offset: place(d, right - d.bb.min.x) });
-      right += d.bb.max.x - d.bb.min.x + COMPANION_GAP_MM;
-    }
-    let left = here.min.x - COMPANION_GAP_MM;
-    for (const d of sized.filter((d) => rank(d.id) < rank(activeId)).sort((a, b) => rank(b.id) - rank(a.id))) {
-      out.push({ id: d.id, build: d.build, offset: place(d, left - d.bb.max.x) });
-      left -= d.bb.max.x - d.bb.min.x + COMPANION_GAP_MM;
-    }
-    return out;
-  }, [ids, others, active, activeId, order]);
-  useEffect(() => {
-    stage.settleVersion++;
-  }, [slots, away]);
-  return (
-    <group ref={ref}>
-      {!away &&
-        slots.map((sl) =>
-          sl.build ? <CompanionDevice key={sl.id} canvasId={sl.id} build={sl.build} offset={sl.offset} name={shortName(names[ids.indexOf(sl.id)])} /> : null,
-        )}
-    </group>
-  );
-}
-
-/** "a wireless mouse with a scroll wheel" reads as "Wireless mouse" on its tag. */
-function shortName(prompt: string): string {
-  const t = prompt.replace(/^(?:an?|the|make|build|create)\s+/i, "").split(/\s+(?:with|that|for|to)\s+/i)[0].trim();
-  return t ? t.charAt(0).toUpperCase() + t.slice(1, 40) : "Device";
-}
-
 function SceneContents(props: {
   gizmoMode: "translate" | "rotate";
   theme: Theme;
@@ -1598,7 +1302,6 @@ function SceneContents(props: {
     }
     return out;
   }, [build?.checks]);
-  const hoverLabel = useApp((s) => s.hoverLabel);
   const hoverEnds = useMemo(() => {
     const c = build?.connections.find((x) => x.connection_id === hoverConn);
     return new Set(c ? [c.from.instance_id, c.to.instance_id] : []);
@@ -1650,7 +1353,6 @@ function SceneContents(props: {
   });
   const showCase = toggles.case && !boardOnly;
   const showBoard = toggles.board || boardOnly;
-  const simOn = useSim((s) => s.active);
   const revision = `${build?.build_id ?? ""}:${build?.revision ?? 0}:${parts.length}:${showCase}:${showBoard}:${toggles.keycaps}:${covered.size}`;
   return (
     <>
@@ -1658,7 +1360,6 @@ function SceneContents(props: {
       {preset !== "bottom" && <StudioFloor palette={props.palette} revision={revision} grid />}
       <ExplodeDriver />
       <FocusDriver />
-      <SimDriver />
       <group ref={rootRef}>
         {visible.map((p) => (
           <PartNode
@@ -1671,7 +1372,7 @@ function SceneContents(props: {
             provisional={!placeDone}
             selected={selection === p.instance_id}
             failing={failing.has(p.instance_id)}
-            highlight={hoverEnds.has(p.instance_id) || hoverLabel === partLabel(p).key}
+            highlight={hoverEnds.has(p.instance_id)}
             focus={agentFocus === p.instance_id}
             labels={toggles.labels}
             theme={theme}
@@ -1698,9 +1399,6 @@ function SceneContents(props: {
               <BoardNode key={b.board_id} board={b} labelKey={i === 0 ? "b:board" : null} candidates={candidates} onCovered={onCovered} parts={parts} theme={theme} />
             ))}
       </group>
-      <CompanionRow />
-      <SimCaps covered={showBoard ? covered : NO_COVER} />
-      <SimScreens />
       <MoveGizmo mode={props.gizmoMode} />
       <CameraRig />
       <AgentCam />
@@ -1710,11 +1408,9 @@ function SceneContents(props: {
       <FitCheck onResult={props.onFit} />
       {props.post && <StudioPost dark={false} />}
       {/* View cube, top left. Build space is Z up: +Y is the back face, -Y the front. */}
-      {!simOn && (
-        <GizmoHelper alignment="top-left" margin={[64, 64]} renderPriority={2}>
-          <GizmoViewcube faces={["Right", "Left", "Back", "Front", "Top", "Bottom"]} color="#F4F5F7" textColor="#5B6470" strokeColor="#B9C0C8" hoverColor="#CFE3F7" opacity={1} />
-        </GizmoHelper>
-      )}
+      <GizmoHelper alignment="top-left" margin={[64, 64]} renderPriority={2}>
+        <GizmoViewcube faces={["Right", "Left", "Back", "Front", "Top", "Bottom"]} color="#F4F5F7" textColor="#5B6470" strokeColor="#B9C0C8" hoverColor="#CFE3F7" opacity={1} />
+      </GizmoHelper>
     </>
   );
 }
@@ -1731,12 +1427,6 @@ export function Viewport3D() {
   const [gizmoMode, setGizmoMode] = useState<"translate" | "rotate">("translate");
   const [boardOnly, setBoardOnly] = useState(false);
   const [misfit, setMisfit] = useState(0);
-  const simOn = useSim((s) => s.active);
-  useEffect(() => {
-    if (simOn) setBoardOnly(false);
-  }, [simOn]);
-  // a part pulled out into focus has left its case on purpose: the fit check does not apply
-  const focusOn = useApp((s) => s.focusKey !== null);
   // Narrow viewports get a compact toolbar so it stays one row and never covers the prompt bar.
   const vpRef = useRef<HTMLDivElement>(null);
   const [compact, setCompact] = useState(false);
@@ -1771,7 +1461,7 @@ export function Viewport3D() {
         gl={{ antialias: !post, preserveDrawingBuffer: true, powerPreference: "high-performance" }}
       >
         <SceneContents gizmoMode={gizmoMode} theme={theme} palette={palette} boardOnly={boardOnly} post={post} onFit={setMisfit} />
-        <OrbitControls makeDefault enableDamping dampingFactor={0.12} enabled={!simOn} />
+        <OrbitControls makeDefault enableDamping dampingFactor={0.12} />
       </Canvas>
       {hasParts && <LabelOverlay rows={overlayRows} color="#1B1D1F" muted="#5D6166" line="#7C8086" accent="#2E7D46" />}
       {!hasParts && (
@@ -1779,19 +1469,18 @@ export function Viewport3D() {
           {status === "running" || status === "awaiting_input" ? "Parts appear here as they are chosen." : status === "failed" ? "No parts were placed." : "Describe a device to start."}
         </div>
       )}
-      {hasParts && misfit > 0 && !focusOn && !simOn && (
+      {hasParts && misfit > 0 && (
         <div style={MISFIT_CHIP} role="status">
           <span className="chip solid tone-warn" title="The case model does not contain the board in plan view. It is shown as generated and needs regenerating.">
             Case does not fit the board: off by {misfit} mm
           </span>
         </div>
       )}
-      {hasParts && missingCount > 0 && !simOn && (
+      {hasParts && missingCount > 0 && (
         <div className="vp-note small" title="These parts have no 3D model on the server, so they are drawn as boxes sized from the catalog.">
           {missingCount} of the parts drawn as boxes (no model)
         </div>
       )}
-      <SimOverlay />
       <ViewportToolbar gizmoMode={gizmoMode} setGizmoMode={setGizmoMode} boardOnly={boardOnly} setBoardOnly={setBoardOnly} compact={compact} />
     </div>
   );
@@ -1824,8 +1513,6 @@ function ViewportToolbar(props: {
   const preset = useApp((s) => s.preset);
   const moving = useApp((s) => s.moving);
   const hasScene = useApp((s) => !!s.build?.scene);
-  const simOn = useSim((s) => s.active);
-  const simReady = useApp((s) => canSimulate(s.build));
   // Only offer toggles that change something in this build (a smartwatch has no keycaps).
   const applies = useApp(
     useShallow((s) => {
@@ -1840,17 +1527,6 @@ function ViewportToolbar(props: {
   );
   const setPreset = (p: ViewPreset) => setView(p);
   const toggle = (k: keyof typeof toggles) => useApp.setState((s) => ({ toggles: { ...s.toggles, [k]: !s.toggles[k] } }));
-  if (simOn) {
-    return (
-      <div className="vp-toolbar" role="toolbar" aria-label="Simulation" style={props.compact ? { ...TOOLBAR_FIT, gap: 4, padding: "4px 6px" } : TOOLBAR_FIT}>
-        <button type="button" className="seg-btn active" aria-pressed onClick={exitSimulation} title="Leave simulation (Esc)">
-          simulate
-        </button>
-        <span className="vp-sep" />
-        <span className="small sim-hint">Click the device or use your keyboard. Esc leaves.</span>
-      </div>
-    );
-  }
   return (
     <div className="vp-toolbar" role="toolbar" aria-label="View" style={props.compact ? { ...TOOLBAR_FIT, gap: 4, padding: "4px 6px" } : TOOLBAR_FIT}>
       <label className="vp-explode">
@@ -1892,14 +1568,6 @@ function ViewportToolbar(props: {
           </button>
         )}
       </div>
-      {simReady && (
-        <>
-          <span className="vp-sep" />
-          <button type="button" className="seg-btn" aria-pressed={false} onClick={enterSimulation} title="Run the device: press its keys and buttons, see what it does">
-            simulate
-          </button>
-        </>
-      )}
       {moving && (
         <>
           <span className="vp-sep" />
@@ -1917,4 +1585,14 @@ function ViewportToolbar(props: {
       )}
     </div>
   );
+}
+
+const noFit = () => undefined;
+
+/** The build drawn as the workspace draws it, for another canvas (the simulator): no toolbar, no move gizmo. */
+export function DeviceScene() {
+  const theme = useTheme();
+  const palette = useMemo(() => studioPalette(), []);
+  const post = useMemo(postEnabled, []);
+  return <SceneContents gizmoMode="translate" theme={theme} palette={palette} boardOnly={false} post={post} onFit={noFit} />;
 }

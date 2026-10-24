@@ -3,7 +3,7 @@ import { loadFixtures } from "../spec/fixtures";
 import type { Build, ClientEnvelope, EditOp, ServerEnvelope, ServerPayloads } from "../spec/types";
 import { createBuild, reduceBuild } from "../state/reducer";
 import { Connection } from "./connection";
-import { FakeSocket, fixtureBuildPath, MockHub, MockServer, MOCK_EDIT_MESSAGE, pacedDelays, selectEditFixture, selectFixture } from "./fakeSocket";
+import { FakeSocket, MockServer, MOCK_EDIT_MESSAGE, pacedDelays, selectEditFixture, selectFixture } from "./fakeSocket";
 import { RestClient, paths, stubFetcher } from "./rest";
 
 const fx = await loadFixtures();
@@ -187,47 +187,6 @@ describe("REST stub", () => {
     const missing = await rest.get(paths.part("mod:nope"));
     expect(missing.ok).toBe(false);
     if (!missing.ok) expect(missing.error.code).toBe("E_NOT_FOUND");
-  });
-});
-
-describe("mock hub (several canvases)", () => {
-  it("runs two builds of one fixture at once under different build ids", async () => {
-    const hub = new MockHub(fx, { speed: 1 });
-    const builds = new Map<string, Build>();
-    const starts = new Map<string, string>();
-    const conn: Connection = new Connection({
-      url: "mock",
-      socketFactory: () => new FakeSocket(hub),
-      resumeTarget: () => null,
-      onEnvelope: (env) => {
-        if (env.type === "ack") {
-          const p = env.payload as ServerPayloads["ack"];
-          const prompt = starts.get(p.msg_id);
-          if (prompt && p.build_id) {
-            builds.set(p.build_id, createBuild(p.build_id, prompt));
-            conn.setCursor(p.build_id, 0);
-          }
-          return;
-        }
-        const b = env.build_id ? builds.get(env.build_id) : undefined;
-        if (b && env.seq > 0) builds.set(b.build_id, reduceBuild(b, env));
-      },
-    });
-    conn.connect();
-    starts.set(conn.send("build.start", { prompt: "a toaster that tweets" }), "a");
-    await run(300);
-    starts.set(conn.send("build.start", { prompt: "a toaster that tweets" }), "b");
-    await run();
-    const ids = [...builds.keys()];
-    expect(ids).toHaveLength(2);
-    expect(ids[0]).not.toBe(ids[1]);
-    expect(ids.map((id) => id.split("~")[0])).toEqual([ids[0].split("~")[0], ids[0].split("~")[0]]);
-    expect(fixtureBuildPath(paths.build(ids[1]))).toBe(paths.build(ids[0].split("~")[0]));
-    for (const b of builds.values()) {
-      expect(b.status).toBe("done");
-      expect(b.parts.length).toBeGreaterThan(0);
-    }
-    expect(builds.get(ids[0])?.parts.length).toBe(builds.get(ids[1])?.parts.length);
   });
 });
 

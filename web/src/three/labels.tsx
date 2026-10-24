@@ -6,7 +6,6 @@ import { useEffect, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { stage } from "./stage";
-import { focusPart, useApp } from "../state/store";
 
 export interface LabelRow {
   key: string;
@@ -41,8 +40,8 @@ export function LabelOverlay(props: { rows: LabelRow[]; color: string; muted: st
     };
   }, []);
   return (
-    <div ref={ref} style={{ position: "absolute", inset: 0, pointerEvents: "none", opacity: 0, zIndex: 3, overflow: "hidden" }}>
-      <svg aria-hidden width="100%" height="100%" style={{ position: "absolute", inset: 0 }}>
+    <div ref={ref} aria-hidden style={{ position: "absolute", inset: 0, pointerEvents: "none", opacity: 0, zIndex: 3, overflow: "hidden" }}>
+      <svg width="100%" height="100%" style={{ position: "absolute", inset: 0 }}>
         {props.rows.map((r) => (
           <g key={r.key}>
             <line
@@ -74,18 +73,7 @@ export function LabelOverlay(props: { rows: LabelRow[]; color: string; muted: st
             s.row = el;
             slots.set(r.key, s);
           }}
-          role="button"
-          className="explode-label"
-          // a label picks its part: hovering outlines it, clicking pulls it out into focus
-          onPointerEnter={() => useApp.setState({ hoverLabel: r.key })}
-          onPointerLeave={() => {
-            if (useApp.getState().hoverLabel === r.key) useApp.setState({ hoverLabel: null });
-          }}
-          onClick={() => {
-            useApp.setState({ hoverLabel: null });
-            focusPart(r.key);
-          }}
-          style={{ position: "absolute", left: 0, top: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", lineHeight: 1.15, willChange: "transform", pointerEvents: "none", cursor: "pointer" }}
+          style={{ position: "absolute", left: 0, top: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", lineHeight: 1.15, willChange: "transform" }}
         >
           <div style={{ font: "600 14px/1.2 var(--font-sans, system-ui, sans-serif)", color: props.color, overflow: "hidden", textOverflow: "ellipsis" }}>
             {r.title}
@@ -160,9 +148,6 @@ export function LabelProjector() {
     // labels step aside while a part is in focus
     const alpha = labelOpacity(stage.explode) * (1 - stage.focusK);
     el.style.opacity = String(alpha);
-    // rows take clicks only while the explode is held open, never as invisible hit areas
-    const live = alpha > 0.5 ? "auto" : "none";
-    for (const s of slots.values()) if (s.row && s.row.style.pointerEvents !== live) s.row.style.pointerEvents = live;
     if (alpha <= 0) return;
     const w = size.width;
     const h = size.height;

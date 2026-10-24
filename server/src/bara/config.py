@@ -10,19 +10,6 @@ SERVER_DIR = Path(__file__).resolve().parents[2]
 REPO_DIR = SERVER_DIR.parent
 
 
-def load_dotenv(path: Path = SERVER_DIR / ".env") -> None:
-    """KEY=value lines from server/.env (gitignored) into the environment. Variables already
-    set in the shell win, so a deploy's real environment is never overridden."""
-    if not path.is_file():
-        return
-    for line in path.read_text().splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        name, _, value = line.partition("=")
-        os.environ.setdefault(name.strip(), value.strip().strip("\"'"))
-
-
 def _float_env(name: str, default: float) -> float:
     raw = os.environ.get(name)
     if raw is None or raw == "":

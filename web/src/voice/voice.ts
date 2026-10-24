@@ -51,34 +51,7 @@ export function setReplies(on: boolean, announce = false): void {
 // ---------------------------------------------------------------- speaking
 
 let audio: HTMLAudioElement | null = null;
-/** The next sentence, already downloading while the current one plays. */
-let upNext: HTMLAudioElement | null = null;
 let engineVoice: boolean | null = null;
-
-/** Sentences to speak one by one: the first starts sooner than the whole reply would, and the
- *  rest are fetched while it plays. Very short pieces ride with the next so it doesn't sound clipped. */
-export function sentences(text: string): string[] {
-  const out: string[] = [];
-  let carry = "";
-  for (const piece of text.split(/(?<=[.!?])\s+/)) {
-    carry = carry ? `${carry} ${piece}` : piece;
-    if (carry.length >= 16) {
-      out.push(carry);
-      carry = "";
-    }
-  }
-  if (carry) {
-    if (out.length && carry.length < 16) out[out.length - 1] += ` ${carry}`;
-    else out.push(carry);
-  }
-  return out;
-}
-
-function ttsAudio(line: string): HTMLAudioElement {
-  const a = new Audio(serverUrl(`/v1/tts?text=${encodeURIComponent(line)}`));
-  a.preload = "auto";
-  return a;
-}
 
 async function engineCanSpeak(): Promise<boolean> {
   if (engineVoice !== null) return engineVoice;
@@ -92,13 +65,11 @@ async function engineCanSpeak(): Promise<boolean> {
 }
 
 export function stopSpeaking(): void {
-  for (const a of [audio, upNext]) {
-    if (!a) continue;
-    a.pause();
-    a.src = "";
+  if (audio) {
+    audio.pause();
+    audio.src = "";
+    audio = null;
   }
-  audio = null;
-  upNext = null;
   if (typeof speechSynthesis !== "undefined") speechSynthesis.cancel();
   useVoice.setState({ caption: null });
 }
@@ -138,30 +109,21 @@ export function speak(text: string, force = false): void {
       return;
     }
     // GET, so the audio element plays the stream as it arrives instead of waiting for the file
-    const lines = sentences(clean);
-    const play = (i: number, a: HTMLAudioElement) => {
-      audio = a;
-      upNext = i + 1 < lines.length ? ttsAudio(lines[i + 1]) : null;
-      a.onended = () => {
-        if (audio !== a) return;
-        if (upNext) play(i + 1, upNext);
-        else useVoice.setState({ caption: null });
-      };
-      a.onerror = () => {
-        if (audio !== a) return;
-        engineVoice = false;
-        speakInBrowser(lines.slice(i).join(" "));
-      };
-      void a.play().catch(() => {
-        if (audio === a) speakInBrowser(lines.slice(i).join(" "));
-      });
+    const a = new Audio(serverUrl(`/v1/tts?text=${encodeURIComponent(clean)}`));
+    audio = a;
+    a.onended = () => {
+      if (audio === a) useVoice.setState({ caption: null });
     };
-    play(0, ttsAudio(lines[0]));
+    a.onerror = () => {
+      if (audio !== a) return;
+      engineVoice = false;
+      speakInBrowser(clean);
+    };
+    void a.play().catch(() => {
+      if (audio === a) speakInBrowser(clean);
+    });
   });
 }
-
-// ask the engine once, early, so the first reply doesn't wait on it
-if (typeof window !== "undefined") void engineCanSpeak();
 
 // ---------------------------------------------------------------- listening
 

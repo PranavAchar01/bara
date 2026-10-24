@@ -316,7 +316,6 @@ def geometry_board(entry: dict[str, Any]) -> dict[str, Any]:
         "position_mm": spec_board.get("position_mm") or [0, 0, 0],
         "placements": entry.get("placements") or [],
         "cables": entry.get("cables") or [],
-        "frame": "y_up",  # BOARD entries are already in build space, not KiCad's y-down frame
     }
 
 
