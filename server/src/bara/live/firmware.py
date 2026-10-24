@@ -113,7 +113,7 @@ def _keymap_rows(plan: KeyboardPlan) -> list[str]:
     for half in plan.halves:
         line = []
         for key in half.keys:
-            if key["matrix"][0] >= half.rows:  # thumb row
+            if key.get("thumb"):
                 line.append(f"&kp {THUMBS[t % len(THUMBS)]}")
                 t += 1
             else:

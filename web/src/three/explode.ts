@@ -3,7 +3,7 @@
 // Pure functions so the order and the naming are unit tested.
 import type { BuildPart } from "../spec/types";
 
-export type LayerId = "case" | "under" | "pcb" | "board_parts" | "plate" | "switches" | "keycaps" | "top";
+export type LayerId = "case" | "under" | "pcb" | "board_parts" | "plate" | "switches" | "keycaps" | "top" | "lid";
 
 export const LAYER_RANK: Record<LayerId, number> = {
   case: 0,
@@ -14,6 +14,8 @@ export const LAYER_RANK: Record<LayerId, number> = {
   switches: 5,
   keycaps: 6,
   top: 7,
+  /** A closed case (lid over the board) lifts off above everything else. */
+  lid: 8,
 };
 export const TOP_RANK = LAYER_RANK.top;
 
@@ -65,6 +67,7 @@ const GROUP_NAME: Record<LayerId, string> = {
   switches: "Switches",
   keycaps: "Keycaps",
   top: "",
+  lid: "Case",
 };
 
 const BY_FUNCTION: [RegExp, string][] = [

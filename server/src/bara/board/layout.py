@@ -258,6 +258,7 @@ class Key:
     row: int
     col: int
     thumb: bool = False
+    w: float = 1.0  # key width in units (1, 1.25 ... 6.25)
 
 
 @dataclass
@@ -314,9 +315,87 @@ def _grid_shape(n: int, b: Brief) -> tuple[int, int, int]:
     return rows, cols, n - rows * cols
 
 
+STAB_SIZES = (2.0, 3.0, 6.0, 6.25, 7.0, 8.0)  # kiswitch Stabilizer_Cherry_MX_*u footprints
+
+
+def _switch_fp(base: str, w: float) -> FootprintInfo | None:
+    """The width-specific kiswitch footprint (same socket, key outline drawn at that width)."""
+    if abs(w - 1.0) < 1e-6 or "_1.00u" not in base:
+        return None
+    try:
+        return footprint_ref(base.replace("_1.00u", f"_{w:.2f}u"))
+    except Exception:  # no footprint for that width: the 1u one is used
+        return None
+
+
+def _stab_fp(switch: str, w: float) -> FootprintInfo | None:
+    if switch != "mx" or w < 2.0 - 1e-6:
+        return None
+    size = max(s for s in STAB_SIZES if s <= w + 1e-6)
+    try:
+        return footprint_ref(
+            f"kiswitch/Mounting_Keyboard_Stabilizer:Stabilizer_Cherry_MX_{size:.2f}u"
+        )
+    except Exception:
+        return None
+
+
 def _key_rect(pitch: tuple[float, float]) -> Polygon:
     px, py = pitch
     return box(-px / 2, -py / 2, px / 2, py / 2)
+
+
+def _keys_from_points(
+    points: list[dict],
+    pitch: tuple[float, float],
+    shape_for: Any,
+    log: list[str],
+) -> list[Key]:
+    """Exact keys from the live layout (SPEC 3.3 units, y down), centres in mm.
+
+    Thumb keys are pushed down (and apart) only as far as needed for their sockets and caps
+    to clear the main block; the count and order never change.
+    """
+    px, py = pitch
+    keys: list[Key] = []
+    for i, p in enumerate(points):
+        w = float(p.get("w_u") or 1.0)
+        cx, cy = (float(p["x_u"]) + w / 2) * px, (float(p["y_u"]) + 0.5) * py
+        r = float(p.get("r_deg") or 0.0)
+        if r:
+            ox, oy = float(p.get("rx_u", p["x_u"])) * px, float(p.get("ry_u", p["y_u"])) * py
+            a = math.radians(r)
+            dx, dy = cx - ox, cy - oy
+            ca, sa = math.cos(a), math.sin(a)
+            cx, cy = ox + dx * ca - dy * sa, oy + dx * sa + dy * ca
+        keys.append(Key(cx, cy, -r, i, 0, bool(p.get("thumb")), w))
+
+    def poly(k: Key) -> Polygon:
+        return affinity.translate(affinity.rotate(shape_for(k.w), -k.rot, origin=(0, 0)), k.x, k.y)
+
+    main = [k for k in keys if not k.thumb]
+    thumbs = [k for k in keys if k.thumb]
+    if thumbs and main:
+        placed = unary_union([poly(k) for k in main]).buffer(THUMB_CAP_GAP / 2)
+        for _ in range(40):  # spread neighbours that touch
+            moved = False
+            for a, b in zip(thumbs, thumbs[1:], strict=False):
+                if poly(a).buffer(THUMB_CAP_GAP / 2).intersects(poly(b)):
+                    step = 0.5 if b.x >= a.x else -0.5
+                    for t in thumbs[thumbs.index(b) :]:
+                        t.x += step
+                    moved = True
+            if not moved:
+                break
+        push = 0.0
+        while any(poly(t).intersects(placed) for t in thumbs) and push < 40:
+            for t in thumbs:
+                t.y += 0.5
+            push += 0.5
+        if push:
+            log.append(f"thumb keys moved {push:.1f} mm down to clear the main block")
+    log.append(f"{len(keys)} keys from the live layout (pitch {px}x{py} mm)")
+    return keys
 
 
 def _place_keys(
@@ -455,6 +534,17 @@ def _search(
 # ---------------------------------------------------------------- controller + budget
 
 
+def matrix_dims(n: int) -> tuple[int, int]:
+    """Fewest-pin electrical matrix for n switches: smallest rows + cols with rows * cols >= n,
+    the squarest one on a tie."""
+    best = (n, 1)
+    for cols in range(1, max(n, 1) + 1):
+        rows = math.ceil(n / cols)
+        if (rows + cols, abs(rows - cols)) < (best[0] + best[1], abs(best[0] - best[1])):
+            best = (rows, cols)
+    return best
+
+
 def controller_gpio(ctrl: dict) -> tuple[list[str], dict[str, str]]:
     """GPIO pad numbers on the module's edge rows, and the full pad->symbol-name map."""
     fp = footprint_ref(ctrl["footprint"])
@@ -468,24 +558,27 @@ def controller_gpio(ctrl: dict) -> tuple[list[str], dict[str, str]]:
 
 
 def pick_controller(need: int, b: Brief, log: list[str]) -> tuple[dict, dict]:
+    """The brief's controller when it has the GPIO, else the smallest one that does."""
     cands = [c for c in R.CONTROLLERS if c["wireless"] or not b.wireless]
-    if b.mcu_hint:
-        hinted = [c for c in cands if any(w in c["label"].lower() for w in b.mcu_hint.split())]
-        if hinted:
-            cands = hinted + [c for c in cands if c not in hinted]
-    first = cands[0]
-    for c in cands:
-        gpio, _ = controller_gpio(c)
-        if len(gpio) >= need:
-            if c is not first:
-                log.append(
-                    f"MCU pin budget: {need} GPIO needed, {first['label']} has "
-                    f"{len(controller_gpio(first)[0])}, upgraded to {c['label']} ({len(gpio)})"
-                )
-            else:
-                log.append(f"MCU pin budget: {need} GPIO needed, {c['label']} has {len(gpio)}")
-            return c, {"needed": need, "available": len(gpio), "controller": c["id"]}
-    raise RuntimeError(f"no controller has {need} GPIO")
+    gpio = {c["id"]: len(controller_gpio(c)[0]) for c in cands}
+    words = b.mcu_hint.lower().split()
+    hinted = [c for c in cands if any(w in c["label"].lower() for w in words)]
+    first = hinted[0] if hinted else cands[0]
+    if gpio[first["id"]] >= need:
+        log.append(
+            f"pin budget: {need} GPIO needed, {first['label']} has {gpio[first['id']]}: "
+            "kept the brief's pick"
+        )
+        return first, {"needed": need, "available": gpio[first["id"]], "controller": first["id"]}
+    fits = sorted((gpio[c["id"]], i, c) for i, c in enumerate(cands) if gpio[c["id"]] >= need)
+    if not fits:
+        raise RuntimeError(f"no controller has {need} GPIO")
+    n, _, ctrl = fits[0]
+    log.append(
+        f"pin budget: {need} GPIO needed; {first['label']} has {gpio[first['id']]} -> "
+        f"{ctrl['label']} ({n} GPIO)"
+    )
+    return ctrl, {"needed": need, "available": n, "controller": ctrl["id"]}
 
 
 # ---------------------------------------------------------------- one keyboard half
@@ -533,7 +626,19 @@ def plan_keyboard_board(name: str, n_keys: int, b: Brief, log: list[str]) -> lis
     cw, ch = sw["keycap_mm"]
     # thumb fan spacing must clear the keycaps as well as the sockets
     key_shape = unary_union([sw_shape, box(-cw / 2, -ch / 2, cw / 2, ch / 2)])
-    keys = _place_keys(n_keys, b, pitch, key_shape, mirror, log)
+
+    def cap_w(w: float) -> float:
+        return cw + (w - 1.0) * pitch[0]
+
+    def shape_for(w: float) -> Polygon:
+        c = cap_w(w)
+        return unary_union([sw_shape, box(-c / 2, -ch / 2, c / 2, ch / 2)])
+
+    points = (b.raw.get("key_points") or {}).get(name)
+    if points:
+        keys = _keys_from_points(points, pitch, shape_for, log)
+    else:
+        keys = _place_keys(n_keys, b, pitch, key_shape, mirror, log)
     inner_sign = -1.0 if mirror else 1.0  # inner = towards the other half
     feats = _features_for(name, b)
     items: list[Item] = []
@@ -542,25 +647,28 @@ def plan_keyboard_board(name: str, n_keys: int, b: Brief, log: list[str]) -> lis
         it = Item(
             f"SW{i + 1}",
             "switch",
-            sw_fp,
+            _switch_fp(sw["footprint"], k.w) or sw_fp,
             k.x,
             k.y,
             k.rot,
             "top",
-            label=sw["label"],
+            label=sw["label"] + (f" ({k.w:g}u)" if k.w != 1.0 else ""),
             height_mm=sw["height_mm"],
             extra_models=list(sw["extra_models"]),
             meta={
                 "row": k.row,
                 "col": k.col,
                 "thumb": k.thumb,
-                "keycap_mm": sw["keycap_mm"],
+                "w_u": k.w,
+                "keycap_mm": (cap_w(k.w), ch),
                 "keycap_top_mm": sw["keycap_top_mm"],
             },
         )
         items.append(it)
         rect = affinity.translate(
-            affinity.rotate(_key_rect(pitch), -k.rot, origin=(0, 0)), k.x, k.y
+            affinity.rotate(_key_rect((pitch[0] * k.w, pitch[1])), -k.rot, origin=(0, 0)),
+            k.x,
+            k.y,
         )
         blocked_top.append(unary_union([rect, it.footprint_poly()]))
     key_cloud = unary_union(blocked_top)
@@ -570,21 +678,24 @@ def plan_keyboard_board(name: str, n_keys: int, b: Brief, log: list[str]) -> lis
         else key_cloud
     )
 
-    # matrix: physical rows (+ thumb row) x columns; encoder pushes fill free slots
-    grid_rows = max(k.row for k in keys if not k.thumb) + 1
-    grid_cols = max(k.col for k in keys if not k.thumb) + 1
-    n_rows = grid_rows + (1 if any(k.thumb for k in keys) else 0)
-    used = {(k.row, k.col) for k in keys}
+    # matrix: the smallest rows x cols grid for the keys (fewest pins), keys filled in
+    # reading order; encoder pushes take the grid's spare cells, then an extra column
     knobs = [f for f in feats if f.kind == "knob"]
     screens = [f for f in feats if f.kind == "screen"]
     balls = [f for f in feats if f.kind == "trackball"]
-    free = [(r, c) for r in range(n_rows) for c in range(grid_cols) if (r, c) not in used]
-    n_cols = grid_cols
+    n_rows, n_cols = matrix_dims(len(keys))
+    for i, it in enumerate(it for it in items if it.role == "switch"):
+        it.meta["matrix"] = divmod(i, n_cols)
+    free = [divmod(i, n_cols) for i in range(len(keys), n_rows * n_cols)]
     while len(free) < len(knobs):
         free += [(r, n_cols) for r in range(n_rows)]
         n_cols += 1
     knob_slots = free[: len(knobs)]
     gpio_need = n_rows + n_cols + 2 * len(knobs) + 2 * bool(screens) + 5 * len(balls)
+    log.append(
+        f"matrix {n_rows}x{n_cols} for {len(keys)} keys"
+        + (f" + {len(knobs)} encoder push" if knobs else "")
+    )
     ctrl, budget = pick_controller(gpio_need, b, log)
     budget.update(
         {
@@ -759,8 +870,17 @@ def plan_keyboard_board(name: str, n_keys: int, b: Brief, log: list[str]) -> lis
         blocked_bottom.append(d.footprint_poly())
         knob_diodes.append(d)
 
-    # battery cell under the board (off-PCB part; keeps clear of everything on the underside)
+    # battery cell under the board (off-PCB part; keeps clear of everything on the underside,
+    # including the trackball sensor boards that hang under each ball)
     if b.battery:
+        for ball in (it for it in items if it.role == "trackball"):
+            sensor = plan_sensor_board("probe", [])
+            lens = sensor_lens(sensor)
+            blocked_bottom.append(
+                affinity.translate(
+                    box(*sensor.outline.bounds), ball.x - lens.x, ball.y - lens.y
+                ).buffer(SENSOR_BOARD_CLEARANCE, join_style="mitre")
+            )
         w, h = R.BATTERY_CELL["size_mm"]
         cell = Item(
             "BT1",
@@ -798,14 +918,10 @@ def plan_keyboard_board(name: str, n_keys: int, b: Brief, log: list[str]) -> lis
         mcu.pads = {k: v for k, v in mcu.pads.items() if v != "BAT+"}
     diodes = [it for it in items if it.role == "diode"]
     for i, swi in enumerate(switches):
-        r, c = swi.meta["row"], swi.meta["col"]
-        if swi.meta["thumb"]:
-            r = n_rows - 1
-            c = min(c, n_cols - 1)
+        r, c = divmod(i, n_cols)
         knet = f"K{i + 1}"
         swi.pads = {sw["pins"]["col"]: f"COL{c}", sw["pins"]["row_side"]: knet}
         diodes[i].pads = {R.DIODE["pins"]["anode"]: knet, R.DIODE["pins"]["cathode"]: f"ROW{r}"}
-        swi.meta["matrix"] = (r, c)
     for i, enc in enumerate(it for it in items if it.role == "encoder"):
         r, c = knob_slots[i]
         knet = f"KE{i + 1}"
@@ -903,10 +1019,13 @@ def _assign_gpio(mcu: Item, gpio: list[str], nets: list[str], items: list[Item])
     for net in nets:
         pts = []
         for it in items:
-            if it.role == "switch" and net.startswith("COL"):
-                pts.append((it.x, it.y)) if f"COL{it.meta.get('col')}" == net else None
-            elif it.role == "switch" and net.startswith("ROW"):
-                pts.append((it.x, it.y)) if f"ROW{it.meta.get('row')}" == net else None
+            if it.role != "switch" or "matrix" not in it.meta:
+                if any(v == net for v in it.pads.values()) and it is not mcu:
+                    pts.append(it.centre())
+                continue
+            r, c = it.meta["matrix"]
+            if net in (f"ROW{r}", f"COL{c}"):
+                pts.append((it.x, it.y))
         centroids[net] = (
             (sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts))
             if pts

@@ -1,0 +1,1163 @@
+{
+ "description": "Device archetypes: what real devices of a class look like, used to fill what a prompt leaves unstated. Each names the open design or the common community pattern it was read from. Sizes are approximate (read from the projects' published dimensions or photos, not measured); conformance ranges are wide on purpose. 'open_design' entries cite a public repository; 'pattern' entries summarise the usual hobby build of that device and cite no single project. Data only, written by hand for Bara; no files were copied from these projects.",
+ "archetypes": [
+  {
+   "id": "bakeneko60",
+   "name": "Bakeneko60 (60% ANSI)",
+   "source": {
+    "kind": "open_design",
+    "url": "https://github.com/kkatano/Bakeneko-60",
+    "licence": "MIT"
+   },
+   "words": [
+    "keyboard",
+    "60%",
+    "60 percent",
+    "sixty percent",
+    "ansi",
+    "mechanical keyboard"
+   ],
+   "default_for": [
+    "keyboard"
+   ],
+   "excludes": [
+    "split",
+    "macropad",
+    "macro pad",
+    "numpad",
+    "keypad",
+    "ortho",
+    "ortholinear",
+    "40%",
+    "65%",
+    "tkl",
+    "corne",
+    "lily58",
+    "75%",
+    "80%",
+    "96%",
+    "100%",
+    "full size",
+    "full-size",
+    "tenkeyless",
+    "numpad"
+   ],
+   "brief": {
+    "layout_style": "unibody",
+    "stagger": "row",
+    "layout_preset": "ansi_60",
+    "key_count": 61,
+    "switch_family": "mx"
+   },
+   "functions": [],
+   "form": {
+    "shape": "rect",
+    "size_mm": [
+     285.0,
+     94.6
+    ],
+    "thickness_mm": 20.0,
+    "mount": "desk"
+   },
+   "size_range_mm": {
+    "w": [
+     270.0,
+     310.0
+    ],
+    "h": [
+     85.0,
+     120.0
+    ]
+   }
+  },
+  {
+   "id": "bakeneko65",
+   "name": "Bakeneko65 (65% ANSI)",
+   "source": {
+    "kind": "open_design",
+    "url": "https://github.com/kkatano/Bakeneko-65",
+    "licence": "MIT"
+   },
+   "words": [
+    "65%",
+    "65 percent",
+    "sixty five"
+   ],
+   "excludes": [
+    "split",
+    "macropad",
+    "60%",
+    "75%"
+   ],
+   "brief": {
+    "layout_style": "unibody",
+    "stagger": "row",
+    "layout_preset": "ansi_65",
+    "key_count": 68,
+    "switch_family": "mx"
+   },
+   "functions": [],
+   "form": {
+    "shape": "rect",
+    "size_mm": [
+     305.0,
+     94.6
+    ],
+    "thickness_mm": 20.0,
+    "mount": "desk"
+   },
+   "size_range_mm": {
+    "w": [
+     290.0,
+     330.0
+    ],
+    "h": [
+     85.0,
+     120.0
+    ]
+   }
+  },
+  {
+   "id": "planck",
+   "name": "40% ortholinear (Planck-style pattern)",
+   "source": {
+    "kind": "pattern",
+    "url": null,
+    "licence": null
+   },
+   "words": [
+    "ortho",
+    "ortholinear",
+    "40%",
+    "planck",
+    "grid keyboard"
+   ],
+   "excludes": [
+    "split",
+    "macropad"
+   ],
+   "brief": {
+    "layout_style": "unibody",
+    "stagger": "ortho",
+    "rows": 4,
+    "cols": 12,
+    "key_count": 48,
+    "switch_family": "mx"
+   },
+   "functions": [],
+   "form": {
+    "shape": "rect",
+    "size_mm": [
+     233.0,
+     81.0
+    ],
+    "thickness_mm": 18.0,
+    "mount": "desk"
+   },
+   "size_range_mm": {
+    "w": [
+     220.0,
+     250.0
+    ],
+    "h": [
+     75.0,
+     100.0
+    ]
+   }
+  },
+  {
+   "id": "corne",
+   "name": "Corne (crkbd, 42-key split)",
+   "source": {
+    "kind": "open_design",
+    "url": "https://github.com/foostan/crkbd",
+    "licence": "CC-BY-4.0"
+   },
+   "words": [
+    "split",
+    "corne",
+    "crkbd",
+    "ergo",
+    "ergonomic"
+   ],
+   "default_for": [
+    "split keyboard"
+   ],
+   "excludes": [
+    "lily58",
+    "58 key"
+   ],
+   "brief": {
+    "layout_style": "split",
+    "stagger": "column",
+    "rows": 3,
+    "key_count": 42,
+    "thumb_keys": 3,
+    "switch_family": "choc_v1"
+   },
+   "functions": [],
+   "form": {
+    "shape": "rect",
+    "size_mm": [
+     134.0,
+     93.0
+    ],
+    "thickness_mm": 14.0,
+    "mount": "desk"
+   },
+   "size_range_mm": {
+    "w": [
+     110.0,
+     180.0
+    ],
+    "h": [
+     75.0,
+     140.0
+    ]
+   }
+  },
+  {
+   "id": "lily58",
+   "name": "Lily58 (58-key split with OLEDs)",
+   "source": {
+    "kind": "open_design",
+    "url": "https://github.com/kata0510/Lily58",
+    "licence": "NOASSERTION"
+   },
+   "words": [
+    "lily58",
+    "58 key",
+    "58-key"
+   ],
+   "excludes": [],
+   "brief": {
+    "layout_style": "split",
+    "stagger": "column",
+    "rows": 4,
+    "key_count": 58,
+    "thumb_keys": 5,
+    "switch_family": "mx"
+   },
+   "functions": [],
+   "form": {
+    "shape": "rect",
+    "size_mm": [
+     145.0,
+     105.0
+    ],
+    "thickness_mm": 16.0,
+    "mount": "desk"
+   },
+   "size_range_mm": {
+    "w": [
+     120.0,
+     190.0
+    ],
+    "h": [
+     85.0,
+     150.0
+    ]
+   }
+  },
+  {
+   "id": "macropad_3x3",
+   "name": "3x3 macropad (common open pattern)",
+   "source": {
+    "kind": "pattern",
+    "url": null,
+    "licence": null
+   },
+   "words": [
+    "macropad",
+    "macro pad",
+    "keypad",
+    "stream deck",
+    "shortcut pad"
+   ],
+   "default_for": [
+    "macropad"
+   ],
+   "excludes": [],
+   "brief": {
+    "layout_style": "macropad",
+    "stagger": "ortho",
+    "rows": 3,
+    "cols": 3,
+    "key_count": 9,
+    "switch_family": "mx"
+   },
+   "functions": [],
+   "form": {
+    "shape": "rect",
+    "size_mm": [
+     70.0,
+     70.0
+    ],
+    "thickness_mm": 20.0,
+    "mount": "desk"
+   },
+   "size_range_mm": {
+    "w": [
+     50.0,
+     140.0
+    ],
+    "h": [
+     50.0,
+     140.0
+    ]
+   }
+  },
+  {
+   "id": "watchy",
+   "name": "Watchy (open e-paper smartwatch)",
+   "source": {
+    "kind": "open_design",
+    "url": "https://github.com/sqfmi/Watchy",
+    "licence": "MIT"
+   },
+   "words": [
+    "smartwatch",
+    "smart watch",
+    "watch",
+    "wrist",
+    "fitness band",
+    "wearable"
+   ],
+   "default_for": [
+    "smartwatch",
+    "watch"
+   ],
+   "excludes": [
+    "round",
+    "circular"
+   ],
+   "brief": {
+    "power_source": "battery",
+    "display_type": [
+     "epaper",
+     "oled",
+     "tft"
+    ],
+    "wireless": "ble"
+   },
+   "functions": [
+    {
+     "function_id": "compute.mcu",
+     "count": 1,
+     "face": "bottom"
+    },
+    {
+     "function_id": "display.oled",
+     "count": 1,
+     "face": "top",
+     "any_of": [
+      "display.epaper",
+      "display.oled",
+      "display.tft"
+     ]
+    },
+    {
+     "function_id": "input.button",
+     "count": 4,
+     "face": "edge"
+    },
+    {
+     "function_id": "output.haptic",
+     "count": 1,
+     "face": "bottom"
+    },
+    {
+     "function_id": "sense.imu",
+     "count": 1,
+     "face": "bottom"
+    },
+    {
+     "function_id": "power.battery",
+     "count": 1,
+     "face": "bottom"
+    },
+    {
+     "function_id": "power.charger",
+     "count": 1,
+     "face": "bottom"
+    }
+   ],
+   "form": {
+    "shape": "rounded_rect",
+    "size_mm": [
+     38.0,
+     44.0
+    ],
+    "thickness_mm": 12.0,
+    "mount": "wrist"
+   },
+   "size_range_mm": {
+    "w": [
+     30.0,
+     52.0
+    ],
+    "h": [
+     30.0,
+     56.0
+    ]
+   }
+  },
+  {
+   "id": "zswatch",
+   "name": "ZSWatch (open round smartwatch)",
+   "source": {
+    "kind": "open_design",
+    "url": "https://github.com/ZSWatch/ZSWatch",
+    "licence": "GPL-3.0"
+   },
+   "words": [
+    "round watch",
+    "round smartwatch",
+    "circular watch",
+    "round"
+   ],
+   "excludes": [],
+   "brief": {
+    "power_source": "battery",
+    "display_type": [
+     "tft",
+     "oled"
+    ],
+    "wireless": "ble"
+   },
+   "functions": [
+    {
+     "function_id": "compute.mcu",
+     "count": 1,
+     "face": "bottom"
+    },
+    {
+     "function_id": "display.tft",
+     "count": 1,
+     "face": "top",
+     "any_of": [
+      "display.tft",
+      "display.oled"
+     ]
+    },
+    {
+     "function_id": "input.button",
+     "count": 3,
+     "face": "edge"
+    },
+    {
+     "function_id": "output.haptic",
+     "count": 1,
+     "face": "bottom"
+    },
+    {
+     "function_id": "sense.imu",
+     "count": 1,
+     "face": "bottom"
+    },
+    {
+     "function_id": "power.battery",
+     "count": 1,
+     "face": "bottom"
+    },
+    {
+     "function_id": "power.charger",
+     "count": 1,
+     "face": "bottom"
+    }
+   ],
+   "form": {
+    "shape": "round",
+    "size_mm": [
+     42.0,
+     42.0
+    ],
+    "thickness_mm": 13.0,
+    "mount": "wrist"
+   },
+   "size_range_mm": {
+    "w": [
+     34.0,
+     52.0
+    ],
+    "h": [
+     34.0,
+     52.0
+    ]
+   }
+  },
+  {
+   "id": "weather_station",
+   "name": "Wi-Fi weather station (ESP32 + BME280 + screen pattern)",
+   "source": {
+    "kind": "pattern",
+    "url": null,
+    "licence": null
+   },
+   "words": [
+    "weather station",
+    "weather",
+    "thermometer",
+    "barometer",
+    "climate monitor",
+    "indoor air"
+   ],
+   "default_for": [
+    "weather station"
+   ],
+   "excludes": [],
+   "brief": {
+    "wireless": "wifi",
+    "power_source": "usb",
+    "display_type": [
+     "oled",
+     "lcd_char",
+     "tft"
+    ]
+   },
+   "functions": [
+    {
+     "function_id": "compute.mcu",
+     "count": 1,
+     "face": "top"
+    },
+    {
+     "function_id": "sense.pressure",
+     "count": 1,
+     "face": "top",
+     "any_of": [
+      "sense.pressure",
+      "sense.temperature"
+     ]
+    },
+    {
+     "function_id": "sense.humidity",
+     "count": 1,
+     "face": "top"
+    },
+    {
+     "function_id": "display.oled",
+     "count": 1,
+     "face": "top",
+     "any_of": [
+      "display.oled",
+      "display.lcd_char",
+      "display.tft"
+     ]
+    },
+    {
+     "function_id": "power.usb_in",
+     "count": 1,
+     "face": "edge"
+    }
+   ],
+   "form": {
+    "shape": "rounded_rect",
+    "size_mm": [
+     80.0,
+     60.0
+    ],
+    "thickness_mm": 25.0,
+    "mount": "wall"
+   },
+   "size_range_mm": {
+    "w": [
+     40.0,
+     140.0
+    ],
+    "h": [
+     35.0,
+     120.0
+    ]
+   }
+  },
+  {
+   "id": "plant_monitor",
+   "name": "Plant monitor (stake sensor + Wi-Fi pattern)",
+   "source": {
+    "kind": "pattern",
+    "url": null,
+    "licence": null
+   },
+   "words": [
+    "plant",
+    "plant monitor",
+    "soil",
+    "garden",
+    "watering",
+    "greenhouse"
+   ],
+   "default_for": [
+    "plant monitor"
+   ],
+   "excludes": [],
+   "brief": {
+    "wireless": "wifi",
+    "power_source": "battery"
+   },
+   "functions": [
+    {
+     "function_id": "compute.mcu",
+     "count": 1,
+     "face": "top"
+    },
+    {
+     "function_id": "sense.water_level",
+     "count": 1,
+     "face": "bottom",
+     "any_of": [
+      "sense.water_level",
+      "sense.humidity"
+     ]
+    },
+    {
+     "function_id": "sense.light",
+     "count": 1,
+     "face": "top"
+    },
+    {
+     "function_id": "sense.temperature",
+     "count": 1,
+     "face": "top",
+     "any_of": [
+      "sense.temperature",
+      "sense.humidity"
+     ]
+    },
+    {
+     "function_id": "display.indicator_led",
+     "count": 1,
+     "face": "top",
+     "any_of": [
+      "display.indicator_led",
+      "output.rgb_led"
+     ]
+    },
+    {
+     "function_id": "power.battery",
+     "count": 1,
+     "face": "bottom"
+    },
+    {
+     "function_id": "power.charger",
+     "count": 1,
+     "face": "bottom"
+    }
+   ],
+   "form": {
+    "shape": "rounded_rect",
+    "size_mm": [
+     30.0,
+     90.0
+    ],
+    "thickness_mm": 15.0,
+    "mount": "stake"
+   },
+   "size_range_mm": {
+    "w": [
+     20.0,
+     70.0
+    ],
+    "h": [
+     50.0,
+     160.0
+    ]
+   }
+  },
+  {
+   "id": "desk_clock",
+   "name": "Wi-Fi desk clock (NTP + display pattern)",
+   "source": {
+    "kind": "pattern",
+    "url": null,
+    "licence": null
+   },
+   "words": [
+    "clock",
+    "desk clock",
+    "alarm clock",
+    "timer"
+   ],
+   "default_for": [
+    "clock"
+   ],
+   "excludes": [
+    "watch",
+    "smartwatch",
+    "wrist"
+   ],
+   "brief": {
+    "wireless": "wifi",
+    "power_source": "usb",
+    "display_type": [
+     "seven_segment",
+     "oled",
+     "lcd_char",
+     "tft"
+    ]
+   },
+   "functions": [
+    {
+     "function_id": "compute.mcu",
+     "count": 1,
+     "face": "bottom"
+    },
+    {
+     "function_id": "display.seven_segment",
+     "count": 4,
+     "face": "top",
+     "any_of": [
+      "display.seven_segment",
+      "display.oled",
+      "display.lcd_char"
+     ]
+    },
+    {
+     "function_id": "input.button",
+     "count": 2,
+     "face": "top"
+    },
+    {
+     "function_id": "output.buzzer",
+     "count": 1,
+     "face": "bottom"
+    },
+    {
+     "function_id": "power.usb_in",
+     "count": 1,
+     "face": "edge"
+    }
+   ],
+   "form": {
+    "shape": "rounded_rect",
+    "size_mm": [
+     100.0,
+     45.0
+    ],
+    "thickness_mm": 30.0,
+    "mount": "desk"
+   },
+   "size_range_mm": {
+    "w": [
+     60.0,
+     180.0
+    ],
+    "h": [
+     30.0,
+     100.0
+    ]
+   }
+  },
+  {
+   "id": "rover",
+   "name": "Two-wheel rover (MCU + dual H-bridge pattern)",
+   "source": {
+    "kind": "pattern",
+    "url": null,
+    "licence": null
+   },
+   "words": [
+    "rover",
+    "robot car",
+    "robot",
+    "car",
+    "buggy",
+    "line follower"
+   ],
+   "default_for": [
+    "rover"
+   ],
+   "excludes": [
+    "arm",
+    "drone"
+   ],
+   "brief": {
+    "wireless": "ble",
+    "power_source": "battery"
+   },
+   "functions": [
+    {
+     "function_id": "compute.mcu",
+     "count": 1,
+     "face": "top"
+    },
+    {
+     "function_id": "output.motor_dc",
+     "count": 1,
+     "face": "top"
+    },
+    {
+     "function_id": "sense.distance",
+     "count": 1,
+     "face": "edge"
+    },
+    {
+     "function_id": "power.battery",
+     "count": 1,
+     "face": "bottom"
+    },
+    {
+     "function_id": "power.regulator",
+     "count": 1,
+     "face": "top"
+    },
+    {
+     "function_id": "power.switch",
+     "count": 1,
+     "face": "edge"
+    }
+   ],
+   "form": {
+    "shape": "rounded_rect",
+    "size_mm": [
+     100.0,
+     80.0
+    ],
+    "thickness_mm": 40.0,
+    "mount": "vehicle"
+   },
+   "size_range_mm": {
+    "w": [
+     50.0,
+     200.0
+    ],
+    "h": [
+     40.0,
+     160.0
+    ]
+   }
+  },
+  {
+   "id": "game_controller",
+   "name": "Handheld game controller (buttons + thumbsticks pattern)",
+   "source": {
+    "kind": "pattern",
+    "url": null,
+    "licence": null
+   },
+   "words": [
+    "game controller",
+    "gamepad",
+    "controller",
+    "joypad",
+    "joystick"
+   ],
+   "default_for": [
+    "game controller"
+   ],
+   "excludes": [
+    "flight controller",
+    "motor controller",
+    "midi controller"
+   ],
+   "brief": {
+    "wireless": "ble",
+    "power_source": "battery"
+   },
+   "functions": [
+    {
+     "function_id": "compute.mcu",
+     "count": 1,
+     "face": "bottom"
+    },
+    {
+     "function_id": "input.button",
+     "count": 8,
+     "face": "top"
+    },
+    {
+     "function_id": "input.potentiometer",
+     "count": 2,
+     "face": "top"
+    },
+    {
+     "function_id": "output.haptic",
+     "count": 1,
+     "face": "bottom"
+    },
+    {
+     "function_id": "power.battery",
+     "count": 1,
+     "face": "bottom"
+    },
+    {
+     "function_id": "power.charger",
+     "count": 1,
+     "face": "bottom"
+    }
+   ],
+   "form": {
+    "shape": "rounded_rect",
+    "size_mm": [
+     140.0,
+     60.0
+    ],
+    "thickness_mm": 25.0,
+    "mount": "handheld"
+   },
+   "size_range_mm": {
+    "w": [
+     90.0,
+     180.0
+    ],
+    "h": [
+     40.0,
+     110.0
+    ]
+   }
+  },
+  {
+   "id": "pocket_synth",
+   "name": "Pocket synth (keys + knobs + speaker pattern)",
+   "source": {
+    "kind": "pattern",
+    "url": null,
+    "licence": null
+   },
+   "words": [
+    "synth",
+    "synthesizer",
+    "music",
+    "midi",
+    "drum machine",
+    "groovebox"
+   ],
+   "default_for": [
+    "synth"
+   ],
+   "excludes": [],
+   "brief": {
+    "power_source": "battery"
+   },
+   "functions": [
+    {
+     "function_id": "compute.mcu",
+     "count": 1,
+     "face": "bottom"
+    },
+    {
+     "function_id": "input.button",
+     "count": 8,
+     "face": "top"
+    },
+    {
+     "function_id": "input.potentiometer",
+     "count": 3,
+     "face": "top",
+     "any_of": [
+      "input.potentiometer",
+      "input.rotary_encoder"
+     ]
+    },
+    {
+     "function_id": "output.speaker",
+     "count": 1,
+     "face": "bottom",
+     "any_of": [
+      "output.speaker",
+      "output.buzzer"
+     ]
+    },
+    {
+     "function_id": "interconnect.jack",
+     "count": 1,
+     "face": "edge"
+    },
+    {
+     "function_id": "display.oled",
+     "count": 1,
+     "face": "top"
+    },
+    {
+     "function_id": "power.battery",
+     "count": 1,
+     "face": "bottom"
+    }
+   ],
+   "form": {
+    "shape": "rounded_rect",
+    "size_mm": [
+     120.0,
+     70.0
+    ],
+    "thickness_mm": 20.0,
+    "mount": "handheld"
+   },
+   "size_range_mm": {
+    "w": [
+     70.0,
+     200.0
+    ],
+    "h": [
+     45.0,
+     130.0
+    ]
+   }
+  },
+  {
+   "id": "drone_fc",
+   "name": "Drone flight controller (30.5 mm stack pattern)",
+   "source": {
+    "kind": "pattern",
+    "url": null,
+    "licence": null
+   },
+   "words": [
+    "flight controller",
+    "drone",
+    "quadcopter",
+    "fpv",
+    "multirotor"
+   ],
+   "default_for": [
+    "drone flight controller"
+   ],
+   "excludes": [],
+   "brief": {
+    "power_source": "battery"
+   },
+   "functions": [
+    {
+     "function_id": "compute.mcu",
+     "count": 1,
+     "face": "top"
+    },
+    {
+     "function_id": "sense.imu",
+     "count": 1,
+     "face": "top"
+    },
+    {
+     "function_id": "sense.pressure",
+     "count": 1,
+     "face": "top"
+    },
+    {
+     "function_id": "power.regulator",
+     "count": 1,
+     "face": "bottom"
+    },
+    {
+     "function_id": "storage.flash",
+     "count": 1,
+     "face": "bottom",
+     "any_of": [
+      "storage.flash",
+      "storage.sd_card"
+     ]
+    },
+    {
+     "function_id": "display.indicator_led",
+     "count": 1,
+     "face": "top"
+    }
+   ],
+   "form": {
+    "shape": "square",
+    "size_mm": [
+     36.0,
+     36.0
+    ],
+    "thickness_mm": 8.0,
+    "mount": "stack_30_5"
+   },
+   "size_range_mm": {
+    "w": [
+     30.0,
+     45.0
+    ],
+    "h": [
+     30.0,
+     45.0
+    ]
+   }
+  },
+  {
+   "id": "e_reader",
+   "name": "E-reader (e-paper + page buttons pattern)",
+   "source": {
+    "kind": "pattern",
+    "url": null,
+    "licence": null
+   },
+   "words": [
+    "e-reader",
+    "ereader",
+    "e reader",
+    "ebook",
+    "kindle",
+    "book reader"
+   ],
+   "default_for": [
+    "e-reader"
+   ],
+   "excludes": [],
+   "brief": {
+    "power_source": "battery",
+    "display_type": [
+     "epaper",
+     "tft",
+     "lcd_graphic",
+     "oled"
+    ],
+    "wireless": "wifi"
+   },
+   "functions": [
+    {
+     "function_id": "compute.mcu",
+     "count": 1,
+     "face": "bottom"
+    },
+    {
+     "function_id": "display.tft",
+     "count": 1,
+     "face": "top",
+     "any_of": [
+      "display.epaper",
+      "display.tft",
+      "display.oled"
+     ]
+    },
+    {
+     "function_id": "input.button",
+     "count": 3,
+     "face": "edge"
+    },
+    {
+     "function_id": "storage.sd_card",
+     "count": 1,
+     "face": "bottom"
+    },
+    {
+     "function_id": "power.battery",
+     "count": 1,
+     "face": "bottom"
+    },
+    {
+     "function_id": "power.charger",
+     "count": 1,
+     "face": "bottom"
+    }
+   ],
+   "form": {
+    "shape": "rounded_rect",
+    "size_mm": [
+     90.0,
+     125.0
+    ],
+    "thickness_mm": 12.0,
+    "mount": "handheld"
+   },
+   "size_range_mm": {
+    "w": [
+     70.0,
+     140.0
+    ],
+    "h": [
+     90.0,
+     190.0
+    ]
+   }
+  }
+ ]
+}

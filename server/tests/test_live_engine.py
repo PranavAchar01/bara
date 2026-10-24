@@ -36,7 +36,7 @@ def no_kicad(monkeypatch: pytest.MonkeyPatch) -> None:
     async def fake(*_a: Any, **_k: Any) -> tuple[None, str]:
         return None, "KiCad board build disabled in unit tests"
 
-    monkeypatch.setattr(adapters, "run_board", fake)
+    monkeypatch.setattr(adapters, "route_board", fake)
 
 
 def stage_order(events: list[dict[str, Any]]) -> list[str]:

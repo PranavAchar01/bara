@@ -349,7 +349,7 @@ ENTRIES: list[Entry] = [
         "Knurled knob (6 mm D shaft)",
         "mechanical",
         "mech.knob",
-        models=[ModelSpec("knobby", "knob.step")],
+        models=[ModelSpec("knobby", "knob.step", rotate=(180.0, 0.0, 0.0))],  # STEP is bore-up
         facets={"shaft": "d_6mm"},
         color="#2b2b2b",
     ),

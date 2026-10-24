@@ -105,6 +105,14 @@ export function LabelProjector() {
       pts.push({ key, x: ((tmp.x + 1) / 2) * w, y: ((1 - tmp.y) / 2) * h });
     }
     pts.sort((a, b) => a.y - b.y);
+    // Rows whose part has no anchor this frame (toggled off, or a case without a bezel) stay hidden.
+    const shown = new Set(pts.map((p) => p.key));
+    for (const [key, s] of slots) {
+      const v = shown.has(key) ? "visible" : "hidden";
+      if (s.row && s.row.style.visibility !== v) s.row.style.visibility = v;
+      if (s.line && s.line.style.visibility !== v) s.line.style.visibility = v;
+      if (s.dot && s.dot.style.visibility !== v) s.dot.style.visibility = v;
+    }
     const maxX = pts.reduce((m, p) => Math.max(m, p.x), 0);
     const colX = Math.min(Math.max(maxX + 48, w * 0.5), w - 300);
     const top = Math.max(16, h * 0.27);
