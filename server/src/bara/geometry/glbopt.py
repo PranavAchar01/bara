@@ -54,6 +54,47 @@ def is_valid(path: Path) -> bool:
         return False
 
 
+def _occ_label(name: str | None) -> bool:
+    return not name or name.startswith("=>")
+
+
+def name_footprint_meshes(src: Path, dst: Path) -> bool:
+    """kicad-cli names a node per footprint (SW3, U1) whose mesh children carry OpenCASCADE
+    labels (=>[0:1:1:3]). Give the meshes their footprint's name and drop the OCC labels,
+    so join keeps one node per footprint (the viewer hovers by it) and merges the rest.
+    Rewrites the JSON chunk only. False when nothing was renamed (dst not written)."""
+    data = src.read_bytes()
+    (jlen,) = struct.unpack_from("<I", data, 12)
+    doc = json.loads(data[20 : 20 + jlen])
+    nodes = doc.get("nodes", [])
+    renamed = 0
+
+    def walk(i: int, owner: str | None) -> None:
+        nonlocal renamed
+        node = nodes[i]
+        name = node.get("name")
+        mine = owner if _occ_label(name) else name
+        if _occ_label(name):
+            if owner and "mesh" in node:
+                node["name"] = owner
+                renamed += 1
+            else:
+                node.pop("name", None)
+        for c in node.get("children", []):
+            walk(c, mine)
+
+    for root in doc["scenes"][doc.get("scene", 0)]["nodes"]:
+        walk(root, None)
+    if not renamed:
+        return False
+    js = json.dumps(doc, separators=(",", ":")).encode()
+    js += b" " * (-len(js) % 4)
+    rest = data[20 + jlen :]
+    body = struct.pack("<II", len(js), 0x4E4F534A) + js + rest
+    dst.write_bytes(struct.pack("<III", 0x46546C67, 2, 12 + len(body)) + body)
+    return True
+
+
 def enabled() -> bool:
     return os.environ.get("BARA_GLB_COMPRESS", "1") != "0"
 
@@ -87,8 +128,13 @@ def compress(
     if not enabled():
         shutil.copyfile(raw, out)
         return raw
+    src = raw
+    if keep_named:
+        named = work / f"{out.stem}.named.glb"
+        if name_footprint_meshes(raw, named):
+            src = named
     joined = _gt(
-        ["join", str(raw), str(plain), "--keepNamed", "true" if keep_named else "false"], timeout
+        ["join", str(src), str(plain), "--keepNamed", "true" if keep_named else "false"], timeout
     )
     if not joined or not plain.exists():
         shutil.copyfile(raw, out)
@@ -116,4 +162,4 @@ def compress(
     return plain
 
 
-__all__ = ["compress", "enabled", "is_valid"]
+__all__ = ["compress", "enabled", "is_valid", "name_footprint_meshes"]

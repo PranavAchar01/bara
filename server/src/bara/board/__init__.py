@@ -468,6 +468,75 @@ def _glb_ref(path: Path, key: str) -> dict:
     }
 
 
+def _plan_frame(
+    plan: BoardPlan, plans: list[BoardPlan], offsets: dict[str, tuple[float, float]]
+) -> tuple[float, float, str]:
+    """(dx, dy, side): where a board's plan frame sits in build space, and its side."""
+    is_sensor = plan.name.endswith("sensor")
+    host_name = plan.name.removesuffix("sensor").rstrip("_") if is_sensor else None
+    if plan.name in offsets:
+        dx, dy = offsets[plan.name]
+    else:
+        # sensor board: centred under its trackball in the host half's frame
+        want = host_name or "main"
+        host = next((p for p in plans if p.name == want), plans[0])
+        hdx, hdy = offsets.get(host.name, (0.0, 0.0))
+        ball = next((it for it in host.items if it.role == "trackball"), None)
+        sc = sensor_lens(plan)  # the lens goes under the ball
+        if ball is not None:
+            dx, dy = ball.x + hdx - sc.x, ball.y + hdy - sc.y
+        else:
+            dx, dy = hdx, hdy
+    side = (
+        plan.name
+        if plan.name in ("left", "right")
+        else (host_name if host_name in ("left", "right") else "none")
+    )
+    return dx, dy, side
+
+
+def _footprints(placements: list[dict]) -> list[dict]:
+    """SPEC Board.footprints: what the viewport draws and names before and after the GLB."""
+    return [
+        {
+            "ref": p["ref"],
+            "label": p.get("label"),
+            "role": p.get("role"),
+            "lib_id": p.get("lib_id") or None,
+            "instance_id": p.get("instance_id"),
+            "center_mm": [round(p["x_mm"], 3), round(p["y_mm"], 3)],
+            "size_mm": [round(v, 3) for v in (p.get("size_mm") or [1, 1])[:2]],
+            "rot_deg": p.get("rot_deg", 0.0),
+        }
+        for p in placements
+        if p.get("on_pcb", True)
+    ]
+
+
+def _board_record(plan: BoardPlan, dx: float, dy: float, side: str, roles: dict[str, dict]) -> dict:
+    """SPEC Board as soon as the board is laid out: outline and footprints, status pending."""
+    placements = _placements(plan, dx, dy, roles, plan.name)
+    x0, y0, x1, y1 = plan.outline.bounds
+    return {
+        "board_id": "pcb_" + _slug(plan.name),
+        "source": "unknown",
+        "side": side,
+        "part_instance_id": None,
+        "for_instance_ids": [p["instance_id"] for p in placements],
+        "outline_mm": _poly_build(plan.outline, dx, dy),
+        "size_mm": [round(x1 - x0, 3), round(y1 - y0, 3)],
+        "thickness_mm": PCB_THICKNESS_MM,
+        "layers": 2,
+        "position_mm": [0.0, 0.0, 0.0],
+        "rotation_deg": [0.0, 0.0, 0.0],
+        "footprints": _footprints(placements),
+        "routing": {"status": "unrouted", "method": "autorouted", "router": None},
+        "assets": [],
+        "status": "pending",
+        "revision": 0,
+    }
+
+
 # ---------------------------------------------------------------- entry
 
 
@@ -479,8 +548,13 @@ def build_board(
     progress: Progress | None = None,
     route_timeout_s: float = 300.0,
     passes: int = 100,
+    on_plan: Callable[[dict], None] | None = None,
 ) -> dict:
     """Generic brief -> list of routed KiCad boards (one per half, plus sensor boards).
+
+    on_plan gets each board record with status pending (outline and footprints, no model)
+    as soon as the boards are laid out, before any routing, so the viewport can draw them
+    while Freerouting and the GLB export run.
 
     Returns {"boards": [...], "controller", "pin_budget", "log", "timings", "hand_set"} plus
     main-board shortcuts kicad_pcb, glb, drc, nets, outline, placements.
@@ -507,34 +581,20 @@ def build_board(
         if plan.name in ("left", "right", "main"):
             offsets[plan.name] = (_half_offset(plan), 0.0)
 
+    frames = [_plan_frame(plan, plans, offsets) for plan in plans]
+    if on_plan is not None:
+        for plan, (dx, dy, side) in zip(plans, frames, strict=True):
+            on_plan(_board_record(plan, dx, dy, side, roles))
+
     boards: list[dict] = []
     for i, plan in enumerate(plans):
-        is_sensor = plan.name.endswith("sensor")
-        host_name = plan.name.removesuffix("sensor").rstrip("_") if is_sensor else None
-        if plan.name in offsets:
-            dx, dy = offsets[plan.name]
-        else:
-            # sensor board: centred under its trackball in the host half's frame
-            want = host_name or "main"
-            host = next((p for p in plans if p.name == want), plans[0])
-            hdx, hdy = offsets.get(host.name, (0.0, 0.0))
-            ball = next((it for it in host.items if it.role == "trackball"), None)
-            sc = sensor_lens(plan)  # the lens goes under the ball
-            if ball is not None:
-                dx, dy = ball.x + hdx - sc.x, ball.y + hdy - sc.y
-            else:
-                dx, dy = hdx, hdy
+        dx, dy, side = frames[i]
         origin_plan = (-dx, -dy)
 
         def sub(msg: str, frac: float | None, _i: int = i) -> None:
             report(msg, None if frac is None else (_i + frac) / len(plans))
 
         res = _route_one(plan, work_root, glb_root, origin_plan, route_timeout_s, passes, sub)
-        side = (
-            plan.name
-            if plan.name in ("left", "right")
-            else (host_name if host_name in ("left", "right") else "none")
-        )
         tag = plan.name
         outline = _poly_build(plan.outline, dx, dy)
         holes = [
@@ -545,20 +605,9 @@ def build_board(
         drc = res["drc"]
         ok = drc["errors"] == 0 and drc["unconnected"] == 0
         glb_ref = _glb_ref(Path(res["glb_path"]), res["key"])
-        x0, y0, x1, y1 = plan.outline.bounds
         board_id = "pcb_" + _slug(plan.name)
         spec_board = {
-            "board_id": board_id,
-            "source": "unknown",
-            "side": side,
-            "part_instance_id": None,
-            "for_instance_ids": [p["instance_id"] for p in placements],
-            "outline_mm": outline,
-            "size_mm": [round(x1 - x0, 3), round(y1 - y0, 3)],
-            "thickness_mm": PCB_THICKNESS_MM,
-            "layers": 2,
-            "position_mm": [0.0, 0.0, 0.0],
-            "rotation_deg": [0.0, 0.0, 0.0],
+            **_board_record(plan, dx, dy, side, roles),
             "nets": nets,
             "routing": {
                 "status": "routed" if drc["unconnected"] == 0 else "partial",
@@ -572,7 +621,6 @@ def build_board(
             "drc": "pass" if ok else "fail",
             "assets": [glb_ref],
             "status": "ok" if ok else "failed",
-            "revision": 0,
         }
         cables = [
             {
