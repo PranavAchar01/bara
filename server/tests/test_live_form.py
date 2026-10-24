@@ -160,6 +160,15 @@ def test_overflow_report_carries_the_numbers_the_form_is_redrawn_with() -> None:
     assert str(rep["parts_mm2"]) in fit_note(rep) and "Redraw the SAME product" in fit_note(rep)
 
 
+def test_declared_product_size_is_kept_by_the_fit_redraw() -> None:
+    from bara.live.form import declared_size, fit_note
+
+    assert declared_size("a 12 x 6 cm tracker") == (120.0, 60.0)
+    assert declared_size("a 60 gram mouse") is None
+    rep = {"parts_mm2": 900, "usable_mm2": 700, "declared_mm": [120.0, 60.0]}
+    assert "keep the silhouette at that size" in fit_note(rep)
+
+
 def test_inputs_become_a_diode_matrix_when_gpio_runs_short() -> None:
     from bara.board.generic import _matrix_inputs
 

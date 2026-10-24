@@ -154,6 +154,16 @@ class _Stage:
         self.emit("stage.completed", payload)
 
 
+def _spans(product: form_mod.Form, size: tuple[float, float]) -> bool:
+    """True when the form already has the declared width and height (either way round)."""
+    xs = [p[0] for p in product.silhouette]
+    ys = [p[1] for p in product.silhouette]
+    w, h = max(xs) - min(xs), max(ys) - min(ys)
+    return any(abs(a - b) <= 0.1 * b for a, b in ((w, size[0]), (h, size[1]))) and any(
+        abs(a - b) <= 0.1 * b for a, b in ((w, size[1]), (h, size[0]))
+    )
+
+
 class LiveRunner:
     def __init__(self, engine: Engine, source: PartSource) -> None:
         self.engine = engine
@@ -735,6 +745,11 @@ class LiveRunner:
             report = (gb.get("product_form") or {}).get("fit_report")
             if product is None or board is None or not report or report["ok"]:
                 break
+            declared = form_mod.declared_size(run.prompt)
+            if declared:  # the request fixes the size: the parts must fit it or the build fails
+                report = {**report, "declared_mm": list(declared)}
+                if _spans(product, declared):
+                    break
             redrawn = await self.form_stage(run, result, st, fit=report)
             if redrawn is None or redrawn.problems:
                 break
