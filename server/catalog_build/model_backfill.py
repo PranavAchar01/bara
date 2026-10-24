@@ -1,5 +1,5 @@
 """Find a real 3D model, by part number on LCSC/EasyEDA, for every catalog entry whose
-footprint has no library model (and no same-package KiCad sibling to borrow one from).
+footprint has no library model (and no same-size KiCad sibling to borrow one from).
 
     cd server
     uv run --with easyeda2kicad --with trimesh --with numpy \\
@@ -18,8 +18,6 @@ import re
 import sys
 import time
 from typing import Any
-
-from bara.kicad_generated import KicadIndex
 
 from . import fetch_lcsc
 from .build import LCSC_MODELS_JSON, plan_entry
@@ -53,16 +51,13 @@ def part_numbers(e: Entry) -> list[str]:
     return seen
 
 
-def needs_model(e: Entry, index: KicadIndex | None) -> bool:
+def needs_model(e: Entry) -> bool:
     if e.whole_board or e.mesh_from or e.models or not e.footprint:
         return False
     if e.part_id.startswith("mh:"):
         return False  # a mounting hole has no body
-    p = plan_entry(e)
-    if any(spec is None or spec.source != "lcsc" for _, _, spec in p.models):
-        return False
-    fp = e.footprint.removeprefix("kicad:")
-    return index is None or index.model_footprint(fp) is None
+    # a library model, its own or a same-size sibling's (build._lend_model), wins over LCSC
+    return not any(spec is None or spec.source != "lcsc" for _, _, spec in plan_entry(e).models)
 
 
 def _sides(courtyard: dict[str, list[float]] | None) -> list[float] | None:
@@ -105,9 +100,8 @@ def main(argv: list[str] | None = None) -> int:
     found: dict[str, dict[str, str]] = (
         json.loads(LCSC_MODELS_JSON.read_text()) if LCSC_MODELS_JSON.is_file() else {}
     )
-    index = KicadIndex.open()
     todo = [e for e in ENTRIES if (not args.only or e.part_id in args.only)]
-    todo = [e for e in todo if e.part_id not in found and needs_model(e, index)]
+    todo = [e for e in todo if e.part_id not in found and needs_model(e)]
     misses: list[str] = []
     for e in todo:
         hit = find(e)

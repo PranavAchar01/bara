@@ -223,3 +223,31 @@ def test_model_lent_by_same_package_sibling(lib: Path, monkeypatch: pytest.Monke
     assert asset["url"].endswith(f"{kicad_generated.glb_stem(lender)}.glb")
     assert idx.ensure_glb(pid) is not None and calls == [lender]
     assert idx.model_footprint("Pkg_Test:Orphan") is None  # no same-size sibling, no model
+
+
+def test_name_alike_sibling_must_match_the_outline(
+    lib: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from catalog_build import sources
+
+    monkeypatch.setattr(sources, "SOURCES", {"kicad": SimpleNamespace(root=lib)})
+    pretty = lib / "footprints" / "Pkg_Test.pretty"
+    shapes = lib / "3dmodels" / "Pkg_Test.3dshapes"
+
+    def mod(name: str, w: float) -> str:
+        yard = f'\t(fp_rect (start 0 0) (end {w} {w}) (layer "F.CrtYd"))\n)\n'
+        return MOD.replace("SOIC-4", name).rstrip().removesuffix(")") + yard
+
+    (pretty / "Trim_3386P_Vertical.kicad_mod").write_text(mod("Trim_3386P_Vertical", 9.5))
+    (pretty / "Trim_3339P_Vertical.kicad_mod").write_text(mod("Trim_3339P_Vertical", 7.0))
+    (shapes / "Trim_3339P_Vertical.step").write_text("ISO-10303-21;")
+    ki.write_index(*ki.build_rows(("kicad",)))
+    idx = kicad_generated.KicadIndex(ki.INDEX_SQLITE, glb_dir=lib / "glb")
+    assert idx.model_footprint("Pkg_Test:Trim_3386P_Vertical") is None  # 9.5 mm vs 7 mm body
+    (pretty / "Trim_3386W_Vertical.kicad_mod").write_text(mod("Trim_3386W_Vertical", 9.0))
+    (shapes / "Trim_3386W_Vertical.step").write_text("ISO-10303-21;")
+    ki.write_index(*ki.build_rows(("kicad",)))
+    idx = kicad_generated.KicadIndex(ki.INDEX_SQLITE, glb_dir=lib / "glb")
+    assert idx.model_footprint("Pkg_Test:Trim_3386P_Vertical") == (
+        "kicadgen:kicad:fp:Pkg_Test:Trim_3386W_Vertical"
+    )

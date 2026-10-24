@@ -125,6 +125,8 @@ def plan_entry(e: Entry) -> Plan:
                 p.missing_models.append(m.path)
             else:
                 p.models.append((res, m, None))
+    if not p.models and p.fp is not None and e.footprint.startswith("kicad:"):
+        _lend_model(p)
     if not p.models and e.part_id in LCSC_MODELS:
         # no library model for this footprint: the same part's model from LCSC by part number
         spec = ModelSpec("lcsc", LCSC_MODELS[e.part_id]["path"])
@@ -135,6 +137,28 @@ def plan_entry(e: Entry) -> Plan:
         else:
             p.problems.append(f"model missing: {path}")
     return p
+
+
+def _lend_model(p: Plan) -> None:
+    """No model ships for this footprint: draw it with a same-size KiCad sibling's (the VQFN-16
+    3x3 charger with the WQFN-16 3x3 body), the same lender the generated tier uses."""
+    from bara.kicad_generated import KicadIndex
+
+    index = KicadIndex.open()
+    lender = index.model_footprint(p.entry.footprint.removeprefix("kicad:")) if index else None
+    if lender is None:
+        return
+    lib_id = "kicad:" + lender.removeprefix("kicadgen:kicad:fp:")
+    try:
+        lfp = read_footprint(resolve_footprint(lib_id).path)
+    except FileNotFoundError:
+        return
+    for m in lfp.models:
+        res = None if m.hidden else resolve_model(m.path, lfp.path)
+        if res is not None:
+            p.models.append((res, m, None))
+    if p.models:
+        p.missing_models.clear()
 
 
 def cmd_check() -> int:
