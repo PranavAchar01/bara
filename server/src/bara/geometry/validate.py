@@ -280,10 +280,14 @@ def validate(report: EncloseReport) -> list[dict[str, Any]]:
         if f.role == "trackball":
             continue
         box = _feature_box(f, t, _z_lo(f, feats, t))
-        v = (box ^ case).volume()
-        if v > LIMITS["overlap_volume_mm3"]:
-            offenders.append(f"{f.ref} ({v:.1f} mm3)")
+        hit = box ^ case
+        v = hit.volume()
         lo, hi = f.z_range(t)
+        if v > LIMITS["overlap_volume_mm3"]:
+            bb = hit.bounding_box()  # where the case meets the part: its roof (z) or a wall
+            offenders.append(
+                f"{f.ref} ({v:.1f} mm3; case z {bb[2]:.1f}-{bb[5]:.1f} vs part {lo:.1f}-{hi:.1f})"
+            )
         zc = (max(lo, 0.0) + max(hi, 0.0)) / 2 if f.side == "top" else (lo + hi) / 2
         a = math.radians(f.rot_deg)
         for ux, uy, half in (
