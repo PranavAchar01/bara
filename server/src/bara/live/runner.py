@@ -219,7 +219,6 @@ class LiveRunner:
         run.emit("build.done", self.engine._done_payload(run, {}))
 
     # checks that decide whether the product exists: any one failing ends the build as failed
-    FIT_REPAIRS = 2
     REQUIRED = {
         "device.complete": "E_CRITICAL_PART_MISSING",
         "slot.critical_filled": "E_CRITICAL_PART_MISSING",
@@ -545,11 +544,7 @@ class LiveRunner:
         return out
 
     async def form_stage(
-        self,
-        run: BuildRun,
-        result: ComposeResult,
-        st: _Stage,
-        fit: dict[str, Any] | None = None,
+        self, run: BuildRun, result: ComposeResult, st: _Stage
     ) -> form_mod.Form | None:
         """The product's silhouette and anchors, from the model grounded on reference designs."""
         touches = self._touches(result)
@@ -557,18 +552,17 @@ class LiveRunner:
         previous = getattr(run, "product_form", None)
         repair = getattr(run, "repair", "")
         product, note = await form_mod.derive(
-            run.prompt, touches, previous if (repair or fit) else None, repair, fit
+            run.prompt, touches, previous if repair else None, repair
         )
         run.product_form = product  # type: ignore[attr-defined]
-        if (repair or fit) and previous is not None and product is not None:
+        if repair and previous is not None and product is not None:
             self._warn(
                 run,
                 "place",
                 "w_form_repair",
                 "assumption_made",
                 "info",
-                ("Fit repair resized the form: " if fit else "Identity repair redrew the form: ")
-                + form_mod.diff(previous, product),
+                "Identity repair redrew the form: " + form_mod.diff(previous, product),
             )
         problems = list(product.problems) if product is not None else [f"no form ({note})"]
         poly_ok = product is not None and Polygon(product.silhouette).is_valid
@@ -711,23 +705,7 @@ class LiveRunner:
             gb["product_form"] = product.json()
             brief["body_thickness_mm"] = product.thickness_mm
             brief["edge_thickness_mm"] = product.edge_thickness_mm
-            brief["anchors"] = product.anchors
         board, err = await asyncio.to_thread(A.plan_board, gb, parts, run.build_id)
-        for _ in range(
-            self.FIT_REPAIRS
-        ):  # a form too small for its parts is redrawn with the numbers
-            report = (gb.get("product_form") or {}).get("fit_report")
-            if product is None or board is None or not report or report["ok"]:
-                break
-            redrawn = await self.form_stage(run, result, st, fit=report)
-            if redrawn is None or redrawn.problems:
-                break
-            product = redrawn
-            gb["product_form"] = product.json()
-            brief["body_thickness_mm"] = product.thickness_mm
-            brief["edge_thickness_mm"] = product.edge_thickness_mm
-            brief["anchors"] = product.anchors
-            board, err = await asyncio.to_thread(A.plan_board, gb, parts, run.build_id)
         if product is not None and board is not None:
             self._form_fit_check(run, st, board, product)
         if board is None or not any(

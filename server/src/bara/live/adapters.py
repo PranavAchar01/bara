@@ -208,8 +208,11 @@ def geometry_brief(brief: dict[str, Any]) -> dict[str, Any]:
     if brief.get("body_thickness_mm"):
         out["body_thickness_mm"] = float(brief["body_thickness_mm"])
         out["edge_thickness_mm"] = float(brief.get("edge_thickness_mm") or 0.0)
+<<<<<<< HEAD
         if brief.get("anchors"):
             out["anchors"] = list(brief["anchors"])
+=======
+>>>>>>> main
     return out
 
 
