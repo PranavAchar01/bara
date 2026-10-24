@@ -32,6 +32,10 @@ from .libs import FootprintInfo, find_footprint, footprint_ref, symbol_pins
 
 PART_GAP = 1.2  # courtyard to courtyard between packed parts
 EDGE_COPPER_MM = 0.5  # widest board-edge clearance kicad.py rules ask (0.45 mm)
+# A fine-pitch part also keeps half the part gap from the edge: its edge-side pins have no
+# room between pads, so they escape outward and need the same channel as between parts.
+FINE_PITCH_MM = 0.65
+ESCAPE_MM = PART_GAP / 2
 PASSIVE_GAP = 0.6
 BOARD_MARGIN = 2.0
 CORNER_R = 2.0
@@ -763,6 +767,18 @@ def _shadow(it: Item) -> Polygon | None:
     return it.world(hull)
 
 
+def _fine_pitch(it: Item) -> bool:
+    """An IC whose pins sit closer than a track and its clearances can pass between."""
+    if it.fp is None or it.role in CABLE_ROLES:
+        return False
+    pts = np.array([(p.x, p.y) for p in it.fp.pads if p.kind == "smd"])
+    if len(pts) < 6:
+        return False
+    d = np.hypot(pts[:, None, 0] - pts[None, :, 0], pts[:, None, 1] - pts[None, :, 1])
+    np.fill_diagonal(d, np.inf)
+    return float(d.min()) < FINE_PITCH_MM
+
+
 def _attempt(
     order: list[Item],
     region: Polygon,
@@ -776,6 +792,7 @@ def _attempt(
     # a courtyard may not reach the outline: its pads need the copper-to-edge clearance
     region = region.buffer(-EDGE_COPPER_MM, join_style="mitre")
     prep = prepared.prep(region)
+    inner = prepared.prep(region.buffer(-ESCAPE_MM, join_style="mitre"))
     x0, y0, x1, y1 = region.bounds
     step = max(1.0, math.sqrt(region.area / FORM_GRID_POINTS))
     gx, gy = np.meshgrid(np.arange(x0, x1, step), np.arange(y0, y1, step))
@@ -793,6 +810,7 @@ def _attempt(
         other = "bottom" if side == "top" else "top"
         gap = gaps[id(it)]
         tx, ty = targets[id(it)]
+        fit = inner if _fine_pitch(it) else prep
         idx = np.argsort(np.hypot(cand[:, 0] - tx, cand[:, 1] - ty))[:FORM_TRIES]
         for turn in turns:
             it.rot = rot0 + turn
@@ -803,7 +821,7 @@ def _attempt(
             for i in idx:
                 dx, dy = float(cand[i, 0] - c0.x), float(cand[i, 1] - c0.y)
                 poly = affinity.translate(base, dx, dy)
-                if not prep.contains(poly):
+                if not fit.contains(poly):
                     continue
                 under = affinity.translate(shade, dx, dy) if shade is not None else None
                 if taken[side] is not None and taken[side].distance(poly) < gap:
