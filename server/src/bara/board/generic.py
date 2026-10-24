@@ -133,7 +133,7 @@ def footprint_name(ref: str) -> str:
 
 def _pins_for(record: dict[str, Any], fp: FootprintInfo) -> dict[str, str]:
     """Pad -> pin name: the catalog record, else the registry map, else the KiCad symbol."""
-    if record.get("pins"):
+    if isinstance(record.get("pins"), dict):  # a bare name list has no pad numbers: use the symbol
         return {str(k): str(v) for k, v in record["pins"].items()}
     reg = _registry_match(fp)
     if reg is not None:
@@ -141,6 +141,9 @@ def _pins_for(record: dict[str, Any], fp: FootprintInfo) -> dict[str, str]:
             return dict(symbol_pins(*reg["symbol"]))
         return dict(reg["pins"])
     lib_id = str(record.get("lib_id") or "")
+    pid = str(record.get("part_id") or "")
+    if not lib_id and pid.startswith("kicadgen:kicad:sym:"):  # a generated part names its symbol
+        lib_id = pid.removeprefix("kicadgen:kicad:sym:")
     if ":" in lib_id:
         lib, sym = lib_id.split(":", 1)
         try:
