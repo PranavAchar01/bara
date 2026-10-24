@@ -484,9 +484,10 @@ class LiveRunner:
         uc = record["use_case"] or {}
         jobs = "; ".join(uc.get("jobs") or [])
         unresolved = sum(1 for k in record["links"] if k["outcome"].startswith("UNRESOLVED"))
-        st.progress(
-            f"use case: {jobs[:90]} -> {len(record['links'])} blocks, {unresolved} unresolved", None
-        )
+        tail = f" -> {len(record['links'])} blocks, {unresolved} unresolved"
+        room = 120 - len("use case: ") - len(tail)  # stage.progress message maxLength
+        head = jobs if len(jobs) <= room else jobs[: room - 3].rstrip() + "..."
+        st.progress(f"use case: {head}{tail}", None)
         self._write_chain(run, record)
         checks = composer.checks()
         if checks:
