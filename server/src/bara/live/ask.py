@@ -18,6 +18,7 @@ from jsonschema import Draft202012Validator
 
 from bara.live.llm_json import _for_anthropic
 from bara.live.websearch import media_type
+from bara.llm import anthropic_headers
 
 log = logging.getLogger(__name__)
 DEFAULT_MODEL = "claude-sonnet-5-5"
@@ -78,7 +79,9 @@ async def ask_json(
         for img in images or []
     ]
     content.append({"type": "text", "text": prompt})
-    client = AsyncAnthropic(api_key=key, timeout=timeout_s, max_retries=1)
+    client = AsyncAnthropic(
+        api_key=key, timeout=timeout_s, max_retries=1, default_headers=anthropic_headers()
+    )
     try:
         # An answer cut off by the token cap is unparseable JSON; ask again with room to finish.
         for budget in (max_tokens, max_tokens * 2, max_tokens * 4):
