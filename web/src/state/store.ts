@@ -60,6 +60,8 @@ export interface AppState {
   moving: string | null;
   /** Part pulled out of the build into focus: its label key (one per catalog part, the case, the board). */
   focusKey: string | null;
+  /** Build id when the open build came from the library (not started in this page). */
+  openedFromLibrary: string | null;
   hoverConnection: string | null;
   explode: number;
   preset: ViewPreset;
@@ -99,6 +101,7 @@ export const useApp = create<AppState>(() => ({
   inspectPartId: null,
   moving: null,
   focusKey: null,
+  openedFromLibrary: null,
   hoverConnection: null,
   explode: 0,
   preset: "scene",

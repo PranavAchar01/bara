@@ -270,6 +270,23 @@ The coverage audit of the live site found three places where the UI said two con
 
 **Minutes:** about 25. **Rating:** 3/5; this should have been caught before the first push.
 
+### Your builds on Home
+
+**Asked:** a library at the bottom of the landing page of everything built, so you can go back to it.
+
+**Tools:** Figma frame 21 (Home · your builds) first, cloned from 01 Home: a "Pick up where you left off" grid of build cards with snapshots, search, and status pills. Then Claude Code.
+
+**What moved:**
+- **Saving:** every build is saved in this browser (IndexedDB) as it changes: status, revision and parts. Each save keeps the full build and its view state, plus a 480×300 JPEG of the 3D canvas, taken again once late models have drawn. Up to 60 are kept, newest first.
+- **On Home:** the hero keeps most of the first screen and "Your builds" sits below it as a grid. Each card shows the prompt, the reused design or kind of device, the part count, and when it was made. Pills mark demo (mock) builds, failed or stopped ones, and ones still in progress. Search appears once there are more than three. × asks once more before removing.
+- **Reopening:** clicking a card shows the saved copy at once, then asks the engine to carry on from the last event it saw (`build.resume`), so edits keep working. If the engine has restarted and forgotten the build, a toast says the copy is for looking at and to build it again to change it.
+
+**Checked:** typecheck, lint, 67 tests (2 new for the card line). Mock build: the card appeared with its snapshot and the saved status read done. Opening it from Home brought back the parts, design reuse and status with no errors.
+
+**Not checked:** reopening against the live engine (its tunnel was down while testing).
+
+**Minutes:** about 35. **Rating:** 4/5.
+
 ## Before and after
 
 | Change | Before | After |
