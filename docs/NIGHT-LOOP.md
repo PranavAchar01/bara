@@ -155,3 +155,8 @@ Web: bara-merge agent merges Nithin's figma-design-in-code / agent-board-3d / fi
 - Root cause: every LCSC-fetched part (DW01A, LDO, ESD, antenna, switches, sensor) became an off-board "module" with a JST lead, because find_footprint did not resolve easyeda:<C> refs. Fix d611c95: libs resolves fetched/src/<C>/<C>.kicad_mod plus its STEP model and transform. All 213 fetched records load, and their pin maps fit the pads.
 - Suite restarted on d611c95 (server 42035, suite 42056).
 - Next: identity on mouse/mp4 after the re-run; the mouse rotary encoder shows as a 30 mm bare shaft (needs a wheel cap); identity message cut at 300 chars hides the mismatches.
+
+### 09:05 (code e3fee5c)
+- Controller on d611c95: case checks clear, board.drc 60 errors, all from fetched footprints now on the PCB: ESP32-S3-WROOM 0.25 mm thermal vias (drill, clearance) and EasyEDA rings at 0.0999 mm vs 0.1 minimum (SS49E, RKJXV stick and others). 2 track_width necks from the router.
+- Fix e3fee5c: kicad_script._fit_holes drops unnumbered PTH vias under the minimum hole and grows thin rings, for any footprint. A dropped pad freed by Python corrupts pcbnew's pad list, so removed pads are kept alive. Unrouted rebuild of that board: 0 DRC errors. Test added (5 pass).
+- Open: the controller BOM has both an ESP32-S3 module and a BlueMicro840. Suite restarted on e3fee5c (server 65980, suite 66012).
