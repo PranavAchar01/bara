@@ -230,3 +230,9 @@ Web: bara-merge agent merges Nithin's figma-design-in-code / agent-board-3d / fi
   - 4b2c556: a through-hole part's opposite-side shadow is its lead pads, not their hull (the 2xAA holder blocked a 60 mm strip); unanchored through-hole holders may go on the back.
   - 7104d07: one d-pad cross per slot (an 8-switch slot = arrows + face buttons); KiCad build reruns once on the intermittent wx traits assert (not reproducible on 25 cached plans).
 - Suite restarted on bba2542 (pid 64357). Known pre-existing failure: tests/test_live_form.py::test_ask_json_asks_again_when_the_answer_was_cut_off (ask_json cache).
+
+- 2026-10-24 13:08 iteration: web references are live (You.com search, 3 photos per build). Gap: the
+  search used the brief's generic device class ("handheld game console 3d model"), and one of the
+  3 hits was a lantern. Fixed at the source in 0d0b9ff: a prompt of 6 words or fewer is searched
+  as typed ("game boy 3d model"). This goes live at the next engine restart, after the
+  current Game Boy test build. bara-keycaps (wide keycaps) is still running.
