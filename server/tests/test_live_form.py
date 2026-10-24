@@ -363,6 +363,42 @@ def test_missing_part_is_fetched_cached_and_misses_are_remembered(tmp_path: Path
     assert r2.fetch(miss) is None and "NOPE9" in r2.notes["z"]
 
 
+def test_a_part_number_fetched_under_another_function_serves_the_block_that_names_it(
+    tmp_path: Path,
+) -> None:
+    class Source:
+        name = "stub"
+
+        def query(self, *a: Any, **k: Any) -> list[dict[str, Any]]:
+            return []
+
+        def get_part(self, part_id: str) -> dict[str, Any]:
+            raise KeyError(part_id)
+
+    path = tmp_path / "fetched.jsonl"
+    row = {
+        "part_id": "lcsc:pmw3360dm_t2qu_c1",
+        "display_name": "PMW3360DM-T2QU (PixArt)",
+        "mpn": "PMW3360DM-T2QU",
+        "functions": [{"function_id": "component.ic", "primary": True}],
+    }
+    path.write_text(json.dumps(row) + "\n")
+
+    def cli(term: str, function: str, timeout: float) -> tuple[int, str]:
+        raise AssertionError("the cache should answer")
+
+    need = cp.Need("s", "sense.motion", "Motion sensor", terms=("PMW3360DM-T2QU",))
+    part = Resolver(Overlay(Source()), cli=cli, fetched_path=path).fetch(need)
+    assert part is not None and part["functions"][0]["function_id"] == "sense.motion"
+    # a description search never borrows a row filed under another function
+    vague = cp.Need("v", "sense.motion", "pmw3360dm t2qu", terms=())
+    calls: list[str] = []
+    r = Resolver(
+        Overlay(Source()), cli=lambda t, f, s: (calls.append(t), (1, "no"))[1], fetched_path=path
+    )
+    assert r.fetch(vague) is None
+
+
 def test_unresolved_block_is_retried_with_relaxed_names(monkeypatch: Any) -> None:
     import asyncio
 

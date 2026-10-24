@@ -52,6 +52,9 @@ Rules:
   voltage or current, a battery capacity). Empty when any part of the function will do.
 - Every block must serve a function the product's brief implies. Do not add parts the product
   does not have.
+- A companion device sold with the product (a USB receiver dongle, a charging dock, a remote,
+  a base station) is a separate board: list only the requested device's own blocks, never the
+  companion's plug, radio or antenna.
 - mains_input is true only when the product plugs into AC mains. Its low-voltage side is built
   behind a certified AC-DC module; do not design any mains-side circuit.
 - portable is true for battery-powered products. avg_current_ma is the typical average draw.
@@ -131,6 +134,8 @@ it is missing. Walk every function chain the product implies and check each link
 - power: input or cell, protection, charger or converter, regulators for each voltage, monitor
 - anything the product's defining function needs (a motion sensor, a driver for a motor, a
   scaler for a video input)
+Only the requested device itself: a companion device sold with it (receiver dongle, dock,
+remote) is a separate board, so never add its blocks.
 Return ONLY the missing blocks, in the same shape as the listed ones, with real MPNs when you
 know them. Return an empty list when the diagram is complete. Never repeat a listed block."""
 
