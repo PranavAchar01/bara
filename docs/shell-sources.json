@@ -1,0 +1,1040 @@
+[
+ {
+  "device": "video game controller",
+  "status": "verified",
+  "candidates": [
+   {
+    "repo": "https://github.com/CoretechR/DIY-Portrait-Mode-Gamepad",
+    "licence": "GPL-3.0",
+    "kicad_file_format": "KiCad 9 (v9)",
+    "kicad_pcb": "PCB/USB-C Gamepad/Gamepad.kicad_pcb",
+    "enclosure_files": [
+     "CAD/Top Shell.stl",
+     "CAD/Bottom Shell.stl",
+     "CAD/Gamepad v10.step",
+     "CAD/A1.stl",
+     "CAD/A2.stl",
+     "CAD/ABXY.stl",
+     "CAD/DPAD.stl",
+     "CAD/L1.stl",
+     "CAD/R1.stl",
+     "CAD/Select.stl",
+     "CAD/Start.stl"
+    ],
+    "enclosure_formats": "STL+STEP",
+    "shell_split": "yes: top shell, bottom shell, individual button caps",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2025-04-21",
+    "fit": "exact",
+    "note": "Best fit: phone-sized USB gamepad, full printable shell."
+   },
+   {
+    "repo": "https://github.com/ravinrabbid/DonCon2040",
+    "licence": "MIT",
+    "kicad_file_format": "KiCad file format 20230620",
+    "kicad_pcb": "pcb/DonConPad/DonConPad.kicad_pcb",
+    "enclosure_files": [
+     "pcb/DonConPad/Case/Top.stl",
+     "pcb/DonConPad/Case/Top.3mf",
+     "pcb/DonConPad/Case/Bottom.stl",
+     "pcb/DonConPad/Case/Bottom.3mf",
+     "pcb/DonConPad/Case/Button.stl",
+     "pcb/DonConPad/Case/Button.3mf"
+    ],
+    "enclosure_formats": "STL+3MF",
+    "shell_split": "yes: top, bottom, button",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2026-09-09",
+    "fit": "close",
+    "note": "Taiko drum pad controller; small pad board with case."
+   },
+   {
+    "repo": "https://github.com/roboryman/prototroller",
+    "licence": "MIT",
+    "kicad_file_format": "KiCad 6",
+    "kicad_pcb": "schematics/master_board/master_board.kicad_pcb (6 boards under schematics/)",
+    "enclosure_files": [
+     "models/Chassis_Top_v2.stl",
+     "models/Chassis_Bottom_v2.stl",
+     "models/Chassis_Handle_L_v0.stl",
+     "models/Chassis_Handle_R_v0.stl",
+     "models/Master Enclosure v13.f3d",
+     "models/chassis.stl"
+    ],
+    "enclosure_formats": "STL+F3D",
+    "shell_split": "yes: top, bottom, handles",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2023-04-18",
+    "fit": "close",
+    "note": "Modular controller; shell versions v0-v2, pick newest."
+   }
+  ],
+  "fallback": null
+ },
+ {
+  "device": "monitor with stand",
+  "status": "weak-only",
+  "candidates": [
+   {
+    "repo": "https://github.com/v-cu/dpf-load-monitor-wide",
+    "licence": "none stated (GitHub: NOASSERTION)",
+    "kicad_file_format": "KiCad 9",
+    "kicad_pcb": "hardware/kicad/esp32p4amoled3.19.kicad_pcb",
+    "enclosure_files": [
+     "enclosure/main_enclosure.step",
+     "enclosure/main_enclosure.3mf",
+     "enclosure/obd2_enclosure.step",
+     "enclosure/obd2_enclosure.3mf"
+    ],
+    "enclosure_formats": "STEP+3MF",
+    "shell_split": "not verified",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2026-08-09",
+    "fit": "weak",
+    "note": "3.19in display dash unit, not a desktop monitor."
+   },
+   {
+    "repo": "https://github.com/caccia78/PlancH",
+    "licence": "none stated (NOASSERTION)",
+    "kicad_file_format": "KiCad file format 20260206",
+    "kicad_pcb": "hardware/planch/planch.kicad_pcb",
+    "enclosure_files": [
+     "mechanical/desk-stand/planch-desk-stand.step",
+     "mechanical/desk-stand/planch-desk-stand.stl",
+     "mechanical/desk-stand/planch-desk-stand.3mf",
+     "production/planch.step"
+    ],
+    "enclosure_formats": "STEP+STL+3MF",
+    "shell_split": "yes: stand separate from body",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2026-10-20",
+    "fit": "weak",
+    "note": "Desk panel with an OLED and a stand; closest to 'display with stand'."
+   },
+   {
+    "repo": "https://github.com/EwoudVV/ducktop2",
+    "licence": "MIT",
+    "kicad_file_format": "KiCad file format 20260206",
+    "kicad_pcb": "ducktop2-center.kicad_pcb (7 pcbs)",
+    "enclosure_files": [
+     "mechanical/case-prototype/exports/ducktop2-assembly.step"
+    ],
+    "enclosure_formats": "STEP/STL",
+    "shell_split": "yes (base, lid, hinge tests)",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2026-10-20",
+    "fit": "weak",
+    "note": "16in laptop; lid is the only monitor-like shell."
+   }
+  ],
+  "fallback": "No repo ships a monitor+stand shell with a KiCad display driver. Borrow a flat bezel shell from v-cu/dpf-load-monitor-wide (enclosure/main_enclosure.step) and scale; stand from caccia78/PlancH desk-stand.step."
+ },
+ {
+  "device": "wireless gaming mouse",
+  "status": "verified",
+  "candidates": [
+   {
+    "repo": "https://github.com/lambdakb/trackball-lt6c",
+    "licence": "CERN-OHL-S-2.0",
+    "kicad_file_format": "KiCad 9",
+    "kicad_pcb": "pcb/lt6c-pcb.kicad_pcb",
+    "enclosure_files": [
+     "case/stl/lt6c-case-top.stl",
+     "case/stl/lt6c-case-bottom.stl",
+     "case/stl/lt6c-sensor-shroud.stl",
+     "case/src/LT6C Case v25.step",
+     "case/lt6c-case.3mf"
+    ],
+    "enclosure_formats": "STL+STEP+3MF",
+    "shell_split": "yes: top, bottom, shroud",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2025-05-13",
+    "fit": "close",
+    "note": "Trackball, not a mouse, but pointer-sized with sensor; best same-class pair."
+   },
+   {
+    "repo": "https://github.com/valeriosetti/ploopy-nano-kicad",
+    "licence": "none stated",
+    "kicad_file_format": "KiCad (v?)",
+    "kicad_pcb": "ploopy-nano.kicad_pcb",
+    "enclosure_files": [
+     "(no shell in this repo; only library STEP parts)"
+    ],
+    "enclosure_formats": "-",
+    "shell_split": "n/a",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2023-03-31",
+    "fit": "pcb-only",
+    "note": "KiCad port of the Ploopy Nano board. Pair with shell from ploopyco/nano-trackball (hardware/mechanicals/STEPs/Top.step, Bottom.step; licence NOASSERTION, last push 2021-08-24) - separate repos, outline must be checked against the shell."
+   }
+  ],
+  "fallback": "Ploopy upstream (ploopyco/classic-2-trackball, nano-2-trackball, adept-trackball, mouse, trackpad) ships shells (STEP/STL/3MF) but its PCBs are Altium (.PcbDoc/.SchDoc), NOT .kicad_pcb, so no Edge.Cuts. ploopyco/mouse has Mouse.STEP/Mouse.STL at hardware/mechanicals/ (licence NOASSERTION, pushed 2025-06-17). Use LT6C or valeriosetti outline + Ploopy shell as reference only."
+ },
+ {
+  "device": "mp3 player",
+  "status": "verified",
+  "candidates": [
+   {
+    "repo": "https://github.com/mikeysklar/eink-audio-player",
+    "licence": "MIT-0",
+    "kicad_file_format": "KiCad file format 20260206",
+    "kicad_pcb": "kicad/eink-audio-player.kicad_pcb",
+    "enclosure_files": [
+     "enclosure/eink-audio-player.FCStd",
+     "enclosure/step/bezel.step",
+     "enclosure/step/chassis.step",
+     "enclosure/step/cradle.step",
+     "enclosure/step/deck.step",
+     "enclosure/step/handle.step",
+     "enclosure/stl/bezel.stl",
+     "enclosure/stl/chassis.stl",
+     "enclosure/stl/cradle.stl",
+     "enclosure/stl/deck.stl",
+     "enclosure/stl/handle.stl"
+    ],
+    "enclosure_formats": "FCStd+STEP+STL",
+    "shell_split": "yes: bezel, chassis, cradle, deck, handle",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2026-10-24",
+    "fit": "exact",
+    "note": "Palm-sized RP2350 player with e-ink; best match, very recent."
+   },
+   {
+    "repo": "https://github.com/lori28167/ownPod",
+    "licence": "GPL-2.0",
+    "kicad_file_format": "KiCad 8",
+    "kicad_pcb": "hardware/kicad/ipod-hat.kicad_pcb",
+    "enclosure_files": [
+     "case/ipod-case.scad"
+    ],
+    "enclosure_formats": "OpenSCAD only",
+    "shell_split": "parametric, not verified",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2026-06-18",
+    "fit": "exact",
+    "note": "iPod-style Pi Zero 2W player; only .scad (needs export to STL)."
+   },
+   {
+    "repo": "https://github.com/marian-millan/mp3_player",
+    "licence": "none stated",
+    "kicad_file_format": "KiCad 9",
+    "kicad_pcb": "versions/v1/hardware/mp3_player_pcb_v1.kicad_pcb",
+    "enclosure_files": [
+     "versions/v1/hardware/mp3_player_assembly_v1.step"
+    ],
+    "enclosure_formats": "STEP assembly",
+    "shell_split": "unclear: single assembly STEP (may include shell)",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2026-07-30",
+    "fit": "close",
+    "note": "Retro MP3 player; assembly STEP not inspected."
+   }
+  ],
+  "fallback": null
+ },
+ {
+  "device": "mp4 video player",
+  "status": "none-exact",
+  "candidates": [
+   {
+    "repo": "https://github.com/niyikes/eiko-cam",
+    "licence": "none stated",
+    "kicad_file_format": "KiCad 9",
+    "kicad_pcb": "PCB/eiko.kicad_pcb",
+    "enclosure_files": [
+     "CAD/eiko-cam body.step",
+     "CAD/top plate.step",
+     "CAD/eiko-cam body.f3d",
+     "CAD/top plate.f3d"
+    ],
+    "enclosure_formats": "STEP+F3D",
+    "shell_split": "yes: body, top plate",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2026-09-08",
+    "fit": "weak",
+    "note": "Handheld camera with LCD; shape works for a small video player."
+   }
+  ],
+  "fallback": "No video-player-specific repo found. Borrow mikeysklar/eink-audio-player shell (enclosure/step/*.step) or codetiger/GameTiger case; both are screen-forward palm devices."
+ },
+ {
+  "device": "flip phone",
+  "status": "none-exact",
+  "candidates": [
+   {
+    "repo": "https://github.com/JeremyLakeyJr/mesh-phone",
+    "licence": "none stated",
+    "kicad_file_format": "KiCad file format 20260206",
+    "kicad_pcb": "hardware/rev-f/mesh-phone.kicad_pcb (main); hardware/handset-rev-a/generated/handset.kicad_pcb",
+    "enclosure_files": [
+     "mechanical/enclosure/exports/front.stl",
+     "mechanical/enclosure/exports/rear.stl",
+     "mechanical/enclosure/exports/module_pod.stl",
+     "mechanical/enclosure/exports/port_cover.stl",
+     "mechanical/enclosure/enclosure.scad"
+    ],
+    "enclosure_formats": "STL+OpenSCAD",
+    "shell_split": "yes: front, rear, pod, port cover",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2026-10-13",
+    "fit": "close",
+    "note": "Candy-bar ESP32-S3 phone, not a clamshell. Repo has many archived PCB copies; use hardware/rev-f."
+   },
+   {
+    "repo": "https://github.com/tengigabytes/MokyaLora",
+    "licence": "none stated (NOASSERTION)",
+    "kicad_file_format": "KiCad 9",
+    "kicad_pcb": "hardware/kicad/MokyaLora.kicad_pcb",
+    "enclosure_files": [
+     "hardware/production/rev-a/MokyaLora.step (board STEP only, no shell)"
+    ],
+    "enclosure_formats": "STEP (board)",
+    "shell_split": "n/a",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2026-05-09",
+    "fit": "pcb-only",
+    "note": "Meshtastic feature phone, no case file found in tree."
+   }
+  ],
+  "fallback": "No flip phone exists. For the clamshell geometry borrow the two-part clamshell in jackw01/pi-tin (3d/25a-a101 3d printed clamshell case.STEP); for candy-bar use mesh-phone."
+ },
+ {
+  "device": "game boy",
+  "status": "verified",
+  "candidates": [
+   {
+    "repo": "https://github.com/codetiger/GameTiger",
+    "licence": "MIT",
+    "kicad_file_format": "KiCad 8",
+    "kicad_pcb": "PCB/GameTiger/GameTiger.kicad_pcb",
+    "enclosure_files": [
+     "Case/GameTigerCaseFront.stl",
+     "Case/GameTigerCaseBack.stl",
+     "Case/GameTigerCase.stl",
+     "Case/GameTigerButtonStart.stl",
+     "Case/GameTigerButtonSelect.stl",
+     "Case/GameTigerButtonPower.stl",
+     "Case/GameTigerButtonReset.stl",
+     "Case/GameTigerButtonBoot.stl"
+    ],
+    "enclosure_formats": "STL",
+    "shell_split": "yes: front, back, buttons",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2024-08-18",
+    "fit": "close",
+    "note": "Retro RP2040 handheld, Game Boy layout; best DMG-like shell."
+   },
+   {
+    "repo": "https://github.com/ashkan89/esp32-emu-turbo",
+    "licence": "none stated",
+    "kicad_file_format": "KiCad 9",
+    "kicad_pcb": "hardware/kicad/esp32-emu-turbo.kicad_pcb",
+    "enclosure_files": [
+     "3d_case/case_top.stl",
+     "3d_case/case_bottom.stl",
+     "3d_case/btn_a.stl",
+     "3d_case/btn_b.stl",
+     "3d_case/btn_x.stl",
+     "3d_case/btn_y.stl",
+     "3d_case/dpad.stl",
+     "3d_case/lr_cap_x2.stl",
+     "3d_case/power_slider.stl"
+    ],
+    "enclosure_formats": "STL",
+    "shell_split": "yes: top, bottom, 10+ button parts",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2026-10-11",
+    "fit": "close",
+    "note": "ESP32-S3 NES/SNES handheld. No licence stated: ask before shipping."
+   },
+   {
+    "repo": "https://github.com/SeanP2001/pico-handheld-games-console",
+    "licence": "GPL-3.0",
+    "kicad_file_format": "KiCad 6",
+    "kicad_pcb": "PCB/Pico_Handheld/Pico_Handheld.kicad_pcb",
+    "enclosure_files": [
+     "Enclosure/Pico_Handheld_Enclosure_Printable.stl",
+     "Enclosure/Pico_Handheld_Enclosure.f3d"
+    ],
+    "enclosure_formats": "STL+F3D",
+    "shell_split": "single printable body",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2023-01-29",
+    "fit": "close",
+    "note": "Small Pico handheld."
+   }
+  ],
+  "fallback": "No true DMG-01 reproduction with both a KiCad PCB and a shell was found (Gekkio/gb-hardware, cajunpanda/gameboy-hifi-audio, jbshelton/ReverseRetroLib are PCB-only; Szybet/Yatchy has a 'Michal-gameboy' watch-sized case)."
+ },
+ {
+  "device": "calculator",
+  "status": "verified",
+  "candidates": [
+   {
+    "repo": "https://github.com/hotwolf/AriCalculator",
+    "licence": "GPL-3.0",
+    "kicad_file_format": "KiCad 4 (old format)",
+    "kicad_pcb": "Hardware/RevC/PCB/KiCad/AriCalculator-RevC.kicad_pcb",
+    "enclosure_files": [
+     "Hardware/RevC/Case/case.stl",
+     "Hardware/RevC/Case/case.scad",
+     "Hardware/RevC/Enclosure/case.scad"
+    ],
+    "enclosure_formats": "STL+OpenSCAD",
+    "shell_split": "single case file, likely 2 parts, not verified",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2020-06-28",
+    "fit": "exact",
+    "note": "Pocket calculator; PCB is old KiCad 4 format, re-save in KiCad 8+ before use."
+   },
+   {
+    "repo": "https://github.com/pjschinske/TI83x",
+    "licence": "CERN-OHL-S-2.0",
+    "kicad_file_format": "KiCad 7",
+    "kicad_pcb": "TI-83x.kicad_pcb",
+    "enclosure_files": [
+     "CAD/TI-83x.step (likely board model, unverified as shell)"
+    ],
+    "enclosure_formats": "STEP, Inventor .ipt/.iam",
+    "shell_split": "n/a: reuses original TI-83 case",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2023-04-05",
+    "fit": "weak",
+    "note": "Drop-in internals for an existing case; no shell redistributed."
+   }
+  ],
+  "fallback": "If AriCalculator is unsuitable, use a keypad handheld shell: acidvegas/t9kb case (case/t9kb_case_top.stl, t9kb_case_lid.stl, ISC) for a small keypad slab."
+ },
+ {
+  "device": "flashlight",
+  "status": "verified",
+  "candidates": [
+   {
+    "repo": "https://github.com/Small-doge128/Gilbert-the-flashlight",
+    "licence": "none stated",
+    "kicad_file_format": "KiCad file format 20260206",
+    "kicad_pcb": "Gilbert the flashlight ki cad/Gilbert the flashlight.kicad_pcb",
+    "enclosure_files": [
+     "CAD files/Gilbert the flahlight.step",
+     "CAD files/Gilbert the flahlight.stl"
+    ],
+    "enclosure_formats": "STEP+STL",
+    "shell_split": "single body",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2026-08-07",
+    "fit": "exact",
+    "note": "Small flashlight with OLED, ESP32-S3. No licence stated."
+   },
+   {
+    "repo": "https://github.com/specs32/prolight",
+    "licence": "none stated",
+    "kicad_file_format": "KiCad 4",
+    "kicad_pcb": "REV11/KICAD/eside_rev11/modular_eside_rev11.kicad_pcb",
+    "enclosure_files": [
+     "REV11/BLENDER/prolight25.stl",
+     "REV11/BLENDER/btncap_array_good_1.stl"
+    ],
+    "enclosure_formats": "STL",
+    "shell_split": "single body + button caps",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2018-05-22",
+    "fit": "close",
+    "note": "Gyroscope matrix flashlight; old."
+   }
+  ],
+  "fallback": null
+ },
+ {
+  "device": "handheld GPS tracker",
+  "status": "verified",
+  "candidates": [
+   {
+    "repo": "https://github.com/felixwittwer/undercity_gps_thingy",
+    "licence": "GPL-3.0",
+    "kicad_file_format": "KiCad 9",
+    "kicad_pcb": "schematics/gps_thingy_schematics/gps_thingy_schematics.kicad_pcb",
+    "enclosure_files": [
+     "production/top_case.stl",
+     "production/middle_case.stl",
+     "production/bottom_case.stl",
+     "production/top_case_bezzle.stl",
+     "cad/gps thingy.step",
+     "cad/gps_thingy.3mf"
+    ],
+    "enclosure_formats": "STL+STEP+3MF",
+    "shell_split": "yes: top, middle, bottom, bezel",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2025-07-14",
+    "fit": "exact",
+    "note": "GPS handheld (Pi Zero 2W based)."
+   },
+   {
+    "repo": "https://github.com/indoor-industry/Mercurio-RevB",
+    "licence": "GPL-3.0",
+    "kicad_file_format": "KiCad file format 20260206",
+    "kicad_pcb": "Module/LoRa-device.kicad_pcb (and Bare chip/LoRa-device.kicad_pcb)",
+    "enclosure_files": [
+     "Module/Case_10mm/LoRa-device-Bottom.step",
+     "Module/Case_10mm/LoRa-device-Lid.step",
+     "Module/Case_10mm/LoRa-device-Buttons.step",
+     "Bare chip/Case/LoRa-device.FCStd",
+     "Bare chip/Case/LoRa-device.step"
+    ],
+    "enclosure_formats": "STEP+FCStd",
+    "shell_split": "yes: bottom, lid, buttons",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2026-06-16",
+    "fit": "exact",
+    "note": "Handheld LoRa+GPS radio."
+   },
+   {
+    "repo": "https://github.com/gitberthe/BertheVario",
+    "licence": "GPL-3.0",
+    "kicad_file_format": "KiCad 7",
+    "kicad_pcb": "BertheVario213/Kicad/BertheVario213-Shema.kicad_pcb",
+    "enclosure_files": [
+     "BertheVario213/FreeCad/BertheVario213_corps-v5-Body.stl",
+     "BertheVario213/FreeCad/BertheVario213_capot-v5-Body.stl",
+     "BertheVario213/FreeCad/BertheVario213_corps-v5.FCStd",
+     "BertheVario213/FreeCad/BertheVario213_capot-v5.FCStd"
+    ],
+    "enclosure_formats": "FCStd+STL",
+    "shell_split": "yes: body, cover",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2026-10-15",
+    "fit": "close",
+    "note": "GPS paragliding variometer."
+   }
+  ],
+  "fallback": null
+ },
+ {
+  "device": "USB microphone",
+  "status": "none",
+  "candidates": [
+   {
+    "repo": "https://github.com/mkvenkit/mico",
+    "licence": "MIT",
+    "kicad_file_format": "KiCad 5",
+    "kicad_pcb": "pcb/ver0.1/mico.kicad_pcb",
+    "enclosure_files": [
+     "(only board/component STEP; no shell)"
+    ],
+    "enclosure_formats": "STEP (board)",
+    "shell_split": "n/a",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2022-01-06",
+    "fit": "pcb-only",
+    "note": "PDM to USB mic on RP2040; no enclosure."
+   },
+   {
+    "repo": "https://github.com/ConfusedHello/USB-Mic",
+    "licence": "none stated",
+    "kicad_file_format": "KiCad 9",
+    "kicad_pcb": "src/PCB/USB Mic.kicad_pcb",
+    "enclosure_files": [
+     "src/CAD/KiCad Board.step (board only)"
+    ],
+    "enclosure_formats": "STEP (board)",
+    "shell_split": "n/a",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2025-08-20",
+    "fit": "pcb-only",
+    "note": "DIY USB-C microphone; no shell file found (11 other STEP/other files are libs)."
+   }
+  ],
+  "fallback": "No repo with a shell. Closest same-size shell: Small-doge128/Gilbert-the-flashlight (cylindrical/elongated hand-held body) or tphakala/p48-pip-adapter fit_test/p48_fittest.scad (XLR barrel)."
+ },
+ {
+  "device": "power strip with USB",
+  "status": "none",
+  "candidates": [],
+  "fallback": "Nothing found. Closest box: JGAguado/Smart_Plant Enclosure/FDM (Smart-Plant Enclosure Top/Bottom .stl/.stp, licence NOASSERTION, KiCad file format 20260206 Design/Smart_Plant.kicad_pcb) or mikesmitty/power-manifold hardware/CAD (side plate only)."
+ },
+ {
+  "device": "USB-C charger",
+  "status": "none-exact",
+  "candidates": [
+   {
+    "repo": "https://github.com/mikesmitty/power-manifold",
+    "licence": "MIT",
+    "kicad_file_format": "KiCad file format 20260206",
+    "kicad_pcb": "hardware/backplane/backplane.kicad_pcb (7 boards)",
+    "enclosure_files": [
+     "hardware/CAD/left-side-plate.step",
+     "hardware/CAD/backplane.step",
+     "hardware/CAD/charger-module.step"
+    ],
+    "enclosure_formats": "STEP",
+    "shell_split": "partial: side plate and board models, no full chassis",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2026-10-24",
+    "fit": "weak",
+    "note": "6-port 100 W USB-C supply; no closed case."
+   },
+   {
+    "repo": "https://github.com/tobycm/skibidi-usb-charger-hub",
+    "licence": "MIT",
+    "kicad_file_format": "KiCad file format 20260206",
+    "kicad_pcb": "pcb/skibidi-usb-charger-hub.kicad_pcb",
+    "enclosure_files": [
+     "cad/mounting plate.step",
+     "cad/mounting plate.3mf"
+    ],
+    "enclosure_formats": "STEP+3MF",
+    "shell_split": "mounting plate only",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2026-08-17",
+    "fit": "weak",
+    "note": "Plate, not an enclosure."
+   }
+  ],
+  "fallback": "No wall-charger shell exists. Borrow a small two-part box: JGAguado/Smart_Plant enclosure."
+ },
+ {
+  "device": "USB-C power brick",
+  "status": "verified",
+  "candidates": [
+   {
+    "repo": "https://github.com/MidwestMotorBoy/Battery-Bank",
+    "licence": "none stated (NOASSERTION)",
+    "kicad_file_format": "KiCad file format 20260206",
+    "kicad_pcb": "hardware/Production/Monolith.kicad_pcb",
+    "enclosure_files": [
+     "hardware/mechanical/monolith_cup_cup.stl",
+     "hardware/mechanical/monolith_cup_cap.stl",
+     "hardware/mechanical/monolith_cup_carrier.stl",
+     "hardware/mechanical/monolith_cup_bumpt_band.stl",
+     "hardware/mechanical/monolith_cup_oring.stl"
+    ],
+    "enclosure_formats": "STL",
+    "shell_split": "yes: cup, cap, carrier, bumpers, o-ring",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2026-10-24",
+    "fit": "close",
+    "note": "Ultralight IP67 21700 power bank; cylindrical, 73 mechanical files. Recent."
+   }
+  ],
+  "fallback": "For a rectangular brick use JGAguado/Smart_Plant enclosure."
+ },
+ {
+  "device": "Steam Deck-style handheld",
+  "status": "verified",
+  "candidates": [
+   {
+    "repo": "https://github.com/ashkan89/esp32-emu-turbo",
+    "licence": "none stated",
+    "kicad_file_format": "KiCad 9",
+    "kicad_pcb": "hardware/kicad/esp32-emu-turbo.kicad_pcb",
+    "enclosure_files": [
+     "3d_case/case_top.stl",
+     "3d_case/case_bottom.stl",
+     "3d_case/dpad.stl",
+     "3d_case/lr_lever_l.stl",
+     "3d_case/lr_lever_r.stl",
+     "3d_case/menu.stl"
+    ],
+    "enclosure_formats": "STL",
+    "shell_split": "yes: top, bottom, face buttons, triggers",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2026-10-11",
+    "fit": "close",
+    "note": "Closest to a Deck layout (dpad, ABXY, shoulder levers, menu)."
+   },
+   {
+    "repo": "https://github.com/jackw01/pi-tin",
+    "licence": "CERN-OHL-W-2.0",
+    "kicad_file_format": "KiCad 8",
+    "kicad_pcb": "pcb_main_r2/mintypcb.kicad_pcb (also pcb_display_r2a/displaypcb.kicad_pcb)",
+    "enclosure_files": [
+     "3d/25a-a101 3d printed clamshell case.STEP",
+     "3d/25a-a001 mint tin case.STEP"
+    ],
+    "enclosure_formats": "STEP",
+    "shell_split": "clamshell, 2 parts",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2026-04-25",
+    "fit": "close",
+    "note": "Pi handheld; clamshell is more Pocket-PC than Deck."
+   },
+   {
+    "repo": "https://github.com/sam-chami/zPocket",
+    "licence": "none stated (NOASSERTION)",
+    "kicad_file_format": "KiCad 8",
+    "kicad_pcb": "linuxpocket.kicad/linuxpocket.kicad_pcb",
+    "enclosure_files": [
+     "Case/zPocket-Back.step",
+     "Case/zPocket.FCStd",
+     "Case/pcb.step"
+    ],
+    "enclosure_formats": "STEP+FCStd",
+    "shell_split": "back shell + FCStd",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2025-03-17",
+    "fit": "weak",
+    "note": "Modular pocket computer."
+   }
+  ],
+  "fallback": null
+ },
+ {
+  "device": "music synthesizer",
+  "status": "verified",
+  "candidates": [
+   {
+    "repo": "https://github.com/JH-2108/Custom-Audio-Synthesizer",
+    "licence": "none stated",
+    "kicad_file_format": "KiCad file format 20260206",
+    "kicad_pcb": "PCB/Audio Synthesizer.kicad_pcb",
+    "enclosure_files": [
+     "Manufacturing/3d printing/Case.stl",
+     "Manufacturing/3d printing/Keys.stl",
+     "Manufacturing/3d printing/Audio Synthesizer.step"
+    ],
+    "enclosure_formats": "STL+STEP",
+    "shell_split": "case + keys",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2026-10-21",
+    "fit": "exact",
+    "note": "RP2040 synth with 8 encoders and keys."
+   },
+   {
+    "repo": "https://github.com/sssamuelll/sam17",
+    "licence": "none stated (NOASSERTION)",
+    "kicad_file_format": "KiCad file format 20260206",
+    "kicad_pcb": "case/panels/panel-template-sup.kicad_pcb and hardware/*/kicad/*.kicad_pcb (9 boards)",
+    "enclosure_files": [
+     "case/cad/sam17_case.scad",
+     "case/cad/piezas.scad",
+     "case/cad/params.scad"
+    ],
+    "enclosure_formats": "OpenSCAD",
+    "shell_split": "parametric parts",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2026-10-24",
+    "fit": "close",
+    "note": "Polyphonic analog synth; rack-style, large."
+   },
+   {
+    "repo": "https://github.com/vaeinoe/0x10pb",
+    "licence": "MIT",
+    "kicad_file_format": "KiCad 7",
+    "kicad_pcb": "kicad/0x10pb.kicad_pcb",
+    "enclosure_files": [
+     "panel/0x10pb-front.stp",
+     "panel/0x10pb-back.stp"
+    ],
+    "enclosure_formats": "STEP",
+    "shell_split": "front + back panel",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2024-04-26",
+    "fit": "close",
+    "note": "MIDI controller with 16 pots."
+   }
+  ],
+  "fallback": null
+ },
+ {
+  "device": "smartwatch",
+  "status": "verified",
+  "candidates": [
+   {
+    "repo": "https://github.com/Bellafaire/ESP32-Smart-Watch",
+    "licence": "MIT",
+    "kicad_file_format": "KiCad 5",
+    "kicad_pcb": "SmartWatch V5/SmartWatch V5.kicad_pcb (V3, V4 also)",
+    "enclosure_files": [
+     "Rev 5 Top.stl",
+     "Rev 5 Bottom.stl",
+     "SmartWatch Rev 5 Case 2 Top.stl",
+     "SmartWatch Rev 5 Case 2 Bottom.stl",
+     "SmartWatch.FCStd",
+     "SmartWatch V5/SmartWatch V5.step"
+    ],
+    "enclosure_formats": "STL+FCStd+STEP",
+    "shell_split": "yes: top, bottom",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2023-10-29",
+    "fit": "exact",
+    "note": "Cleanest watch pair."
+   },
+   {
+    "repo": "https://github.com/Szybet/Yatchy",
+    "licence": "none stated",
+    "kicad_file_format": "KiCad 9",
+    "kicad_pcb": "hardware/kicad/Yatchy/Yatchy.kicad_pcb",
+    "enclosure_files": [
+     "3D/cases/Szybet-brick/3D/Brick case for 30x20x5mm.step",
+     "3D/cases/Kitkat-rotated/3D/rotated-250mah.step",
+     "3D/cases/glowy-thicc/3D/thicc-case-for-20mm-one-piece-strap.step",
+     "3D/cases/Michal-gameboy/3D/michal-gameboy-top.3mf",
+     "3D/cases/Michal-gameboy/3D/michal-gameboy-bottom.3mf"
+    ],
+    "enclosure_formats": "STEP+3MF+FCStd",
+    "shell_split": "multiple community cases",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2026-09-27",
+    "fit": "exact",
+    "note": "Watchy-like, many case variants. Original sqfmi/watchy-hardware (MIT, KiCad 7, Watchy.kicad_pcb) has NO case file."
+   },
+   {
+    "repo": "https://github.com/ttankbuster/Cyberwatch",
+    "licence": "MIT",
+    "kicad_file_format": "KiCad file format 20260206",
+    "kicad_pcb": "design/electronics/CyberwatchV1B/CyberwatchV1B.kicad_pcb",
+    "enclosure_files": [
+     "design/case/case.FCStd",
+     "design/watch-crown/crown.FCStd",
+     "design/electronics/CyberwatchV1B/model/CyberwatchV1B-PCB-model.step"
+    ],
+    "enclosure_formats": "FCStd+STEP",
+    "shell_split": "case + crown",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2026-10-04",
+    "fit": "close",
+    "note": "Extensible smartwatch; case only as FCStd, export STEP."
+   }
+  ],
+  "fallback": null
+ },
+ {
+  "device": "fitness band",
+  "status": "verified",
+  "candidates": [
+   {
+    "repo": "https://github.com/ljbudgie/openhear",
+    "licence": "Apache-2.0",
+    "kicad_file_format": "KiCad 8",
+    "kicad_pcb": "hardware/wristband/kicad/wristband_v1.kicad_pcb",
+    "enclosure_files": [
+     "hardware/wristband/v2-xiao-nrf52840/print_pack/stl/openhear_v2_case.stl",
+     "hardware/wristband/v2-xiao-nrf52840/print_pack/stl/openhear_v2_lid.stl",
+     "hardware/wristband/cad/parametric_wristband_v1.scad",
+     "hardware/wristband/v2-xiao-nrf52840/parametric_wristband_v2.scad"
+    ],
+    "enclosure_formats": "STL+OpenSCAD",
+    "shell_split": "yes: case, lid",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2026-10-17",
+    "fit": "close",
+    "note": "Wrist-worn band with nRF52840; the v2 PCB is not .kicad_pcb in print_pack, use v1/v1.5 PCB outlines."
+   }
+  ],
+  "fallback": "Open-Muscle/OpenMuscle-Band has only trivial STLs. Secondary: Bellafaire watch case with a band slot."
+ },
+ {
+  "device": "smart glasses",
+  "status": "verified",
+  "candidates": [
+   {
+    "repo": "https://github.com/Mentra-Community/OpenSourceSmartGlasses",
+    "licence": "none stated",
+    "kicad_file_format": "KiCad 6",
+    "kicad_pcb": "electronics_and_firmware/OSSG_v0p1_and_v0p2/pcb/ver0.2/main_rigid_board_kicad_project/mico.kicad_pcb (12 boards)",
+    "enclosure_files": [
+     "mechanical/MAIN_FRAME_CAD_0p3.stp",
+     "mechanical/MAIN_FRAME_CAD_0p3.stl",
+     "mechanical/FRONT_FRAME_NO_ARMS_0p3.stl",
+     "mechanical/archive/temple_left.stl",
+     "mechanical/archive/temple_right.stl"
+    ],
+    "enclosure_formats": "STEP+STL",
+    "shell_split": "frame + temples",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2024-11-27",
+    "fit": "exact",
+    "note": "Only smart-glasses repo with both. No licence in repo: ask upstream."
+   }
+  ],
+  "fallback": null
+ },
+ {
+  "device": "smart water bottle",
+  "status": "verified",
+  "candidates": [
+   {
+    "repo": "https://github.com/barrettotte/goto-bed",
+    "licence": "MIT",
+    "kicad_file_format": "KiCad 4",
+    "kicad_pcb": "eda/goto-bed/goto-bed.kicad_pcb",
+    "enclosure_files": [
+     "enclosure/top.stl",
+     "enclosure/bottom.stl",
+     "enclosure/pot-dial.stl",
+     "enclosure/goto-bed.f3d"
+    ],
+    "enclosure_formats": "STL+F3D",
+    "shell_split": "yes: top, bottom",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2021-02-10",
+    "fit": "close",
+    "note": "Vibrating cap for a pill bottle; shell geometry only."
+   },
+   {
+    "repo": "https://github.com/SarusanS/Smart-Water-Bottle",
+    "licence": "none stated",
+    "kicad_file_format": "KiCad 9",
+    "kicad_pcb": "PCB_Design/PCB/PCB.kicad_pcb",
+    "enclosure_files": [
+     "PCB_Design/PCB/PCB.step (board only)"
+    ],
+    "enclosure_formats": "STEP (board)",
+    "shell_split": "n/a",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2026-01-30",
+    "fit": "pcb-only",
+    "note": "ToF + IMU bottle sensor; no shell."
+   }
+  ],
+  "fallback": "Use MidwestMotorBoy/Battery-Bank cylindrical cup/cap for a bottle-cap form."
+ },
+ {
+  "device": "TV / large display",
+  "status": "none",
+  "candidates": [],
+  "fallback": "Nothing found. Display-with-enclosure shells at small scale: v-cu/dpf-load-monitor-wide (enclosure/main_enclosure.step), slomkowski/octoglow (case/shape.fcstd). Scale up."
+ },
+ {
+  "device": "TV remote",
+  "status": "verified",
+  "candidates": [
+   {
+    "repo": "https://github.com/OMOTE-Community/OMOTE-Hardware",
+    "licence": "GPL-3.0",
+    "kicad_file_format": "KiCad 8",
+    "kicad_pcb": "PCB/Omote.kicad_pcb",
+    "enclosure_files": [
+     "CAD/Case.stl",
+     "CAD/Cover Plate.stl",
+     "CAD/Button Grid.stl",
+     "CAD/Color Button.stl",
+     "CAD/Off Button.stl",
+     "CAD/OMOTE v25.step",
+     "CAD/Dock/Omote Dock USB-C.step"
+    ],
+    "enclosure_formats": "STL+STEP",
+    "shell_split": "yes: case, cover plate, button grid, buttons, dock",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2025-04-06",
+    "fit": "exact",
+    "note": "Universal touchscreen remote; best candidate."
+   },
+   {
+    "repo": "https://github.com/mhellevang/openrz67-trigger",
+    "licence": "MIT",
+    "kicad_file_format": "KiCad file format 20260206",
+    "kicad_pcb": "esp32/pcb/kicad/openrz67.kicad_pcb",
+    "enclosure_files": [
+     "esp32/case/bambu-template.3mf",
+     "nrf/case/qidi-template.3mf"
+    ],
+    "enclosure_formats": "3MF",
+    "shell_split": "slicer templates, not clearly a part",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2026-10-23",
+    "fit": "weak",
+    "note": "Camera release remote; 3MF are slicer projects."
+   }
+  ],
+  "fallback": null
+ },
+ {
+  "device": "speakers",
+  "status": "none",
+  "candidates": [],
+  "fallback": "No repo has a speaker shell plus KiCad PCB. 74kumi/Esp32-Poe-HA-Speaker (NOASSERTION, hardware/PoE-Speaker/RevE/KiCad-RevE/PoE-Speaker-RevE.kicad_pcb) has only an assembly STEP; RainbowLabsDE/USB2Speakon (CERN-OHL-W-2.0, KiCad 8) has USB2Speakon_Holder.step. Cylinder shell: MidwestMotorBoy/Battery-Bank cup."
+ },
+ {
+  "device": "smart home speaker",
+  "status": "none-shell",
+  "candidates": [],
+  "fallback": "iMike78/nest-mini-drop-in-pcb (CERN-OHL-S-2.0, nest-mini-v2-drop-in-pcb.kicad_pcb, 618 stars, pushed 2026-10-20) has a PCB for the Google Nest Mini shell but ships only component STEPs in parts/ (no shell). Use its Edge.Cuts as the board outline; shell must be a generic puck (MidwestMotorBoy cup)."
+ },
+ {
+  "device": "Raspberry Pi Game Boy",
+  "status": "verified",
+  "candidates": [
+   {
+    "repo": "https://github.com/jackw01/pi-tin",
+    "licence": "CERN-OHL-W-2.0",
+    "kicad_file_format": "KiCad 8",
+    "kicad_pcb": "pcb_main_r2/mintypcb.kicad_pcb; pcb_display_r2a/displaypcb.kicad_pcb",
+    "enclosure_files": [
+     "3d/25a-a101 3d printed clamshell case.STEP",
+     "3d/25a-a001 mint tin case.STEP"
+    ],
+    "enclosure_formats": "STEP",
+    "shell_split": "clamshell, 2 parts",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2026-04-25",
+    "fit": "exact",
+    "note": "Pi Zero retro handheld, clamshell."
+   },
+   {
+    "repo": "https://github.com/felixwittwer/undercity_gps_thingy",
+    "licence": "GPL-3.0",
+    "kicad_file_format": "KiCad 9",
+    "kicad_pcb": "schematics/gps_thingy_schematics/gps_thingy_schematics.kicad_pcb",
+    "enclosure_files": [
+     "production/top_case.stl",
+     "production/middle_case.stl",
+     "production/bottom_case.stl"
+    ],
+    "enclosure_formats": "STL",
+    "shell_split": "3-part",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2025-07-14",
+    "fit": "close",
+    "note": "Pi Zero 2W handheld, GPS focus."
+   },
+   {
+    "repo": "https://github.com/sam-chami/zPocket",
+    "licence": "none stated (NOASSERTION)",
+    "kicad_file_format": "KiCad 8",
+    "kicad_pcb": "linuxpocket.kicad/linuxpocket.kicad_pcb",
+    "enclosure_files": [
+     "Case/zPocket-Back.step",
+     "Case/zPocket.FCStd"
+    ],
+    "enclosure_formats": "STEP+FCStd",
+    "shell_split": "back shell",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2025-03-17",
+    "fit": "weak",
+    "note": "Linux pocket computer."
+   }
+  ],
+  "fallback": null
+ },
+ {
+  "device": "GameCube-style console",
+  "status": "none",
+  "candidates": [],
+  "fallback": "Nothing found. hackclub/hackxpansion (GPL-3.0, KiCad file format 20260206) is a modular game console but ships board STEPs only. Box with ports: JGAguado/Smart_Plant enclosure, or a slab from MidwestMotorBoy."
+ },
+ {
+  "device": "touchpad",
+  "status": "verified",
+  "candidates": [
+   {
+    "repo": "https://github.com/george-norton/peacock",
+    "licence": "CERN-OHL-S-2.0",
+    "kicad_file_format": "KiCad 7",
+    "kicad_pcb": "trackpad.kicad_pcb",
+    "enclosure_files": [
+     "case/peacock-low-case-v5.step",
+     "case/peacock-low-case-v5.stl",
+     "case/peacock-low-case-v5-5deg-tilt.step",
+     "case/peacock-low-case-v5-5deg-tilt.stl"
+    ],
+    "enclosure_formats": "STEP+STL",
+    "shell_split": "single case body (two tilt variants)",
+    "approx_outer_size": "not stated in tree; read README/STEP",
+    "last_commit_pushed": "2025-02-03",
+    "fit": "exact",
+    "note": "Large QMK trackpad."
+   }
+  ],
+  "fallback": "Ploopy trackpad shell (ploopyco/trackpad hardware/mechanicals/PloopyTrackpad-RevA.STEP, CERN-OHL-S-2.0) exists but its PCB is Altium, not KiCad."
+ }
+]
