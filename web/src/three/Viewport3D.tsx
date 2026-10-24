@@ -205,6 +205,11 @@ interface PartNodeProps {
   labelKey: string | null;
 }
 
+/** PCBs and FR4 plates are kicad-cli board exports: their layers get the KiCad board look. */
+function isBoardPart(part: BuildPart): boolean {
+  return String(part.card.kind) === "pcb" || /plate_fr4/.test(part.part_id);
+}
+
 function PartNode(props: PartNodeProps) {
   const { part, theme } = props;
   const pose = props.pose;
@@ -213,7 +218,7 @@ function PartNode(props: PartNodeProps) {
     return elementPoses(placement, part.quantity, props.layout);
   }, [pose, part.placement, part.quantity, props.layout]);
   const asset = modelAsset(part.assets, poses.length > 1);
-  const model = useModel(asset?.url ?? null);
+  const model = useModel(asset?.url ?? null, isBoardPart(part));
   const catalog = useCatalogBbox(part.part_id);
   const box = useMemo(
     () => placeholderBox(part, { layouts: props.layouts, boards: props.boards, parts: props.parts, catalogBbox: catalog }),
@@ -227,8 +232,9 @@ function PartNode(props: PartNodeProps) {
   useEffect(() => () => placeholderGeom?.dispose(), [placeholderGeom]);
   const groups = useMemo<MeshGroup[]>(() => {
     if (loaded) {
-      // Keep the GLB's own PBR materials; a single-material part takes the build's colour.
-      if (loaded.groups.length === 1 && part.color?.hex) {
+      // Keep the GLB's own PBR materials; a single flat-colour part takes the build's colour.
+      // A textured one (gltf-transform palette) carries its real colours in the texture, so it keeps them.
+      if (loaded.groups.length === 1 && part.color?.hex && !loaded.groups[0].material.map) {
         const g = loaded.groups[0];
         return [{ ...g, material: tinted(g.material, part.color.hex) }];
       }
@@ -361,7 +367,7 @@ function boardModelUrl(board: Board): string | null {
 
 function BoardNode(props: { board: Board; labelKey: string | null }) {
   const { board } = props;
-  const model = useModel(boardModelUrl(board));
+  const model = useModel(boardModelUrl(board), true);
   const loaded = model.status === "ready" && model.model.groups.length > 0 ? model.model : null;
   const outline = useMemo(() => {
     if (loaded) return null;
