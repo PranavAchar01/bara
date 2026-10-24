@@ -66,6 +66,62 @@ export function TopBar() {
   );
 }
 
+/** Left panel header in the workspace (Figma file header): Bara / prompt, build id + status, connection · model. */
+export function FileHeader() {
+  const conn = useApp((s) => s.conn);
+  const hello = useApp((s) => s.hello);
+  const build = useApp((s) => s.build);
+  const health = useApp((s) => s.health);
+  const mock = useApp((s) => s.mode.mock);
+  const status = build?.status ?? "idle";
+  const fallback = health?.llm_fallback?.provider ? `Fallback: ${health.llm_fallback.provider} ${health.llm_fallback.model ?? ""}` : "No fallback";
+  return (
+    <header className="file-header">
+      <div className="file-title">
+        <button type="button" className="brand" onClick={() => useApp.setState({ screen: "home" })} title="Home">
+          Bara
+        </button>
+        <span className="sep">/</span>
+        <span className="file-prompt" title={build?.prompt}>
+          {build?.prompt ?? "New build"}
+        </span>
+      </div>
+      {build && (
+        <div className="file-meta">
+          <span className="mono">{build.build_id}</span>
+          <span className={`status-pill st-${String(status)}`}>{String(status).replace("_", " ")}</span>
+          {(mock || hello?.mock) && <span className="status-pill">mock</span>}
+        </div>
+      )}
+      <div className="file-meta">
+        <span className={`conn-dot tone-${CONN_TONE[conn]}`} aria-hidden />
+        <span aria-live="polite">{CONN_LABEL[conn]}</span>
+        {health?.llm?.model && (
+          <>
+            <span className="sep">·</span>
+            <span className="file-model" title={`${health.llm.provider} ${health.llm.model}. ${fallback}`}>
+              {health.llm.model}
+            </span>
+          </>
+        )}
+      </div>
+    </header>
+  );
+}
+
+/** Right panel header in the workspace (Figma toolbar right): Home and Export, Export is the one primary action. */
+export function PanelToolbar() {
+  return (
+    <div className="panel-toolbar">
+      <button type="button" className="btn ghost sm icon" onClick={() => useApp.setState({ screen: "home" })} title="Home">
+        <Icon name="home" />
+      </button>
+      <span className="spacer" />
+      <ExportMenu primary />
+    </div>
+  );
+}
+
 function BaraMark() {
   return (
     <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden>
@@ -88,7 +144,7 @@ const FORMATS: { id: string; label: string }[] = [
 ];
 
 /** C24 ExportMenu: disabled until build.done. */
-export function ExportMenu() {
+export function ExportMenu(props: { primary?: boolean }) {
   const build = useApp((s) => s.build);
   const compiling = useApp((s) => s.view.firmwareProgress !== null || s.build?.firmware?.compile.status === "running");
   const [open, setOpen] = useState(false);
@@ -104,7 +160,14 @@ export function ExportMenu() {
   const ready = build?.status === "done";
   return (
     <div className="menu" ref={ref}>
-      <button type="button" className="btn sm" disabled={!ready} onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+      <button
+        type="button"
+        className={`btn sm ${props.primary ? "primary" : ""}`}
+        disabled={!ready}
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        title={ready ? "Export" : "Export unlocks when the build is done"}
+      >
         <Icon name="export" /> Export
       </button>
       {open && ready && build && (

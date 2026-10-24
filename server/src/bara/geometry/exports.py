@@ -58,7 +58,8 @@ def asset_path(url: str | None) -> Path | None:
     """Local file behind an /assets/ URL, or None when it is not on this server."""
     if not url or not url.startswith("/assets/"):
         return None
-    rel = _safe_rel(url[len("/assets/") :])
+    # A ?v=<hash> suffix only versions the URL; the file is the path before it.
+    rel = _safe_rel(url.split("?", 1)[0].split("#", 1)[0][len("/assets/") :])
     if rel is None:
         return None
     root = load_settings().assets_dir.resolve()
