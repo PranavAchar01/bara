@@ -63,7 +63,7 @@ http://localhost:5173/?mock=1&mock_fixture=exact_keyboard
 The Vercel site is the web app only; the engine (pcbnew, Freerouting, kicad-cli, the model key) runs on a Mac. On that Mac:
 
 ```
-scripts/serve-public.sh        # engine on :8791 + Cloudflare quick tunnel; publishes the tunnel URL
+scripts/serve-public.sh        # engine on :8797 + Cloudflare quick tunnel; publishes the tunnel URL
 scripts/serve-public.sh open   # opens the site with the access key, once per browser
 ```
 

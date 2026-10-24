@@ -12,7 +12,7 @@
 set -euo pipefail
 
 repo="$(cd "$(dirname "$0")/.." && pwd)"
-port="${BARA_PORT:-8791}"
+port="${BARA_PORT:-8797}"
 site="${BARA_SITE:-https://bara-ivory-five.vercel.app}"
 gh_repo="${BARA_GH_REPO:-PranavAchar01/bara}"
 pointer=web/api/engine.ts
