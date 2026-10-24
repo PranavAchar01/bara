@@ -79,6 +79,13 @@ def slug(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", str(text).lower()).strip("_")
 
 
+def _names_part(query: str, name: str) -> bool:
+    """A KiCad symbol answers a part number that is its name or its name plus a short
+    packing suffix (DRV8833PWPR is the DRV8833PW on a reel)."""
+    q, n = slug(query).replace("_", ""), slug(name).replace("_", "")
+    return bool(q) and (q in n or (len(n) >= 6 and q.startswith(n) and len(q) - len(n) <= 2))
+
+
 def name_slug(part: dict[str, Any]) -> str:
     return slug(f"{part.get('part_id', '')} {part.get('display_name', '')}")
 
@@ -193,10 +200,8 @@ class Resolver:
         for p in self.source.extra.values():
             if p["part_id"] not in found and name_hit(p, words) and self._serves(p, need):
                 found[p["part_id"]] = p
-        for p in read_fetched(self.path):
-            if p["part_id"] not in found and name_hit(p, words) and self._serves(p, need):
-                self.source.add(p)
-                found[p["part_id"]] = p
+        # parts fetched from LCSC on earlier runs are not offered here: a missing need tries
+        # the stock KiCad library first and only then that cache (resolve_missing)
         return [p for p in found.values() if p["part_id"] not in self.rejected]
 
     @staticmethod
@@ -209,18 +214,25 @@ class Resolver:
         if search is None:
             return None
         for q in need.kicad:
-            try:
-                hits = search(q, kind="symbol", limit=10)
-            except Exception:
-                log.exception("generated search failed for %r", q)
-                continue
-            for p in hits:
-                if not p["part_id"].startswith("kicadgen:") or not p.get("fp_ok"):
-                    continue
-                if p["part_id"] in self.rejected:
-                    continue
-                if slug(q) in slug(p.get("name") or p.get("display_name") or ""):
-                    return self._accept(p, need)
+            # the index matches whole words: a part number with a packing suffix is also
+            # looked up without it
+            stems = [q] + [q[:-k] for k in (1, 2) if len(q) - k >= 6]
+            hits = []
+            for stem in stems:
+                try:
+                    hits += search(stem, kind="symbol", limit=10)
+                except Exception:
+                    log.exception("generated search failed for %r", stem)
+            ok = [
+                p
+                for p in hits
+                if p["part_id"].startswith("kicadgen:")
+                and p.get("fp_ok")
+                and p["part_id"] not in self.rejected
+                and _names_part(q, p.get("name") or p.get("display_name") or "")
+            ]
+            if ok:  # the longest name is the closest variant (DRV8833PWP, not DRV8833PW)
+                return self._accept(max(ok, key=lambda p: len(slug(p.get("name") or ""))), need)
         return None
 
     def composed(self, need: Need) -> dict[str, Any] | None:
