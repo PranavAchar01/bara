@@ -30,6 +30,14 @@ export interface LoadedModel {
 
 const cache = new Map<string, Promise<LoadedModel | null>>();
 const loader = new GLTFLoader();
+// Meshopt buffers decode in workers, so a large board never stalls orbiting or the UI.
+try {
+  const n = Math.min(4, Math.max(1, (navigator.hardwareConcurrency || 2) >> 1));
+  // useWorkers is in the decoder module but missing from its type definitions.
+  if (n > 1) (MeshoptDecoder as typeof MeshoptDecoder & { useWorkers: (count: number) => void }).useWorkers(n);
+} catch {
+  // main-thread decoding
+}
 loader.setMeshoptDecoder(MeshoptDecoder);
 
 export type BoardLayer = "mask" | "silk" | "pad" | "copper" | "body";
@@ -191,6 +199,22 @@ function studioMaterial(src: THREE.Material, board: boolean, g: THREE.BufferGeom
   return partMaterial(std);
 }
 
+/**
+ * Meshopt GLBs are quantised (KHR_mesh_quantization): positions and normals are
+ * normalised integers with the scale on the node. Baking the node matrix into
+ * an integer attribute clamps it to [-1, 1], so attributes become float first.
+ */
+function floatAttributes(g: THREE.BufferGeometry): void {
+  for (const name of Object.keys(g.attributes)) {
+    // Interleaved buffers (meshopt's default vertex layout) are copied out too: mergeGeometries needs plain ones.
+    const a = g.attributes[name] as THREE.BufferAttribute | THREE.InterleavedBufferAttribute;
+    if (!("isInterleavedBufferAttribute" in a && a.isInterleavedBufferAttribute) && a.array instanceof Float32Array && !a.normalized) continue;
+    const out = new Float32Array(a.count * a.itemSize);
+    for (let i = 0; i < a.count; i++) for (let k = 0; k < a.itemSize; k++) out[i * a.itemSize + k] = a.getComponent(i, k);
+    g.setAttribute(name, new THREE.BufferAttribute(out, a.itemSize, false));
+  }
+}
+
 /** mergeGeometries needs all indexed or none: keep indices (a third of the vertices) unless the list is mixed. */
 function sameIndexing(list: THREE.BufferGeometry[]): THREE.BufferGeometry[] {
   if (list.every((g) => g.index) || list.every((g) => !g.index)) return list;
@@ -227,6 +251,7 @@ function convert(scene: THREE.Object3D, board: boolean): LoadedModel {
       parts.push({ g: src.clone(), mat: mats[0] });
     }
     for (const { g, mat } of parts) {
+      floatAttributes(g);
       g.applyMatrix4(mesh.matrixWorld);
       const keepUv = !!(mat as THREE.MeshStandardMaterial).map && !!g.attributes.uv;
       for (const name of Object.keys(g.attributes)) if (name !== "position" && name !== "normal" && !(keepUv && name === "uv")) g.deleteAttribute(name);
