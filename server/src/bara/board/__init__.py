@@ -34,6 +34,7 @@ __all__ = ["build_board", "plan_board", "route_board", "pending_board", "BoardBu
 
 Progress = Callable[[str, float | None], None]
 CACHE_VERSION = "board-v4"
+ROUTE_PADS_BASE = 150  # pads a board has before routing gets more than the base time
 PCB_THICKNESS_MM = 1.6
 
 # Composer part function / role words -> layout roles (for part_id mapping only).
@@ -218,6 +219,9 @@ def _route_one(
         timings: dict[str, float] = {}
 
         attempts: list[dict] = []
+        # routing time grows with the number of pads to connect
+        pads = sum(len(it.fp.pads) for it in plan.items if it.fp is not None)
+        route_timeout_s *= min(4.0, max(1.0, pads / ROUTE_PADS_BASE))
         deadline = time.monotonic() + route_timeout_s
         drc: dict = {}
         route: dict = {}
@@ -246,7 +250,24 @@ def _route_one(
                 f"{plan.name}: autorouting with Freerouting {K.FREEROUTING_VERSION} ({strategy})",
                 0.25,
             )
-            route = K.freeroute(dsn, ses, remaining, passes=passes, extra=extra)
+            try:
+                # leave room for a retry: one strategy never gets the whole budget
+                route = K.freeroute(
+                    dsn, ses, min(remaining, route_timeout_s * 0.6), passes=passes, extra=extra
+                )
+            except K.ToolError as exc:
+                if "timed out" not in str(exc):
+                    raise
+                # too slow on this board: try again with relaxed rules and fewer passes
+                attempts.append({"strategy": strategy, "timed_out": True})
+                passes = max(10, passes // 2)
+                if not widened:
+                    strategies.insert(i + 1, ("wide_rules", [], K.WIDE_RULES))
+                    widened = True
+                if i + 1 >= len(strategies) or deadline - time.monotonic() < 10:
+                    raise
+                i += 1
+                continue
             timings["route_s"] = round(timings.get("route_s", 0.0) + route["seconds"], 2)
 
             progress(f"{plan.name}: importing routes", 0.7)
@@ -285,7 +306,9 @@ def _route_one(
                 widened = True
             progress(f"{plan.name}: {drc['errors']} DRC errors after {strategy}, retrying", 0.3)
             i += 1
-        if best is not None and best[1] is not drc:  # the last pass was worse than an earlier one
+        if best is None:
+            raise K.ToolError("no routing strategy finished inside the time budget")
+        if best[1] is not drc:  # the last pass was worse than an earlier one
             shutil.copyfile(best[2], pcb)
             drc = best[1]
 

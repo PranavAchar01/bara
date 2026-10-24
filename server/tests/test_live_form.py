@@ -451,7 +451,7 @@ def test_drc_errors_from_tight_copper_get_one_wide_rules_pass(
     monkeypatch.setattr(K, "export_glb", lambda *a, **k: None)
     monkeypatch.setattr(K, "count_routing", lambda pcb: {"tracks": 1})
     res = B._route_one(
-        SimpleNamespace(name="b"), tmp_path / "w", tmp_path / "g", (0.0, 0.0), 600.0, 5,
+        SimpleNamespace(name="b", items=[]), tmp_path / "w", tmp_path / "g", (0.0, 0.0), 600.0, 5,
         lambda *a, **k: None,
     )  # fmt: skip
     assert res["drc"]["errors"] == 0
@@ -516,7 +516,7 @@ def test_fetch_falls_back_to_a_description_when_no_part_number_matches(tmp_path:
     named = cp.Need("c", "component.ic", "Some IC", terms=("X1",))
     calls.clear()
     r.fetch(named)
-    assert calls == ["X1"]  # an IC is only ever a named part
+    assert calls == ["X1", "keyword:Some IC"]  # then the block described in words
 
 
 def test_touched_mechanical_block_without_a_part_is_made_by_the_case() -> None:
@@ -731,3 +731,78 @@ def test_mating_parts_share_a_spot_but_strangers_still_collide() -> None:
     assert _mates(sw, stab)
     assert not _mates(feat("SW2", "switch", 30.0, 14.0), stab)  # another switch under it
     assert not _mates(sw, feat("BT1", "battery", 0.0, 20.0))
+
+
+def test_every_part_traces_to_a_user_job_and_dropped_blocks_are_logged() -> None:
+    from bara.live import blocks as bl
+    from bara.live.compose import derive_slots
+
+    spec: dict[str, Any] = {"functions": []}
+    blocks = {
+        "device_class": "gadget",
+        "mains_input": False,
+        "portable": True,
+        "avg_current_ma": 10,
+        "shell_g": 5,
+        "use_case": {
+            "jobs": ["see the time at night"],
+            "environment": "bedside",
+            "power": "battery",
+            "handling": "sits on a table",
+        },
+        "blocks": [
+            block("input.button", "Set button", 2, why="set the time"),
+            block("comms.ble", "Radio", 1, why="sync the time", category="comms"),
+        ],
+    }
+    comp = cp.apply(spec, {}, None, blocks)
+    slots = derive_slots(spec, {}, None, comp)
+    got = bl.chain(blocks, slots, comp.dropped)
+    assert got["use_case"]["jobs"] == ["see the time at night"]
+    link = next(k for k in got["links"] if k["function_id"] == "input.button")
+    assert link["job"] == "set the time" and link["quantity"] == 2
+    assert link["outcome"].startswith("UNRESOLVED")  # nothing chosen yet, never silently ok
+    assert [d["label"] for d in got["dropped"]] == ["Radio"]
+    assert got["dropped"][0]["why"] == "sync the time"
+
+
+def test_a_routing_timeout_retries_with_relaxed_rules(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    import types
+
+    import bara.board as board
+    from bara.board import kicad as K
+
+    seen: list[tuple[float, int, bool]] = []
+
+    def freeroute(dsn: Path, ses: Path, timeout_s: float, passes: int = 100, **_: Any) -> dict:
+        seen.append((timeout_s, passes, True))
+        if len(seen) == 1:
+            raise K.ToolError(f"freerouting timed out after {timeout_s:.0f} s")
+        ses.write_text("ses")
+        return {"seconds": 1.0, "unrouted": 0, "passes": passes}
+
+    rules_used: list[Any] = []
+    monkeypatch.setattr(K, "freeroute", freeroute)
+    monkeypatch.setattr(K, "plan_json", lambda plan, pcb, dsn: {"pcb": str(pcb)})
+
+    def build_pcb(p: Path) -> None:
+        rules_used.append(json.loads(p.read_text()))
+        (p.parent / "main.kicad_pcb").write_text("pcb")
+
+    monkeypatch.setattr(K, "build_pcb", build_pcb)
+    monkeypatch.setattr(K, "import_ses", lambda *a, **k: None)
+    monkeypatch.setattr(K, "run_drc", lambda *a, **k: {"errors": 0, "unconnected": 0})
+    monkeypatch.setattr(K, "export_glb", lambda *a, **k: None)
+    monkeypatch.setattr(K, "count_routing", lambda p: {})
+    monkeypatch.setattr(board, "_fp_lib_table", lambda d: "")
+    pcb_stub = types.SimpleNamespace(pads=[object()] * 600)
+    plan = types.SimpleNamespace(name="b", items=[types.SimpleNamespace(fp=pcb_stub)])
+    res = board._route_one(plan, tmp_path / "w", tmp_path / "g", (0.0, 0.0), 100.0, 100, print)
+    assert len(seen) == 2
+    assert seen[0][0] <= 100.0 * 4 * 0.6 and seen[0][0] > 100.0  # scaled by pad count
+    assert rules_used[1]["rules"] == K.WIDE_RULES
+    assert seen[1][1] == 50  # fewer passes on the retry
+    assert res["routing"]["strategy"] == "wide_rules"
+    assert res["routing"]["attempts"][0]["timed_out"] is True

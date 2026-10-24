@@ -62,3 +62,25 @@ Engine-level, applies to every build; a build that misses a row reports a failin
 ### 2026-10-24 ~01:25 PT
 - His verdict: form inference is accurate, shell is ugly. Shell surface rules (solid skin, parting line, continuous fillets, blended bosses, taper from thickness profile, satin two-tone, decimated GLB) assigned to bara-quality under E12.
 - ~01:35 iteration: adea742 merged (no silent fallback, mating roles, stabilizer depth, board-v4). Suite on adea742 running under heavy lock. bara-quality still on E10-E14 + shell surface. bara-gaps/bara-render stay stopped.
+
+## Overnight goal (his ask, 2026-10-24 ~01:45 PT, up ~08:00)
+His words: "do like recursive loops of self-improvement... envision a very solid end goal... once you're done, go into more objects... keep going", plus merge Nithin's code into one working Vercel app; don't rename yet, tone down branding ("I hate the name Bara").
+
+North star (what a finished build looks like, any prompt):
+1. Reads instantly as the product from 3 m: silhouette, proportions and control layout match real products of that class.
+2. Shell looks injection-moulded: solid walls, one parting line, continuous fillets, blended bosses, satin two-tone, no raw edges, few-MB GLB.
+3. Board is a real routed PCB: visible copper, silk, vias, real 3D part models (placeholders = 0), DRC clean, fits inside with bosses + clearance.
+4. Exploded view stacks correctly (caps / top shell / board / battery / bottom) with no mirror or float.
+5. All checks required and green; failures are loud, never silent fallbacks.
+
+Loop: run suite -> rank worst element across devices -> one engine-level fix (no device names) -> rerun -> log. When the 27 pass, add a new batch of gadgets (prompts only, never engine special cases) and repeat.
+Expansion batches: (A) e-reader, digital camera, action camera, walkie-talkie, smart doorbell, thermostat, e-bike light, drone remote; (B) VR controller, stylus, earbuds case, bluetooth tracker, smart ring, baby monitor, label printer, dashcam; (C) mechanical numpad, macro pad, MIDI controller, handheld scanner, kitchen scale, alarm clock, portable fan, power bank.
+Web: bara-merge agent merges Nithin's figma-design-in-code / agent-board-3d / figma-stage-log, mutes branding, wires Vercel to the live engine behind a token.
+
+### 2026-10-24 ~02:00 PT: use case + one-to-one benchmark (his ask)
+- North star 6: the engine understands each device's use case (jobs -> functions -> blocks -> parts) and organizes or composes new components to meet it; nothing dropped silently. Ledger E15 (compose agent).
+- North star 7: every device is compared one-to-one with a real open-source KiCad project of its class (bench/references.json), same kicad-cli renderer both sides, metrics + function recall + side-by-side sheets + UI/UX comparison (bara-bench agent; scripts/compare_reference.py re-scores each iteration).
+- ~01:10 E15 part 1 (0a46fcd): use_case (jobs, env, power, mounting) + per-block why; audit chain per slot in server/data/cache/chains/<build>.json; dropped blocks logged. Open: composed sub-circuits for unresolved functions. Suite adea742 rows: controller J1/J_M1 cut case; monitor mains-inlet/fuse/ESD unresolved; one Freerouting 300 s timeout (sent to compose agent).
+- ~01:35 suite adea742 5/5 rows failed device.complete (fetch budget, fixed 415d105) + identity on mp3/mp4. Compose agent told to restart server + suite on main. c52dad8 (bara-merge): dev proxy uses the published engine + access key.
+- ~01:45 found the "adea742" suite was hitting a server started 23:43 (pre-fix code). Restarted server (pid 21599) on b90088a and the suite (comp/suite.pid). Old rows saved as comp/suite-staleserver.jsonl. Compose agent was stopped by Pranav; main session owns live/* engine work now (E15 part 2 composed recipes pending).
+- ~02:10 suite rows on b90088a failed protocol: E15 use-case progress line >120 chars. Fixed 281f189 (clamp). Promising: controller 18 blocks 0 unresolved, MP3 0 unresolved, monitor/mouse 1 each. Restarted server + suite on 281f189.

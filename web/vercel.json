@@ -1,6 +1,6 @@
 {
   "framework": "vite",
   "installCommand": "pnpm install",
-  "buildCommand": "VITE_MOCK=1 pnpm build",
+  "buildCommand": "VITE_ENGINE_DISCOVERY=1 pnpm build",
   "outputDirectory": "dist"
 }

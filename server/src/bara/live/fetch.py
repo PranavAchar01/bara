@@ -20,7 +20,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from bara.live.completeness import SPECIFIC, Need
+from bara.live.completeness import Need
 
 log = logging.getLogger(__name__)
 
@@ -28,6 +28,7 @@ SERVER = Path(__file__).resolve().parents[3]
 FETCHED_JSONL = SERVER / "data/catalog/fetched/fetched.jsonl"
 PER_FETCH_S = 25.0
 TOTAL_BUDGET_S = 140.0
+BUDGET_PER_NEED_S = 20.0  # a device with many parts to find gets time for each of them
 MISS_TTL_S = 600.0
 UV_ARGS = ("--with", "easyeda2kicad", "--with", "trimesh", "--with", "numpy")
 
@@ -202,8 +203,9 @@ class Resolver:
         """Search + download from LCSC. Returns the new catalog row, or None with a note."""
         reasons: list[str] = []
         terms = list(need.terms)
-        if need.function_id not in SPECIFIC:  # no MPN worked: search by what the block is
-            terms.append("keyword:" + re.sub(r"\s+", " ", need.label)[:60])
+        # no MPN worked (or none was named): search by what the block is, in words
+        words = re.sub(r"[^\w/.+-]+", " ", f"{need.label} {need.requirement}").strip()
+        terms.append("keyword:" + re.sub(r"\s+", " ", words)[:60])
         for term in terms:
             cached = self._cached(term, need)
             if cached is not None:

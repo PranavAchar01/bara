@@ -44,6 +44,8 @@ class Settings:
     cerebras_model: str
     anthropic_model: str
     mock: bool
+    # When set, every request except /v1/health must carry it (X-Bara-Token header or ?token=).
+    access_token: str | None = None
 
     @property
     def schemas_dir(self) -> Path:
@@ -83,4 +85,5 @@ def load_settings() -> Settings:
         cerebras_model=os.environ.get("BARA_CEREBRAS_MODEL", "llama-3.3-70b"),
         anthropic_model=os.environ.get("BARA_ANTHROPIC_MODEL", "claude-haiku-5-5"),
         mock=os.environ.get("BARA_MOCK", "1") not in ("0", "false", "no"),
+        access_token=os.environ.get("BARA_ACCESS_TOKEN") or None,
     )

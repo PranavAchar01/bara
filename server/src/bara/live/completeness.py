@@ -34,6 +34,7 @@ class Need:
     touch: bool = False  # a person touches, sees or plugs into it (the form stage anchors it)
     groups: tuple[str, ...] = ()  # the merged blocks, "label xN", so the form can place each
     requirement: str = ""  # key numbers the part must meet (size, connector standard, rating)
+    why: str = ""  # the user job this need serves (audit trail)
     mechanical: bool = False  # a touched mechanical block: the shell makes it when no part exists
 
     @property
@@ -49,6 +50,7 @@ class Completeness:
     kind: str | None = None
     mains: bool = False
     controller_keys: tuple[str, ...] = ()  # needs that are the device's controller
+    dropped: list[dict[str, str]] = field(default_factory=list)  # blocks no slot was made for
 
 
 # ---- numbers in the prompt -------------------------------------------------------------
@@ -109,6 +111,15 @@ ACDC = dict(
 DEPENDS_ON = {"mech.keycap": "input.key", "mech.stabilizer": "input.key"}
 
 
+def _dropped(block: dict[str, Any], reason: str) -> dict[str, str]:
+    return {
+        "label": str(block.get("label")),
+        "function_id": str(block.get("function_id")),
+        "why": str(block.get("why") or ""),
+        "reason": reason,
+    }
+
+
 def _slug(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", text.lower()).strip("_")[:24] or "block"
 
@@ -138,6 +149,7 @@ def need_from_block(block: dict[str, Any], taken: set[str]) -> Need:
         touch=bool(block.get("touchpoint")),
         groups=tuple(block.get("groups") or ()),
         requirement=str(block.get("requirement") or "")[:160],
+        why=str(block.get("why") or "")[:200],
         mechanical=block.get("category") == "mechanical" and bool(block.get("touchpoint")),
     )
 
@@ -244,9 +256,12 @@ def apply(
             fid = block.get("function_id")
             terms = tuple(block.get("search_terms") or [])
             if fid in SKIP:
+                out.dropped.append(_dropped(block, "provided by the case, board or support rules"))
                 continue
             if not terms and (fid.startswith("comms.") or fid in ("mech.mount", "mech.foot")):
-                continue  # the controller module carries the radio; a bare mount has no part
+                # the controller module carries the radio; a bare mount has no part
+                out.dropped.append(_dropped(block, "carried by the controller module or case"))
+                continue
             if fid in PLAIN:
                 add(fid, f"block {block.get('label')}", max(1, int(block.get("count") or 1)))
                 continue
@@ -259,6 +274,8 @@ def apply(
                 dict.fromkeys([*row.get("kicad_names", []), *(block.get("kicad_names") or [])])
             )
             row["count"] += max(1, int(block.get("count") or 1))
+            if block.get("why") and block["why"] not in str(row.get("why")):
+                row["why"] = "; ".join(x for x in (row.get("why"), block["why"]) if x)
             row["groups"].append(f"{block.get('label')} x{max(1, int(block.get('count') or 1))}")
         for block in merged.values():
             need = need_from_block(block, taken)

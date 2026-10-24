@@ -507,7 +507,7 @@ function BotFace(props: FaceProps) {
 
   return (
     <span className={`bara-bot ${props.className ?? ""}`} style={{ width: size, height: size }} data-mood={mood} data-activity={activity ?? ""}>
-      <svg ref={svg} viewBox="-60 -60 120 120" width={size} height={size} aria-label={`Bara is ${activity ?? mood}`} role="img">
+      <svg ref={svg} viewBox="-60 -60 120 120" width={size} height={size} aria-label={`Assistant is ${activity ?? mood}`} role="img">
         <g className="bb-rig">
           <rect className="bb-oval" x={-OVAL_W / 2} y={-OVAL_H / 2} width={OVAL_W} height={OVAL_H} rx={OVAL_H / 2} />
           <g className="bb-face">
