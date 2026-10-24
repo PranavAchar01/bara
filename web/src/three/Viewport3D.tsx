@@ -342,8 +342,8 @@ function PartNode(props: PartNodeProps) {
   );
 }
 
-/** Case colour: the brief's, or a neutral light grey when the server only filled in its default. */
-const CASE_NEUTRAL = "#D3D1CB";
+/** Case colour: the brief's, or graphite when the server only filled in its default (a light grey melted into the white floor). */
+const CASE_NEUTRAL = "#4A4E55";
 function caseHex(enc: Enclosure): string {
   return enc.color?.hex && enc.color_source !== "default" ? enc.color.hex : CASE_NEUTRAL;
 }
@@ -442,7 +442,7 @@ function CasePieceNode(props: {
   useEffect(() => () => material.dispose(), [material]);
   const edges = useMemo(() => piece.geoms.map((g) => new THREE.EdgesGeometry(g, 40)), [piece.geoms]);
   useEffect(() => () => edges.forEach((e) => e.dispose()), [edges]);
-  const edgeMat = useMemo(() => new THREE.LineBasicMaterial({ color: "#6F757D", transparent: true, opacity: 0.3, depthWrite: false, toneMapped: false }), []);
+  const edgeMat = useMemo(() => new THREE.LineBasicMaterial({ color: "#1F2226", transparent: true, opacity: 0.3, depthWrite: false, toneMapped: false }), []);
   useEffect(() => () => edgeMat.dispose(), [edgeMat]);
   const base = props.material.opacity;
   const floor = piece.lid ? 0.16 : 0.24;
@@ -450,7 +450,8 @@ function CasePieceNode(props: {
     const k = Math.min(1, stage.explode / 0.6);
     const o = (floor + (1 - floor) * k) * base;
     material.opacity = o;
-    edgeMat.opacity = 0.3 * (1 - k);
+    // Creases stay drawn when pulled apart, like the outlines the library parts carry in their own geometry.
+    edgeMat.opacity = 0.3 + 0.25 * k;
     const solid = k >= 0.999 && base >= 0.999;
     if (material.depthWrite !== solid) {
       material.depthWrite = solid;
