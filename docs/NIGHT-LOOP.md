@@ -160,3 +160,9 @@ Web: bara-merge agent merges Nithin's figma-design-in-code / agent-board-3d / fi
 - Controller on d611c95: case checks clear, board.drc 60 errors, all from fetched footprints now on the PCB: ESP32-S3-WROOM 0.25 mm thermal vias (drill, clearance) and EasyEDA rings at 0.0999 mm vs 0.1 minimum (SS49E, RKJXV stick and others). 2 track_width necks from the router.
 - Fix e3fee5c: kicad_script._fit_holes drops unnumbered PTH vias under the minimum hole and grows thin rings, for any footprint. A dropped pad freed by Python corrupts pcbnew's pad list, so removed pads are kept alive. Unrouted rebuild of that board: 0 DRC errors. Test added (5 pass).
 - Open: the controller BOM has both an ESP32-S3 module and a BlueMicro840. Suite restarted on e3fee5c (server 65980, suite 66012).
+
+### 09:35 (cd33090)
+- Suite on e3fee5c, controller: battery is now a LiPo (chemistry filter works) and DRC has 0 errors (hole fit works); only fail is board.routing.complete with 3 unconnected, all on U5 = LSM6DS3TR-C (LGA-14, 0.5 mm pitch) pins 6/7/8. All 4 router strategies left the same 3 open.
+- Cause: the placer's region allowed a courtyard 0.5 mm from the outline; U5's edge-side pads sat 0.67 mm from the edge keep-out band, so its pins had no way out (only pin 5 escaped, by a via). Parts get 1.2 mm between each other but no channel at the rim.
+- Fix cd33090 (generic, no device names): fine-pitch SMD parts (>= 6 pads, min pad spacing < 0.65 mm, not cable connectors) keep EDGE_COPPER_MM + PART_GAP/2 from the edge. Test tests/test_fine_pitch_edge.py; 47 related tests pass.
+- Server still runs e3fee5c; suite continues on mouse/mp3/mp4/monitor for the identity re-check. Controller re-check on the next run.
