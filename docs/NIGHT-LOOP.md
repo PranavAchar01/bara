@@ -236,3 +236,5 @@ Web: bara-merge agent merges Nithin's figma-design-in-code / agent-board-3d / fi
   3 hits was a lantern. Fixed at the source in 0d0b9ff: a prompt of 6 words or fewer is searched
   as typed ("game boy 3d model"). This goes live at the next engine restart, after the
   current Game Boy test build. bara-keycaps (wide keycaps) is still running.
+
+- 2026-10-24 13:20: Find design was a 0 ms no-op in live builds (compared against the sample designs only). dc21756 makes it name the closest open KiCad project with a shell from docs/shell-sources.json, and gives the live stages measured budgets. Engine restarted at his request on 632e58e: all builds were stopped, including the old suite. Probe check: "a game boy" shows GameTiger, esp32-emu-turbo and pico-handheld-games-console. New tunnel: dentists-contents-proposition-airline.trycloudflare.com.
