@@ -6,7 +6,7 @@
 // feeling to the next and never stops moving. One SVG, mutated per frame from
 // refs; React only renders when the mood or the bubbles change.
 //
-// Bubbles (opt-in, see botBubbles): a thought cloud of tiny icons while it
+// Bubbles (on by default, ?bubbles=0 turns them off): a thought cloud of tiny icons while it
 // thinks, and a one-line speech bubble typed out while its eyes bounce with
 // the words.
 import { useEffect, useId, useRef, useState } from "react";
@@ -76,6 +76,7 @@ const EMOTE: Record<Emote, { pose: Partial<Pose>; ms: number }> = {
   yawn: { pose: { h: 3, sy: 1.12, sx: 0.94, by: -2 }, ms: 1500 },
 };
 
+/** Thought and speech bubbles: on unless ?bubbles=0 (remembered) turned them off. */
 export function botBubbles(): boolean {
   const q = new URLSearchParams(window.location.search).get("bubbles");
   if (q === "1" || q === "0") {
@@ -87,9 +88,9 @@ export function botBubbles(): boolean {
     return q === "1";
   }
   try {
-    return localStorage.getItem("bara.bubbles") === "1";
+    return localStorage.getItem("bara.bubbles") !== "0";
   } catch {
-    return false;
+    return true;
   }
 }
 
