@@ -569,3 +569,239 @@
 .build-done .btn {
   margin-left: auto;
 }
+
+/* Focus card (Figma 17): Bara asks what to do with the part pulled out of the build. */
+.focus-card {
+  background: var(--paper);
+  border-left: 1px solid var(--line);
+  box-shadow: none;
+}
+.fc-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 12px 12px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.fc-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.fc-title h2 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 22px;
+  letter-spacing: var(--track-display);
+  line-height: 1.05;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fc-kicker {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+  color: var(--text-2);
+}
+.fc-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.fc-say {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--text);
+}
+.fc-src,
+.fc-thinking {
+  color: var(--text-2);
+  font-size: 12px;
+}
+.fc-thinking {
+  margin: -6px 0 0;
+}
+.fc-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.fc-opt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 10px 10px 10px 12px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: var(--paper-2);
+  color: var(--text);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.fc-opt > span {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.fc-opt b {
+  font-weight: 500;
+}
+.fc-opt small {
+  font-size: 12px;
+  color: var(--text-2);
+}
+.fc-opt:hover:not(:disabled) {
+  background: var(--paper-3);
+}
+.fc-opt.active {
+  background: var(--paper-3);
+  border-color: var(--ink);
+}
+.fc-opt:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.fc-opt kbd,
+.fc-keys kbd {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1;
+  padding: 3px 5px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--paper);
+  color: var(--text-2);
+}
+.fc-more {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.fc-ask {
+  display: flex;
+  gap: 6px;
+}
+.fc-ask .prompt-input {
+  flex: 1;
+  height: 34px;
+  border-radius: 17px;
+  padding: 0 12px;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+}
+.fc-ask .btn {
+  border-radius: 17px;
+}
+.fc-suggest {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.fc-suggest .chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.fc-suggest .chip {
+  cursor: pointer;
+}
+.fc-history {
+  font-size: 12px;
+  color: var(--text-2);
+}
+.fc-history p {
+  margin: 6px 0 0;
+}
+.fc-keys {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--text-2);
+}
+.fc-keys .spacer {
+  flex: 1;
+}
+
+/* Voice (Figma 19): hold the eyes or Space to talk; level bars while listening, captions in the bubble. */
+.bot-mic {
+  display: inline-flex;
+  padding: 0;
+  border: 0;
+  background: none;
+  border-radius: 50%;
+  cursor: pointer;
+  touch-action: none;
+}
+.bot-mic.on {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+.prompt-input.listening {
+  outline: 1px solid var(--ink);
+  background: var(--paper);
+}
+.voice-bars {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 20px;
+  flex: none;
+}
+.voice-bars i {
+  display: block;
+  width: 2px;
+  height: 6px;
+  border-radius: 1px;
+  background: var(--ink);
+  animation: voice-bar 0.9s ease-in-out infinite;
+}
+.voice-bars i:nth-child(2) {
+  animation-delay: 0.12s;
+}
+.voice-bars i:nth-child(3) {
+  animation-delay: 0.24s;
+}
+.voice-bars i:nth-child(4) {
+  animation-delay: 0.36s;
+}
+.voice-bars i:nth-child(5) {
+  animation-delay: 0.48s;
+}
+@keyframes voice-bar {
+  0%,
+  100% {
+    height: 4px;
+  }
+  50% {
+    height: 18px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .voice-bars i {
+    animation: none;
+    height: 10px;
+  }
+}
+.voice-toggle {
+  flex: none;
+  color: var(--text-2);
+}
+.voice-toggle.on {
+  color: var(--ink);
+}

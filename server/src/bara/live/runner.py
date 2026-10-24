@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any
 from shapely.geometry import Polygon
 
 from bara.live import adapters as A
-from bara.live import archetype, completeness, hero, open_designs, websearch
+from bara.live import archetype, completeness, hero, websearch
 from bara.live import blocks as blocks_mod
 from bara.live import form as form_mod
 from bara.live import identity as identity_mod
@@ -33,9 +33,6 @@ if TYPE_CHECKING:
     from bara.engine import BuildRun, Engine
 
 log = logging.getLogger(__name__)
-# p90 of measured live builds (2026-10-24 suite); the fixture budgets are for the mock path
-LIVE_BUDGET_MS = {"classify": 90_000, "reuse": 1_000, "compose": 120_000, "render": 45_000}
-SHORT_PROMPT_WORDS = 6  # up to this many words the prompt is searched as typed
 
 MAX_CLARIFY_ROUNDS = 2
 
@@ -182,8 +179,7 @@ class LiveRunner:
         self.settings = engine.settings
 
     def _stage(self, run: BuildRun, stage: str, label: str) -> _Stage:
-        budget = LIVE_BUDGET_MS.get(stage) or self.catalog.stage_budget(stage)
-        return _Stage(run, budget, stage, label)
+        return _Stage(run, self.catalog.stage_budget(stage), stage, label)
 
     def _warn(self, run: BuildRun, stage: str, wid: str, code: str, sev: str, msg: str) -> None:
         used = {w["warning_id"] for w in run.state["warnings"]}
@@ -428,12 +424,8 @@ class LiveRunner:
             reason = arch.reason() + " New KiCad board, case and firmware generated."
         else:
             reason = "No archetype matched; generating a new KiCad board, case and firmware."
-        opens = open_designs.rows(run.prompt, str(brief.get("device") or ""))
-        if opens:
-            considered = opens + considered
-            reason += f" Closest open design: {opens[0]['name']}, compared only."
-        elif design_id is None:
-            reason += " No open KiCad project with a shell is listed for this device."
+            if considered:
+                reason += f" Closest open design: {considered[0]['name']}, compared only."
         st.emit(
             "reuse.decided",
             {
@@ -598,12 +590,8 @@ class LiveRunner:
         """Web pictures of the product (its name plus "3d model"), searched once per build and
         shared by the form and the identity judge."""
         if not hasattr(run, "web_photos"):
-            # a short prompt is the product's own name ("a game boy"); the brief generalises
-            # it ("handheld game console") and the search then finds lanterns
             brief = getattr(run, "live_brief", None) or {}
-            words = run.prompt.split()
-            short = len(words) <= SHORT_PROMPT_WORDS
-            product = run.prompt if short else str(brief.get("device") or "") or run.prompt
+            product = str(brief.get("device") or "") or run.prompt
             photos, sources, note = await websearch.reference_photos(product)
             run.web_photos = photos  # type: ignore[attr-defined]
             run.web_sources = sources  # type: ignore[attr-defined]

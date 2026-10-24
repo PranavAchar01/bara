@@ -657,10 +657,6 @@ def test_locating_pegs_keep_the_other_side_clear() -> None:
     assert pf["fit_report"]["ok"] is False  # a hole through one is a hole through the other
 
 
-async def _no_photos(run: object) -> list[bytes]:
-    return []
-
-
 def test_identity_redraw_below_the_fit_floor_keeps_the_fitting_form(monkeypatch: Any) -> None:
     from types import SimpleNamespace
 
@@ -682,10 +678,7 @@ def test_identity_redraw_below_the_fit_floor_keeps_the_fitting_form(monkeypatch:
     )
     st = SimpleNamespace(progress=lambda *a: None, emit=lambda *a, **k: None)
     fake = SimpleNamespace(
-        _touches=lambda r: [],
-        _warn=lambda *a: warned.append(a[-1]),
-        _stage=None,
-        _photos=_no_photos,
+        _touches=lambda r: [], _warn=lambda *a: warned.append(a[-1]), _stage=None
     )
     result = SimpleNamespace(log=[])
     got = asyncio.run(rn.LiveRunner.form_stage(fake, run, result, st))  # type: ignore[arg-type]
@@ -734,14 +727,10 @@ def test_a_cap_without_a_key_switch_is_dropped_and_counts_reach_the_slots() -> N
     assert "mech.keycap" not in qty
 
 
-def test_ask_json_asks_again_when_the_answer_was_cut_off(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_ask_json_asks_again_when_the_answer_was_cut_off(monkeypatch: pytest.MonkeyPatch) -> None:
     import types
 
     from bara.live import ask
-
-    monkeypatch.setattr(ask, "CACHE", tmp_path)  # a cached answer would hide the retry
 
     budgets: list[int] = []
 

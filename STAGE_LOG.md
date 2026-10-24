@@ -209,6 +209,53 @@ The coverage audit of the live site found three places where the UI said two con
 
 **Not done:** the darker inner wall from the Figma spec; it needs per-face shading in the shader. **Minutes:** about 15. **Rating:** 4/5.
 
+### Labels that follow what you can see
+
+**What moved:** each label anchor now knows which part it sits on. A few times a second, while the camera or the explode moves, a ray from the camera checks whether that part is the first thing it meets. If another part is in the way, the label waits 150 ms, then fades out over 180 ms; turning the model back fades it in. With several anchors per label, the line uses the visible one nearest the label column. Hidden parts are counted under the column ("+6 behind other parts, turn the model to see them"). See-through shells (the assembled case) don't hide what is inside.
+
+**Checked:** typecheck, lint, tests; a real keyboard build pulled apart. ISO and front show all seven labels; from below only the case bottom keeps its label, with the other six counted as behind. Orbiting between the two brings them back.
+
+**Not done:** the Figma rule "hover a Layers row to show its label anyway". **Minutes:** about 20. **Rating:** 4/5.
+
+### Part focus with the agent card
+
+**Tools:** Figma frames 17 and 17a as the spec; Claude Code for the scene, store and card. The engine got a new route, `POST /v1/builds/{id}/ask`, which answers about one part from the build's own facts (card, why it was chosen, connections, checks). It is short and spoken-style, Cerebras first and Anthropic as backup.
+
+**What moved:**
+- Clicking a part in 3D, or its Layers row, pulls it out. It eases to just right of the view's centre and grows to fill about 60% of the view. Every other part shrinks onto a shelf down the left fifth, in stack order. The labels step aside, the floor hides, and the selection outline drops so the part isn't drowned in blue.
+- The right column becomes Bara's card: the eyes, the part, one question and three options. **Ask about it** (`A`) opens a question field. **Change it** (`S`) opens swap, or resize for the case and board. **Something else** (`O`) holds details, recolour, move and take it out. Three suggested questions start the chat, and the model's follow-ups replace them after each answer. `←` `→` step through parts; `Esc` closes a drawer first, then puts the part back.
+- Footprint models drawn from the KiCad board export (switches, diodes, MCU) focus as their own parts, not as "the board".
+
+**Checked:**
+- Typecheck, lint, and 65 tests: 3 new for the focus layout (centred and grown, shelf on the left, split halves kept together) and 3 server tests for the ask route.
+- In the browser, on two fresh keyboard builds from the live engine: pulled out the switches, asked "Why this one?", stepped to the keycaps and pressed Esc.
+
+**Friction:**
+- The exploded framing shifts the image 20% left for the label column. That shift now relaxes as focus eases in, or the shelf would land off-screen.
+- An InstancedMesh's cached bounds were stale after a remount, so focus measures instance by instance.
+- The engine on Pranav's machine still runs code without `/ask` (404). The card says when its answer came from the build rather than the model; the route goes live when the engine restarts on this commit.
+
+**Minutes:** about 60. **Rating:** 4/5.
+
+### Talk to Bara
+
+**Tools:** Figma frame 19 as the spec; ElevenLabs for the voice (text to speech streamed, Scribe v2 for speech to text) through two new engine routes, so the key never reaches the browser.
+
+**What moved:**
+- **Talking:** hold Space, or press and hold Bara's eyes in the Ask pill. Level bars show and your words appear live where the browser can recognise speech; elsewhere the clip goes to the engine's `POST /v1/stt`, which hints Scribe with the build's part names. Releasing sends it: to the focus card when a part is pulled out, otherwise to the prompt. Esc throws it away.
+- **Answers:** spoken through the engine's `GET /v1/tts`, which streams ElevenLabs audio straight into an audio element, so playback starts while the rest is still being generated. The default model is `eleven_v4`, the most natural one; `BARA_TTS_MODEL=eleven_flash_v2_5` trades a little warmth for speed. The voice is Charlotte, chosen as warm and conversational; `BARA_TTS_VOICE` changes it. The words show in Bara's speech bubble as it talks. Without the engine's voice, the browser's best voice speaks instead.
+- **Replies:** spoken replies turn on the first time you talk. The speaker button in the Ask pill or `V` toggles them, and the choice is remembered per browser.
+
+**Checked:**
+- Web typecheck, lint and tests; 4 new server tests (settings follow the environment, long text is cut, part names reach Scribe, no key means no voice), plus the ask and contract tests.
+- In the browser: the caption shows in Bara's bubble and the fallback voice speaks.
+
+**Not checked:** a real ElevenLabs call, because no key is set on this machine. The engine needs `ELEVENLABS_API_KEY` and a restart on this commit. Six live-form and footprint server tests fail on `main` without this change (they need the KiCad libraries on Pranav's machine).
+
+**Changed from Figma:** frame 19 named Flash v2.5; we chose v4 because the brief was "sounds incredibly human", and Flash stays one setting away.
+
+**Minutes:** about 40. **Rating:** 4/5.
+
 ## Before and after
 
 | Change | Before | After |

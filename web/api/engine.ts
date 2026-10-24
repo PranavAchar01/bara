@@ -2,7 +2,7 @@
 // The engine runs on Pranav's Mac behind a Cloudflare quick tunnel whose URL changes on every
 // start; scripts/serve-public.sh rewrites ENGINE_URL below, which redeploys the site.
 // The line below is rewritten by scripts/serve-public.sh; empty means no engine published.
-const ENGINE_URL: string = "https://ruled-positive-delhi-univ.trycloudflare.com";
+const ENGINE_URL: string = "https://dentists-contents-proposition-airline.trycloudflare.com";
 
 const reply = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), {
