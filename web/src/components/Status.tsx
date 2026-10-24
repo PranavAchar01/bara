@@ -7,6 +7,9 @@ import { Chip, Icon, Panel, useNow } from "../ui/common";
 import { buildProgress, fmtDuration, fmtLeft } from "../state/progress";
 import { checkTone, fmtMs, fmtValue, known, severityTone, vlabel } from "../ui/format";
 
+/** How long a notification stays before it closes itself. */
+const AUTO_CLOSE_MS = 8000;
+
 /** Whole-build progress bar with time left while running, then a done confirmation. */
 export function BuildProgress() {
   const status = useApp((s) => s.build?.status);
@@ -18,6 +21,11 @@ export function BuildProgress() {
   const [closed, setClosed] = useState<string | null>(null);
   const running = status === "running";
   const now = useNow(running, 1000);
+  useEffect(() => {
+    if (status !== "done" || !buildId) return;
+    const h = setTimeout(() => setClosed(buildId), AUTO_CLOSE_MS);
+    return () => clearTimeout(h);
+  }, [status, buildId]);
   if (running) {
     const p = buildProgress(stages, startAt, now);
     const pct = Math.round(p.fraction * 100);
@@ -96,6 +104,14 @@ export function WarningBanner() {
   const dismissed = useApp((s) => s.dismissedWarnings);
   const vocab = useApp((s) => s.vocab);
   const shown = warnings.filter((w) => !dismissed.includes(w.warning_id));
+  const ids = shown.map((w) => (w.severity === "critical" ? "" : w.warning_id)).join("|");
+  // Warnings close themselves after a while; a critical one stays until dismissed.
+  useEffect(() => {
+    const close = ids.split("|").filter(Boolean);
+    if (!close.length) return;
+    const h = setTimeout(() => useApp.setState((s) => ({ dismissedWarnings: [...s.dismissedWarnings, ...close] })), AUTO_CLOSE_MS);
+    return () => clearTimeout(h);
+  }, [ids]);
   if (!shown.length) return null;
   return (
     <div className="warnings" role="status">
