@@ -34,7 +34,16 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 # p90 of measured live builds (2026-10-24 suite); the fixture budgets are for the mock path
-LIVE_BUDGET_MS = {"classify": 90_000, "reuse": 1_000, "compose": 120_000, "render": 45_000}
+LIVE_BUDGET_MS = {
+    "classify": 90_000,
+    "reuse": 15_000,
+    "compose": 120_000,
+    "place": 10_000,
+    "enclose": 60_000,
+    "board": 240_000,
+    "firmware": 30_000,
+    "render": 45_000,
+}
 SHORT_PROMPT_WORDS = 6  # up to this many words the prompt is searched as typed
 
 MAX_CLARIFY_ROUNDS = 2
@@ -120,6 +129,14 @@ def _question(round_no: int) -> dict[str, Any]:
         "missing_facets": ["function"],
         "timeout_ms": 60000,
     }
+
+
+def _product_name(run: BuildRun, brief: dict[str, Any]) -> str:
+    """What to search the web for. A short prompt is the product's own name ("a game boy"); the
+    brief generalises it ("handheld game console") and a search then finds lanterns."""
+    if len(run.prompt.split()) <= SHORT_PROMPT_WORDS:
+        return run.prompt
+    return str(brief.get("device") or "") or run.prompt
 
 
 class _Stage:
@@ -213,7 +230,7 @@ class LiveRunner:
             return
         spec, brief = spec_brief
         plan = plan_keyboard(brief)
-        self.reuse(run, spec, brief)
+        await self.reuse(run, spec, brief)
         result = await self.compose(run, spec, brief, plan)
         if not result.chosen_parts:  # nothing resolved is a failed build, never an empty DONE
             why = result.error or "No part could be chosen for this request; nothing to build."
@@ -388,7 +405,7 @@ class LiveRunner:
             log.warning("live: could not write the brief log for %s", run.build_id)
 
     # ---- reuse ---------------------------------------------------------------------------
-    def reuse(self, run: BuildRun, spec: dict[str, Any], brief: dict[str, Any]) -> None:
+    async def reuse(self, run: BuildRun, spec: dict[str, Any], brief: dict[str, Any]) -> None:
         st = self._stage(run, "reuse", "Looking for an existing open design")
         reqs = spec["hard_requirements"]
         by_facet = {r["facet"]: r["req_id"] for r in reqs}
@@ -428,12 +445,19 @@ class LiveRunner:
             reason = arch.reason() + " New KiCad board, case and firmware generated."
         else:
             reason = "No archetype matched; generating a new KiCad board, case and firmware."
-        opens = open_designs.rows(run.prompt, str(brief.get("device") or ""))
+        st.progress("Searching open KiCad projects", 0.2)
+        found, note = await open_designs.search(_product_name(run, brief))
+        scouted = open_designs.rows(run.prompt, str(brief.get("device") or ""))
+        seen = {r["design_id"] for r in scouted}
+        opens = scouted + [r for r in open_designs.to_rows(found, 5) if r["design_id"] not in seen]
+        opens = sorted(opens, key=lambda r: -r["score"])[:5]
+        run.open_designs = found  # type: ignore[attr-defined]
+        log.info("open designs for %s: %d searched (%s)", run.build_id, len(found), note)
         if opens:
             considered = opens + considered
             reason += f" Closest open design: {opens[0]['name']}, compared only."
-        elif design_id is None:
-            reason += " No open KiCad project with a shell is listed for this device."
+        else:
+            reason += f" No open KiCad project found for this device ({note})."
         st.emit(
             "reuse.decided",
             {
@@ -598,13 +622,8 @@ class LiveRunner:
         """Web pictures of the product (its name plus "3d model"), searched once per build and
         shared by the form and the identity judge."""
         if not hasattr(run, "web_photos"):
-            # a short prompt is the product's own name ("a game boy"); the brief generalises
-            # it ("handheld game console") and the search then finds lanterns
             brief = getattr(run, "live_brief", None) or {}
-            words = run.prompt.split()
-            short = len(words) <= SHORT_PROMPT_WORDS
-            product = run.prompt if short else str(brief.get("device") or "") or run.prompt
-            photos, sources, note = await websearch.reference_photos(product)
+            photos, sources, note = await websearch.reference_photos(_product_name(run, brief))
             run.web_photos = photos  # type: ignore[attr-defined]
             run.web_sources = sources  # type: ignore[attr-defined]
             log.info("web reference photos for %s: %d (%s)", run.build_id, len(photos), note)
