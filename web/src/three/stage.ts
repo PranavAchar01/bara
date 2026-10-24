@@ -8,8 +8,6 @@ export interface LabelAnchor {
   key: string;
   /** Current world-space anchor (follows the explode). */
   world: () => THREE.Vector3;
-  /** The object the anchor sits on: a ray that hits it first means the anchor is in view. */
-  owner?: () => THREE.Object3D | null;
 }
 
 export const stage = {
@@ -26,12 +24,6 @@ export const stage = {
   /** True while the camera eases to a new pose (on-demand rendering keeps drawing). */
   animating: false,
   anchors: new Map<string, LabelAnchor[]>(),
-  /** Every part group by its focus key (label key), so focus can move them as sets. */
-  focusGroups: new Map<THREE.Group, string>(),
-  /** 0 = the build as laid out, 1 = one part pulled to the centre and the rest on the shelf. */
-  focusK: 0,
-  /** Where each group sits at focusK = 1 (position, uniform scale). */
-  focusPose: new Map<THREE.Group, { pos: THREE.Vector3; scale: number }>(),
 };
 
 export function registerAnchor(a: LabelAnchor): () => void {

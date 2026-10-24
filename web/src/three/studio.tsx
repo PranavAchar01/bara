@@ -7,7 +7,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { ContactShadows } from "@react-three/drei";
-import { useApp } from "../state/store";
 import * as THREE from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { onModelsChanged } from "./assets";
@@ -183,10 +182,8 @@ export function StudioFloor(props: { palette: StudioPalette; revision: string; g
   );
   useEffect(() => () => tex?.dispose(), [tex]);
   const span = Math.max(size.x, size.y, 120);
-  // A part in focus floats free of the build; the floor and its shadow belong to the build.
-  const focused = useApp((s) => s.focusKey !== null);
   return (
-    <group visible={!focused}>
+    <>
       {tex && (
         <mesh position={[g.x0 + g.w / 2, g.y0 + g.h / 2, z - 0.15]} raycast={() => null} renderOrder={-2}>
           <planeGeometry args={[g.w + 2 * g.band, g.h + 2 * g.band]} />
@@ -206,6 +203,6 @@ export function StudioFloor(props: { palette: StudioPalette; revision: string; g
           color={props.palette.shadow}
         />
       </group>
-    </group>
+    </>
   );
 }

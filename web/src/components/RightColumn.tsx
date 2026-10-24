@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { focusPart, select, useApp, type CodeTab, type RightTab } from "../state/store";
-import { focusKeyOf } from "../three/Viewport3D";
+import { select, useApp, type CodeTab, type RightTab } from "../state/store";
 import { ClarifyCard, DecisionTrace, ReuseCard, SpecCard, StageTimeline } from "./LeftColumn";
 import { PanelToolbar } from "./TopBar";
 import { applyEdit } from "../net/client";
@@ -148,10 +147,7 @@ export function PartsList() {
                 className={`part-row ${selection === p.instance_id ? "selected" : ""} ${p.placement.source === "intent" ? "provisional" : ""}`}
                 role="button"
                 tabIndex={0}
-                onClick={() => {
-                  select(p.instance_id);
-                  focusPart(focusKeyOf(useApp.getState().build, p));
-                }}
+                onClick={() => select(p.instance_id)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") select(p.instance_id);
                 }}
