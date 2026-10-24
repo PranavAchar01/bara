@@ -494,3 +494,240 @@ def test_footprintless_module_becomes_an_off_board_item_with_a_board_connector()
     mods = [i for i in plan.items if i.role == "module"]
     assert len(mods) == 1 and not mods[0].on_pcb and mods[0].size_mm == (60.0, 40.0)
     assert any(i.role == "module_connector" for i in plan.items)
+
+
+def test_fetch_falls_back_to_a_description_when_no_part_number_matches(tmp_path: Path) -> None:
+    class Source:
+        name = "stub"
+
+        def query(self, *a: Any, **k: Any) -> list[dict[str, Any]]:
+            return []
+
+    calls: list[str] = []
+
+    def cli(term: str, function: str, timeout: float) -> tuple[int, str]:
+        calls.append(term)
+        return 1, "no match"
+
+    r = Resolver(Overlay(Source()), cli=cli, fetched_path=tmp_path / "f.jsonl")
+    need = cp.Need("v", "output.motor", "ERM rumble motor", terms=("RF-300",))
+    assert r.fetch(need) is None
+    assert calls == ["RF-300", "keyword:ERM rumble motor"]
+    named = cp.Need("c", "component.ic", "Some IC", terms=("X1",))
+    calls.clear()
+    r.fetch(named)
+    assert calls == ["X1"]  # an IC is only ever a named part
+
+
+def test_touched_mechanical_block_without_a_part_is_made_by_the_case() -> None:
+    need = cp.need_from_block(
+        {"function_id": "mech.knob", "label": "Trigger levers", "category": "mechanical",
+         "touchpoint": True, "count": 2}, set()
+    )  # fmt: skip
+    assert need.mechanical
+    hidden = cp.need_from_block(
+        {"function_id": "mech.fastener", "label": "Spring", "category": "mechanical",
+         "touchpoint": False, "count": 2}, set()
+    )  # fmt: skip
+    assert not hidden.mechanical
+
+
+def test_off_board_modules_do_not_share_a_spot() -> None:
+    from bara.board.generic import plan_device_board
+
+    def mod(i: str) -> dict[str, Any]:
+        box = {"min": [0, 0, 0], "max": [20, 20, 5]}
+        rec = {
+            "display_name": i,
+            "role": "module",
+            "kind": "module",
+            "mechanical": {"bbox_mm": box},
+        }
+        return {
+            "instance_id": i,
+            "part_id": i,
+            "slot_id": i,
+            "quantity": 1,
+            "label": i,
+            "record": rec,
+        }
+
+    plan = plan_device_board([mod("a"), mod("b"), mod("c")], [], {})
+    mods = [i for i in plan.items if i.role == "module"]
+    assert len(mods) == 3
+    for k, a in enumerate(mods):
+        for b in mods[k + 1 :]:
+            if a.side == b.side:
+                assert a.footprint_poly().intersection(b.footprint_poly()).area < 0.01
+
+
+def test_body_is_thickened_to_the_real_stack() -> None:
+    from types import SimpleNamespace
+
+    from bara.live.runner import LiveRunner as Runner
+
+    seen: list[str] = []
+    fake = SimpleNamespace(
+        WALL_STACK_MM=3.0, STACK_CLEARANCE_MM=1.0, _warn=lambda *a: seen.append(a[-1])
+    )
+    board = {
+        "boards": [
+            {
+                "thickness_mm": 1.6,
+                "placements": [
+                    {"side": "top", "height_mm": 12.0},
+                    {"side": "bottom", "height_mm": 20.0, "on_pcb": False},
+                ],
+            }
+        ]
+    }
+    brief: dict[str, Any] = {}
+    Runner._thicken_to_stack(fake, None, None, brief, board, SimpleNamespace(thickness_mm=25.0))  # type: ignore[arg-type]
+    assert brief["body_thickness_mm"] == pytest.approx(12 + 1.6 + 20 + 7)
+    assert seen
+    brief2: dict[str, Any] = {}
+    Runner._thicken_to_stack(fake, None, None, brief2, board, SimpleNamespace(thickness_mm=60.0))  # type: ignore[arg-type]
+    assert brief2 == {}
+
+
+def test_locating_pegs_keep_the_other_side_clear() -> None:
+    def holder(ref: str) -> Item:
+        fp = FootprintInfo(
+            "t",
+            Path("t.pretty"),
+            ref,
+            [
+                Pad("1", "smd", -8, 0, 1, 1, ["F.Cu"]),
+                Pad("", "np_thru_hole", -3, 3, 1, 1, ["*.Cu"]),
+                Pad("", "np_thru_hole", 3, -3, 1, 1, ["*.Cu"]),
+            ],
+            (-10, -5, 10, 5),
+            None,
+            [],
+        )
+        return Item(ref, "battery", fp, 0.0, 0.0, 0.0, "top")
+
+    a, b = holder("BT1"), holder("BT2")
+    pf = {"silhouette": [(-13, -9), (13, -9), (13, 9), (-13, 9)], "anchors": []}
+    place_in_form([a, b], None, pf, [])
+    assert pf["fit_report"]["ok"] is False  # a hole through one is a hole through the other
+
+
+def test_identity_redraw_below_the_fit_floor_keeps_the_fitting_form(monkeypatch: Any) -> None:
+    from types import SimpleNamespace
+
+    from bara.live import runner as rn
+
+    def form(w: float, h: float) -> fm.Form:
+        sil = [(0.0, 0.0), (w, 0.0), (w, h), (0.0, h)]
+        return fm.Form("x", sil, 20.0, 10.0, [], {}, "d")
+
+    fits, smaller = form(170, 110), form(150, 100)
+
+    async def fake_derive(*a: Any, **k: Any) -> Any:
+        return smaller, "ok"
+
+    monkeypatch.setattr(rn.form_mod, "derive", fake_derive)
+    warned: list[str] = []
+    run = SimpleNamespace(
+        prompt="a thing", product_form=fits, repair="too round", fit_floor=(170.0, 110.0, 18700.0)
+    )
+    st = SimpleNamespace(progress=lambda *a: None, emit=lambda *a, **k: None)
+    fake = SimpleNamespace(
+        _touches=lambda r: [], _warn=lambda *a: warned.append(a[-1]), _stage=None
+    )
+    result = SimpleNamespace(log=[])
+    got = asyncio.run(rn.LiveRunner.form_stage(fake, run, result, st))  # type: ignore[arg-type]
+    assert got is fits and any("below the fit floor" in w for w in warned)
+    # at or above the floor the redraw is accepted
+    bigger = form(172, 112)
+
+    async def fake_big(*a: Any, **k: Any) -> Any:
+        return bigger, "ok"
+
+    monkeypatch.setattr(rn.form_mod, "derive", fake_big)
+    got2 = asyncio.run(rn.LiveRunner.form_stage(fake, run, result, st))  # type: ignore[arg-type]
+    assert got2 is bigger
+
+
+# ---------------------------------------------------------------- block diagram survival
+def test_a_cap_without_a_key_switch_is_dropped_and_counts_reach_the_slots() -> None:
+    from bara.live.compose import derive_slots
+
+    spec: dict[str, Any] = {
+        "functions": [
+            {"function_id": "mech.keycap", "required": True, "count": 1, "source": "implicit"},
+            {"function_id": "input.button", "required": True, "count": 1, "source": "explicit"},
+        ]
+    }
+    blocks = {
+        "device_class": "gadget",
+        "mains_input": False,
+        "portable": False,
+        "avg_current_ma": 10,
+        "shell_g": 5,
+        "blocks": [
+            block("input.button", "Face buttons", 4),
+            block("input.button", "Shoulder buttons", 9),
+            block("input.joystick", "Thumbstick", 2),
+            block("mech.keycap", "Cap", 1, category="mechanical"),
+        ],
+    }
+    comp = cp.apply(spec, {}, None, blocks)
+    assert "mech.keycap" not in {f["function_id"] for f in spec["functions"]}
+    assert all(n.function_id != "mech.keycap" for n in comp.needs.values())
+    slots = derive_slots(spec, {}, None, comp)
+    qty = {s.function_id: sum(i.quantity for i in s.instances) for s in slots}
+    assert qty["input.button"] == 13
+    assert qty["input.joystick"] == 2
+    assert "mech.keycap" not in qty
+
+
+def test_ask_json_asks_again_when_the_answer_was_cut_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    import types
+
+    from bara.live import ask
+
+    budgets: list[int] = []
+
+    class Messages:
+        async def create(self, **kw: Any) -> Any:
+            budgets.append(kw["max_tokens"])
+            cut = len(budgets) == 1
+            text = '{"a": "unterminated' if cut else '{"a": "done"}'
+            return types.SimpleNamespace(
+                stop_reason="max_tokens" if cut else "end_turn",
+                content=[types.SimpleNamespace(type="text", text=text)],
+            )
+
+    class Client:
+        def __init__(self, **_: Any) -> None:
+            self.messages = Messages()
+
+        async def close(self) -> None:
+            return None
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
+    monkeypatch.setattr("anthropic.AsyncAnthropic", Client)
+    schema = {
+        "type": "object",
+        "required": ["a"],
+        "properties": {"a": {"type": "string"}},
+        "additionalProperties": False,
+    }
+    data, note = asyncio.run(ask.ask_json("s", "p", schema, name="t", max_tokens=100))
+    assert data == {"a": "done"}, note
+    assert budgets == [100, 200]
+
+
+def test_mating_parts_share_a_spot_but_strangers_still_collide() -> None:
+    from bara.geometry.case import Feature
+    from bara.geometry.validate import _mates
+
+    def feat(ref: str, role: str, x: float, w: float) -> Feature:
+        return Feature(ref, role, x, 0.0, 0.0, "top", 5.0, w, 10.0)
+
+    sw, stab = feat("SW1", "switch", 0.0, 14.0), feat("ST1", "stabilizer", 0.0, 40.0)
+    assert _mates(sw, stab)
+    assert not _mates(feat("SW2", "switch", 30.0, 14.0), stab)  # another switch under it
+    assert not _mates(sw, feat("BT1", "battery", 0.0, 20.0))

@@ -164,6 +164,13 @@ def _spans(product: form_mod.Form, size: tuple[float, float]) -> bool:
     )
 
 
+def _extent(product: form_mod.Form) -> tuple[float, float, float]:
+    """Overall width, height and area of the silhouette."""
+    xs = [p[0] for p in product.silhouette]
+    ys = [p[1] for p in product.silhouette]
+    return max(xs) - min(xs), max(ys) - min(ys), Polygon(product.silhouette).area
+
+
 class LiveRunner:
     def __init__(self, engine: Engine, source: PartSource) -> None:
         self.engine = engine
@@ -205,8 +212,11 @@ class LiveRunner:
         self.reuse(run, spec, brief)
         result = await self.compose(run, spec, brief, plan)
         if not result.chosen_parts:  # nothing resolved is a failed build, never an empty DONE
-            why = "No part could be chosen for this request; nothing to build."
-            run.emit("build.failed", {"error": error_obj("E_NO_PARTS", why, stage="compose")})
+            why = result.error or "No part could be chosen for this request; nothing to build."
+            run.emit(
+                "build.failed",
+                {"error": error_obj("E_CRITICAL_PART_MISSING", why, stage="compose")},
+            )
             return
         merge_into_catalog(self.catalog, list(result.chosen_parts.values()))
         board = await self.place(run, brief, plan, result, ctx)
@@ -238,6 +248,9 @@ class LiveRunner:
         "identity.reads_as_device": "E_ENCLOSURE_FAILED",
         "board.drc": "E_BOARD_FAILED",
         "board.routing.complete": "E_BOARD_FAILED",
+        "mech.fit.enclosure": "E_ENCLOSURE_FAILED",
+        "mech.fit.collision": "E_ENCLOSURE_FAILED",
+        "mech.fit.floating": "E_ENCLOSURE_FAILED",
     }
 
     def gate(self, run: BuildRun) -> dict[str, Any] | None:
@@ -439,10 +452,14 @@ class LiveRunner:
         controllers = A.board_controllers() if plan is not None else {}
         blocks = getattr(run, "live_blocks", None)
         if plan is None and blocks is None:
-            blocks, note = await blocks_mod.derive(run.prompt, self.catalog.function_ids())
-            if blocks is None:
-                msg = f"No function block diagram ({note}); only the general invariants apply."
-                self._warn(run, "compose", "w_blocks", "other", "warning", msg)
+            for _ in range(2):  # the diagram sets every part and quantity; one retry on failure
+                blocks, note = await blocks_mod.derive(run.prompt, self.catalog.function_ids())
+                if blocks is not None:
+                    break
+            if blocks is None:  # no silent defaults: guessed parts and counts are not a design
+                msg = f"The function block diagram could not be derived ({note}); nothing built."
+                st.done()
+                return ComposeResult(slots=[], error=msg)
         run.live_blocks = blocks  # type: ignore[attr-defined]
         composer = Composer(
             self.source, spec, brief, plan, self.settings, controllers, blocks=blocks
@@ -566,9 +583,25 @@ class LiveRunner:
         st.progress("Designing the product form", 0.0)
         previous = getattr(run, "product_form", None)
         repair = getattr(run, "repair", "")
+        floor = getattr(run, "fit_floor", None)
+        if repair and not fit and floor:  # the parts need this much: change the shape within it
+            repair += (
+                f"\nHard constraint: the parts only fit a form at least {floor[0]:.0f} x "
+                f"{floor[1]:.0f} mm overall with at least {floor[2]:.0f} mm2 of area. Keep every "
+                f"dimension and the area at or above that; change only the shape within it."
+            )
         product, note = await form_mod.derive(
             run.prompt, touches, previous if (repair or fit) else None, repair, fit
         )
+        if repair and not fit and floor and product is not None and previous is not None:
+            w, h, area = _extent(product)
+            if w < 0.98 * floor[0] or h < 0.98 * floor[1] or area < 0.97 * floor[2]:
+                self._warn(
+                    run, "place", "w_floor", "assumption_made", "info",
+                    f"Identity redraw {w:.0f} x {h:.0f} mm is below the fit floor "
+                    f"{floor[0]:.0f} x {floor[1]:.0f} mm; the form that fits was kept.",
+                )  # fmt: skip
+                product = previous
         run.product_form = product  # type: ignore[attr-defined]
         if (repair or fit) and previous is not None and product is not None:
             self._warn(
@@ -715,6 +748,33 @@ class LiveRunner:
             },
         )
 
+    WALL_STACK_MM = 3.0  # case wall above and below the stack
+    STACK_CLEARANCE_MM = 1.0
+
+    def _thicken_to_stack(
+        self, run: BuildRun, st: Any, brief: dict[str, Any], board: dict[str, Any], product: Any
+    ) -> None:
+        """The body is at least as thick as the real stack: the board, the tallest part on each
+        side (off-board modules count by their own thickness) and a wall on each face."""
+        top = bottom = 0.0
+        thick = 1.6
+        for entry in board["boards"]:
+            thick = float(entry.get("thickness_mm") or thick)
+            for pl in entry["placements"]:
+                h = float(pl.get("height_mm") or 0.0)
+                if pl.get("side") == "bottom":
+                    bottom = max(bottom, h)
+                else:
+                    top = max(top, h)
+        stack = top + thick + bottom + 2 * self.WALL_STACK_MM + self.STACK_CLEARANCE_MM
+        if stack > product.thickness_mm:
+            self._warn(
+                run, "place", "w_stack", "other", "info",
+                f"Body thickened {product.thickness_mm:.0f} -> {stack:.0f} mm: the parts stack "
+                f"{top:.1f} mm above and {bottom:.1f} mm below the board.",
+            )  # fmt: skip
+            brief["body_thickness_mm"] = stack
+
     async def _place_generic(
         self, run: BuildRun, brief: dict[str, Any], result: ComposeResult, ctx: dict[str, Any]
     ) -> dict[str, Any] | None:
@@ -740,9 +800,10 @@ class LiveRunner:
             brief["edge_thickness_mm"] = product.edge_thickness_mm
             brief["anchors"] = product.anchors
         board, err = await asyncio.to_thread(A.plan_board, gb, parts, run.build_id)
+        grown = False
         for _ in range(
-            self.FIT_REPAIRS
-        ):  # a form too small for its parts is redrawn with the numbers
+            1 if getattr(run, "repair", "") else self.FIT_REPAIRS
+        ):  # one fit pass after an identity redraw; else a form too small is redrawn with numbers
             report = (gb.get("product_form") or {}).get("fit_report")
             if product is None or board is None or not report or report["ok"]:
                 break
@@ -755,11 +816,21 @@ class LiveRunner:
             if redrawn is None or redrawn.problems:
                 break
             product = redrawn
+            grown = True
             gb["product_form"] = product.json()
             brief["body_thickness_mm"] = product.thickness_mm
             brief["edge_thickness_mm"] = product.edge_thickness_mm
             board, err = await asyncio.to_thread(A.plan_board, gb, parts, run.build_id)
+        report = (gb.get("product_form") or {}).get("fit_report")
+        if product is not None and report and report["ok"]:
+            w, h, area = _extent(product)
+            if not grown:  # no redraw proved a size: the floor is what the footprints need
+                need = report["parts_mm2"] / (1.2 * max(1, report["usable_mm2"]))
+                w, h = max(report["widest_mm"] + 7.0, 0.0), 0.0
+                area *= min(1.0, need)
+            run.fit_floor = (w, h, area)  # type: ignore[attr-defined]
         if product is not None and board is not None:
+            self._thicken_to_stack(run, st, brief, board, product)
             self._form_fit_check(run, st, board, product)
         if board is None or not any(
             pl.get("for_instance_id") for e in board["boards"] for pl in e["placements"]

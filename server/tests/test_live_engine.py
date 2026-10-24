@@ -69,7 +69,10 @@ def test_live_prompt(monkeypatch: pytest.MonkeyPatch, prompt: str) -> None:
     last = events[-1]
     types = [m["type"] for m in events]
     if last["type"] == "build.failed":
-        assert last["payload"]["error"]["code"] == "E_OUT_OF_SCOPE", last["payload"]
+        error = last["payload"]["error"]
+        if "block diagram could not be derived" in error["message"]:
+            return  # no model key here: the build fails loudly rather than guessing parts
+        assert error["code"] == "E_OUT_OF_SCOPE", last["payload"]
         return
     assert last["type"] == "build.done", last["payload"]
     assert stage_order(events) == ORDER
@@ -112,6 +115,9 @@ def test_live_clarify_round(monkeypatch: pytest.MonkeyPatch) -> None:
     check_stream(events)
     types = [m["type"] for m in events]
     assert "clarify.resolved" in types
+    if rest[-1]["type"] == "build.failed":  # no model key here: fails loudly, never guesses
+        assert "block diagram could not be derived" in rest[-1]["payload"]["error"]["message"]
+        return
     assert rest[-1]["type"] == "build.done", rest[-1]["payload"]
 
 

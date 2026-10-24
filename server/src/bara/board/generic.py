@@ -239,7 +239,8 @@ def plan_device_board(
         placed.append(it)
         blocked.append(it.footprint_poly())
     seat = _anchor_targets(pf, off_board, 1.0) if pf and off_board else {}
-    for it in off_board:  # cells and modules: a module that has an anchor sits at it, on top
+    held: dict[str, list[Polygon]] = {"top": [], "bottom": []}  # envelopes already taken
+    for it in sorted(off_board, key=lambda o: -(o.size_mm[0] * o.size_mm[1] if o.size_mm else 0)):
         it.side = "bottom"
         cx, cy = _centre(blocked) if fitted is None else (fitted.centroid.x, fitted.centroid.y)
         spot = seat.get(id(it))
@@ -247,6 +248,9 @@ def plan_device_board(
             cx, cy = spot[0], spot[1]
             it.side = "bottom" if spot[2] == "back" else "top"
         it.x, it.y = cx, cy
+        if it.role == "module":
+            _clear_of(it, held, on_board, fitted, spot is not None)
+        held[it.side].append(it.footprint_poly())
 
     # controller GPIO for every peripheral signal, nearest pad first
     if mcu is not None:
@@ -564,6 +568,49 @@ def _shape_cost(w: float, h: float, form: dict[str, Any] | None) -> float:
     return max(w, h * a) * max(w / a, h)
 
 
+def _clear_of(
+    it: Item,
+    held: dict[str, list[Polygon]],
+    on_board: list[Item],
+    region: Polygon | None,
+    anchored: bool,
+) -> None:
+    """Move an off-board module to the nearest spot, on either side, where its envelope overlaps
+    no other module and, unless it is anchored to a feature, no board part on that side."""
+    others = {
+        side: list(held[side]) + [o.footprint_poly() for o in on_board if o.side == side]
+        for side in ("top", "bottom")
+    }
+    x0, y0 = it.x, it.y
+    shape = it.footprint_poly()
+    bx0, by0, bx1, by1 = region.bounds if region is not None else shape.bounds
+    best: tuple[float, float, float, str] | None = None
+    step = 1.0
+    reach = min(40, int(max(bx1 - bx0, by1 - by0) / step) + 1)
+    for side in (it.side, "top" if it.side == "bottom" else "bottom"):
+        for ring in range(reach):
+            hit = None
+            for i in range(-ring, ring + 1):
+                for j in range(-ring, ring + 1):
+                    if max(abs(i), abs(j)) != ring:
+                        continue
+                    dx, dy = i * step, j * step
+                    moved = affinity.translate(shape, dx, dy)
+                    if region is not None and not region.buffer(0.01).contains(moved):
+                        continue
+                    if any(moved.intersection(o).area > 0.01 for o in others[side]):
+                        continue
+                    d = math.hypot(dx, dy) + (0.0 if side == it.side else 2.0)
+                    if hit is None or d < hit[0]:
+                        hit = (d, dx, dy, side)
+            if hit is not None:
+                if best is None or hit[0] < best[0]:
+                    best = hit
+                break
+    if best is not None:
+        it.x, it.y, it.side = x0 + best[1], y0 + best[2], best[3]
+
+
 def _best_spot(
     it: Item,
     anchor: Polygon | None,
@@ -694,8 +741,8 @@ def _anchor_targets(
 
 
 def _through(it: Item) -> bool:
-    """A part with soldered leads through the board reaches the other side."""
-    return it.fp is not None and any(p.kind == "thru_hole" for p in it.fp.pads)
+    """A part with leads or locating pegs through the board reaches the other side."""
+    return it.fp is not None and any(p.kind in ("thru_hole", "np_thru_hole") for p in it.fp.pads)
 
 
 def _shadow(it: Item) -> Polygon | None:

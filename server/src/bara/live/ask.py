@@ -54,16 +54,22 @@ async def ask_json(
     content.append({"type": "text", "text": prompt})
     client = AsyncAnthropic(api_key=key, timeout=timeout_s, max_retries=1)
     try:
-        response = await asyncio.wait_for(
-            client.messages.create(
-                model=model_name(),
-                max_tokens=max_tokens,
-                system=system,
-                messages=[{"role": "user", "content": content}],
-                output_config={"format": {"type": "json_schema", "schema": _for_anthropic(schema)}},
-            ),
-            timeout=timeout_s,
-        )
+        # An answer cut off by the token cap is unparseable JSON; ask again with room to finish.
+        for budget in (max_tokens, max_tokens * 2, max_tokens * 4):
+            response = await asyncio.wait_for(
+                client.messages.create(
+                    model=model_name(),
+                    max_tokens=budget,
+                    system=system,
+                    messages=[{"role": "user", "content": content}],
+                    output_config={
+                        "format": {"type": "json_schema", "schema": _for_anthropic(schema)}
+                    },
+                ),
+                timeout=timeout_s,
+            )
+            if response.stop_reason != "max_tokens":
+                break
     except Exception as exc:  # any failure is reported, the caller decides what it means
         log.warning("ask_json %s failed: %s", name, exc)
         return None, f"{type(exc).__name__}: {str(exc)[:120]}"

@@ -114,6 +114,14 @@ def best_match(keyword: str, rows: list[dict[str, Any]]) -> dict[str, Any] | Non
     return ranked[0] if ranked and score(ranked[0])[1] else None
 
 
+def best_stocked(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """For a description rather than an MPN: the most relevant hit that is in stock, preferring a
+    real manufacturer over a house part (the search returns them in relevance order)."""
+    live = [r for r in rows if r["stock"] > 0]
+    live.sort(key=lambda r: "jlcpcb" in r["brand"].lower())
+    return live[0] if live else None
+
+
 # --------------------------------------------------------------------------- record
 
 
@@ -365,6 +373,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--function", default=DEFAULT_FUNCTION, help="catalog function id")
     ap.add_argument("--search", metavar="TEXT", help="list LCSC candidates for a part name or MPN")
     ap.add_argument("--mpn", metavar="TEXT", help="search, take the best match, fetch it")
+    ap.add_argument(
+        "--keyword", metavar="TEXT", help="a plain description: fetch the best stocked match"
+    )
     args = ap.parse_args(argv)
 
     if args.search:
@@ -379,6 +390,12 @@ def main(argv: list[str] | None = None) -> int:
         hit = best_match(args.mpn, search(args.mpn, 20))
         if hit is None:
             sys.stderr.write(f"no LCSC match for {args.mpn!r}\n")
+            return 1
+        lcsc_id = hit["lcsc"]
+    if args.keyword:
+        hit = best_stocked(search(args.keyword, 20))
+        if hit is None:
+            sys.stderr.write(f"no stocked LCSC part for {args.keyword!r}\n")
             return 1
         lcsc_id = hit["lcsc"]
     if not lcsc_id:

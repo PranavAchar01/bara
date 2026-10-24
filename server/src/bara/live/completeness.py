@@ -34,6 +34,7 @@ class Need:
     touch: bool = False  # a person touches, sees or plugs into it (the form stage anchors it)
     groups: tuple[str, ...] = ()  # the merged blocks, "label xN", so the form can place each
     requirement: str = ""  # key numbers the part must meet (size, connector standard, rating)
+    mechanical: bool = False  # a touched mechanical block: the shell makes it when no part exists
 
     @property
     def inst_prefix(self) -> str:
@@ -104,6 +105,10 @@ ACDC = dict(
 )
 
 
+# function -> the function it is a part of; without that base it has nothing to attach to
+DEPENDS_ON = {"mech.keycap": "input.key", "mech.stabilizer": "input.key"}
+
+
 def _slug(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", text.lower()).strip("_")[:24] or "block"
 
@@ -133,6 +138,7 @@ def need_from_block(block: dict[str, Any], taken: set[str]) -> Need:
         touch=bool(block.get("touchpoint")),
         groups=tuple(block.get("groups") or ()),
         requirement=str(block.get("requirement") or "")[:160],
+        mechanical=block.get("category") == "mechanical" and bool(block.get("touchpoint")),
     )
 
 
@@ -271,6 +277,16 @@ def apply(
                 functions.remove(f)
                 have.pop(f["function_id"], None)
         out.notes.append("block diagram: " + ", ".join(n.label for n in out.needs.values()))
+
+    # a part that only exists on top of another is dropped when the device has no such base
+    present = {f["function_id"] for f in functions} | {n.function_id for n in out.needs.values()}
+    for fid, base in DEPENDS_ON.items():
+        if fid in present and base not in present:
+            functions[:] = [f for f in functions if f["function_id"] != fid]
+            have.pop(fid, None)
+            for key in [k for k, n in out.needs.items() if n.function_id == fid]:
+                del out.needs[key]
+            out.notes.append(f"{fid} dropped: the device has no {base} to sit on")
 
     # controller: MCU, SBC, or a dedicated controller IC
     has_sbc = any(n.function_id == "compute.sbc" for n in out.needs.values())

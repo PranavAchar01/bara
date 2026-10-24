@@ -678,7 +678,7 @@ def plan_keyboard_board(name: str, n_keys: int, b: Brief, log: list[str]) -> lis
                 "top",
                 label=f"Cherry MX plate/PCB stabilizer ({k.w:g}u)",
                 height_mm=sw["height_mm"],
-                meta={"w_u": k.w},
+                meta={"w_u": k.w, "row_pitch_mm": ch},
             )
             items.append(stab)
         rect = affinity.translate(
