@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useApp } from "../state/store";
-import { BaraBot, botBubbles } from "../bot/BaraBot";
 import { cancelBuild, startBuild } from "../net/client";
 import { demoPrompts } from "../spec/fixtures";
 import { Icon } from "../ui/common";
@@ -8,9 +7,6 @@ import { Icon } from "../ui/common";
 /** C02 PromptBar: Enter sends build.start; Stop (build.cancel) while running. */
 export function PromptBar(props: { docked?: boolean; autoFocus?: boolean }) {
   const [text, setText] = useState("");
-  const [keys, setKeys] = useState(0);
-  const [focused, setFocused] = useState(false);
-  const bubbles = useMemo(botBubbles, []);
   const ready = useApp((s) => s.conn === "open" || s.conn === "resyncing");
   const helloSeen = useApp((s) => s.hello !== null);
   const pending = useApp((s) => s.pendingStart !== null);
@@ -33,7 +29,6 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean }) {
         submit();
       }}
     >
-      <BaraBot size={props.docked ? 36 : 46} typing={focused && text.length > 0} typingNonce={keys} bubbles={bubbles} className="prompt-bot" />
       <input
         className="prompt-input"
         value={text}
@@ -41,12 +36,7 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean }) {
         autoFocus={props.autoFocus}
         placeholder={disabled ? "Waiting for the server" : props.docked ? "Describe another device" : "Describe the device you want"}
         aria-label="Prompt"
-        onChange={(e) => {
-          setText(e.target.value);
-          setKeys((k) => k + 1);
-        }}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
+        onChange={(e) => setText(e.target.value)}
         disabled={disabled}
       />
       {running && !text ? (

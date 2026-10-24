@@ -8,6 +8,7 @@ survivor, the deterministic default (highest score) is used and the decision say
 
 from __future__ import annotations
 
+import asyncio
 import copy
 import logging
 import math
@@ -17,6 +18,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from bara.live import completeness as cp
+from bara.live.ask import ask_json
 from bara.live.catalog_source import (
     PartSource,
     card_for,
@@ -28,6 +31,8 @@ from bara.live.catalog_source import (
     model_asset,
     part_functions,
 )
+from bara.live.completeness import Completeness, Need
+from bara.live.fetch import Resolver, as_overlay
 from bara.live.layout import PITCH_MM, KeyboardPlan, feature_sides, pin_need, stab_size
 from bara.live.llm_json import call_json
 
@@ -95,6 +100,8 @@ class Slot:
     candidates_left: int | None = None
     chosen: dict[str, Any] | None = None
     covered_by: str | None = None  # slot_id whose chosen part also provides this function
+    need: Need | None = None  # set when the completeness invariant added this slot
+    unresolved: str | None = None  # why a required slot has no part
 
     @property
     def quantity(self) -> int:
@@ -152,7 +159,10 @@ def _slug(text: str) -> str:
 
 
 def derive_slots(
-    spec: dict[str, Any], brief: dict[str, Any], plan: KeyboardPlan | None
+    spec: dict[str, Any],
+    brief: dict[str, Any],
+    plan: KeyboardPlan | None,
+    comp: Completeness | None = None,
 ) -> list[Slot]:
     split = brief.get("layout_style") == "split"
     halves = ["left", "right"] if split else ["none"]
@@ -172,8 +182,11 @@ def derive_slots(
         required["interconnect.jack"] = required["interconnect.cable"] = True
     slots: list[Slot] = []
     seen: set[str] = set()
+    need_fids = {n.function_id for n in (comp.needs.values() if comp else [])}
     for fid in functions:
         if fid in NO_SLOT or fid.startswith(NO_SLOT_PREFIX) or fid in seen:
+            continue
+        if fid in need_fids:  # the device's own slot (below) replaces the generic one
             continue
         seen.add(fid)
         if fid in SLOT_KINDS:
@@ -223,13 +236,17 @@ def derive_slots(
             counter: dict[str, int] = {}
             for s in sides:
                 counter[s] = counter.get(s, 0) + 1
+                if plan is None:  # identical copies on one side are one BOM line, qty N
+                    if counter[s] == 1:
+                        instances.append(Instance(f"u_{prefix}{_side_suffix(s)}", s, per[s]))
+                    continue
                 suffix = _side_suffix(s) + (f"_{counter[s]}" if per[s] > 1 else "")
                 instances.append(Instance(f"u_{prefix}{suffix}", s, 1))
         elif fid == "mech.wheel":
             instances = [Instance(f"u_{prefix}_{i}", "none", 1) for i in (1, 2)]
         elif counts.get(fid, 1) > 1:
-            # one instance per physical copy, so each gets its own pose on the board
-            instances = [Instance(f"u_{prefix}_{i}", "none", 1) for i in range(1, counts[fid] + 1)]
+            # identical copies are one BOM line with a quantity; the board places N footprints
+            instances = [Instance(f"u_{prefix}", "none", counts[fid])]
         else:
             instances = [Instance(f"u_{prefix}", "none", 1)]
         critical = required.get(fid, True)
@@ -244,7 +261,20 @@ def derive_slots(
                 feature=feature,
             )
         )
+    for need in comp.needs.values() if comp else []:
+        slots.append(
+            Slot(
+                slot_id=need.key,
+                label=need.label,
+                function_id=need.function_id,
+                criticality="critical",
+                order=0,
+                instances=[Instance(f"u_{need.inst_prefix}", "none", max(1, need.count))],
+                need=need,
+            )
+        )
     rank = {
+        "charger": 84,
         "switches": 0,
         "keycaps": 1,
         "stabilizers": 2,
@@ -257,6 +287,11 @@ def derive_slots(
     for i, slot in enumerate(slots):
         slot.order = i
     return slots
+
+
+def _mah(part: dict[str, Any]) -> float | None:
+    v = (part.get("facets") or {}).get("capacity_mah")
+    return float(v) if isinstance(v, int | float) else None
 
 
 def _compat_label(params: dict[str, Any]) -> str:
@@ -308,15 +343,27 @@ class Composer:
         plan: KeyboardPlan | None,
         settings: Any,
         board_controllers: dict[str, int] | None = None,
+        blocks: dict[str, Any] | None = None,
     ) -> None:
-        self.source = source
+        self.source = as_overlay(source)
         self.spec = spec
         self.brief = brief
         self.plan = plan
         self.settings = settings
         # registry controller id -> GPIO count the KiCad board library offers
         self.board_controllers = board_controllers or {}
-        self.slots = derive_slots(spec, brief, plan)
+        # completeness invariant: controller, power path and the I/O the device implies
+        self.comp = cp.apply(
+            spec,
+            brief,
+            lambda fid: bool(self.source.query(function=fid, limit=1)),
+            blocks,
+            keyboard=plan is not None,
+        )
+        self.resolver = Resolver(self.source)
+        self.fetched: list[dict[str, Any]] = []  # rows added during this build
+        self.extra: dict[str, list[dict[str, Any]]] = {}  # slot id -> parts found for it
+        self.slots = derive_slots(spec, brief, plan, self.comp)
         self.result = ComposeResult(slots=self.slots)
         self.decision_n = 0
         self.warning_n = 0
@@ -326,6 +373,13 @@ class Composer:
 
     # ---- candidates ---------------------------------------------------------------
     def base(self, slot: Slot) -> list[dict[str, Any]]:
+        if slot.need is not None:
+            pool = self.resolver.pool(slot.need)
+            have = {p["part_id"] for p in pool}
+            pool += [p for p in self.extra.get(slot.slot_id, []) if p["part_id"] not in have]
+            if slot.slot_id == "charger":  # a charger, not a second controller that has one
+                pool = [p for p in pool if "compute.mcu" not in part_functions(p)]
+            return pool
         return self.source.query(function=slot.function_id, limit=500)
 
     def board_controller_for(self, part: dict[str, Any]) -> str | None:
@@ -361,8 +415,22 @@ class Composer:
                 "knob",
             ):
                 continue
+            if slot.function_id.startswith(("mech.", "power.")) and slot.need is None:
+                continue  # feet, mounts and power parts cost no controller pins
             for inst in slot.instances:
                 if inst.side != side and side != "none":
+                    continue
+                if slot.need is not None:
+                    if slot.need.pin_kind:
+                        n = max(1, inst.quantity) * slot.need.pin_mult
+                        for _ in range(n):
+                            peripherals.append(
+                                {
+                                    "kind": slot.need.pin_kind,
+                                    "label": slot.label,
+                                    "part": slot.chosen or {},
+                                }
+                            )
                     continue
                 kind = PERIPHERAL_KIND.get(slot.slot_id)
                 if slot.slot_id == "display":
@@ -374,7 +442,10 @@ class Composer:
                 elif slot.slot_id == "jack":
                     kind = None
                 kind = kind or "button"
-                peripherals.append({"kind": kind, "label": slot.label, "part": slot.chosen or {}})
+                for _ in range(max(1, inst.quantity)):
+                    peripherals.append(
+                        {"kind": kind, "label": slot.label, "part": slot.chosen or {}}
+                    )
         wired = self.brief.get("layout_style") == "split" and self.brief.get("wireless") == "none"
         return pin_need(half, peripherals, wired)
 
@@ -432,6 +503,34 @@ class Composer:
                     relaxable=soft,
                 )
             )
+        # 1b. spec numbers: battery size from the mass target and battery life
+        if slot.slot_id == "battery" and slot.need is None:
+            lo, hi = cp.battery_limits(self.comp)
+            mass = self.comp.numbers.get("mass_g")
+            if hi is not None:
+                filters.append(
+                    Filter(
+                        "capacity_mah",
+                        "lte",
+                        hi,
+                        "requirement",
+                        f"Battery <= {hi:.0f} mAh ({mass:g} g device)",
+                        lambda p, hi=hi: _mah(p) is not None and _mah(p) <= hi,
+                        relaxable=True,
+                    )
+                )
+            if lo is not None:
+                filters.append(
+                    Filter(
+                        "capacity_mah",
+                        "gte",
+                        lo,
+                        "requirement",
+                        f"Battery >= {lo:.0f} mAh for the stated life",
+                        lambda p, lo=lo: _mah(p) is not None and _mah(p) >= lo,
+                        relaxable=True,
+                    )
+                )
         # 2. compatibility with every part already chosen
         for other in self.slots:
             if other.chosen is None or other is slot:
@@ -575,6 +674,16 @@ class Composer:
         st = self.brief.get("switch_type")
         if slot.slot_id == "switches" and st and st in name:
             s += 0.2
+        if slot.slot_id == "battery":
+            _, hi = cp.battery_limits(self.comp)
+            mah = _mah(part)
+            if hi is not None and mah is not None:
+                s += 0.15 * min(1.0, mah / hi)  # the biggest cell that still fits the mass
+        want_in = self.comp.numbers.get("screen_in")
+        if want_in and slot.function_id.startswith("display."):
+            have_in = cp.display_inches(part)
+            if have_in:
+                s += 0.3 * max(0.0, 1 - abs(have_in - want_in) / want_in)
         return round(min(1.0, s), 3)
 
     # ---- one slot -----------------------------------------------------------------
@@ -739,8 +848,18 @@ class Composer:
         if inst.key_widths is not None:
             placement["key_widths_u"] = list(inst.key_widths)
             placement["explode_offset_mm"] = [0.0, 0.0, 25.0 if slot.slot_id == "keycaps" else 12.0]
-        label = slot.label + (f" {inst.side}" if inst.side not in ("none", "") else "")
+        label = (slot.label or slot.slot_id) + (
+            f" {inst.side}" if inst.side not in ("none", "") else ""
+        )
         assets = [copy.deepcopy(a) for a in part.get("assets", []) if a.get("url")]
+        for a in assets:  # fetched parts carry an origin the build schema does not list
+            if a.get("origin") not in ("design", "generated", "catalog", "unknown"):
+                a["origin"] = "catalog"
+            if a.get("status") not in ("ready", "pending", "missing", "unknown"):
+                a["status"] = "pending"
+        card = card_for(part)
+        if not str(card.get("display_name") or "").strip():
+            card["display_name"] = str(part.get("mpn") or part.get("part_id") or slot.label)[:120]
         return {
             "instance_id": inst.instance_id,
             "part_id": part["part_id"],
@@ -750,7 +869,7 @@ class Composer:
             "side": inst.side if inst.side in ("left", "right", "center") else "none",
             "color": self.colour_for(slot),
             "placement": placement,
-            "card": card_for(part),
+            "card": card,
             "assets": assets,
             "origin": "compose",
             "status": "ok",
@@ -879,6 +998,10 @@ class Composer:
                 self.mark_covered(slot, cover, step, emit)
                 continue
             slot.state = "narrowing"
+            if slot.need is not None and slot.need.requirement:
+                await self.vet(slot, self.base(slot))
+            if slot.need is not None and not self.base(slot):
+                await self.resolve_missing(slot, emit)
             cands, ranked, applied = self.narrow(slot)
             emit("slot.updated", {"slot": slot.json()}, stage="compose")
             top = ranked[:MAX_SURVIVORS]
@@ -921,16 +1044,22 @@ class Composer:
                 )
             if idx is None:
                 slot.state = "none"
-                if not cands and slot.function_id not in SLOT_KINDS:
+                if slot.need is not None:
+                    slot.unresolved = self.resolver.notes.get(slot.slot_id) or (
+                        "nothing in the catalog, the KiCad library or LCSC"
+                    )
+                    reason = f"REQUIRED {slot.label.lower()} unresolved: {slot.unresolved}"
+                elif not cands and slot.function_id not in SLOT_KINDS:
                     # nothing in the catalog serves this function at all: an extra the brief
                     # asked for (feet, a strap), not part of the electrical build
                     slot.criticality = "optional"
-                why = "; ".join(f"{f['label']} left {f['count_after']}" for f in applied)
-                reason = (
-                    f"No {slot.label.lower()} in the catalog"
-                    + (f" passes the filters ({why})" if applied and cands else "")
-                    + "."
-                )
+                if slot.unresolved is None:
+                    why = "; ".join(f"{f['label']} left {f['count_after']}" for f in applied)
+                    reason = (
+                        f"No {slot.label.lower()} in the catalog"
+                        + (f" passes the filters ({why})" if applied and cands else "")
+                        + "."
+                    )
                 emit(
                     "decision.made",
                     {
@@ -959,7 +1088,11 @@ class Composer:
                             "code": "optional_part_missing"
                             if slot.criticality == "optional"
                             else "other",
-                            "severity": "info" if slot.criticality == "optional" else "warning",
+                            "severity": "info"
+                            if slot.criticality == "optional"
+                            else "error"
+                            if slot.unresolved
+                            else "warning",
                             "message": reason[:300],
                             "subjects": [{"slot_id": slot.slot_id}],
                             "stage": "compose",
@@ -1033,6 +1166,90 @@ class Composer:
             progress(f"{step} of {n_slots} slots decided", step / max(1, n_slots))
         return self.result
 
+    async def vet(self, slot: Slot, parts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Parts that meet the block's key numbers (size, connector standard, rating). The ones
+        that do not are rejected for good, so the next lookup moves on."""
+        need = slot.need
+        if need is None or not need.requirement or not parts:
+            return parts
+        shown = parts[:12]
+        lines = "\n".join(
+            f"{i}: {p.get('display_name')} [{p.get('part_id')}] "
+            f"{str(p.get('description') or p.get('summary') or '')[:140]}"
+            for i, p in enumerate(shown)
+        )
+        schema = {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["meets"],
+            "properties": {"meets": {"type": "array", "items": {"type": "integer"}}},
+        }
+        data, note = await ask_json(
+            "You check parts against a requirement. Return the indexes of the candidates that "
+            "clearly meet every number in the requirement (size, resolution, connector "
+            "standard, rating). A part whose name shows a different size, standard or rating "
+            "does not meet it. When a candidate gives no evidence either way, include it.",
+            f"Product block: {need.label}\nRequirement: {need.requirement}\nCandidates:\n{lines}",
+            schema,
+            name="spec_check",
+            timeout_s=40,
+        )
+        if data is None:
+            return parts
+        keep = {i for i in data["meets"] if 0 <= i < len(shown)}
+        for i, p in enumerate(shown):
+            if i not in keep:
+                self.resolver.rejected.add(p["part_id"])
+        out = [p for i, p in enumerate(shown) if i in keep] + parts[12:]
+        if not out:
+            self.resolver.notes[slot.slot_id] = (
+                f"no candidate meets '{need.requirement}' (rejected: "
+                + ", ".join(str(p.get("display_name"))[:30] for p in shown[:4])
+                + ")"
+            )
+        return out
+
+    async def resolve_missing(self, slot: Slot, emit: Emit) -> None:
+        """A required need with no curated part: KiCad generated tier, then an LCSC fetch."""
+        need = slot.need
+        if need is None:
+            return
+        part = None
+        via = "the KiCad library"
+        for _ in range(3):  # a part that fails the spec check is rejected and the next tried
+            part = self.resolver.generated(need)
+            via = "the KiCad library"
+            if part is None:
+                part = await asyncio.to_thread(self.resolver.fetch, need)
+                via = "LCSC"
+                if part is not None:
+                    self.fetched.append(part)
+            if part is None:
+                return
+            if await self.vet(slot, [part]):
+                break
+            part = None
+        if part is None:
+            return
+        self.extra.setdefault(slot.slot_id, []).append(part)
+        emit(
+            "warning",
+            {
+                "warning": {
+                    "warning_id": self.next_warning("w_fetch"),
+                    "code": "other",
+                    "severity": "info",
+                    "message": (
+                        f"{slot.label}: no curated part, used {part.get('display_name')} from "
+                        f"{via}."
+                    )[:300],
+                    "subjects": [{"slot_id": slot.slot_id}],
+                    "stage": "compose",
+                }
+            },
+            stage="compose",
+        )
+
     def _default_reason(self, slot: Slot, part: dict[str, Any], applied: list[dict]) -> str:
         bits = [f["label"] for f in applied if f["reason"] != "relaxed"][:3]
         name = part.get("display_name") or part["part_id"]
@@ -1052,9 +1269,13 @@ class Composer:
 
         A BME280 measures temperature and humidity: one part, not two of them.
         """
+        if slot.need is not None and slot.slot_id != "charger":
+            return None
         sides = {i.side for i in slot.instances}
         for other in self.slots:
             if other is slot or other.chosen is None or other.covered_by:
+                continue
+            if other.need is not None and other.function_id == "component.ic":
                 continue
             if slot.function_id not in part_functions(other.chosen):
                 continue
@@ -1090,6 +1311,98 @@ class Composer:
         )
 
     # ---- checks ---------------------------------------------------------------------
+    def invariant_checks(self) -> list[dict[str, Any]]:
+        out: list[dict[str, Any]] = []
+        ok_slot = lambda s: s.chosen is not None or s.covered_by is not None  # noqa: E731
+        ctrl_ids = ("controller", *self.comp.controller_keys)
+        ctrl = [s for s in self.slots if s.slot_id in ctrl_ids]
+        power_ids = ("battery", "ac_dc", "power_in")
+        power = [s for s in self.slots if s.slot_id in power_ids]
+        usb = any(f["function_id"] == "power.usb_in" for f in self.spec.get("functions", []))
+        problems = []
+        if not ctrl or not all(ok_slot(s) for s in ctrl):
+            problems.append("no controller")
+        if not (all(ok_slot(s) for s in power) if power else usb):
+            problems.append("no power path")
+        problems += [s.label.lower() for s in self.slots if s.need is not None and not ok_slot(s)]
+        out.append(
+            {
+                "check_key": "device.complete",
+                "rule_id": "device.complete",
+                "status": "fail" if problems else "pass",
+                "severity": "critical",
+                "message": (
+                    "Required parts missing: " + ", ".join(problems)
+                    if problems
+                    else "Controller, power path and the I/O this device implies are all present"
+                )[:300],
+                "subjects": [{"slot_id": s.slot_id} for s in self.slots if s.unresolved][:8],
+                "stage": "compose",
+            }
+        )
+        n = self.comp.numbers
+        chosen = [(s.chosen, max(1, s.quantity)) for s in self.slots if s.chosen is not None]
+        if "mass_g" in n and chosen:
+            est = cp.estimate_mass(self.comp, chosen)
+            out.append(
+                {
+                    "check_key": "spec.mass_target",
+                    "rule_id": "spec.mass_target",
+                    "status": "pass" if est["total_g"] <= n["mass_g"] else "fail",
+                    "severity": "warning",
+                    "message": (
+                        f"ESTIMATED mass {est['total_g']:g} g (parts {est['electronics_g']:g}, "
+                        f"board {est['pcb_g']:g}, case {est['shell_g']:g}; most part masses are "
+                        f"category guesses) against the {n['mass_g']:g} g target"
+                    )[:300],
+                    "measured": est["total_g"],
+                    "limit": n["mass_g"],
+                    "unit": "g",
+                    "subjects": [],
+                    "stage": "compose",
+                }
+            )
+        disp = next((s for s in self.slots if s.function_id.startswith("display.")), None)
+        if "screen_in" in n and disp is not None and disp.chosen is not None:
+            have = cp.display_inches(disp.chosen)
+            want = n["screen_in"]
+            close = have is not None and abs(have - want) <= 0.25 * want
+            out.append(
+                {
+                    "check_key": "spec.screen_size",
+                    "rule_id": "spec.screen_size",
+                    "status": "pass" if close else ("unknown" if have is None else "fail"),
+                    "severity": "warning",
+                    "message": (
+                        f"Asked for a {want:g} in screen; the catalog panel is "
+                        + (f"{have:g} in" if have else "of unknown size")
+                    )[:300],
+                    "measured": have,
+                    "limit": want,
+                    "unit": "in",
+                    "subjects": [{"slot_id": disp.slot_id}],
+                    "stage": "compose",
+                }
+            )
+        if self.comp.mains:
+            out.append(
+                {
+                    "check_key": "safety.mains_wiring",
+                    "rule_id": "safety.mains_wiring",
+                    "status": "unknown",
+                    "severity": "critical",
+                    "message": (
+                        "MAINS WIRING NOT VERIFIED: only a certified, enclosed AC-DC module may "
+                        "touch mains; this board carries low voltage only. The enclosure must be "
+                        "rated and not user-serviceable. Mains sockets, fusing and creepage are "
+                        "the module's and a certified enclosure's job."
+                    ),
+                    "subjects": [{"slot_id": "ac_dc"}],
+                    "stage": "compose",
+                }
+            )
+        return out
+
     def checks(self) -> list[dict[str, Any]]:
         out: list[dict[str, Any]] = []
         for slot in self.slots:
@@ -1111,6 +1424,8 @@ class Composer:
                             if ok and slot.chosen
                             else f"{slot.label}: covered by the {slot.covered_by} part"
                             if ok
+                            else f"{slot.label}: REQUIRED, no part ({slot.unresolved})"
+                            if slot.unresolved
                             else f"{slot.label}: no catalog part passes the filters"
                         )[:300],
                         "subjects": [{"slot_id": slot.slot_id}],
@@ -1195,7 +1510,9 @@ class Composer:
                 )
             bat = next((s for s in self.slots if s.slot_id == "battery"), None)
             if bat is not None:
-                charger = "power.charger" in part_functions(ctrl.chosen)
+                charger = "power.charger" in part_functions(ctrl.chosen) or any(
+                    s.slot_id == "charger" and s.chosen is not None for s in self.slots
+                )
                 out.append(
                     {
                         "check_key": "elec.battery.charger_present:"
@@ -1212,6 +1529,7 @@ class Composer:
                         "stage": "compose",
                     }
                 )
+        out += self.invariant_checks()
         sw = next((s for s in self.slots if s.slot_id == "switches"), None)
         caps = next((s for s in self.slots if s.slot_id == "keycaps"), None)
         if sw is not None and sw.chosen is not None:

@@ -1,87 +1,83 @@
-/* Design tokens, from the Bara UI Figma file (variables collection "Bara", Light mode).
-   Figma names live alongside the app's older names so existing CSS keeps working.
-   One accent (blue, selection and live state only); status colours per SPEC 11.4. */
+/* Design tokens. One accent; status colours per SPEC 11.4. */
 :root {
-  /* type: Averia Serif Libre for display, Atkinson Hyperlegible for UI and data */
-  --font-display: "Averia Serif Libre", Georgia, serif;
-  --font-sans: "Atkinson Hyperlegible Next", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono: "Atkinson Hyperlegible Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
-  /* Figma: paper, ink, accent, status, parts */
-  --paper: #ffffff;
-  --paper-2: #f6f6f5;
-  --paper-3: #ececea;
-  --ink: #161616;
-  --ink-soft: #5e5e5e;
-  --ink-faint: #b4b4b4;
-  --placeholder: #8c8c8c;
-  --grid: #dcdcdc;
-  --neutral: #9a948a;
-  --part-keycap: #ffffff;
-  --part-switch: #d6d6d6;
-  --part-board: #e9e9e7;
-  --part-controller: #2e2e2e;
-  --part-display: #bdbdbd;
-  --part-power: #e4e4e4;
-  --part-sensor: #dadada;
-
-  /* app names, mapped onto the Figma values */
-  --bg: var(--paper);
-  --surface: var(--paper);
-  --surface-2: var(--paper-2);
-  --sunken: var(--paper-3);
-  --line: #dddddd; /* ink-faint at 45% on paper, the Figma hairline */
-  --line-strong: var(--ink-faint);
-  --text: var(--ink);
-  --text-2: var(--ink-soft);
-  --muted: var(--placeholder);
-  --accent: #0a6cff;
-  --accent-soft: #e6f0ff;
+  --bg: #f4f4f1;
+  --surface: #ffffff;
+  --surface-2: #fafaf8;
+  --sunken: #ecece8;
+  --line: #e1e1dc;
+  --line-strong: #c9c9c2;
+  --text: #1b1d1f;
+  --text-2: #4a4e52;
+  --muted: #7a7f84;
+  --accent: #2f55d4;
+  --accent-soft: #e7ecfb;
   --accent-text: #ffffff;
 
-  --ok: #2e9e5b;
-  --ok-soft: #e6f4ec;
-  --warn: #b7791f; /* Figma #e0a030 darkened for AA text on white; bars use --warn-fill */
-  --warn-fill: #e0a030;
-  --warn-soft: #fbf3e2;
-  --fail: #d64545;
-  --fail-soft: #fbe9e9;
-  --info: var(--neutral);
-  --info-soft: #f2f1ef;
+  --ok: #2e7d4f;
+  --ok-soft: #e4f2e9;
+  --warn: #a8690f;
+  --warn-soft: #faf0dc;
+  --fail: #c2362f;
+  --fail-soft: #fbe7e5;
+  --info: #7d838a;
+  --info-soft: #eeefef;
 
-  --viewport-bg: var(--paper);
-  --grid-line: var(--grid);
+  --viewport-bg: #ededea;
+  --grid-line: #d9d9d3;
 
-  /* type scale (Figma text styles, tuned on the Type tuning board) */
-  --track-display: -0.03em;
-  --track-body: -0.01em;
-  --track-label: 0.08em;
-
-  --radius: 8px;
+  --radius: 6px;
   --radius-sm: 4px;
-  --shadow: 0 1px 2px rgb(30 27 24 / 8%), 0 6px 20px rgb(30 27 24 / 10%); /* Figma "Float" */
-  --shadow-pop: var(--shadow);
-
-  /* panel widths from the Figma layout */
-  --panel-left: 248px;
-  --panel-right: 300px;
+  --shadow: 0 1px 2px rgb(20 20 20 / 6%), 0 4px 16px rgb(20 20 20 / 6%);
+  --shadow-pop: 0 2px 6px rgb(20 20 20 / 10%), 0 12px 32px rgb(20 20 20 / 12%);
 
   color-scheme: light;
 }
 
-/* Light only for the demo (UI_PLAN 8.3); data-theme="dark" stays available. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111315;
+    --surface: #181b1e;
+    --surface-2: #1d2024;
+    --sunken: #0d0f10;
+    --line: #2a2e33;
+    --line-strong: #3a3f45;
+    --text: #e7e9eb;
+    --text-2: #b9bec3;
+    --muted: #8a9198;
+    --accent: #7b96f2;
+    --accent-soft: #222b45;
+    --accent-text: #0d1020;
+    --ok: #5cb57f;
+    --ok-soft: #17291f;
+    --warn: #d9a043;
+    --warn-soft: #2e2413;
+    --fail: #e8675f;
+    --fail-soft: #34191a;
+    --info: #98a0a8;
+    --info-soft: #23272b;
+    --viewport-bg: #16191c;
+    --grid-line: #262a2f;
+    --shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 4px 16px rgb(0 0 0 / 30%);
+    --shadow-pop: 0 2px 6px rgb(0 0 0 / 50%), 0 12px 32px rgb(0 0 0 / 40%);
+    color-scheme: dark;
+  }
+}
+
 :root[data-theme="dark"] {
-  --paper: #111315;
-  --paper-2: #181b1e;
-  --paper-3: #0d0f10;
-  --ink: #e7e9eb;
-  --ink-soft: #b9bec3;
-  --ink-faint: #3a3f45;
-  --placeholder: #8a9198;
-  --grid: #262a2f;
+  --bg: #111315;
+  --surface: #181b1e;
+  --surface-2: #1d2024;
+  --sunken: #0d0f10;
   --line: #2a2e33;
-  --accent: #5b9bff;
-  --accent-soft: #14233d;
+  --line-strong: #3a3f45;
+  --text: #e7e9eb;
+  --text-2: #b9bec3;
+  --muted: #8a9198;
+  --accent: #7b96f2;
+  --accent-soft: #222b45;
   --accent-text: #0d1020;
   --ok: #5cb57f;
   --ok-soft: #17291f;
@@ -89,7 +85,11 @@
   --warn-soft: #2e2413;
   --fail: #e8675f;
   --fail-soft: #34191a;
+  --info: #98a0a8;
   --info-soft: #23272b;
+  --viewport-bg: #16191c;
+  --grid-line: #262a2f;
   --shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 4px 16px rgb(0 0 0 / 30%);
+  --shadow-pop: 0 2px 6px rgb(0 0 0 / 50%), 0 12px 32px rgb(0 0 0 / 40%);
   color-scheme: dark;
 }

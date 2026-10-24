@@ -117,22 +117,6 @@ export function PartInspector() {
   const part = usePart(partId);
   const [colorOpen, setColorOpen] = useState(false);
   useEffect(() => setColorOpen(false), [selection]);
-  // S swap, R recolour, M move: the same actions as the buttons, only on a finished build.
-  const keyTarget = build?.status === "done" ? instance : null;
-  useEffect(() => {
-    if (!keyTarget) return;
-    const onKey = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-      const k = e.key.toLowerCase();
-      if (k === "s" && keyTarget.slot_id) useApp.setState({ overlay: "swap" });
-      else if (k === "r") setColorOpen((o) => !o);
-      else if (k === "m") useApp.setState((s) => ({ moving: s.moving === keyTarget.instance_id ? null : keyTarget.instance_id }));
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [keyTarget]);
   if (!partId) return null;
   const card = instance?.card;
   const decision = [...(build?.decisions ?? [])].reverse().find((d) => d.slot_id === instance?.slot_id && d.chosen_part_id === partId);
@@ -144,76 +128,27 @@ export function PartInspector() {
       <SideHead title={card?.display_name ?? full?.display_name ?? partId} sub={instance ? `${instance.label ?? instance.instance_id}  ${partId}` : partId} />
       <div className="side-b">
         {card && (
-          <section className="insp-part">
-            {card.summary && <p className="insp-summary">{card.summary}</p>}
+          <div className="insp-val">
+            <ProvenanceBadge card={card} />
+            {card.summary && <p className="small">{card.summary}</p>}
             <KeySpecs card={card} />
-            {instance && (
-              <div className="insp-facts">
-                <span className="insp-fact">
-                  <b>{instance.quantity}</b>
-                  <span>qty</span>
-                </span>
-                <span className="insp-fact">
-                  <b>{instance.placement.source ?? "—"}</b>
-                  <span>placed by</span>
-                </span>
-                <span className="insp-fact">
-                  <b>{instance.placement.locked ? "locked" : "free"}</b>
-                  <span>position</span>
-                </span>
-              </div>
-            )}
-          </section>
-        )}
-        {done && instance && (
-          <div className="insp-actions">
-            <button type="button" className="btn sm" disabled={!instance.slot_id} onClick={() => useApp.setState({ overlay: "swap" })} title="Swap (S)">
-              Swap <kbd>S</kbd>
-            </button>
-            <button type="button" className="btn sm" onClick={() => setColorOpen((o) => !o)} aria-expanded={colorOpen} title="Recolour (R)">
-              Recolour <kbd>R</kbd>
-            </button>
-            <button
-              type="button"
-              className="btn sm"
-              title="Move (M)"
-              onClick={() => useApp.setState((s) => ({ moving: s.moving === instance.instance_id ? null : instance.instance_id }))}
-            >
-              Move <kbd>M</kbd>
-            </button>
-            <button
-              type="button"
-              className="btn sm ghost danger"
-              onClick={() => {
-                applyEdit([{ op: "remove_part", instance_id: instance.instance_id }], `Remove ${instance.card.display_name}`);
-                closeOverlay();
-              }}
-            >
-              Remove
-            </button>
           </div>
         )}
-        {colorOpen && instance && <ColorPicker target={{ instance_id: instance.instance_id }} current={instance.color ?? null} onClose={() => setColorOpen(false)} />}
         {instance && (
-          <section>
-            <h3>Position</h3>
-            <div className="insp-fields">
-              {["X", "Y", "Z"].map((axis, i) => (
-                <span className="insp-field" key={axis}>
-                  <span>{axis}</span>
-                  {instance.placement.position_mm[i]?.toFixed(1)}
-                </span>
-              ))}
-              <span className="insp-field">
-                <span>⟲</span>
-                {instance.placement.rotation_deg.map((n) => n.toFixed(0)).join(", ")}°
-              </span>
-            </div>
-          </section>
+          <div className="kv">
+            <span>Quantity</span>
+            <span className="mono">{instance.quantity}</span>
+            <span>Position</span>
+            <span className="mono">{instance.placement.position_mm.map((n) => n.toFixed(1)).join(", ")} mm</span>
+            <span>Rotation</span>
+            <span className="mono">{instance.placement.rotation_deg.map((n) => n.toFixed(0)).join(", ")} deg</span>
+            <span>Placed by</span>
+            <span>{instance.placement.source ?? ""}{instance.placement.locked ? ", locked" : ""}</span>
+          </div>
         )}
         {decision && (
           <section className="insp-why">
-            <h3>Why this part</h3>
+            <h3>Why</h3>
             <p className="reason">{decision.reason}</p>
           </section>
         )}
@@ -230,9 +165,36 @@ export function PartInspector() {
             </ul>
           </section>
         )}
+        {done && instance && (
+          <div className="insp-actions">
+            <button type="button" className="btn sm" disabled={!instance.slot_id} onClick={() => useApp.setState({ overlay: "swap" })}>
+              Swap
+            </button>
+            <button type="button" className="btn sm" onClick={() => setColorOpen((o) => !o)} aria-expanded={colorOpen}>
+              Recolor
+            </button>
+            <button
+              type="button"
+              className="btn sm"
+              onClick={() => useApp.setState((s) => ({ moving: s.moving === instance.instance_id ? null : instance.instance_id }))}
+            >
+              Move
+            </button>
+            <button
+              type="button"
+              className="btn sm danger"
+              onClick={() => {
+                applyEdit([{ op: "remove_part", instance_id: instance.instance_id }], `Remove ${instance.card.display_name}`);
+                closeOverlay();
+              }}
+            >
+              Remove
+            </button>
+          </div>
+        )}
+        {colorOpen && instance && <ColorPicker target={{ instance_id: instance.instance_id }} current={instance.color ?? null} onClose={() => setColorOpen(false)} />}
         <section className="insp-meta">
-          <h3>Source</h3>
-          {card && <ProvenanceBadge card={card} />}
+          <h3>Details</h3>
           {part === "loading" ? (
             <Skeleton lines={3} />
           ) : full ? (

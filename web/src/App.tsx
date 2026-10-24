@@ -1,25 +1,18 @@
 import { useEffect } from "react";
 import { useApp } from "./state/store";
-import { ConnectionBanner, FileHeader, TopBar } from "./components/TopBar";
+import { ConnectionBanner, TopBar } from "./components/TopBar";
 import { ExampleChips, PromptBar } from "./components/PromptBar";
-import { StepPlayer } from "./components/LeftColumn";
+import { ClarifyCard, DecisionTrace, ReuseCard, SpecCard, StageTimeline } from "./components/LeftColumn";
 import { EditStatus, EventLog, FailureCard, LatencyHUD, Toast, WarningBanner } from "./components/Status";
-import { PartsList, RightColumn } from "./components/RightColumn";
+import { RightColumn } from "./components/RightColumn";
 import { AddPartPicker, ConnectDialog, PartInspector, ResizePanel, SwapDrawer } from "./components/Overlays";
 import { Viewport3D } from "./three/Viewport3D";
-import { BotLab } from "./bot/BotLab";
 
 function useKeys() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
-      const tab = e.altKey && !e.metaKey && !e.ctrlKey ? ({ Digit1: "design", Digit2: "build", Digit3: "code" } as const)[e.code as "Digit1"] : undefined;
-      if (tab) {
-        e.preventDefault();
-        useApp.setState({ rightTab: tab });
-        return;
-      }
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === "l" || e.key === "L") useApp.setState((s) => ({ logOpen: !s.logOpen }));
       if (e.key === "Escape") useApp.setState({ overlay: null, moving: null, inspectPartId: null });
@@ -65,10 +58,12 @@ function Workspace() {
   const overlay = useApp((s) => s.overlay);
   return (
     <main className="workspace">
-      <aside className="leftcol" aria-label="Layers">
-        <FileHeader />
-        <StepPlayer />
-        <PartsList />
+      <aside className="leftcol" aria-label="Pipeline">
+        <StageTimeline />
+        <ClarifyCard />
+        <SpecCard />
+        <ReuseCard />
+        <DecisionTrace />
       </aside>
       <section className="centre">
         <Viewport3D />
@@ -94,19 +89,12 @@ function Workspace() {
   );
 }
 
-const BOTLAB = new URLSearchParams(window.location.search).get("botlab") === "1";
-
 export function App() {
-  if (BOTLAB) return <BotLab />;
-  return <Main />;
-}
-
-function Main() {
   useKeys();
   const screen = useApp((s) => s.screen);
   return (
     <div className="app">
-      {screen === "home" && <TopBar />}
+      <TopBar />
       <ConnectionBanner />
       {screen === "home" ? <Home /> : <Workspace />}
       <EventLog />

@@ -9,6 +9,7 @@ import uvicorn
 from fastapi import FastAPI, Request, WebSocket
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -67,6 +68,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         await handler.serve(websocket)
 
     settings.assets_dir.mkdir(parents=True, exist_ok=True)
+
+    @app.get("/assets/parts/kicad_gen/{stem}.glb")
+    def kicad_generated_glb(stem: str) -> FileResponse:
+        """Generated-tier GLBs are converted on first request, then served from the cache."""
+        from bara.kicad_generated import KicadIndex, glb_stem
+
+        index = KicadIndex.open(settings.catalog_dir / "kicad_index.sqlite")
+        if index is None:
+            raise StarletteHTTPException(404)
+        glb = index.glb_dir / f"{stem}.glb"
+        if not glb.is_file():
+            rows = index.rows("SELECT part_id FROM kicad_parts WHERE kind = 'footprint'")
+            match = next((r[0] for r in rows if glb_stem(r[0]) == stem), None)
+            if match is None or index.ensure_glb(match) is None:
+                raise StarletteHTTPException(404)
+        return FileResponse(glb, media_type="model/gltf-binary")
+
     app.mount("/assets", StaticFiles(directory=settings.assets_dir), name="assets")
     return app
 

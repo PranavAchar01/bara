@@ -21,6 +21,8 @@ import math
 import re
 from typing import Any
 
+import numpy as np
+from shapely import affinity, prepared
 from shapely.geometry import Point, Polygon, box
 from shapely.ops import unary_union
 
@@ -153,6 +155,7 @@ def plan_device_board(
     parts do not fit inside it.
     """
     form = (brief or {}).get("form") or None
+    touch_slots = set((brief or {}).get("touch_slots") or [])
     items: list[Item] = []
     counters: dict[str, int] = {}
     skipped: list[str] = []
@@ -193,6 +196,8 @@ def plan_device_board(
                 meta={"instance_id": part["instance_id"], "pins": _pins_for(record, fp)},
                 model_override=_model_for(fp),
             )
+            it.meta["slot_id"] = part.get("slot_id")
+            it.meta["touch"] = part.get("slot_id") in touch_slots
             it.meta["module"] = record.get("kind") == "module"
             items.append(it)
     if skipped:
@@ -201,6 +206,7 @@ def plan_device_board(
     mcu = next((it for it in items if it.role == "mcu"), None)
     _pads_from_pins(items, log)
     items += _support_parts(items, log)
+    _matrix_inputs(items, mcu, log)
 
     # pack: controller (or the largest part) at the origin, then largest first
     on_board = [it for it in items if it.on_pcb]
@@ -208,6 +214,13 @@ def plan_device_board(
     first = mcu or max(on_board, key=lambda it: _area(it), default=None)
     placed: list[Item] = []
     blocked: list[Polygon] = []
+    pf = (brief or {}).get("product_form")
+    fitted: Polygon | None = None
+    if pf and on_board:
+        fitted = place_in_form(on_board, first, pf, log)
+        placed = list(on_board)
+        blocked = [it.footprint_poly() for it in placed]
+        first = None
     if first is not None:
         placed.append(first)
         blocked.append(first.footprint_poly())
@@ -216,7 +229,7 @@ def plan_device_board(
         (it for it in on_board if it is not first),
         key=lambda it: (parents[id(it)] is not None, -_area(it)),
     )
-    for it in order:
+    for it in order if fitted is None else []:
         near = parents[id(it)]
         gap = PASSIVE_GAP if near is not None else PART_GAP
         anchor = near.footprint_poly() if near is not None and near in placed else None
@@ -225,7 +238,7 @@ def plan_device_board(
         blocked.append(it.footprint_poly())
     for it in off_board:  # battery cells: under the board, centred
         it.side = "bottom"
-        cx, cy = _centre(blocked)
+        cx, cy = _centre(blocked) if fitted is None else (fitted.centroid.x, fitted.centroid.y)
         it.x, it.y = cx, cy
 
     # controller GPIO for every peripheral signal, nearest pad first
@@ -236,7 +249,7 @@ def plan_device_board(
                 for it in items
                 if it is not mcu
                 for v in it.pads.values()
-                if v and power_net(v) is None and v != "RST_MCU"
+                if v and power_net(v) is None and v != "RST_MCU" and not v.startswith("MX_")
             }
         )
         gpio = [num for num, name in mcu.meta["pins"].items() if GPIO_NAME.match(_clean(name))]
@@ -251,7 +264,10 @@ def plan_device_board(
         log.append(f"pin budget: {len(signals)} GPIO needed, {mcu.label} has {len(gpio)} free")
     _drop_single_pad_nets(items)
 
-    outline = _form_outline(placed, form, log) if form else _outline(placed)
+    if fitted is not None:
+        outline = fitted
+    else:
+        outline = _form_outline(placed, form, log) if form else _outline(placed)
     x0, y0, x1, y1 = outline.bounds
     log.append(
         f"board {x1 - x0:.1f} x {y1 - y0:.1f} mm, {len(placed)} footprints "
@@ -310,6 +326,74 @@ def _drop_single_pad_nets(items: list[Item]) -> None:
             count[v] = count.get(v, 0) + 1
     for it in items:
         it.pads = {k: v for k, v in it.pads.items() if count.get(v, 0) > 1}
+
+
+def _matrix_inputs(items: list[Item], mcu: Item | None, log: list[str]) -> None:
+    """When the controller has fewer free GPIO than the signals need, wire the push buttons as a
+    diode matrix (each switch to a column, a diode from the switch to its row) so n buttons cost
+    rows + columns pins instead of n."""
+    if mcu is None or not mcu.meta.get("pins"):
+        return
+    gpio = [n for n, name in mcu.meta["pins"].items() if GPIO_NAME.match(_clean(name))]
+    free = len([g for g in gpio if g not in mcu.pads])
+
+    def signals(of: list[Item]) -> set[str]:
+        return {
+            v
+            for it in of
+            if it is not mcu
+            for v in it.pads.values()
+            if v and power_net(v) is None and v != "RST_MCU"
+        }
+
+    need = len(signals(items))
+    if need <= free:
+        return
+    keys = [
+        it
+        for it in items
+        if it.role in ("button", "switch") and not it.meta.get("module") and it.fp is not None
+    ]
+    sig_pad = {}
+    for it in keys:
+        pads = [(n, v) for n, v in it.pads.items() if v and power_net(v) is None]
+        if len(pads) == 1:
+            sig_pad[id(it)] = pads[0]
+    keys = [it for it in keys if id(it) in sig_pad]
+    if len(keys) < 4:
+        return
+    spare = free - (need - len({sig_pad[id(it)][1] for it in keys}))
+    best = None
+    for rows in range(1, len(keys) + 1):
+        cols = math.ceil(len(keys) / rows)
+        if rows + cols <= spare and (best is None or rows + cols < best[0] + best[1]):
+            best = (rows, cols)
+    if best is None:
+        log.append(f"{need} signals, {free} free GPIO: no matrix of {len(keys)} buttons fits")
+        return
+    rows, cols = best
+    d_fp = footprint_ref(R.DIODE["footprint"])
+    for i, it in enumerate(keys):
+        num, _ = sig_pad[id(it)]
+        gnd = next((n for n, v in it.pads.items() if power_net(v) is not None), None)
+        it.pads[num] = f"COL{i % cols}"
+        mx = f"MX_{it.ref}"
+        if gnd is not None:
+            it.pads[gnd] = mx
+        else:  # a switch whose second pad is not wired: take any other pad of the footprint
+            other = next((p.number for p in it.fp.pads if p.number != num), None)
+            if other is None:
+                continue
+            it.pads[other] = mx
+        d = Item(
+            f"DM{i + 1}", "diode", d_fp, 0, 0, 0, "top", pads={"1": f"ROW{i // cols}", "2": mx}
+        )
+        d.label, d.height_mm, d.meta = "1N4148W SOD-123", 1.2, {"near": it}
+        items.append(d)
+    log.append(
+        f"{need} signals, {free} free GPIO: {len(keys)} buttons wired as a {rows} x {cols} "
+        f"diode matrix ({rows + cols} pins)"
+    )
 
 
 def _support_parts(items: list[Item], log: list[str]) -> list[Item]:
@@ -504,3 +588,209 @@ def _outline(placed: list[Item]) -> Polygon:
     rect = box(x0 - BOARD_MARGIN, y0 - BOARD_MARGIN, x1 + BOARD_MARGIN, y1 + BOARD_MARGIN)
     rounded = rect.buffer(-CORNER_R, join_style="mitre").buffer(CORNER_R, join_style="round")
     return Polygon(rounded.exterior).simplify(0.05)
+
+
+# ---------------------------------------------------------------- product form
+
+FORM_INSET_MM = 3.5  # case wall + clearance: the board edge sits this far inside the silhouette
+FORM_GRID_POINTS = 24000
+FORM_TRIES = 6000
+
+
+def form_region(pf: dict[str, Any], scale: float) -> Polygon:
+    """The board outline: the silhouette (y up) in board coordinates (y down) inset by the case."""
+    pts = [(x * scale, -y * scale) for x, y in pf["silhouette"]]
+    sil = Polygon(pts)
+    if not sil.is_valid:
+        sil = sil.buffer(0)
+    short = min(sil.bounds[2] - sil.bounds[0], sil.bounds[3] - sil.bounds[1])
+    inset = min(FORM_INSET_MM, 0.12 * short)
+    region = sil.buffer(-inset, join_style="round")
+    if region.geom_type == "MultiPolygon":
+        region = max(region.geoms, key=lambda g: g.area)
+    return Polygon(region.exterior).simplify(0.05)
+
+
+def _anchor_targets(
+    pf: dict[str, Any], items: list[Item], scale: float
+) -> dict[int, tuple[float, float, str]]:
+    """Target centre (board coords) and mount for every item that has an anchor."""
+    from bara.live.form import expand
+
+    by_slot: dict[str, list[Item]] = {}
+    for it in items:
+        sid = it.meta.get("slot_id")
+        if sid:
+            by_slot.setdefault(sid, []).append(it)
+    out: dict[int, tuple[float, float, str]] = {}
+    used: dict[str, int] = {}
+    for a in pf["anchors"]:
+        group = by_slot.get(a["slot_id"], [])
+        k0 = used.get(a["slot_id"], 0)
+        n = max(1, int(a.get("count") or 1))
+        take = group[k0 : k0 + n]
+        if not take and k0 >= len(group) and group:
+            take = []
+        used[a["slot_id"]] = k0 + len(take)
+        spots = expand(a, max(1, len(take)))
+        for k, it in enumerate(take):
+            x, y = spots[k % len(spots)]
+            out[id(it)] = (x * scale, -y * scale, a["mount"])
+    for sid, group in by_slot.items():  # instances no anchor claimed ride on the slot's last one
+        last = next((a for a in reversed(pf["anchors"]) if a["slot_id"] == sid), None)
+        for it in group[used.get(sid, 0) :]:
+            if last is not None:
+                out[id(it)] = (last["centre"][0] * scale, -last["centre"][1] * scale, last["mount"])
+    return out
+
+
+def _through(it: Item) -> bool:
+    """A part with leads through the board occupies both sides."""
+    return it.fp is not None and any(p.kind in ("thru_hole", "np_thru_hole") for p in it.fp.pads)
+
+
+def _attempt(
+    order: list[Item],
+    region: Polygon,
+    targets: dict[int, tuple[float, float]],
+    gaps: dict[int, float],
+    flippable: set[int] | None = None,
+) -> bool:
+    """Put each item at the free spot nearest its target, on its own side first and, for a
+    surface-mount part that has no spot there, on the other side; False when one cannot go."""
+    prep = prepared.prep(region)
+    x0, y0, x1, y1 = region.bounds
+    step = max(1.0, math.sqrt(region.area / FORM_GRID_POINTS))
+    gx, gy = np.meshgrid(np.arange(x0, x1, step), np.arange(y0, y1, step))
+    cand = np.column_stack([gx.ravel(), gy.ravel()])
+    cand = cand[[prep.contains(Point(float(a), float(b))) for a, b in cand]]
+    if not len(cand):
+        return False
+    taken: dict[str, Polygon | None] = {"top": None, "bottom": None}
+
+    def put(it: Item, side: str) -> bool:
+        it.side = side
+        it.x = it.y = 0.0
+        base = it.footprint_poly()
+        c0 = base.centroid
+        tx, ty = targets[id(it)]
+        idx = np.argsort(np.hypot(cand[:, 0] - tx, cand[:, 1] - ty))[:FORM_TRIES]
+        gap = gaps[id(it)]
+        sides = ("top", "bottom") if _through(it) else (side,)
+        for i in idx:
+            dx, dy = float(cand[i, 0] - c0.x), float(cand[i, 1] - c0.y)
+            poly = affinity.translate(base, dx, dy)
+            if not prep.contains(poly):
+                continue
+            if any(taken[sd] is not None and taken[sd].distance(poly) < gap for sd in sides):
+                continue
+            it.x, it.y = dx, dy
+            for sd in sides:
+                taken[sd] = poly if taken[sd] is None else taken[sd].union(poly)
+            return True
+        return False
+
+    for it in order:
+        own = it.side if it.side in ("top", "bottom") else "top"
+        if put(it, own):
+            continue
+        if flippable and id(it) in flippable and not _through(it):
+            if put(it, "bottom" if own == "top" else "top"):
+                continue
+        return False
+    return True
+
+
+def place_in_form(
+    on_board: list[Item], mcu: Item | None, pf: dict[str, Any], log: list[str]
+) -> Polygon:
+    """Place every board item inside the product silhouette; returns the board outline.
+
+    Items with an anchor go to the free spot nearest it (edge anchors to the rim); the controller
+    sits at the centre of the free area; everything else packs outward from the controller,
+    support passives beside their parent. Surface-mount parts with no room on the front go on the
+    back. The product is never scaled to fit: parts that still do not fit log FORM_OVERFLOW,
+    which fails the build.
+    """
+    scale = 1.0
+    region = form_region(pf, scale)
+    anchored = _anchor_targets(pf, on_board, scale)
+    centre = region.representative_point()
+    hub = (centre.x, centre.y)
+    targets: dict[int, tuple[float, float]] = {}
+    gaps: dict[int, float] = {}
+    first: list[Item] = [it for it in on_board if id(it) in anchored]
+    first.sort(key=lambda it: -_area(it))
+    rest = [it for it in on_board if id(it) not in anchored]
+    if mcu is not None and mcu in rest:
+        rest.remove(mcu)
+        rest.insert(0, mcu)
+    rest[1 if mcu is not None else 0 :] = sorted(
+        rest[1 if mcu is not None else 0 :],
+        key=lambda it: (it.meta.get("near") is not None, -_area(it)),
+    )
+    order = first + rest
+    for it in on_board:
+        tgt = anchored.get(id(it))
+        if tgt is not None:
+            targets[id(it)] = (tgt[0], tgt[1])
+            it.side = "bottom" if tgt[2] == "back" else "top"
+        else:
+            targets[id(it)] = hub
+        gaps[id(it)] = PASSIVE_GAP if it.meta.get("near") is not None else PART_GAP
+    # unanchored surface-mount parts may use the back of the board
+    flippable = {id(it) for it in on_board if id(it) not in anchored and it is not mcu}
+    if not _attempt_with_follow(order, region, targets, gaps, mcu, set(anchored), flippable):
+        log.append(
+            f"FORM_OVERFLOW: the parts do not fit the product silhouette on both board sides "
+            f"({len(on_board)} footprints); the product is never scaled to fit"
+        )
+        _attempt_loose(order, region)
+        return region
+    x0, y0, x1, y1 = region.bounds
+    bottom = sum(1 for it in on_board if it.side == "bottom")
+    log.append(
+        f"board follows the product silhouette: {x1 - x0:.1f} x {y1 - y0:.1f} mm outline, "
+        f"{sum(1 for it in on_board if id(it) in anchored)} parts snapped to anchors, "
+        f"{bottom} on the back"
+    )
+    pf["scale"] = scale
+    return region
+
+
+def _attempt_with_follow(
+    order: list[Item],
+    region: Polygon,
+    targets: dict[int, tuple[float, float]],
+    gaps: dict[int, float],
+    mcu: Item | None,
+    anchored: set[int],
+    flippable: set[int] | None = None,
+) -> bool:
+    """Run _attempt with followers retargeted: a support part at its parent, any other
+    unanchored part at the controller, both read when the part is placed (parents come first)."""
+    by_id = {id(it): it for it in order}
+
+    class Follow(dict):
+        def __getitem__(self, key: int) -> tuple[float, float]:
+            it = by_id[key]
+            near = it.meta.get("near")
+            if near is not None:
+                return near.centre()
+            if mcu is not None and it is not mcu and key not in anchored:
+                return mcu.centre()
+            return super().__getitem__(key)
+
+    return _attempt(order, region, Follow(targets), gaps, flippable)
+
+
+def _attempt_loose(order: list[Item], region: Polygon) -> None:
+    """Overflow: lay the unplaced parts in a row below the silhouette so the build still has a
+    board to report on; the FORM_OVERFLOW log line turns into a failing check."""
+    x0, _, _, y1 = region.bounds
+    x = x0
+    for it in order:
+        it.x = it.y = 0.0
+        b = it.footprint_poly().bounds
+        it.x, it.y = x - b[0], y1 + 3.0 - b[1]
+        x += (b[2] - b[0]) + PART_GAP

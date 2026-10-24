@@ -95,13 +95,6 @@ def board_brief(
     }
 
 
-def pending_board(entry: dict[str, Any]) -> dict[str, Any]:
-    """SPEC Board (status pending, outline and footprints) for one planned board."""
-    board, _ = board_module()
-    assert board is not None  # only called after plan_board succeeded
-    return board.pending_board(entry)
-
-
 def plan_board(
     brief: dict[str, Any], parts: list[dict[str, Any]], build_id: str
 ) -> tuple[dict[str, Any] | None, str | None]:
@@ -212,6 +205,9 @@ def geometry_brief(brief: dict[str, Any]) -> dict[str, Any]:
         "features": feats + (["tented"] if brief.get("tented") else []),
         "tented": bool(brief.get("tented")),
     }
+    if brief.get("body_thickness_mm"):
+        out["body_thickness_mm"] = float(brief["body_thickness_mm"])
+        out["edge_thickness_mm"] = float(brief.get("edge_thickness_mm") or 0.0)
     return out
 
 

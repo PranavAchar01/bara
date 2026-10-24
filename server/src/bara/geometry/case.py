@@ -57,6 +57,7 @@ HAND_SET: dict[str, float] = {
     "circular_segments": 48,
 }
 
+TOUCH_MIN_MM = 9.0  # smallest opening for a part a person touches
 DEFAULT_CASE_HEX = "#9E9E9E"
 
 # Roles taller than the bezel underside get an opening; these keep their own opening shape.
@@ -140,6 +141,7 @@ class Feature:
     licence: str = ""
     z_bottom: float | None = None  # explicit lower z in the board frame, when known
     z_top: float | None = None  # explicit upper z (parts off the board, e.g. a ball sensor)
+    touch: bool = False  # a person touches or looks at it: it gets an opening in the shell
 
     def z_range(self, t: float) -> tuple[float, float]:
         if self.z_bottom is not None and self.z_top is not None:
@@ -285,6 +287,7 @@ def _feature_from_placement(p: dict[str, Any]) -> Feature | None:
         source_url=str(p.get("source_url") or ""),
         licence=str(p.get("licence") or ""),
         z_bottom=None if p.get("z_bottom_mm") is None else _num(p.get("z_bottom_mm"), 0.0),
+        touch=bool(p.get("touch")),
     )
 
 
@@ -439,6 +442,32 @@ def _box(lo: tuple[float, float, float], hi: tuple[float, float, float]) -> mf.M
     return mf.Manifold.cube(size).translate(lo)
 
 
+def _soft_edge(
+    cs: mf.CrossSection, z0: float, z1: float, rise: float, width: float, bottom: bool
+) -> mf.Manifold:
+    """A prism of cs from z0 to z1 whose bottom (or top) edge is rounded: a quarter-circle
+    profile `rise` tall and `width` in from the outline, built as thin stepped slices."""
+    steps = 8
+    solids: list[mf.Manifold] = []
+    if bottom:
+        solids.append(_prism(cs, z0 + rise, z1))
+    else:
+        solids.append(_prism(cs, z0, z1 - rise))
+    for i in range(steps):
+        a, b = rise * i / steps, rise * (i + 1) / steps
+        mid = (a + b) / 2
+        u = (rise - mid) / rise if bottom else mid / rise
+        inset = width * (1.0 - math.sqrt(max(0.0, 1.0 - u * u)))
+        ring = cs.offset(-inset, mf.JoinType.Round) if inset > 1e-6 else cs
+        if ring.is_empty():
+            continue
+        if bottom:
+            solids.append(_prism(ring, z0 + a, z0 + b + 0.01))
+        else:
+            solids.append(_prism(ring, z1 - rise + a, z1 - rise + b + 0.01))
+    return _union(solids)
+
+
 def _union(items: list[mf.Manifold]) -> mf.Manifold:
     items = [m for m in items if not m.is_empty()]
     if not items:
@@ -543,9 +572,24 @@ def enclose_report(
         cup_bottom = cz - r - H["ball_clearance_mm"] - H["cup_wall_mm"]
         z_bot = min(z_bot, pocket_bottom - H["floor_mm"], cup_bottom)
 
+    # The product's own thickness (from its form) sets the body height; the board stays at the
+    # top, with the extra body below it.
+    body = _num(brief.get("body_thickness_mm"), 0.0)
+    if body > 0 and body > bezel_top - z_bot:
+        z_bot = bezel_top - body
+
     t_geo = time.perf_counter()
     # ---- tray
-    solids = [_prism(outer_cs, z_bot, wall_top)]
+    shaped = body > 0
+    soft = min(8.0, 0.3 * (wall_top - z_bot)) if shaped else 0.0
+    if shaped:
+        # the belly of the product: a rounded underside, as deep as the body is thicker than
+        # its rim (grips thicker than the edge), never less than the fillet radius
+        edge = _num(brief.get("edge_thickness_mm"), 0.0)
+        rise = min(max(body - edge, 0.5 * soft, 3.0), 0.5 * (wall_top - z_bot))
+        solids = [_soft_edge(outer_cs, z_bot, wall_top, rise, min(rise * 1.2, 8.0), True)]
+    else:
+        solids = [_prism(outer_cs, z_bot, wall_top)]
     for g in ball_geo:
         rr = g["r"] + H["ball_clearance_mm"] + H["cup_wall_mm"]
         solids.append(_prism(_circle_cs(g["x"], g["y"], rr), z_bot, wall_top))
@@ -598,20 +642,48 @@ def enclose_report(
         elif f.role == "screen":
             holes_cs.append(_rect_cs(f.x, f.y, f.w, f.d, f.rot_deg))
             openings["screens"].append(f.ref)
+        elif f.touch and f.role not in ("usb", "mcu", "battery"):
+            # finger-sized, soft-cornered: a bare switch footprint is far smaller than the
+            # button a person presses
+            c = 2 * H["part_opening_clearance_mm"]
+            ow, od = max(f.w + c, TOUCH_MIN_MM), max(f.d + c, TOUCH_MIN_MM)
+            r = 0.4 * min(ow, od)
+            holes_cs.append(
+                _rect_cs(f.x, f.y, ow, od, f.rot_deg)
+                .offset(-r, mf.JoinType.Round)
+                .offset(r, mf.JoinType.Round)
+            )
         elif z_hi > seat - 0.01:
             c = 2 * H["part_opening_clearance_mm"]
             holes_cs.append(_rect_cs(f.x, f.y, f.w + c, f.d + c, f.rot_deg))
     for g in ball_geo:
         holes_cs.append(_circle_cs(g["x"], g["y"], g["r"] + H["ball_ring_clearance_mm"]))
-    bezel = _prism(outer_cs, seat, bezel_top)
+    crown = 0.0
+    if shaped:
+        bx = outer_cs.bounds()
+        crown = max(1.5, min(4.0, 0.12 * min(bx[2] - bx[0], bx[3] - bx[1])))
+        bezel = _soft_edge(outer_cs, seat, bezel_top + crown, crown, crown * 1.1, False)
+    else:
+        bezel = _prism(outer_cs, seat, bezel_top)
     if holes_cs:
         bezel = bezel - _prism(
             mf.CrossSection.batch_boolean(holes_cs, mf.OpType.Add)
             if len(holes_cs) > 1
             else holes_cs[0],
             seat - 1,
-            bezel_top + 1,
+            bezel_top + crown + 1,
         )
+    if shaped and holes_cs:
+        # raised collars around every opening: stick wells, button bosses, a d-pad crown
+        opened = mf.CrossSection.batch_boolean(holes_cs, mf.OpType.Add)
+        collar = mf.CrossSection.batch_boolean(
+            [opened.offset(2.2, mf.JoinType.Round), opened], mf.OpType.Subtract
+        )
+        collar = mf.CrossSection.batch_boolean(
+            [collar, outer_cs.offset(-crown * 1.2, mf.JoinType.Round)], mf.OpType.Intersect
+        )
+        if not collar.is_empty():
+            bezel = bezel + _prism(collar, bezel_top + crown - 0.05, bezel_top + crown + 1.6)
 
     # ---- USB openings through the wall (tray and bezel)
     cutouts: list[dict[str, Any]] = []
@@ -737,7 +809,9 @@ def enclose_report(
             "tent": tent,
             "side": side,
             "hand": HAND_SET,
-            "v": 1,
+            "v": 2,
+            "body": body,
+            "edge": brief.get("edge_thickness_mm"),
         }
     )[:24]
     ident = np.eye(4)

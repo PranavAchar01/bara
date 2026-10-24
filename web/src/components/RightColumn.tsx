@@ -1,49 +1,35 @@
 import { useEffect, useMemo, useState } from "react";
-import { select, useApp, type CodeTab, type RightTab } from "../state/store";
-import { ClarifyCard, DecisionTrace, ReuseCard, SpecCard, StageTimeline } from "./LeftColumn";
-import { PanelToolbar } from "./TopBar";
+import { select, useApp, type RightTab } from "../state/store";
 import { applyEdit } from "../net/client";
 import type { Board, BuildPart, CheckResult, Connection, FirmwareFile } from "../spec/types";
 import { Badge, Chip, Dot, Empty, Panel, ProvenanceBadge } from "../ui/common";
 import { checkArea, checkInstances, checkTone, fmtMm, fmtMs, fmtValue, instanceTone, known, severityRank, vlabel } from "../ui/format";
 import { elementPoses } from "../three/layout";
 
-const TABS: { id: RightTab; label: string; key: string }[] = [
-  { id: "design", label: "Design", key: "⌥1" },
-  { id: "build", label: "Build", key: "⌥2" },
-  { id: "code", label: "Code", key: "⌥3" },
-];
-
-const CODE_TABS: { id: CodeTab; label: string }[] = [
+const TABS: { id: RightTab; label: string }[] = [
+  { id: "parts", label: "Parts" },
   { id: "connections", label: "Wiring" },
   { id: "board", label: "Board" },
   { id: "firmware", label: "Firmware" },
+  { id: "checks", label: "Checks" },
 ];
 
-/** Which right tab a check's failure belongs to, for the tab badges. */
-function checkTab(c: CheckResult): RightTab {
-  const a = checkArea(c);
-  return a === "connections" || a === "board" || a === "firmware" ? "code" : "design";
-}
-
-/** Right panel (Figma layout): Design, Build and Code tabs; each badge counts failing checks in that tab. */
+/** Right column with tabs; each tab badge counts failing checks in that area. */
 export function RightColumn() {
   const tab = useApp((s) => s.rightTab);
-  const codeTab = useApp((s) => s.codeTab);
   const checks = useApp((s) => s.build?.checks ?? []);
-  const connCount = useApp((s) => s.build?.connections?.length ?? 0);
   const counts = useMemo(() => {
     const out: Record<string, number> = {};
     for (const c of checks) {
       if (checkTone(c) !== "fail") continue;
-      const t = checkTab(c);
-      out[t] = (out[t] ?? 0) + 1;
+      const a = checkArea(c);
+      out[a] = (out[a] ?? 0) + 1;
+      if (a !== "checks") out.checks = (out.checks ?? 0) + 1;
     }
     return out;
   }, [checks]);
   return (
     <div className="rightcol">
-      <PanelToolbar />
       <nav className="tabs" role="tablist">
         {TABS.map((t) => (
           <button
@@ -52,7 +38,6 @@ export function RightColumn() {
             role="tab"
             aria-selected={tab === t.id}
             className={`tab ${tab === t.id ? "active" : ""}`}
-            title={`${t.label} (${t.key})`}
             onClick={() => useApp.setState({ rightTab: t.id })}
           >
             {t.label}
@@ -61,42 +46,11 @@ export function RightColumn() {
         ))}
       </nav>
       <div className="tab-body">
-        {tab === "design" && (
-          <>
-            <ClarifyCard />
-            <SpecCard />
-            <ReuseCard />
-            <ChecksPanel />
-          </>
-        )}
-        {tab === "build" && (
-          <>
-            <StageTimeline />
-            <DecisionTrace />
-          </>
-        )}
-        {tab === "code" && (
-          <>
-            <div className="segmented" role="tablist" aria-label="Code">
-              {CODE_TABS.map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={codeTab === t.id}
-                  className={codeTab === t.id ? "active" : ""}
-                  onClick={() => useApp.setState({ codeTab: t.id })}
-                >
-                  {t.label}
-                  {t.id === "connections" && connCount ? <span className="muted"> {connCount}</span> : null}
-                </button>
-              ))}
-            </div>
-            {codeTab === "connections" && <ConnectionView />}
-            {codeTab === "board" && <BoardView />}
-            {codeTab === "firmware" && <FirmwareView />}
-          </>
-        )}
+        {tab === "parts" && <PartsList />}
+        {tab === "connections" && <ConnectionView />}
+        {tab === "board" && <BoardView />}
+        {tab === "firmware" && <FirmwareView />}
+        {tab === "checks" && <ChecksPanel />}
       </div>
     </div>
   );
@@ -126,8 +80,8 @@ export function PartsList() {
   const count = build?.parts.reduce((a, p) => a + p.quantity, 0) ?? 0;
   return (
     <Panel
-      title="Layers"
-      meta={build?.parts.length ? `${build.parts.length} lines · ${count} pcs` : undefined}
+      title="Parts"
+      meta={build?.parts.length ? `${build.parts.length} lines, ${count} pcs` : undefined}
       actions={
         <button type="button" className="btn sm" disabled={!done} onClick={() => useApp.setState({ overlay: "addpart" })}>
           Add part
