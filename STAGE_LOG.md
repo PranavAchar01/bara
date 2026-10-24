@@ -287,6 +287,56 @@ The coverage audit of the live site found three places where the UI said two con
 
 **Minutes:** about 35. **Rating:** 4/5.
 
+### Pressure test, round one
+
+**Tools:** a separate review agent drove the app in headless Chromium for about 17 minutes, as a first-time user and as a power user (mock mode; the live engine's tunnel was down). It reported 24 findings with screenshots. Claude Code fixed the worst first.
+
+**Fixed:**
+- **Blocker:** typing in the bottom pill while a part was in focus started a new build and threw the current one away. With a part in focus the pill now asks about it ("Ask about the Pro Micro…", button "Ask"). The card's second question field is gone; "Ask about it" puts the cursor in the pill.
+- **Narrow windows:** the shell CSS from step one had overridden the stacked layout, so the canvas fell to about 230 px at 800 wide. Restored. Under 860 px it stacks canvas, then details (with the focus card), then layers. Under 980 the timings panel hides, and the view toolbar scrolls sideways instead of running under the panels.
+- **Keyboard:** Enter or Space on a Layers row now focuses the part, and rows report `aria-pressed`. Esc works from inside the prompt or the explode slider: it leaves the field, then steps back. Esc closes the Export menu.
+- **Focus during a build:** blocked, with a toast ("Parts can be pulled out once the build is done"), because it left a half-applied layout. The focus layout is laid out again when parts change.
+- **Collisions and leftovers:** the "← Whole build" pill moved from the top of the canvas (where it covered the done toast and progress bar) to just above the Ask pill. Starting a new build clears focus, so the pill no longer sticks. Part name chips (LABELS on) hide in focus.
+- **Views:** a view preset, Reset or the explode slider puts a focused part back first, instead of garbling the layout.
+- **←/→:** follows the Layers order, includes the board and case, skips parts with no 3D model, and wraps instead of silently dropping out.
+- The duplicated Esc hint in the card footer is gone, and the speaker toggle is a round button rather than a grey box.
+
+**Checked:** typecheck, lint, 67 tests. In mock mode:
+- Enter on a row focuses the part.
+- Typing in the pill and pressing Enter asks and keeps the same build.
+- Space inside the field types and does not listen.
+- Esc from the field puts the part back.
+- Arrows ran through 8 parts and wrapped.
+- FRONT and the explode slider put the part back.
+- At 800 px the card sits right under the canvas.
+
+**Left for round two:**
+- A click in a gap inside the focused part still puts it back.
+- The offline banner wording, V giving no visible feedback, and failing checks drawn grey like unknown ones.
+- The bot bubble's tiny type and the swap drawer's padding.
+
+**Minutes:** about 45. **Rating:** 3/5; most of these should not have shipped.
+
+### Pressure test, round two
+
+**Fixed:**
+- A click in a gap inside the focused part (between keys) no longer puts it back. Only a click clearly outside the part's outline on screen (with a 12% margin) does.
+- The swap and resize panels had lost their padding: the inspector restyle had flattened every side panel. It is now scoped to the inspector.
+- Offline banner: "Can't reach the build engine. Trying again every 8 s; what's on screen stays, and your saved builds still open." It used to read like a passing blip.
+- A failed check is never grey (grey read as "not checked"); low-severity failures are amber.
+- V now says what it did ("Bara will answer out loud. Press V to turn it off.").
+
+**Checked:**
+- Typecheck, lint, 71 tests.
+- Reopened the build from the library after a reload and focused a part. A real click beside it kept the focus; a click in clear space put it back.
+
+**Still open:**
+- The bot bubble's small type.
+- "Build done" toasts again when a library build reopens in mock mode.
+- Real-engine checks of the library, voice and ask routes, once the engine is back up on the new code.
+
+**Minutes:** about 20. **Rating:** 4/5.
+
 ## Before and after
 
 | Change | Before | After |

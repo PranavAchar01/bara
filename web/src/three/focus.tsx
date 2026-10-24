@@ -125,11 +125,43 @@ export function focusPoses(key: string, camera: THREE.Camera): Map<THREE.Group, 
   return poses;
 }
 
+let focusCamera: THREE.Camera | null = null;
+
+/**
+ * True when a click at (x, y) in canvas pixels lands on or near the focused part (within 12% of
+ * the view of its outline): a click in a gap between keys shouldn't put the part back.
+ */
+export function nearFocused(x: number, y: number, width: number, height: number): boolean {
+  const key = useApp.getState().focusKey;
+  if (!key || !focusCamera) return false;
+  const box = new THREE.Box3();
+  for (const [g, k] of stage.focusGroups) if (k === key) box.union(meshBox(g));
+  if (box.isEmpty()) return false;
+  let x0 = Infinity;
+  let y0 = Infinity;
+  let x1 = -Infinity;
+  let y1 = -Infinity;
+  const p = new THREE.Vector3();
+  for (let i = 0; i < 8; i++) {
+    p.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z).project(focusCamera);
+    const sx = ((p.x + 1) / 2) * width;
+    const sy = ((1 - p.y) / 2) * height;
+    x0 = Math.min(x0, sx);
+    y0 = Math.min(y0, sy);
+    x1 = Math.max(x1, sx);
+    y1 = Math.max(y1, sy);
+  }
+  const pad = 0.12 * Math.min(width, height);
+  return x >= x0 - pad && x <= x1 + pad && y >= y0 - pad && y <= y1 + pad;
+}
+
 /** Inside the Canvas: recomputes poses when focus changes and eases focusK toward it. */
 export function FocusDriver() {
   const key = useApp((s) => s.focusKey);
   const explode = useApp((s) => s.explode);
+  const revision = useApp((s) => `${s.build?.revision ?? 0}:${s.build?.parts.length ?? 0}`);
   const { camera, invalidate } = useThree();
+  focusCamera = camera;
   useEffect(() => {
     if (key) {
       stage.focusPose = focusPoses(key, camera);
@@ -138,7 +170,7 @@ export function FocusDriver() {
     }
     invalidate();
     // the shelf is laid out again when the explode slider moves under the focus
-  }, [key, explode, camera, invalidate]);
+  }, [key, explode, revision, camera, invalidate]);
   useFrame((_, dt) => {
     const target = key && stage.focusPose.size ? 1 : 0;
     const d = target - stage.focusK;

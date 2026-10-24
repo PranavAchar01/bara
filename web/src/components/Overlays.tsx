@@ -140,7 +140,7 @@ export function PartInspector() {
   const done = build?.status === "done";
   const full = part !== "loading" ? part : null;
   return (
-    <aside className="side-overlay" aria-label="Part inspector">
+    <aside className="side-overlay inspector" aria-label="Part inspector">
       <SideHead title={card?.display_name ?? full?.display_name ?? partId} sub={instance ? `${instance.label ?? instance.instance_id}  ${partId}` : partId} />
       <div className="side-b">
         {card && (

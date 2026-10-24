@@ -164,8 +164,17 @@ export function ExportMenu(props: { primary?: boolean }) {
     const close = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
+    const esc = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopImmediatePropagation();
+      setOpen(false);
+    };
     window.addEventListener("mousedown", close);
-    return () => window.removeEventListener("mousedown", close);
+    window.addEventListener("keydown", esc, true);
+    return () => {
+      window.removeEventListener("mousedown", close);
+      window.removeEventListener("keydown", esc, true);
+    };
   }, [open]);
   const ready = build?.status === "done";
   return (
@@ -209,7 +218,7 @@ export function ConnectionBanner() {
     conn === "resyncing"
       ? "Reconnected. Catching up on missed events; editing is paused."
       : conn === "offline"
-        ? "Offline. Still retrying every 8 s; the last state stays on screen."
+        ? "Can't reach the build engine. Trying again every 8 s; what's on screen stays, and your saved builds still open."
         : conn === "connecting"
           ? "Connecting to the build server."
           : "Connection lost. Reconnecting; the last state stays on screen.";

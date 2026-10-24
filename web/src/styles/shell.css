@@ -392,16 +392,17 @@
   font-family: var(--font-mono);
   font-size: 11px;
 }
-.side-b {
+/* flat hairline sections are the inspector's; the swap and resize panels keep their padding */
+.inspector .side-b {
   padding: 0;
   gap: 0;
 }
-.side-b > section,
-.side-b > .insp-actions {
+.inspector .side-b > section,
+.inspector .side-b > .insp-actions {
   padding: 14px 16px;
   border-bottom: 1px solid var(--line);
 }
-.side-b > section:last-child {
+.inspector .side-b > section:last-child {
   border-bottom: 0;
 }
 .side-b h3 {
@@ -813,19 +814,35 @@
 }
 .voice-toggle {
   flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 17px;
+  background: none;
   color: var(--text-2);
+  cursor: pointer;
+}
+.voice-toggle:hover {
+  background: var(--paper-2);
+}
+.voice-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 .voice-toggle.on {
   color: var(--ink);
 }
 
 /* The way back from focus, top left of the canvas (and "Put back" in the card) */
+/* above the Ask pill in the bottom stack, so it never collides with toasts or progress at the top */
+.centre-bottom > .focus-exit {
+  width: auto;
+}
 .focus-exit {
-  position: absolute;
-  top: 14px;
-  left: 50%;
-  translate: -50% 0;
-  z-index: 6;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1107,4 +1124,54 @@
 }
 .lib-note {
   margin-top: 16px;
+}
+
+/* Narrow windows. shell.css set the three columns without a breakpoint, which overrode the stacked
+   layout in app.css: the canvas fell to ~230 px at 800 wide. Middle widths drop the left column's
+   width a little; narrow ones stack canvas, then details, then layers. */
+@media (max-width: 980px) {
+  .workspace {
+    grid-template-columns: 212px minmax(0, 1fr) 280px;
+  }
+  .hud {
+    display: none;
+  }
+}
+@media (max-width: 860px) {
+  .workspace {
+    grid-template-columns: 1fr;
+    grid-template-rows: 62vh auto auto;
+    overflow: auto;
+  }
+  .centre {
+    order: -1;
+    min-height: 62vh;
+  }
+  /* details (and the focus card) right under the canvas, layers after */
+  .rightcol-wrap {
+    position: relative;
+    min-height: 480px;
+    order: 0;
+  }
+  .leftcol {
+    order: 1;
+  }
+  .leftcol,
+  .rightcol-wrap {
+    border: 0;
+    border-top: 1px solid var(--line);
+    overflow: visible;
+  }
+}
+/* the view toolbar scrolls sideways rather than running under the panels */
+.vp-toolbar {
+  max-width: calc(100% - 24px);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.vp-toolbar::-webkit-scrollbar {
+  display: none;
+}
+.vp-toolbar > * {
+  flex: none;
 }

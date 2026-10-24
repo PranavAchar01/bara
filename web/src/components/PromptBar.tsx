@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../state/store";
+import { focusKeyOf } from "../three/Viewport3D";
 import { setReplies, startListening, stopListening, useVoice } from "../voice/voice";
 import { BaraBot, botBubbles } from "../bot/BaraBot";
 import { cancelBuild, startBuild } from "../net/client";
@@ -20,18 +21,28 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean }) {
   const maxChars = useApp((s) => s.hello?.limits?.max_prompt_chars ?? 2000);
   const disabled = !helloSeen || !ready;
 
+  const focusKey = useApp((s) => s.focusKey);
+  const focusName = useApp((s) => (s.focusKey ? (s.build?.parts.find((p) => focusKeyOf(s.build, p) === s.focusKey)?.card.display_name ?? null) : null));
+  const inputRef = useRef<HTMLInputElement>(null);
   const submit = () => {
     if (disabled || pending || !text.trim()) return;
-    startBuild(text.slice(0, maxChars));
+    // with a part in focus the pill asks about it; it never throws the build away for a new one
+    if (focusKey) window.dispatchEvent(new CustomEvent("bara:ask", { detail: text.trim() }));
+    else startBuild(text.slice(0, maxChars));
     setText("");
   };
+  useEffect(() => {
+    const onFocusAsk = () => inputRef.current?.focus();
+    window.addEventListener("bara:focus-ask", onFocusAsk);
+    return () => window.removeEventListener("bara:focus-ask", onFocusAsk);
+  }, []);
   const listening = useVoice((s) => s.listening);
   const heard = useVoice((s) => s.heard);
   const transcribing = useVoice((s) => s.transcribing);
   const caption = useVoice((s) => s.caption);
   const replies = useVoice((s) => s.replies);
   const voiceError = useVoice((s) => s.error);
-  const focusOpen = useApp((s) => s.focusKey !== null);
+  const focusOpen = focusKey !== null;
   const sayN = useRef(0);
   const say = useMemo(() => (caption ? { text: caption, n: ++sayN.current } : null), [caption]);
   // Spoken words land here when no part is in focus (the focus card takes them otherwise).
@@ -88,6 +99,7 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean }) {
         </span>
       )}
       <input
+        ref={inputRef}
         className={`prompt-input ${listening ? "listening" : ""}`}
         value={listening || transcribing ? heard : text}
         readOnly={listening || transcribing}
@@ -104,7 +116,9 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean }) {
                 ? voiceError
                 : disabled
                   ? "Waiting for the server"
-                  : props.docked
+                  : focusOpen
+                    ? `Ask about ${focusName ? `the ${focusName}` : "this part"}, or hold Space to talk`
+                    : props.docked
                     ? "Describe another device, or hold Space to talk"
                     : "Describe the device you want, or hold Space to talk"
         }
@@ -137,7 +151,7 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean }) {
       ) : (
         <button type="submit" className="btn primary" disabled={disabled || pending || !text.trim()}>
           {pending ? <span className="spinner light" aria-label="Sending" /> : <Icon name="send" />}
-          Build
+          {focusOpen ? "Ask" : "Build"}
         </button>
       )}
     </form>

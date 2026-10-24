@@ -137,6 +137,12 @@ export function select(instanceId: string | null): void {
 
 /** Pulls one part out into focus (null puts it back); the right column shows the agent card. */
 export function focusPart(key: string | null): void {
+  const st = useApp.getState().build?.status;
+  if (key && (st === "running" || st === "awaiting_input")) {
+    // parts are still moving into place; pulling one out now left a half-applied layout
+    showToast("Parts can be pulled out once the build is done.");
+    return;
+  }
   useApp.setState((s) =>
     key
       ? { focusKey: key, overlay: "focus" }
@@ -146,6 +152,8 @@ export function focusPart(key: string | null): void {
 }
 
 export function setView(preset: ViewPreset): void {
+  // a new view is a new look at the whole build: put a focused part back first
+  if (useApp.getState().focusKey) focusPart(null);
   useApp.setState((s) => ({ preset, cameraNonce: s.cameraNonce + 1 }));
 }
 

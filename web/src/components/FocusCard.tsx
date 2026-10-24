@@ -1,13 +1,14 @@
 // Focus card (Figma 17 Focus · isolated part): the part pulled out of the build, and Bara asking
 // what to do with it. Three plain options (ask, change, something else) and a few questions to
 // start from. Answers come from the engine's /ask route, or from the build itself when it can't.
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { focusPart, select, showToast, useApp } from "../state/store";
 import { applyEdit, getRest } from "../net/client";
 import { partLabel } from "../three/explode";
 import { labelRows } from "../three/Viewport3D";
 import { BaraBot } from "../bot/BaraBot";
 import { speak } from "../voice/voice";
+import { stage } from "../three/stage";
 import type { Build, BuildPart } from "../spec/types";
 
 type Mode = "choose" | "ask" | "else";
@@ -46,9 +47,7 @@ export function FocusCard() {
   const parts = useMemo(() => (key ? partsFor(build, key) : []), [build, key]);
   const [mode, setMode] = useState<Mode>("choose");
   const [turns, setTurns] = useState<Turn[]>([]);
-  const [text, setText] = useState("");
   const [followUps, setFollowUps] = useState<string[] | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
   const done = build?.status === "done";
   const isCase = key?.startsWith("e:") ?? false;
   const isBoard = key === "b:board";
@@ -59,17 +58,16 @@ export function FocusCard() {
     setMode("choose");
     setTurns([]);
     setFollowUps(null);
-    setText("");
   }, [key]);
   useEffect(() => {
-    if (mode === "ask") inputRef.current?.focus();
+    // one place to type: "Ask about it" puts the cursor in the Ask pill under the canvas
+    if (mode === "ask") window.dispatchEvent(new Event("bara:focus-ask"));
   }, [mode]);
 
   const ask = async (q: string) => {
     const question = q.trim();
     if (!question || !build || thinking) return;
     setMode("ask");
-    setText("");
     setTurns((t) => [...t, { q: question, a: null, from: null }]);
     const partId = first?.part_id ?? (isBoard ? build.parts.find((p) => String(p.card.kind) === "pcb")?.part_id : undefined);
     let reply: AskReply | null = null;
@@ -115,9 +113,17 @@ export function FocusCard() {
     focusPart(null);
   };
   const step = (dir: 1 | -1) => {
-    if (!rows.length) return;
-    const i = rows.findIndex((r) => r.key === key);
-    focusPart(rows[(i + dir + rows.length) % rows.length].key);
+    // the order of the Layers list, then the board and case; only parts the 3D view draws
+    const drawn = new Set(stage.focusGroups.values());
+    const order: string[] = [];
+    for (const el of document.querySelectorAll<HTMLElement>(".leftcol .part-row[data-focus-key]")) {
+      const k = el.dataset.focusKey!;
+      if (drawn.has(k) && !order.includes(k)) order.push(k);
+    }
+    for (const k of ["b:board", "e:case_top", "e:case"]) if (drawn.has(k) && !order.includes(k)) order.push(k);
+    if (!order.length) return;
+    const i = order.indexOf(key ?? "");
+    focusPart(order[(i + dir + order.length) % order.length]);
   };
 
   // Spoken questions come here while a part is in focus.
@@ -215,28 +221,6 @@ export function FocusCard() {
           </div>
         )}
 
-        {mode === "ask" && (
-          <form
-            className="fc-ask"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void ask(text);
-            }}
-          >
-            <input
-              ref={inputRef}
-              className="prompt-input"
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder={`Ask about the ${row.title.toLowerCase()}…`}
-              aria-label={`Ask about the ${row.title.toLowerCase()}`}
-              disabled={thinking}
-            />
-            <button type="submit" className="btn primary sm" disabled={!text.trim() || thinking}>
-              Ask
-            </button>
-          </form>
-        )}
 
         <div className="fc-suggest">
           <span className="fc-kicker">{followUps ? "Ask next" : "Or just ask"}</span>
@@ -263,10 +247,9 @@ export function FocusCard() {
       <footer className="fc-keys">
         <kbd>←</kbd>
         <kbd>→</kbd>
-        <span>next part</span>
+        <span>other parts</span>
         <span className="spacer" />
-        <kbd>Esc</kbd>
-        <span>put it back</span>
+        <span>Ask in the bar below, or hold Space</span>
       </footer>
     </aside>
   );
