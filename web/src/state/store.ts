@@ -18,7 +18,9 @@ export interface LogEntry {
 }
 
 export type Overlay = "inspector" | "swap" | "resize" | "connect" | "addpart" | null;
-export type RightTab = "parts" | "connections" | "board" | "firmware" | "checks";
+/** Right panel tabs, as in the Figma layout: Design (what), Build (how it was decided), Code (wiring, board, firmware). */
+export type RightTab = "design" | "build" | "code";
+export type CodeTab = "connections" | "board" | "firmware";
 export type ViewPreset = "iso" | "top" | "bottom" | "front" | "side" | "scene";
 
 export interface Toggles {
@@ -58,6 +60,7 @@ export interface AppState {
   cameraNonce: number;
   toggles: Toggles;
   rightTab: RightTab;
+  codeTab: CodeTab;
   overlay: Overlay;
   colorTarget: { instance_id?: string; enclosure_id?: string } | null;
   resizeTarget: { enclosure_id?: string; board_id?: string } | null;
@@ -92,7 +95,8 @@ export const useApp = create<AppState>(() => ({
   preset: "scene",
   cameraNonce: 0,
   toggles: { case: true, board: true, keycaps: true, labels: false },
-  rightTab: "parts",
+  rightTab: "design",
+  codeTab: "board",
   overlay: null,
   colorTarget: null,
   resizeTarget: null,
