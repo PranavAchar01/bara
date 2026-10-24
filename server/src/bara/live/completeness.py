@@ -83,7 +83,6 @@ def parse_numbers(text: str) -> dict[str, Number]:
 
 
 # ---- the mains scope gate (a model judgement, no device list) ----------------------------
-KEYBOARD_ONLY = ("input.key", "input.key_matrix", "mech.keycap", "mech.stabilizer", "mech.plate")
 # functions served by the device's controller or by the generic slots, never a block of their own
 PLAIN = ("compute.mcu", "power.battery", "power.usb_in", "power.coin_cell", "power.solar")
 # a block of one of these functions needs a named part (an MPN), not "any part of the function"
@@ -260,10 +259,6 @@ def apply(
             out.needs[need.key] = need
             if need.function_id == "compute.sbc":
                 out.controller_keys += (need.key,)
-        if not keyboard:  # no keys or plates on a gadget that is not a keyboard
-            for fid in KEYBOARD_ONLY:
-                if fid in have:
-                    functions.remove(have.pop(fid))
         # the block diagram is authoritative: functions the brief only guessed are dropped
         covered = {n.function_id for n in out.needs.values()}
         for f in list(functions):

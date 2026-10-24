@@ -43,7 +43,8 @@ Rules:
 - requirement: the key numbers the chosen part must meet to make the product what it is, as one
   short phrase (a display's diagonal size and resolution, a connector standard, a rated
   voltage or current, a battery capacity). Empty when any part of the function will do.
-- Do not add parts the product does not have. No keyboards parts unless it is a keyboard.
+- Every block must serve a function the product's brief implies. Do not add parts the product
+  does not have.
 - mains_input is true only when the product plugs into AC mains. Its low-voltage side is built
   behind a certified AC-DC module; do not design any mains-side circuit.
 - portable is true for battery-powered products. avg_current_ma is the typical average draw.
