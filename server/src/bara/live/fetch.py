@@ -16,7 +16,7 @@ import re
 import shutil
 import subprocess
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
 
@@ -97,6 +97,32 @@ def _names_part(query: str, name: str) -> bool:
         and 0 < len(rest) <= SUFFIX_MAX
         and not (n[-1].isdigit() and rest[0].isdigit())
     )
+
+
+def stock_symbol(
+    search: Callable[..., list[dict[str, Any]]], mpn: str, rejected: Iterable[str] = ()
+) -> dict[str, Any] | None:
+    """The KiCad library symbol (with a usable footprint) that a part number names, or None."""
+    # the index matches whole words: a part number with a packing suffix is also looked up
+    # without it
+    stems = [mpn] + [mpn[:-k] for k in range(1, SUFFIX_MAX + 1) if len(mpn) - k >= 6]
+    hits: list[dict[str, Any]] = []
+    for stem in stems:
+        try:
+            hits += search(stem, kind="symbol", limit=10)
+        except Exception:
+            log.exception("generated search failed for %r", stem)
+    skip = set(rejected)
+    ok = [
+        p
+        for p in hits
+        if p["part_id"].startswith("kicadgen:")
+        and p.get("fp_ok")
+        and p["part_id"] not in skip
+        and _names_part(mpn, p.get("name") or p.get("display_name") or "")
+    ]
+    # the longest name is the closest variant (DRV8833PWP, not DRV8833PW)
+    return max(ok, key=lambda p: len(slug(p.get("name") or ""))) if ok else None
 
 
 def name_slug(part: dict[str, Any]) -> str:
@@ -227,25 +253,9 @@ class Resolver:
         if search is None:
             return None
         for q in need.kicad:
-            # the index matches whole words: a part number with a packing suffix is also
-            # looked up without it
-            stems = [q] + [q[:-k] for k in range(1, SUFFIX_MAX + 1) if len(q) - k >= 6]
-            hits = []
-            for stem in stems:
-                try:
-                    hits += search(stem, kind="symbol", limit=10)
-                except Exception:
-                    log.exception("generated search failed for %r", stem)
-            ok = [
-                p
-                for p in hits
-                if p["part_id"].startswith("kicadgen:")
-                and p.get("fp_ok")
-                and p["part_id"] not in self.rejected
-                and _names_part(q, p.get("name") or p.get("display_name") or "")
-            ]
-            if ok:  # the longest name is the closest variant (DRV8833PWP, not DRV8833PW)
-                return self._accept(max(ok, key=lambda p: len(slug(p.get("name") or ""))), need)
+            found = stock_symbol(search, q, self.rejected)
+            if found is not None:
+                return self._accept(found, need)
         return None
 
     def composed(self, need: Need) -> dict[str, Any] | None:

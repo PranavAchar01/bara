@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from bara.catalog import Catalog
+from bara.live.fetch import stock_symbol
 
 log = logging.getLogger(__name__)
 
@@ -123,18 +124,32 @@ def load_fetched(catalog_dir: Path) -> list[dict[str, Any]]:
 
 
 class WithFetched:
-    """Serves fetched parts beside a source that does not know them (CatalogDB)."""
+    """Serves fetched parts beside a source that does not know them (CatalogDB).
 
-    def __init__(self, base: Any, parts: list[dict[str, Any]]) -> None:
+    A fetched part whose part number the stock KiCad library carries is served as that
+    library part instead (reviewed footprint and 3D model), still offered for the role it
+    was fetched for; the LCSC row stays readable by id for builds that already chose it."""
+
+    def __init__(self, base: Any, parts: list[dict[str, Any]], stock: Any | None = None) -> None:
         self.base = base
         self.name = base.name
         self.extra = {p["part_id"]: p for p in parts}
+        self.served = dict(self.extra)
+        if stock is not None:
+            for part in parts:
+                lib = stock_symbol(stock, part.get("mpn") or "")
+                if lib is not None:
+                    del self.served[part["part_id"]]
+                    # two reels of one chip share the library part: it serves both roles
+                    self.served[lib["part_id"]] = _in_role(
+                        self.served.get(lib["part_id"], lib), part
+                    )
 
     def __getattr__(self, attr: str) -> Any:
         return getattr(self.base, attr)
 
     def get_part(self, part_id: str) -> dict[str, Any]:
-        return self.extra.get(part_id) or self.base.get_part(part_id)
+        return self.served.get(part_id) or self.extra.get(part_id) or self.base.get_part(part_id)
 
     def query(
         self,
@@ -144,7 +159,7 @@ class WithFetched:
         limit: int = 50,
     ) -> list[dict[str, Any]]:
         found = self.base.query(function, facets, interfaces, limit)
-        for part in self.extra.values():
+        for part in self.served.values():
             types = {i.get("type") for i in part.get("interfaces", [])}
             if (
                 (not function or function in part_functions(part))
@@ -153,6 +168,23 @@ class WithFetched:
             ):
                 found.append(part)
         return found[:limit]
+
+
+def _in_role(lib: dict[str, Any], fetched: dict[str, Any]) -> dict[str, Any]:
+    """The library part tagged with the functions and interfaces the fetched row served."""
+    part = dict(lib)
+    roles = list(fetched.get("functions", []))
+    have = {f.get("function_id") for f in roles}
+    part["functions"] = roles + [
+        {**f, "primary": False}
+        for f in lib.get("functions", [])
+        if f.get("function_id") not in have
+    ]
+    part["interfaces"] = lib.get("interfaces") or fetched.get("interfaces", [])
+    # the library footprint's own sizes win; what only the fetched row knew is kept
+    part["facets"] = {**(fetched.get("facets") or {}), **(lib.get("facets") or {})}
+    part["replaces"] = [*lib.get("replaces", []), fetched["part_id"]]
+    return part
 
 
 class WithGenerated:
@@ -204,14 +236,14 @@ class WithGenerated:
 def open_part_source(catalog: Catalog, catalog_dir: Path) -> PartSource:
     """The real CatalogDB when its module and sqlite file exist, else the stub.
     Fetched LCSC parts and the generated KiCad tier (when built) are added to either."""
+    from bara.kicad_generated import KicadIndex
+
     fetched = load_fetched(catalog_dir)
     merge_into_catalog(catalog, fetched)
     source = _open_base(catalog, catalog_dir)
-    if fetched and source.name != "stub":
-        source = WithFetched(source, fetched)
-    from bara.kicad_generated import KicadIndex
-
     index = KicadIndex.open(catalog_dir / "kicad_index.sqlite")
+    if fetched and source.name != "stub":
+        source = WithFetched(source, fetched, index.search if index else None)
     return WithGenerated(source, index) if index else source
 
 
