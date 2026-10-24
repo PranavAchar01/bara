@@ -155,6 +155,7 @@ def derive_slots(
     halves = ["left", "right"] if split else ["none"]
     functions = [f["function_id"] for f in spec.get("functions", [])]
     required = {f["function_id"]: f.get("required", True) for f in spec.get("functions", [])}
+    counts = {f["function_id"]: int(f.get("count") or 1) for f in spec.get("functions", [])}
     if split and brief.get("wireless") == "none":
         functions += ["interconnect.jack", "interconnect.cable"]
         required["interconnect.jack"] = required["interconnect.cable"] = True
@@ -202,6 +203,9 @@ def derive_slots(
                 instances.append(Instance(f"u_{prefix}{suffix}", s, 1))
         elif fid == "mech.wheel":
             instances = [Instance(f"u_{prefix}_{i}", "none", 1) for i in (1, 2)]
+        elif counts.get(fid, 1) > 1:
+            # one instance per physical copy, so each gets its own pose on the board
+            instances = [Instance(f"u_{prefix}_{i}", "none", 1) for i in range(1, counts[fid] + 1)]
         else:
             instances = [Instance(f"u_{prefix}", "none", 1)]
         critical = required.get(fid, True)

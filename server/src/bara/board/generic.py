@@ -21,7 +21,7 @@ import math
 import re
 from typing import Any
 
-from shapely.geometry import Polygon, box
+from shapely.geometry import Point, Polygon, box
 from shapely.ops import unary_union
 
 from . import registry as R
@@ -143,8 +143,16 @@ def _model_for(fp: FootprintInfo) -> dict[str, Any] | None:
     return reg.get("model") if reg is not None else None
 
 
-def plan_device_board(parts: list[dict[str, Any]], log: list[str]) -> BoardPlan:
-    """parts: compose part instances, each with its catalog record under "record"."""
+def plan_device_board(
+    parts: list[dict[str, Any]], log: list[str], brief: dict[str, Any] | None = None
+) -> BoardPlan:
+    """parts: compose part instances, each with its catalog record under "record".
+
+    brief["form"] ({shape, size_mm}, from the device archetype) sets the board outline: the
+    parts are packed towards that aspect and the outline is that shape, grown only when the
+    parts do not fit inside it.
+    """
+    form = (brief or {}).get("form") or None
     items: list[Item] = []
     counters: dict[str, int] = {}
     skipped: list[str] = []
@@ -212,7 +220,7 @@ def plan_device_board(parts: list[dict[str, Any]], log: list[str]) -> BoardPlan:
         near = parents[id(it)]
         gap = PASSIVE_GAP if near is not None else PART_GAP
         anchor = near.footprint_poly() if near is not None and near in placed else None
-        it.x, it.y = _best_spot(it, anchor, blocked, gap)
+        it.x, it.y = _best_spot(it, anchor, blocked, gap, form)
         placed.append(it)
         blocked.append(it.footprint_poly())
     for it in off_board:  # battery cells: under the board, centred
@@ -243,7 +251,7 @@ def plan_device_board(parts: list[dict[str, Any]], log: list[str]) -> BoardPlan:
         log.append(f"pin budget: {len(signals)} GPIO needed, {mcu.label} has {len(gpio)} free")
     _drop_single_pad_nets(items)
 
-    outline = _outline(placed)
+    outline = _form_outline(placed, form, log) if form else _outline(placed)
     x0, y0, x1, y1 = outline.bounds
     log.append(
         f"board {x1 - x0:.1f} x {y1 - y0:.1f} mm, {len(placed)} footprints "
@@ -412,8 +420,23 @@ def _centre(blocked: list[Polygon]) -> tuple[float, float]:
 DIRECTIONS = [(1.0, 0.0), (-1.0, 0.0), (0.0, 1.0), (0.0, -1.0)]
 
 
+def _shape_cost(w: float, h: float, form: dict[str, Any] | None) -> float:
+    """Area of the smallest board of the target form that holds a w x h cluster."""
+    if not form:
+        return w * h + 0.3 * abs(w - h) ** 2  # small and near square
+    if form.get("shape") == "round":
+        return math.hypot(w, h) ** 2
+    fw, fh = (float(v) for v in form.get("size_mm") or (1.0, 1.0))
+    a = fw / fh if fh else 1.0
+    return max(w, h * a) * max(w / a, h)
+
+
 def _best_spot(
-    it: Item, anchor: Polygon | None, blocked: list[Polygon], gap: float
+    it: Item,
+    anchor: Polygon | None,
+    blocked: list[Polygon],
+    gap: float,
+    form: dict[str, Any] | None = None,
 ) -> tuple[float, float]:
     """Free spot beside the anchor (or the packed cluster) that keeps the board smallest."""
     shape = it.footprint_poly()  # item is at the origin until placed
@@ -429,13 +452,50 @@ def _best_spot(
         bx0, by0 = min(x0, sx0 + x), min(y0, sy0 + y)
         bx1, by1 = max(x1, sx1 + x), max(y1, sy1 + y)
         w, h = bx1 - bx0, by1 - by0
-        cost = w * h + 0.3 * abs(w - h) ** 2  # small and near square
+        cost = _shape_cost(w, h, form)
         if anchor is not None:
             cost += 4.0 * math.hypot(x - anchor.centroid.x, y - anchor.centroid.y)
         if best is None or cost < best[0]:
             best = (cost, (x, y))
     assert best is not None
     return best[1]
+
+
+CASE_ALLOWANCE_MM = 3.0  # case wall + clearance between the device outline and the board
+
+
+def _form_outline(placed: list[Item], form: dict[str, Any], log: list[str]) -> Polygon:
+    """Board outline in the device's own shape, inset from its size by the case allowance."""
+    u = unary_union([it.footprint_poly() for it in placed])
+    need = u.buffer(BOARD_MARGIN, join_style="mitre")
+    c = need.envelope.centroid
+    fw, fh = (float(v) for v in form.get("size_mm") or (0.0, 0.0))
+    w, h = max(fw - 2 * CASE_ALLOWANCE_MM, 5.0), max(fh - 2 * CASE_ALLOWANCE_MM, 5.0)
+    shape = form.get("shape") or "rect"
+
+    def make(scale: float) -> Polygon:
+        sw, sh = w * scale, h * scale
+        if shape == "round":
+            return Point(c.x, c.y).buffer(min(sw, sh) / 2, 128)
+        r = min(sw, sh) * (0.22 if shape in ("rounded_rect", "squircle") else 0.05)
+        r = max(r, CORNER_R)
+        rect = box(c.x - sw / 2, c.y - sh / 2, c.x + sw / 2, c.y + sh / 2)
+        return Polygon(rect.buffer(-r, join_style="mitre").buffer(r, join_style="round").exterior)
+
+    scale = 1.0
+    poly = make(scale)
+    while not poly.contains(need) and scale < 6.0:
+        scale *= 1.03
+        poly = make(scale)
+    x0, y0, x1, y1 = poly.bounds
+    if scale > 1.0:
+        log.append(
+            f"{shape} outline grown {scale:.2f}x to {x1 - x0:.1f} x {y1 - y0:.1f} mm to fit the "
+            f"parts (target {w:.0f} x {h:.0f} mm inside a {fw:.0f} x {fh:.0f} mm device)"
+        )
+    else:
+        log.append(f"{shape} outline {x1 - x0:.1f} x {y1 - y0:.1f} mm from the device form")
+    return poly.simplify(0.05)
 
 
 def _outline(placed: list[Item]) -> Polygon:
