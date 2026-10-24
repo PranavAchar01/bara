@@ -244,6 +244,38 @@ def test_same_function_blocks_merge_even_when_named_differently_but_ics_do_not()
     assert len(ics) == 2
 
 
+def test_block_audit_adds_the_missing_links_of_a_chain(monkeypatch: Any) -> None:
+    import asyncio
+
+    from bara.live import blocks as bl
+
+    calls: list[str] = []
+
+    async def fake_ask(system: str, user: str, schema: Any, **kw: Any) -> Any:
+        calls.append(kw["name"])
+        if kw["name"] == "blocks":
+            return {
+                "device_class": "player",
+                "mains_input": False,
+                "portable": True,
+                "avg_current_ma": 40,
+                "shell_g": 30,
+                "blocks": [block("output.speaker", "Speaker", 1, search_terms=["CMR-1206S"])],
+            }, ""
+        if kw["name"] == "block_audit":
+            assert "Speaker" in user
+            return {
+                "missing": [block("component.ic", "Audio amplifier", 1, search_terms=["PAM8403"])]
+            }, ""
+        return {"blocks": []}, ""
+
+    monkeypatch.setattr(bl, "ask_json", fake_ask)
+    data, _ = asyncio.run(bl.derive("a player", ["output.speaker", "component.ic"]))
+    assert data is not None
+    assert [b["label"] for b in data["blocks"]] == ["Speaker", "Audio amplifier"]
+    assert calls[:2] == ["blocks", "block_audit"]
+
+
 def test_every_device_gets_a_controller_and_a_power_path() -> None:
     spec: dict[str, Any] = {"functions": []}
     blocks = {

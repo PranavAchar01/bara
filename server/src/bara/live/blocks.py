@@ -98,6 +98,50 @@ def schema(function_ids: list[str]) -> dict[str, Any]:
     }
 
 
+AUDIT_SYSTEM = """You audit a function block diagram for a hardware product and return the blocks
+it is missing. Walk every function chain the product implies and check each link has a block:
+- sound out: source, converter or codec, amplifier, transducer, connector
+- sound in: transducer, preamp or converter, controller
+- display: panel, its driver or bridge, backlight supply, connector to the board
+- input: the sensor or switch, anything that conditions its signal, the controller input
+- wireless or wired link: radio or PHY, antenna or connector, protection
+- storage: the medium, its socket or controller
+- power: input or cell, protection, charger or converter, regulators for each voltage, monitor
+- anything the product's defining function needs (a motion sensor, a driver for a motor, a
+  scaler for a video input)
+Return ONLY the missing blocks, in the same shape as the listed ones, with real MPNs when you
+know them. Return an empty list when the diagram is complete. Never repeat a listed block."""
+
+
+async def _complete_chains(
+    prompt: str, data: dict[str, Any], function_ids: list[str], note: str
+) -> str:
+    """Second pass: every implied function chain gets all of its blocks."""
+    listed = "\n".join(f"- {b['label']} ({b['function_id']}) x{b['count']}" for b in data["blocks"])
+    item = schema(function_ids)["properties"]["blocks"]["items"]
+    out_schema = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["missing"],
+        "properties": {"missing": {"type": "array", "items": item}},
+    }
+    got, why = await ask_json(
+        AUDIT_SYSTEM,
+        f"Device request: {prompt}\nListed blocks:\n{listed}\n"
+        f"Allowed function_id values: {', '.join(function_ids)}",
+        out_schema,
+        name="block_audit",
+        timeout_s=60,
+    )
+    if got is None:
+        return f"{note}; {why}".strip("; ")
+    seen = {(b["function_id"], b["label"].lower()) for b in data["blocks"]}
+    for blk in got["missing"]:
+        if (blk["function_id"], blk["label"].lower()) not in seen:
+            data["blocks"].append(blk)
+    return note
+
+
 async def derive(
     prompt: str, function_ids: list[str], hint: str = ""
 ) -> tuple[dict[str, Any] | None, str]:
@@ -107,6 +151,7 @@ async def derive(
     if data is not None and not data["blocks"]:
         return None, "empty block diagram"
     if data is not None:
+        note = await _complete_chains(prompt, data, function_ids, note)
         note = await _name_the_parts(prompt, data, note)
     return data, note
 
