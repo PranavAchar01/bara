@@ -1038,3 +1038,25 @@ def test_a_battery_cell_matches_the_chemistry_the_controller_takes() -> None:
     lipo = {"part_id": "bat:lipo", "facets": {"chemistry": "lipo"}}
     tests = [f.test for f in comp.filters_for(bat, [aa, lipo]) if f.facet == "chemistry"]
     assert tests and [all(t(p) for t in tests) for p in (aa, lipo)] == [False, True]
+
+
+def test_a_screen_type_requirement_leaves_indicator_leds_alone() -> None:
+    from bara.live import compose as cmp
+
+    comp = object.__new__(cmp.Composer)
+    comp.brief, comp.board_controllers = {}, {}
+    comp.spec = {
+        "hard_requirements": [
+            {"req_id": "r1", "facet": "display_type", "op": "eq", "value": "tft", "label": "Screen"}
+        ]
+    }
+    led = cmp.Slot("status", "Status LED", "display.indicator_led", "optional", 1, [])
+    screen = cmp.Slot("screen", "Screen", "display.tft", "critical", 1, [])
+    led.need = screen.need = object()
+    comp.slots = [led, screen]
+    ind = {"part_id": "led:x", "facets": {"display_type": "led"}}
+    oled = {"part_id": "oled:x", "facets": {"display_type": "oled"}}
+    tft = {"part_id": "tft:x", "facets": {"display_type": "tft"}}
+    assert not [f for f in comp.filters_for(led, [ind]) if f.facet == "display_type"]
+    tests = [f.test for f in comp.filters_for(screen, [oled, tft]) if f.facet == "display_type"]
+    assert tests and [all(t(p) for t in tests) for p in (oled, tft)] == [False, True]

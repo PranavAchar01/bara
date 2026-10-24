@@ -20,6 +20,7 @@ from typing import Any
 
 from bara.live import completeness as cp
 from bara.live.ask import ask_json
+from bara.live.brief import DISPLAY_TYPES
 from bara.live.catalog_source import (
     PartSource,
     card_for,
@@ -526,6 +527,10 @@ class Composer:
                 )
                 continue
             if facet not in present or facet in ("split", "key_count"):
+                continue
+            # the screen type names the device's screen; an indicator LED is no screen
+            screen = slot.function_id.removeprefix("display.")
+            if facet == "display_type" and screen not in DISPLAY_TYPES:
                 continue
             op_ = "eq" if op in ("has", "in") else op
             filters.append(
