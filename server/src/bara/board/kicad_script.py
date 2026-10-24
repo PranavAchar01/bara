@@ -186,6 +186,14 @@ def _place_footprint(board, nets: dict, spec: dict) -> None:
             pad.SetNet(_net(board, nets, net_name))
         else:
             pad.SetNetCode(0)
+    # unnumbered holes inside an exposed pad are its thermal vias: they carry its net, or
+    # every one is a short against the pad (DRV8833 HTSSOP)
+    for pad in fp.Pads():
+        if pad.GetNumber() or pad.GetAttribute() != pcbnew.PAD_ATTRIB_PTH:
+            continue
+        host = [p for p in fp.Pads() if p.GetNumber() and p.HitTest(pad.GetPosition())]
+        if host and host[0].GetNetCode() > 0:
+            pad.SetNet(host[0].GetNet())
 
 
 def build(plan_path: str) -> None:
