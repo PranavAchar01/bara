@@ -7,6 +7,7 @@ import { EditStatus, EventLog, FailureCard, LatencyHUD, Toast, WarningBanner } f
 import { RightColumn } from "./components/RightColumn";
 import { AddPartPicker, ConnectDialog, PartInspector, ResizePanel, SwapDrawer } from "./components/Overlays";
 import { Viewport3D } from "./three/Viewport3D";
+import { BotLab } from "./bot/BotLab";
 
 function useKeys() {
   useEffect(() => {
@@ -89,7 +90,14 @@ function Workspace() {
   );
 }
 
+const BOTLAB = new URLSearchParams(window.location.search).get("botlab") === "1";
+
 export function App() {
+  if (BOTLAB) return <BotLab />;
+  return <Main />;
+}
+
+function Main() {
   useKeys();
   const screen = useApp((s) => s.screen);
   return (
