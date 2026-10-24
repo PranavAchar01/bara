@@ -355,8 +355,26 @@ def _prompt(prompt: str, touches: list[Touch], refs: list[dict[str, Any]], note:
     )
 
 
+def fit_note(report: dict) -> str:
+    """The numbers a form needs to be sized to hold the parts it was drawn for."""
+    big = "; ".join(f"{p['part']} {p['mm'][0]} x {p['mm'][1]} mm" for p in report["largest"])
+    return (
+        f"The parts chosen for this product do not fit your silhouette. Footprints total "
+        f"{report['parts_mm2']} mm2 (largest: {big}); your silhouette is "
+        f"{report['silhouette_mm2']} mm2 and only {report['usable_mm2']} mm2 of it is usable per "
+        f"board side once the case wall is taken off. Redraw the SAME product, keeping every "
+        f"anchor's role and layout, at a "
+        f"realistic size that holds them: the usable area per side should be at least twice the "
+        f"footprint total and no silhouette dimension below {report['widest_mm'] + 8:.0f} mm."
+    )
+
+
 async def derive(
-    prompt: str, touches: list[Touch], previous: Form | None = None, critique: str = ""
+    prompt: str,
+    touches: list[Touch],
+    previous: Form | None = None,
+    critique: str = "",
+    fit: dict | None = None,
 ) -> tuple[Form | None, str]:
     """Ask for the form, check it, and make one repair pass. A form that still fails keeps its
     problems on the object so the caller can fail loudly."""
@@ -369,6 +387,13 @@ async def derive(
             "\nThe form you proposed earlier was built and reviewed from a render. Redraw it "
             "so the product is recognisable.\n"
             + critique
+            + "\nEarlier silhouette: "
+            + json.dumps([[round(x), round(y)] for x, y in previous.silhouette])
+        )
+    if fit and previous is not None:
+        note = (
+            "\n"
+            + fit_note(fit)
             + "\nEarlier silhouette: "
             + json.dumps([[round(x), round(y)] for x, y in previous.silhouette])
         )

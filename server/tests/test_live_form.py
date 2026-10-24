@@ -135,6 +135,31 @@ def test_overflow_never_scales_the_form() -> None:
     assert "scale" not in pf or pf["scale"] == 1.0
 
 
+def test_through_hole_part_takes_only_its_lead_hull_from_the_other_side() -> None:
+    # a 24 x 24 module whose leads run along one edge leaves the rest of the back free
+    module = _item("M1", "module", "x", 24.0)
+    module.fp.pads[:] = [
+        Pad(str(i), "thru_hole", -11.0, i * 2.54 - 10, 1.7, 1.7, ["*.Cu"]) for i in range(8)
+    ]
+    smd = [_item(f"U{i}", "ic", "x", 10.0) for i in range(2)]
+    pf = {"silhouette": [[-20, -20], [20, -20], [20, 20], [-20, 20]], "anchors": []}
+    log: list[str] = []
+    place_in_form([module, *smd], None, pf, log)
+    assert pf["fit_report"]["ok"], log
+    assert {u.side for u in smd} == {"bottom"} or any(u.side == "bottom" for u in smd)
+
+
+def test_overflow_report_carries_the_numbers_the_form_is_redrawn_with() -> None:
+    from bara.live.form import fit_note
+
+    parts = [_item(f"U{i}", "ic", "x", 20.0) for i in range(40)]
+    pf = {"silhouette": [list(p) for p in PILL], "anchors": []}
+    place_in_form(parts, None, pf, [])
+    rep = pf["fit_report"]
+    assert rep["ok"] is False and rep["parts_mm2"] > rep["usable_mm2"] > 0
+    assert str(rep["parts_mm2"]) in fit_note(rep) and "Redraw the SAME product" in fit_note(rep)
+
+
 def test_inputs_become_a_diode_matrix_when_gpio_runs_short() -> None:
     from bara.board.generic import _matrix_inputs
 
