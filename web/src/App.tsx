@@ -6,6 +6,8 @@ import { StepPlayer } from "./components/LeftColumn";
 import { BuildProgress, EditStatus, EventLog, FailureCard, LatencyHUD, Toast, WarningBanner } from "./components/Status";
 import { PartsList, RightColumn } from "./components/RightColumn";
 import { AddPartPicker, ConnectDialog, PartInspector, ResizePanel, SwapDrawer } from "./components/Overlays";
+import { FocusCard } from "./components/FocusCard";
+import { bindVoiceKeys } from "./voice/voice";
 import { Viewport3D } from "./three/Viewport3D";
 import { BotLab } from "./bot/BotLab";
 
@@ -22,7 +24,13 @@ function useKeys() {
       }
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === "l" || e.key === "L") useApp.setState((s) => ({ logOpen: !s.logOpen }));
-      if (e.key === "Escape") useApp.setState({ overlay: null, moving: null, inspectPartId: null });
+      // Esc steps back one level: out of a drawer opened from focus, then out of focus itself
+      if (e.key === "Escape")
+        useApp.setState((s) =>
+          s.focusKey && s.overlay !== "focus"
+            ? { overlay: "focus", moving: null, inspectPartId: null }
+            : { overlay: null, moving: null, inspectPartId: null, focusKey: null },
+        );
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -55,6 +63,8 @@ function RightOverlay() {
   const overlay = useApp((s) => s.overlay);
   const selection = useApp((s) => s.selection);
   const inspectPartId = useApp((s) => s.inspectPartId);
+  const focusKey = useApp((s) => s.focusKey);
+  if (overlay === "focus" && focusKey) return <FocusCard />;
   if (overlay === "inspector" && (selection || inspectPartId)) return <PartInspector />;
   if (overlay === "swap" && selection) return <SwapDrawer />;
   if (overlay === "resize") return <ResizePanel />;
@@ -104,6 +114,7 @@ export function App() {
 
 function Main() {
   useKeys();
+  useEffect(() => bindVoiceKeys(), []);
   const screen = useApp((s) => s.screen);
   return (
     <div className="app">

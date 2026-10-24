@@ -11,9 +11,9 @@ import zipfile
 from typing import Any
 
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 
-from bara import SERVER_VERSION, SPEC_VERSION, geometry
+from bara import SERVER_VERSION, SPEC_VERSION, geometry, part_ask, voice
 from bara.edits import Reject
 from bara.llm import providers_configured
 from bara.services import Services
@@ -245,6 +245,78 @@ def build_router(svc: Services) -> APIRouter:
                 "complete": run.stream_complete and next_after >= run.seq,
             }
         )
+
+    @api.post("/v1/builds/{build_id}/ask")
+    async def ask_part(build_id: str, request: Request) -> JSONResponse:
+        """A spoken-style answer about one part of the build (focus card, voice agent)."""
+        run = run_or_404(build_id)
+        try:
+            data = await request.json()
+        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+            raise ApiError("E_BAD_MESSAGE", "Body is not JSON.") from exc
+        part_id, question = data.get("part_id"), data.get("question")
+        if not isinstance(part_id, str) or not isinstance(question, str) or not question.strip():
+            raise ApiError("E_BAD_MESSAGE", "Send part_id and question.")
+        result, note = await part_ask.answer(
+            run.state,
+            part_id,
+            question,
+            cerebras_model=svc.settings.cerebras_model,
+            anthropic_model=svc.settings.anthropic_model,
+        )
+        if result is None:
+            if note == "unknown part":
+                raise ApiError("E_UNKNOWN_PART", f"No part {part_id} in build {build_id}.")
+            raise ApiError("E_LLM_UNAVAILABLE", f"No model answered: {note}")
+        return body(
+            {
+                "answer": result.answer,
+                "follow_ups": result.follow_ups,
+                "provider": result.provider,
+                "model": result.model,
+                "latency_ms": result.latency_ms,
+            }
+        )
+
+    @api.get("/v1/voice")
+    def voice_info() -> JSONResponse:
+        """Whether Bara can speak and listen here, and with which voice."""
+        return body(voice.settings())
+
+    @api.get("/v1/tts")
+    async def tts(request: Request) -> Response:
+        """Streams Bara saying `text` (GET, so an <audio> element can play it as it arrives)."""
+        text = (request.query_params.get("text") or "").strip()
+        if not text:
+            raise ApiError("E_BAD_MESSAGE", "Send text.")
+        try:
+            client, resp = await voice.open_speech(text)
+        except RuntimeError as exc:
+            raise ApiError("E_LLM_UNAVAILABLE", f"No voice: {exc}") from exc
+        return StreamingResponse(
+            voice.relay(client, resp),
+            media_type="audio/mpeg",
+            headers={"cache-control": "no-store"},
+        )
+
+    @api.post("/v1/stt")
+    async def stt(request: Request) -> JSONResponse:
+        """Text of a short recording (raw audio body), for browsers without speech recognition."""
+        audio = await request.body()
+        if not audio or len(audio) > voice.MAX_STT_BYTES:
+            raise ApiError("E_BAD_MESSAGE", "Send up to 8 MB of audio.")
+        build_id = request.query_params.get("build_id")
+        run = svc.engine.get(build_id) if build_id else None
+        terms = (
+            sorted({p["card"]["display_name"] for p in (run.state.get("parts") or [])})
+            if run
+            else None
+        )
+        try:
+            text = await voice.transcribe(audio, request.headers.get("content-type", ""), terms)
+        except RuntimeError as exc:
+            raise ApiError("E_LLM_UNAVAILABLE", f"No transcription: {exc}") from exc
+        return body({"text": text})
 
     @api.get("/v1/builds/{build_id}/slots/{slot_id}/alternatives")
     def alternatives(build_id: str, slot_id: str, request: Request) -> JSONResponse:
