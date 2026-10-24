@@ -2307,7 +2307,7 @@ Rules:
 - Defaultable facets (`power_source`, `connectivity`, `size`, `colour`, `layout`, `mounting`, `display_type`, `input_method`, `quantity`, `enclosure`) never block. The engine assumes a safe default (USB power, gray case, no radio unless a phone or the internet is implied) and records an `Assumption`.
 - A request for a named product never blocks. If the reuse test (section 8.12) finds a catalog design that does the same job, any blocking facet is cleared.
 - One question per round, at most 2 rounds.
-- Out of scope (not buildable from hobby electronics and printed or off-the-shelf mechanical parts, physically impossible, or needing a regulated or unsafe capability such as medical diagnosis, weapons, jamming, mains appliances or rideable vehicles): no question; `build.failed` with `E_OUT_OF_SCOPE` and `Spec.scope out_of_scope`. A vague request is never out of scope; it gets a question.
+- Out of scope (not buildable from hobby electronics and printed or off-the-shelf mechanical parts, physically impossible, or needing a regulated or unsafe capability such as medical diagnosis, weapons, jamming, mains appliances (whose own circuit switches, heats or drives mains power; a product running on low voltage behind a wall adapter or certified AC-DC module is in scope) or rideable vehicles): no question; `build.failed` with `E_OUT_OF_SCOPE` and `Spec.scope out_of_scope`. A vague request is never out of scope; it gets a question.
 
 Flow:
 

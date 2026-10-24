@@ -3,6 +3,7 @@ import { select, useApp, type CodeTab, type RightTab } from "../state/store";
 import { ClarifyCard, DecisionTrace, ReuseCard, SpecCard, StageTimeline } from "./LeftColumn";
 import { PanelToolbar } from "./TopBar";
 import { applyEdit } from "../net/client";
+import { serverUrl } from "../net/mode";
 import type { Board, BuildPart, CheckResult, Connection, FirmwareFile } from "../spec/types";
 import { Badge, Chip, Dot, Empty, Panel, ProvenanceBadge } from "../ui/common";
 import { checkArea, checkInstances, checkTone, fmtMm, fmtMs, fmtValue, instanceTone, known, severityRank, vlabel } from "../ui/format";
@@ -520,7 +521,7 @@ export function FirmwareView() {
       {(fw.compile.binaries ?? []).length > 0 && (
         <div className="chips">
           {fw.compile.binaries?.map((b) => (
-            <a key={b.asset_id} className="chip tone-muted outline" href={b.url} download>
+            <a key={b.asset_id} className="chip tone-muted outline" href={serverUrl(b.url)} download>
               {b.url.split("/").pop()}
             </a>
           ))}
@@ -566,7 +567,7 @@ function SourceView(props: { file: FirmwareFile }) {
     }
     let live = true;
     setState("loading");
-    void fetch(file.asset.url)
+    void fetch(serverUrl(file.asset.url))
       .then((r) => (r.ok ? r.text() : Promise.reject(new Error(String(r.status)))))
       .then((t) => {
         if (live) {

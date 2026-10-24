@@ -7,11 +7,14 @@ None plus the reason, and the stage reports degraded instead of inventing a resu
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 import logging
 import math
 import time
 from collections.abc import Callable
 from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 from bara.live.layout import PITCH_MM
@@ -212,6 +215,11 @@ def geometry_brief(brief: dict[str, Any]) -> dict[str, Any]:
         "features": feats + (["tented"] if brief.get("tented") else []),
         "tented": bool(brief.get("tented")),
     }
+    if brief.get("body_thickness_mm"):
+        out["body_thickness_mm"] = float(brief["body_thickness_mm"])
+        out["edge_thickness_mm"] = float(brief.get("edge_thickness_mm") or 0.0)
+        if brief.get("anchors"):
+            out["anchors"] = list(brief["anchors"])
     return out
 
 
@@ -317,11 +325,32 @@ def run_enclose(
     geometry, why = geometry_module()
     if geometry is None:
         return None, why
+    gbrief = geometry_brief(brief)
     try:
-        return geometry.enclose_report(board_record, parts, geometry_brief(brief)), None
+        report = geometry.enclose_report(board_record, parts, gbrief)
     except Exception as exc:  # a degenerate outline must not take the build down
         log.exception("live: enclose failed")
+        _keep_failed_case(board_record, parts, gbrief)
         return None, f"case generation failed: {type(exc).__name__}: {str(exc)[:160]}"
+    if any(c["status"] == "fail" for c in report.checks):
+        _keep_failed_case(board_record, parts, gbrief)
+    return report, None
+
+
+FAILED_CASES = Path(__file__).resolve().parents[3] / "data/cache/enclose"
+
+
+def _keep_failed_case(
+    board_record: dict[str, Any], parts: list[dict[str, Any]], gbrief: dict[str, Any]
+) -> None:
+    """Keep the inputs of a case that failed a check, so it can be rebuilt offline."""
+    try:
+        text = json.dumps({"board": board_record, "parts": parts, "brief": gbrief}, default=str)
+        FAILED_CASES.mkdir(parents=True, exist_ok=True)
+        name = hashlib.sha1(text.encode()).hexdigest()[:16]
+        (FAILED_CASES / f"{name}.json").write_text(text)
+    except (OSError, TypeError, ValueError):
+        log.exception("live: could not keep the failed case inputs")
 
 
 def fallback_enclosure(

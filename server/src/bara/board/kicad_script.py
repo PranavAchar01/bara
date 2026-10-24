@@ -10,6 +10,7 @@ Python 3.9 syntax only: this file is executed by KiCad's interpreter, not the se
 from __future__ import annotations
 
 import json
+import math
 import sys
 
 import pcbnew
@@ -106,6 +107,42 @@ def _rule_area(board, outer: list, holes: list, layers: list, name: str) -> None
     board.Add(zone)
 
 
+_DROPPED: list = []
+
+
+def _fit_holes(board, fp) -> None:
+    """Bring a footprint's plated holes inside the board's hole rules.
+
+    Footprints converted from other tools carry mil-rounded rings a hair under the minimum
+    and unnumbered thermal vias drilled below the minimum hole; those vias only stitch an
+    exposed pad, so they are dropped, and thin rings are grown to the minimum.
+    """
+    ds = board.GetDesignSettings()
+    min_hole, ring = ds.m_MinThroughDrill, ds.m_ViasMinAnnularWidth
+    pth = [p for p in fp.Pads() if p.GetAttribute() == pcbnew.PAD_ATTRIB_PTH]
+    # a thermal via is unnumbered or carries its exposed pad's number (an SMD pad's)
+    smd = {p.GetNumber() for p in fp.Pads() if p.GetAttribute() == pcbnew.PAD_ATTRIB_SMD}
+    vias = [
+        p
+        for p in pth
+        if (not p.GetNumber() or p.GetNumber() in smd) and min(p.GetDrillSize()) < min_hole
+    ]
+    for pad in vias:
+        fp.Remove(pad)
+    # a removed pad freed by Python corrupts the footprint's pad list; keep it alive
+    _DROPPED.extend(vias)
+    for pad in pth:
+        if pad in vias:
+            continue
+        drill = pad.GetDrillSize()
+        size = pad.GetSize(pcbnew.F_Cu)
+        want = pcbnew.VECTOR2I(
+            max(size.x, drill.x + 2 * ring + _mm(0.01)), max(size.y, drill.y + 2 * ring + _mm(0.01))
+        )
+        if want.x != size.x or want.y != size.y:
+            pad.SetSize(pcbnew.F_Cu, want)
+
+
 def _place_footprint(board, nets: dict, spec: dict) -> None:
     fp = pcbnew.FootprintLoad(spec["lib_dir"], spec["name"])
     if fp is None:
@@ -120,6 +157,12 @@ def _place_footprint(board, nets: dict, spec: dict) -> None:
     for zone in list(fp.Zones()):
         if zone.GetIsRuleArea() and not zone.GetDoNotAllowTracks():
             fp.Remove(zone)
+    # Edge.Cuts that do not close (a jack drawn to splice into the board edge) are not
+    # a cutout on our outline; keep them as a drawing so the outline stays closed.
+    if not spec.get("edge_cuts", True):
+        for g in fp.GraphicalItems():
+            if g.GetLayer() == pcbnew.Edge_Cuts:
+                g.SetLayer(pcbnew.Cmts_User)
     # Models: replace the library paths with resolved absolute files.
     models = fp.Models()
     models.clear()
@@ -134,10 +177,14 @@ def _place_footprint(board, nets: dict, spec: dict) -> None:
         mod.m_Scale = pcbnew.VECTOR3D(sc[0], sc[1], sc[2])
         models.push_back(mod)
     board.Add(fp)
-    if spec.get("side") == "bottom":
+    _fit_holes(board, fp)
+    bottom = spec.get("side") == "bottom"
+    if bottom:
         fp.Flip(fp.GetPosition(), pcbnew.FLIP_DIRECTION_LEFT_RIGHT)
     fp.SetPosition(_vec(spec["x"], spec["y"]))
-    fp.SetOrientationDegrees(float(spec.get("rot", 0.0)))
+    # A flip stores the pads mirrored in y; the extra half turn makes it the x
+    # mirror the packer laid out (layout.Item.world), so pads land where planned.
+    fp.SetOrientationDegrees(float(spec.get("rot", 0.0)) + (180.0 if bottom else 0.0))
     pads = spec.get("pads", {})
     for pad in fp.Pads():
         net_name = pads.get(pad.GetNumber())
@@ -145,6 +192,14 @@ def _place_footprint(board, nets: dict, spec: dict) -> None:
             pad.SetNet(_net(board, nets, net_name))
         else:
             pad.SetNetCode(0)
+    # unnumbered holes inside an exposed pad are its thermal vias: they carry its net, or
+    # every one is a short against the pad (DRV8833 HTSSOP)
+    for pad in fp.Pads():
+        if pad.GetNumber() or pad.GetAttribute() != pcbnew.PAD_ATTRIB_PTH:
+            continue
+        host = [p for p in fp.Pads() if p.GetNumber() and p.HitTest(pad.GetPosition())]
+        if host and host[0].GetNetCode() > 0:
+            pad.SetNet(host[0].GetNet())
 
 
 def build(plan_path: str) -> None:
@@ -175,11 +230,74 @@ def build(plan_path: str) -> None:
             raise RuntimeError("DSN export failed")
 
 
+def _foreign(board, net: int, layer: int) -> list:
+    items = list(board.GetTracks()) + list(board.GetPads())
+    foreign = [i for i in items if i.GetNetCode() != net and i.IsOnLayer(layer)]
+    return [i.GetEffectiveShape(layer) for i in foreign]
+
+
+def _put(t, joined: list, pa, pb, width: int) -> None:
+    t.SetStart(pa)
+    t.SetEnd(pb)
+    t.SetWidth(width)
+    for u, end, at_a in joined:
+        (u.SetStart if end == "s" else u.SetEnd)(pa if at_a else pb)
+
+
+def _repair_necks(board) -> int:
+    """Widen Freerouting's sub-minimum necks, sliding each sideways until it clears.
+
+    Freerouting narrows a trace where it squeezes past a fine-pitch pad, below the board's
+    minimum width even with neckdown off. Widening in place hits the pad it squeezed past,
+    so the neck and the ends of the traces joined to it slide along its normal in 5 um
+    steps to the first spot where the full-width trace keeps clearance from other nets
+    (with 5 um to spare: the shape test is looser than DRC on rounded pads).
+    """
+    ds = board.GetDesignSettings()
+    mn = ds.m_TrackMinWidth
+    clr = ds.m_NetSettings.GetDefaultNetclass().GetClearance()
+    tracks = [t for t in board.GetTracks() if t.GetClass() == "PCB_TRACK"]
+    fixed = 0
+    for t in tracks:
+        if t.GetWidth() >= mn - _mm(0.005):
+            continue
+        layer, net = t.GetLayer(), t.GetNetCode()
+        # copies: GetStart() returns a live reference that SetStart() would move too
+        a, b = pcbnew.VECTOR2I(t.GetStart()), pcbnew.VECTOR2I(t.GetEnd())
+        if any(p.GetNetCode() == net and (p.HitTest(a) or p.HitTest(b)) for p in board.GetPads()):
+            continue  # a pin entry: sliding it would leave the pad
+        joined = []
+        for u in tracks:
+            if u is not t and u.GetNetCode() == net and u.GetLayer() == layer:
+                for end, pos in (("s", u.GetStart()), ("e", u.GetEnd())):
+                    if pos == a or pos == b:
+                        joined.append((u, end, pos == a))
+        n = math.hypot(b.x - a.x, b.y - a.y) or 1.0
+        nx, ny = -(b.y - a.y) / n, (b.x - a.x) / n
+        others = _foreign(board, net, layer)
+        width = t.GetWidth()
+
+        for k in [0] + [s * i for i in range(1, 17) for s in (1, -1)]:
+            off = _mm(0.005 * k)
+            dx, dy = int(round(nx * off)), int(round(ny * off))
+            pa, pb = pcbnew.VECTOR2I(a.x + dx, a.y + dy), pcbnew.VECTOR2I(b.x + dx, b.y + dy)
+            _put(t, joined, pa, pb, mn)
+            moved = [t.GetEffectiveShape(layer)]
+            moved += [u.GetEffectiveShape(layer) for u, _, _ in joined]
+            if not any(m.Collide(o, clr + _mm(0.005)) for m in moved for o in others):
+                fixed += 1
+                break
+        else:
+            _put(t, joined, a, b, width)
+    return fixed
+
+
 def import_ses(board_path: str, ses_path: str) -> None:
     board = pcbnew.LoadBoard(board_path)
     ok = pcbnew.ImportSpecctraSES(board, ses_path)
     if not ok:
         raise RuntimeError("SES import failed")
+    _repair_necks(board)
     pcbnew.SaveBoard(board_path, board)
 
 

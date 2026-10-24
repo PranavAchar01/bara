@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from bara.catalog import Catalog
+from bara.live.fetch import stock_symbol
 
 log = logging.getLogger(__name__)
 
@@ -123,18 +124,32 @@ def load_fetched(catalog_dir: Path) -> list[dict[str, Any]]:
 
 
 class WithFetched:
-    """Serves fetched parts beside a source that does not know them (CatalogDB)."""
+    """Serves fetched parts beside a source that does not know them (CatalogDB).
 
-    def __init__(self, base: Any, parts: list[dict[str, Any]]) -> None:
+    A fetched part whose part number the stock KiCad library carries is served as that
+    library part instead (reviewed footprint and 3D model), still offered for the role it
+    was fetched for; the LCSC row stays readable by id for builds that already chose it."""
+
+    def __init__(self, base: Any, parts: list[dict[str, Any]], stock: Any | None = None) -> None:
         self.base = base
         self.name = base.name
         self.extra = {p["part_id"]: p for p in parts}
+        self.served = dict(self.extra)
+        if stock is not None:
+            for part in parts:
+                lib = stock_symbol(stock, part.get("mpn") or "")
+                if lib is not None:
+                    del self.served[part["part_id"]]
+                    # two reels of one chip share the library part: it serves both roles
+                    self.served[lib["part_id"]] = _in_role(
+                        self.served.get(lib["part_id"], lib), part
+                    )
 
     def __getattr__(self, attr: str) -> Any:
         return getattr(self.base, attr)
 
     def get_part(self, part_id: str) -> dict[str, Any]:
-        return self.extra.get(part_id) or self.base.get_part(part_id)
+        return self.served.get(part_id) or self.extra.get(part_id) or self.base.get_part(part_id)
 
     def query(
         self,
@@ -144,7 +159,7 @@ class WithFetched:
         limit: int = 50,
     ) -> list[dict[str, Any]]:
         found = self.base.query(function, facets, interfaces, limit)
-        for part in self.extra.values():
+        for part in self.served.values():
             types = {i.get("type") for i in part.get("interfaces", [])}
             if (
                 (not function or function in part_functions(part))
@@ -155,13 +170,81 @@ class WithFetched:
         return found[:limit]
 
 
+def _in_role(lib: dict[str, Any], fetched: dict[str, Any]) -> dict[str, Any]:
+    """The library part tagged with the functions and interfaces the fetched row served."""
+    part = dict(lib)
+    roles = list(fetched.get("functions", []))
+    have = {f.get("function_id") for f in roles}
+    part["functions"] = roles + [
+        {**f, "primary": False}
+        for f in lib.get("functions", [])
+        if f.get("function_id") not in have
+    ]
+    part["interfaces"] = lib.get("interfaces") or fetched.get("interfaces", [])
+    # the library footprint's own sizes win; what only the fetched row knew is kept
+    part["facets"] = {**(fetched.get("facets") or {}), **(lib.get("facets") or {})}
+    part["replaces"] = [*lib.get("replaces", []), fetched["part_id"]]
+    return part
+
+
+class WithGenerated:
+    """Adds the generated tier (every KiCad symbol and footprint, bara.kicad_generated) to a
+    source. query() is unchanged, so curated parts are all that function queries return;
+    search() lists curated hits first and generated ones after them."""
+
+    def __init__(self, base: Any, index: Any) -> None:
+        self.base = base
+        self.name = base.name
+        self.generated = index
+
+    def __getattr__(self, attr: str) -> Any:
+        return getattr(self.base, attr)
+
+    def get_part(self, part_id: str) -> dict[str, Any]:
+        if part_id.startswith("kicadgen:"):
+            try:
+                return self.generated.get_part(part_id)
+            except KeyError:
+                raise KeyError(part_id) from None
+        return self.base.get_part(part_id)
+
+    def search(self, text: str, kind: str | None = None, limit: int = 20) -> list[dict[str, Any]]:
+        """Parts matching free text. kind = "symbol" | "footprint" restricts to the generated
+        tier (curated parts are components, not library entries). Curated parts always rank
+        above generated ones for the same query."""
+        found: list[dict[str, Any]] = []
+        if kind is None:
+            base_search = getattr(self.base, "search", None)
+            if base_search is not None:
+                found = list(base_search(text, limit))
+            else:
+                words = text.lower().split()
+                for part in self.base.query(limit=10_000):
+                    blob = f"{part.get('part_id', '')} {part.get('display_name', '')}".lower()
+                    if words and all(w in blob for w in words):
+                        found.append(part)
+        found = found[:limit]
+        seen = {p["part_id"] for p in found}
+        for part in self.generated.search(text, kind=kind, limit=limit):
+            if len(found) >= limit:
+                break
+            if part["part_id"] not in seen:
+                found.append(part)
+        return found
+
+
 def open_part_source(catalog: Catalog, catalog_dir: Path) -> PartSource:
     """The real CatalogDB when its module and sqlite file exist, else the stub.
-    Fetched LCSC parts are added to either."""
+    Fetched LCSC parts and the generated KiCad tier (when built) are added to either."""
+    from bara.kicad_generated import KicadIndex
+
     fetched = load_fetched(catalog_dir)
     merge_into_catalog(catalog, fetched)
     source = _open_base(catalog, catalog_dir)
-    return WithFetched(source, fetched) if fetched and source.name != "stub" else source
+    index = KicadIndex.open(catalog_dir / "kicad_index.sqlite")
+    if fetched and source.name != "stub":
+        source = WithFetched(source, fetched, index.search if index else None)
+    return WithGenerated(source, index) if index else source
 
 
 def _open_base(catalog: Catalog, catalog_dir: Path) -> PartSource:

@@ -226,3 +226,88 @@ def test_usb_slot_never_crosses_a_notch(tmp_path, monkeypatch):
     assert rep.enclosure["enclosure_id"] == "e_case_pcb_main"  # side "none": no half guessed
     failed = [c["message"] for c in rep.checks if c["status"] != "pass"]
     assert not failed, failed
+
+
+def test_a_board_side_role_reads_the_part_not_the_word_module():
+    from bara.geometry.case import _feature_from_placement
+
+    jst = {
+        "role": "module_connector",
+        "lib_id": "Connector_JST:JST_PH_B2B-PH-K_1x02_P2.00mm_Vertical",
+        "label": "JST PH 2-pin connector to USB bridge",
+        "size_mm": [6.9, 5.5],
+    }
+    mov = {"role": "module", "lib_id": "", "label": "V275LA20AP varistor", "size_mm": [17, 5.6]}
+    assert _feature_from_placement(jst).role == "other"
+    assert _feature_from_placement(mov).role == "other"
+    # an ESD IC named USBLC6 is hidden, so it is no USB port; a touched module still reads
+    esd = {"role": "module", "lib_id": "", "label": "USBLC6-2SC6 (ST)", "size_mm": [2.8, 2.9]}
+    knob = {"role": "module", "label": "EC11E15244G1 encoder", "touch": True, "size_mm": [12, 14]}
+    assert _feature_from_placement(esd).role == "other"
+    assert _feature_from_placement(knob).role == "encoder"
+
+
+def test_a_loose_bezel_sliver_is_dropped_and_real_pieces_stay():
+    import manifold3d as mf
+
+    from bara.geometry.case import _drop_slivers
+
+    main = mf.Manifold.cube((60, 40, 4))
+    sliver = mf.Manifold.cube((3, 6, 4)).translate((70, 0, 0))
+    assert len(_drop_slivers(main + sliver).decompose()) == 1
+    big = mf.Manifold.cube((20, 20, 4)).translate((70, 0, 0))
+    assert len(_drop_slivers(main + big).decompose()) == 2  # a real piece is kept and reported
+    island = mf.Manifold.cube((7, 7, 4)).translate((20, 15, 8))  # ringed by button holes
+    assert len(_drop_slivers(main.scale((3, 3, 1)) + island).decompose()) == 1
+
+
+def test_a_desk_facing_sensor_looks_through_the_floor_and_a_knob_fits_round(tmp_path, monkeypatch):
+    monkeypatch.setenv("BARA_DATA_DIR", str(tmp_path))
+    board = {
+        "board_id": "pcb_main",
+        "side": "none",
+        "outline": [[0, 0], [60, 0], [60, 90], [0, 90]],
+        "thickness_mm": 1.6,
+        "placements": [
+            {"ref": "M1", "role": "module", "label": "PMW3360DM-T2QU optical sensor",
+             "x_mm": 30.0, "y_mm": 40.0, "rot_deg": 0, "side": "bottom", "on_pcb": False,
+             "touch": True, "height_mm": 5.0, "size_mm": [10.9, 16.2]},
+        ],
+    }  # fmt: skip
+    rep = enclose_report(board, [], {})
+    fit = _by_rule(rep.checks, "mech.fit.enclosure")[0]
+    assert fit["status"] == "pass", fit["message"]
+    # the floor is open under the lens: a ray straight down from it leaves the tray
+    from bara.geometry.validate import _first_hit
+
+    assert _first_hit(rep.tray, np.array([30.0, 40.0, -1.0]), np.array([0, 0, -1.0]), 40) is None
+
+    from bara.geometry.case import Feature
+    from bara.geometry.validate import _feature_box
+
+    knob = Feature("M8", "knob", 0.0, 0.0, 0.0, "top", 10.0, 20.0, 20.0)
+    assert _feature_box(knob, 1.6).volume() < 0.8 * 20 * 20 * 10  # a disc, not its box
+
+
+@pytest.mark.parametrize("body", [0.0, 30.0])
+def test_a_tall_hidden_part_stays_under_the_skin(tmp_path, monkeypatch, body):
+    monkeypatch.setenv("BARA_DATA_DIR", str(tmp_path))
+    board = {
+        "board_id": "pcb_main",
+        "side": "none",
+        "outline": [[0, 0], [60, 0], [60, 90], [0, 90]],
+        "thickness_mm": 1.6,
+        "placements": [
+            {"ref": "C9", "role": "capacitor", "label": "470uF bulk electrolytic capacitor",
+             "x_mm": 30.0, "y_mm": 45.0, "rot_deg": 0, "side": "top", "on_pcb": True,
+             "touch": False, "height_mm": 9.0, "size_mm": [8.0, 8.0]},
+        ],
+    }  # fmt: skip
+    brief = {"body_thickness_mm": body} if body else {}
+    rep = enclose_report(board, [], brief)
+    from bara.geometry.validate import _first_hit
+
+    # straight down from above the case, the skin is met before the part's top
+    origin = np.array([30.0, 45.0, 60.0])
+    hit = _first_hit(rep.bezel, origin, np.array([0, 0, -1.0]), 80)
+    assert hit is not None and origin[2] - hit > 1.6 + 9.0, hit

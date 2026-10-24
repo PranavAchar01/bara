@@ -18,6 +18,13 @@ KICAD_SHARE = KICAD_APP / "Contents/SharedSupport"
 KICAD_PYTHON = KICAD_APP / "Contents/Frameworks/Python.framework/Versions/Current/bin/python3"
 SOURCES = Path(os.environ.get("BARA_SOURCES", Path.home() / "helloworld/bara-sources"))
 LIBS = SOURCES / "kicad-libs"
+# Parts fetched from LCSC: easyeda2kicad writes each one's footprint, symbol and model
+# under its own folder, <C number>/<C number>.kicad_mod (live/fetch.py).
+FETCHED_SRC = Path(
+    os.environ.get(
+        "BARA_FETCHED_SRC", Path(__file__).resolve().parents[3] / "data/catalog/fetched/src"
+    )
+)
 
 # Library roots: name -> (footprint dir, 3D model dirs, source url, licence, commit file or None).
 LIBRARIES: dict[str, dict] = {
@@ -48,6 +55,12 @@ LIBRARIES: dict[str, dict] = {
         "models": [],
         "url": "https://github.com/sadekbaroudi/fingerpunch",
         "licence": "MIT",
+    },
+    "easyeda": {
+        "footprints": None,  # one folder per part, see find_footprint
+        "models": [FETCHED_SRC],
+        "url": "https://www.lcsc.com",
+        "licence": "LCSC/EasyEDA part library (via easyeda2kicad)",
     },
     "garden36": {
         "footprints": None,
@@ -156,6 +169,23 @@ def _shape_points(item: list) -> list[tuple[float, float]]:
     return []
 
 
+def _edges_close(items: list[list]) -> bool:
+    """True when a footprint's Edge.Cuts shapes close: every line and arc end meets another.
+
+    A connector drawn to sit in the board edge (a 3.5 mm jack's notch) ships an open
+    chain meant to splice into the outline; it is no cutout, and on our own outline it
+    leaves Edge.Cuts that never close."""
+    ends: dict[tuple[int, int], int] = {}
+    for item in items:
+        if item[0] not in ("fp_line", "fp_arc"):
+            continue
+        for key in ("start", "end"):
+            x, y = _floats(_child(item, key), 2)
+            k = (round(x * 100), round(y * 100))
+            ends[k] = ends.get(k, 0) + 1
+    return all(n % 2 == 0 for n in ends.values())
+
+
 def _bbox(points: list[tuple[float, float]]) -> tuple[float, float, float, float] | None:
     if not points:
         return None
@@ -172,7 +202,9 @@ def _layer_of(item: list) -> str:
 @lru_cache(maxsize=256)
 def load_footprint(lib: str, pretty: str, name: str) -> FootprintInfo:
     meta = LIBRARIES[lib]
-    lib_dir = Path(meta["footprints"]) / f"{pretty}.pretty"
+    lib_dir = (
+        FETCHED_SRC / name if lib == "easyeda" else Path(meta["footprints"]) / f"{pretty}.pretty"
+    )
     path = lib_dir / f"{name}.kicad_mod"
     tree = parse_sexpr(path.read_text())
     pads: list[Pad] = []
@@ -191,6 +223,7 @@ def load_footprint(lib: str, pretty: str, name: str) -> FootprintInfo:
     crt_b: list[tuple[float, float]] = []
     fab: list[tuple[float, float]] = []
     cuts: list[tuple[float, float]] = []
+    cut_items: list[list] = []
     for item in tree:
         if not isinstance(item, list) or not item or not str(item[0]).startswith("fp_"):
             continue
@@ -204,6 +237,7 @@ def load_footprint(lib: str, pretty: str, name: str) -> FootprintInfo:
             fab += pts
         elif layer == "Edge.Cuts":
             cuts += pts
+            cut_items.append(item)
     pad_pts = [(p.x - p.w / 2, p.y - p.h / 2) for p in pads] + [
         (p.x + p.w / 2, p.y + p.h / 2) for p in pads
     ]
@@ -218,6 +252,10 @@ def load_footprint(lib: str, pretty: str, name: str) -> FootprintInfo:
             if xyz:
                 xf[key] = _floats(xyz, 3)
         xforms[str(m[1])] = xf
+    step = sorted(lib_dir.glob(f"{name}.st*p")) if lib == "easyeda" else []
+    if step and models:  # fetch.py keeps the part's model beside it as <C number>.step
+        xforms[str(step[0])] = xforms.get(models[0], {})
+        models = [str(step[0])]
     descr_node = _child(tree, "descr")
     return FootprintInfo(
         lib=lib,
@@ -230,7 +268,7 @@ def load_footprint(lib: str, pretty: str, name: str) -> FootprintInfo:
         descr=str(descr_node[1]) if descr_node else "",
         source_url=str(meta["url"]),
         licence=str(meta["licence"]),
-        cutout=_bbox(cuts),
+        cutout=_bbox(cuts) if _edges_close(cut_items) else None,
         extra={"model_xforms": xforms},
     )
 
@@ -247,6 +285,9 @@ def find_footprint(lib_id: str) -> FootprintInfo | None:
     if ":" not in lib_id:
         return None
     pretty, name = lib_id.split(":", 1)
+    if pretty == "easyeda":
+        found = (FETCHED_SRC / name / f"{name}.kicad_mod").exists()
+        return load_footprint("easyeda", pretty, name) if found else None
     for lib, meta in LIBRARIES.items():
         root = meta.get("footprints")
         if root and (Path(root) / f"{pretty}.pretty" / f"{name}.kicad_mod").exists():

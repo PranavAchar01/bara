@@ -109,7 +109,23 @@ def _feature_box(f: Feature, t: float, z_lo: float | None = None) -> mf.Manifold
     lo, hi = f.z_range(t)
     if z_lo is not None:
         lo = z_lo
-    return _prism(_rect_cs(f.x, f.y, f.w, f.d, f.rot_deg), lo, max(hi, lo + 0.01))
+    if f.role == "knob":  # a knob is turned: round, whatever box its catalog row gives
+        cs = mf.CrossSection.circle(max(f.w, f.d) / 2, 64).translate((f.x, f.y))
+    else:
+        cs = _rect_cs(f.x, f.y, f.w, f.d, f.rot_deg)
+    return _prism(cs, lo, max(hi, lo + 0.01))
+
+
+# Parts built to share one position, beyond the stacked ones: a stabilizer wraps its switch
+# and sits under the cap.
+MATING_ROLES = STACKED_ROLES | {("stabilizer", "switch"), ("stabilizer", "keycap")}
+
+
+def _mates(a: Feature, b: Feature) -> bool:
+    """True when two parts are designed to occupy the same spot (declared pair, same centre)."""
+    if (a.role, b.role) not in MATING_ROLES and (b.role, a.role) not in MATING_ROLES:
+        return False
+    return math.hypot(a.x - b.x, a.y - b.y) < max(a.w, a.d, b.w, b.d) / 2
 
 
 def _stack_partner(f: Feature, feats: list[Feature]) -> Feature | None:
@@ -268,10 +284,14 @@ def validate(report: EncloseReport) -> list[dict[str, Any]]:
         if f.role == "trackball":
             continue
         box = _feature_box(f, t, _z_lo(f, feats, t))
-        v = (box ^ case).volume()
-        if v > LIMITS["overlap_volume_mm3"]:
-            offenders.append(f"{f.ref} ({v:.1f} mm3)")
+        hit = box ^ case
+        v = hit.volume()
         lo, hi = f.z_range(t)
+        if v > LIMITS["overlap_volume_mm3"]:
+            bb = hit.bounding_box()  # where the case meets the part: its roof (z) or a wall
+            offenders.append(
+                f"{f.ref} ({v:.1f} mm3; case z {bb[2]:.1f}-{bb[5]:.1f} vs part {lo:.1f}-{hi:.1f})"
+            )
         zc = (max(lo, 0.0) + max(hi, 0.0)) / 2 if f.side == "top" else (lo + hi) / 2
         a = math.radians(f.rot_deg)
         for ux, uy, half in (
@@ -320,7 +340,7 @@ def validate(report: EncloseReport) -> list[dict[str, Any]]:
     for i in range(len(feats)):
         for j in range(i + 1, len(feats)):
             a, b = feats[i], feats[j]
-            if (a.role, b.role) in STACKED_ROLES or (b.role, a.role) in STACKED_ROLES:
+            if _mates(a, b):
                 continue
             if min(zr[i][1], zr[j][1]) - max(zr[i][0], zr[j][0]) <= LIMITS["overlap_depth_mm"]:
                 continue
@@ -461,12 +481,14 @@ def validate(report: EncloseReport) -> list[dict[str, Any]]:
                 **kw,
             )
         )
+    wheeled = {w["ref"] for w in report.openings.get("wheels", [])}
     for f in feats:
         if f.role != "encoder":
             continue
         s = time.perf_counter()
         _, z_hi = f.z_range(t)
-        r = max(f.w, f.d) / 2
+        # a wheel on the shaft turns in its own slot; only the slot over the shaft must be open
+        r = 0.0 if f.ref in wheeled else max(f.w, f.d) / 2
         blocked = sum(
             1
             for a in np.linspace(0, 2 * math.pi, 8, endpoint=False)

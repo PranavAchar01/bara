@@ -22,8 +22,10 @@ from typing import Any
 
 import manifold3d as mf
 import numpy as np
+from shapely.geometry import Polygon
 
 from bara.config import load_settings
+from bara.geometry import shell
 from bara.geometry.meshio import MeshPart, write_3mf, write_glb, write_stl
 
 # Hand-set constants (not derived from a part record or a measurement). One table, on purpose.
@@ -57,14 +59,24 @@ HAND_SET: dict[str, float] = {
     "circular_segments": 48,
 }
 
+TOUCH_MIN_MM = 9.0  # smallest opening for a part a person touches
 DEFAULT_CASE_HEX = "#9E9E9E"
+# A sculpted product with no colour asked for gets a matte warm plastic: saturated enough that the
+# viewer's material pass (assets.ts treats light neutral greys as metal) keeps it dielectric, and
+# unlike the PCB's solder-mask green. Keycaps and buttons are a contrasting separate part.
+SHAPED_BODY_HEX = "#E6DCCB"
+GLASS_HEX = "#11161D"
+BODY_ROUGHNESS = 0.66
+CAP_ROUGHNESS = 0.42
 
 # Roles taller than the bezel underside get an opening; these keep their own opening shape.
 ROLE_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
+    ("stabilizer", ("stabilizer",)),
     ("keycap", ("keycap",)),
     ("knob", ("knob",)),
     ("trackball", ("trackball", "ball")),
     ("encoder", ("rotary_encoder", "encoder", "ec11", "ec12")),
+    ("indicator_led", ("indicator_led",)),
     ("screen", ("oled", "display", "lcd", "ssd1306", "screen", "epaper", "tft")),
     ("sensor", ("pmw", "paw3", "optical_sensor")),
     ("battery", ("battery", "lipo", "li-po", "18650", "cr2032")),
@@ -140,6 +152,7 @@ class Feature:
     licence: str = ""
     z_bottom: float | None = None  # explicit lower z in the board frame, when known
     z_top: float | None = None  # explicit upper z (parts off the board, e.g. a ball sensor)
+    touch: bool = False  # a person touches or looks at it: it gets an opening in the shell
 
     def z_range(self, t: float) -> tuple[float, float]:
         if self.z_bottom is not None and self.z_top is not None:
@@ -247,6 +260,30 @@ def _ccw(poly: np.ndarray) -> np.ndarray:
 # ---------------------------------------------------------------- inputs
 
 
+HIDDEN_ROLES = {"battery", "mcu", "sensor", "other"}  # roles a part can have out of reach
+
+
+SLIVER_MM3 = 150.0  # a loose bezel strip smaller than this would snap off: the openings merge
+ISLAND_FRACTION = 0.02  # nor can an island ringed by openings (the middle of a button diamond)
+
+
+def _drop_slivers(m: mf.Manifold) -> mf.Manifold:
+    """Two openings a hair apart leave a loose strip of bezel between them; a strip that small
+    cannot be printed or held, so it goes and the openings join. So does an island the
+    openings ring round: nothing holds it to the shell."""
+    pieces = m.decompose()
+    if len(pieces) <= 1:
+        return m
+    floor = max(SLIVER_MM3, ISLAND_FRACTION * max(p.volume() for p in pieces))
+    keep = [p for p in pieces if p.volume() >= floor]
+    if not keep:
+        return m
+    out = keep[0]
+    for p in keep[1:]:
+        out = out + p
+    return out
+
+
 def infer_role(*texts: str | None) -> str:
     blob = " ".join(t.lower() for t in texts if t)
     for role, words in ROLE_KEYWORDS:
@@ -267,7 +304,11 @@ def _feature_from_placement(p: dict[str, Any]) -> Feature | None:
     size = p.get("size_mm") or [0, 0]
     role = p.get("role") or infer_role(p.get("lib_id"), p.get("ref"))
     if role not in {r for r, _ in ROLE_KEYWORDS} and role != "other":
-        role = infer_role(role, p.get("lib_id"))
+        # a board-side role (module, module_connector, connector) says where a part sits, not
+        # what it is: read the part itself, so a connector to a module is not a controller
+        role = infer_role(p.get("lib_id")) if p.get("lib_id") else infer_role(p.get("label"))
+        if not p.get("touch") and role not in HIDDEN_ROLES:
+            role = "other"  # a part nobody touches is no port or control (USBLC6 is an ESD IC)
     w, d = _num(size[0], 0.0), _num(size[1] if len(size) > 1 else size[0], 0.0)
     if w <= 0 or d <= 0:
         return None
@@ -285,6 +326,7 @@ def _feature_from_placement(p: dict[str, Any]) -> Feature | None:
         source_url=str(p.get("source_url") or ""),
         licence=str(p.get("licence") or ""),
         z_bottom=None if p.get("z_bottom_mm") is None else _num(p.get("z_bottom_mm"), 0.0),
+        touch=bool(p.get("touch")),
     )
 
 
@@ -372,6 +414,23 @@ def collect_features(board: dict[str, Any], parts: list[dict[str, Any]]) -> list
     return feats
 
 
+def cap_color(body_hex: str) -> str:
+    """Keycap and button colour: graphite on a light body, warm sand on a dark one."""
+    h = body_hex.lstrip("#")
+    lum = sum(int(h[i : i + 2], 16) * w for i, w in ((0, 0.2126), (2, 0.7152), (4, 0.0722))) / 255
+    return "#2F343B" if lum > 0.45 else "#D8C8A8"
+
+
+def _largest_polygon(g: Any) -> Polygon:
+    """Biggest ring of a CrossSection or shapely geometry, as a simple shapely polygon."""
+    if isinstance(g, mf.CrossSection):
+        polys = [Polygon(p) for p in g.to_polygons() if len(p) >= 3]
+        return max(polys, key=lambda p: p.area)
+    if hasattr(g, "geoms"):
+        g = max(g.geoms, key=lambda p: p.area)
+    return Polygon(g.exterior)
+
+
 def case_color(brief: dict[str, Any]) -> tuple[str, str]:
     colors = brief.get("colors") or brief.get("colours") or {}
     candidates: list[Any] = []
@@ -457,12 +516,27 @@ def enclosure_dir() -> Path:
     return load_settings().assets_dir / "cache" / "enclosures"
 
 
-def mesh_part(name: str, m: mf.Manifold, transform: np.ndarray, hex_color: str) -> MeshPart:
-    mesh = m.calculate_normals(3, 40.0).to_mesh(3)
+def mesh_part(
+    name: str, m: mf.Manifold, transform: np.ndarray, hex_color: str, roughness: float = 0.55
+) -> MeshPart:
+    # property channel 0 sits after the three position columns: the normals land in columns 3:6
+    mesh = m.calculate_normals(0, 40.0).to_mesh()
     props = np.asarray(mesh.vert_properties, dtype=np.float64)
     v = props[:, :3] @ transform[:3, :3].T + transform[:3, 3]
     n = props[:, 3:6] @ transform[:3, :3].T
-    return MeshPart(name, v, np.asarray(mesh.tri_verts, dtype=np.int64), n, hex_color)
+    n /= np.maximum(np.linalg.norm(n, axis=1, keepdims=True), 1e-12)
+    return MeshPart(name, v, np.asarray(mesh.tri_verts, dtype=np.int64), n, hex_color, roughness)
+
+
+OWN_HOLE_ROLES = ("trackball", "sensor")
+OPENING_ROLES = ("switch", "keycap", "encoder", "knob", "screen", "indicator_led")
+
+
+def _hidden(f: Feature) -> bool:
+    """A top-side part the shell covers: it gets a blind pocket, never an opening."""
+    if f.side == "bottom" or f.role in OWN_HOLE_ROLES or f.role in OPENING_ROLES:
+        return False
+    return True  # a touched part with no opening role still needs the skin over it
 
 
 def enclose_report(
@@ -479,6 +553,8 @@ def enclose_report(
     feats = collect_features(board, parts_with_poses)
     side = board_side(board, outline)
     hex_color, color_source = case_color(brief)
+    if color_source == "default" and _num(brief.get("body_thickness_mm"), 0.0) > 0:
+        hex_color = SHAPED_BODY_HEX
     tent = tent_angle(brief)
 
     board_cs = mf.CrossSection([outline.tolist()])
@@ -491,20 +567,32 @@ def enclose_report(
 
     top = t  # board top surface
     wall_top = top + H["wall_top_mm"]
-    bezel_top = top + H["bezel_top_mm"]
+    # the skin covers every part that gets no opening, so a tall hidden part lifts the top
+    plate = H["bezel_top_mm"] - H["wall_top_mm"]
+    covered = [f.z_range(t)[1] + H["part_opening_clearance_mm"] for f in feats if _hidden(f)]
+    bezel_top = max([top + H["bezel_top_mm"], *(z + plate for z in covered)])
 
     # Pockets for bottom-side parts; the floor goes under the deepest one.
     pockets: list[mf.Manifold] = []
     deepest = 0.0
+    balls = [f for f in feats if f.role == "trackball"]
+
+    def under_ball(f: Feature) -> bool:
+        return any(math.hypot(f.x - b.x, f.y - b.y) < max(b.w, b.d) / 2 for b in balls)
+
+    # a sensor facing the desk (an optical mouse) looks through the floor; under a ball the
+    # cup below gives it its own pocket
+    desk_sensors = [
+        f for f in feats if f.role == "sensor" and f.side == "bottom" and not under_ball(f)
+    ]
     for f in feats:
-        if f.side != "bottom" or f.height <= 0 or f.role == "sensor":
+        if f.side != "bottom" or f.height <= 0 or (f.role == "sensor" and under_ball(f)):
             continue
         depth = f.height + H["floor_clearance_mm"]
         deepest = max(deepest, depth)
         c = H["pocket_clearance_mm"] * 2
         pockets.append(_prism(_rect_cs(f.x, f.y, f.w + c, f.d + c, f.rot_deg), -depth, 0.01))
 
-    balls = [f for f in feats if f.role == "trackball"]
     ball_geo: list[dict[str, float]] = []
     z_bot = -deepest - H["floor_mm"]
     for b in balls:
@@ -543,20 +631,89 @@ def enclose_report(
         cup_bottom = cz - r - H["ball_clearance_mm"] - H["cup_wall_mm"]
         z_bot = min(z_bot, pocket_bottom - H["floor_mm"], cup_bottom)
 
+    # The product's own thickness (from its form) sets the body height; the board stays at the
+    # top, with the extra body below it; on a desk the floor stays put and the body domes above.
+    body = _num(brief.get("body_thickness_mm"), 0.0)
+    if body > 0 and body > bezel_top - z_bot and not desk_sensors:
+        z_bot = bezel_top - body
+    shaped = body > 0
+
     t_geo = time.perf_counter()
+    seat = wall_top
+    sculpt: shell.Body | None = None
+    site_feats = shell.Features()
+    sites: list[shell.Site] = []
+    crown = 0.0
+    if shaped:
+        sites = shell.sites_from_anchors(list(brief.get("anchors") or []), feats, t)
+        claimed_refs = {s_.ref for s_ in sites if s_.ref}
+        port_parts = [f for f in feats if f.role == "usb"] or [f for f in feats if f.role == "mcu"]
+        raw = _largest_polygon(outer_cs)
+        for f in port_parts:  # a port part no anchor claimed still gets its slot
+            if f.ref in claimed_refs:
+                continue
+            face, _ = _port_exit(f.x, f.y, outer_cs)
+            dx, dy = FACE_DIR[face]
+            deg = math.degrees(math.atan2(dy, dx))
+            site = shell.Site("port", -1, f.x, f.y, "edge", deg, f.w, f.d, f.rot_deg, ref=f.ref)
+            site.z_hi = f.z_range(t)[1]
+            sites.append(site)
+        for st in sites:
+            if st.kind == "port":
+                st.normal_deg = shell.snap_axis(st.normal_deg, 20.0)
+        for lobe in shell.shoulder_lobes(sites, raw):
+            raw = _largest_polygon(raw.union(lobe))
+        x0, y0, x1, y1 = raw.bounds
+        r_min = shell.plan_min_radius(x1 - x0, y1 - y0)
+        required = Polygon(outline).buffer(H["tray_clearance_mm"] + 1.5, join_style="round")
+        plan = shell.smooth_plan(raw, r_min, required)
+        outer_cs = mf.CrossSection([_ccw(np.asarray(plan.exterior.coords)[:-1]).tolist()])
+        prof = shell.profile_for(
+            z_bot,
+            seat,
+            bezel_top,
+            body,
+            _num(brief.get("edge_thickness_mm"), 0.0),
+            min(x1 - x0, y1 - y0),
+            r_min,
+            desk=bool(desk_sensors),
+        )
+        sculpt = shell.build_body(plan, prof)
+        z_port: dict[str, float] = {}
+        for f in port_parts:
+            z_lo_, z_hi_ = f.z_range(t)
+            z_port[f.ref] = (top + max(z_hi_, top + 1.0)) / 2 if f.side == "top" else z_lo_ / 2
+        site_feats = shell.build_features(
+            sites,
+            sculpt,
+            seat,
+            H["wall_mm"],
+            H["part_opening_clearance_mm"],
+            H["usb_opening_w_mm"],
+            H["usb_opening_h_mm"],
+            z_port,
+        )
+        crown = prof.crown
+
     # ---- tray
-    solids = [_prism(outer_cs, z_bot, wall_top)]
+    if sculpt is not None:
+        solids = [sculpt.solid.trim_by_plane((0, 0, -1), -wall_top)]
+        z_bot = min(z_bot, float(sculpt.solid.bounding_box()[2]))
+    else:
+        solids = [_prism(outer_cs, z_bot, wall_top)]
     for g in ball_geo:
         rr = g["r"] + H["ball_clearance_mm"] + H["cup_wall_mm"]
         solids.append(_prism(_circle_cs(g["x"], g["y"], rr), z_bot, wall_top))
     tray = _union(solids)
     cuts = [_prism(inner_cs, 0.0, wall_top + 1.0), *pockets]
+    for f in desk_sensors:
+        cuts.append(_prism(_circle_cs(f.x, f.y, H["sensor_window_d_mm"] / 2), z_bot - 1.0, 0.01))
     tray = tray - _union(cuts)
     for g in ball_geo:
         rin = g["r"] + H["ball_clearance_mm"]
-        shell = mf.Manifold.sphere(rin + H["cup_wall_mm"]).translate((g["x"], g["y"], g["cz"]))
-        shell = shell.trim_by_plane((0, 0, -1), -g["cz"])  # keep z <= centre
-        tray = tray + shell
+        cup = mf.Manifold.sphere(rin + H["cup_wall_mm"]).translate((g["x"], g["y"], g["cz"]))
+        cup = cup.trim_by_plane((0, 0, -1), -g["cz"])  # keep z <= centre
+        tray = tray + cup
         tray = tray - mf.Manifold.sphere(rin).translate((g["x"], g["y"], g["cz"]))
         tray = tray - _prism(_circle_cs(g["x"], g["y"], rin), g["cz"], wall_top + 1.0)
         tray = tray - _prism(
@@ -568,16 +725,34 @@ def enclose_report(
             g["pocket_bottom"],
             g["lens_z"],
         )
+    if sculpt is not None:
+        # the board seats on a ledge round its edge that never enters a pocket, and any piece
+        # the cuts left floating is tied to the main body by a rib
+        ledge = _prism(board_cs - board_cs.offset(-2.0, mf.JoinType.Round), -H["floor_mm"], 0.0)
+        under = [
+            _prism(_rect_cs(f.x, f.y, f.w + 2.0, f.d + 2.0, f.rot_deg), -H["floor_mm"], 0.01)
+            for f in feats
+            if f.side == "bottom" and f.height > 0
+        ]
+        if under:
+            ledge = ledge - _union(under)
+        tray = tray + (ledge ^ sculpt.solid)
+        tray = shell.connect_pieces(tray, sculpt.solid, 0.0)
+        for w in site_feats.wall_cuts:
+            tray = tray - w
 
     # ---- bezel openings
-    seat = wall_top
     holes_cs: list[mf.CrossSection] = []
+    pockets: list[tuple[mf.CrossSection, float]] = []
     openings: dict[str, Any] = {"keys": 0, "encoders": [], "screens": [], "usb": []}
+    openings["wheels"] = site_feats.wheels
     keycaps = [f for f in feats if f.role == "keycap"]
     for f in feats:
         z_lo, z_hi = f.z_range(t)
-        if f.side == "bottom" or f.role in ("trackball", "sensor"):
+        if f.side == "bottom" or f.role in OWN_HOLE_ROLES:
             continue
+        if f.ref in site_feats.claimed:
+            continue  # the form's anchor already gave it a sculpted feature
         if f.role == "switch":
             if keycaps:
                 continue
@@ -598,24 +773,61 @@ def enclose_report(
         elif f.role == "screen":
             holes_cs.append(_rect_cs(f.x, f.y, f.w, f.d, f.rot_deg))
             openings["screens"].append(f.ref)
-        elif z_hi > seat - 0.01:
+        elif f.role == "indicator_led":
+            # a round light hole: the LED shows through the skin, nothing frames it
+            r = max(f.w, f.d) / 2 + H["part_opening_clearance_mm"]
+            holes_cs.append(_circle_cs(f.x, f.y, r))
+            openings.setdefault("lights", []).append({"ref": f.ref, "r": r})
+        elif f.touch and f.role not in ("usb", "mcu", "battery"):
+            # finger-sized, soft-cornered: a bare switch footprint is far smaller than the
+            # button a person presses
             c = 2 * H["part_opening_clearance_mm"]
+            ow, od = max(f.w + c, TOUCH_MIN_MM), max(f.d + c, TOUCH_MIN_MM)
+            r = 0.4 * min(ow, od)
+            holes_cs.append(
+                _rect_cs(f.x, f.y, ow, od, f.rot_deg)
+                .offset(-r, mf.JoinType.Round)
+                .offset(r, mf.JoinType.Round)
+            )
+            # the soft corners must not clip the part: its own clearance box is cut too
             holes_cs.append(_rect_cs(f.x, f.y, f.w + c, f.d + c, f.rot_deg))
+        elif z_hi > seat - 0.01:
+            # hidden, so it gets a blind pocket under the skin, not a hole a person sees
+            c = 2 * H["part_opening_clearance_mm"]
+            pockets.append((_rect_cs(f.x, f.y, f.w + c, f.d + c, f.rot_deg), z_hi + c / 2))
     for g in ball_geo:
         holes_cs.append(_circle_cs(g["x"], g["y"], g["r"] + H["ball_ring_clearance_mm"]))
-    bezel = _prism(outer_cs, seat, bezel_top)
+    if sculpt is not None:
+        bezel = sculpt.solid.trim_by_plane((0, 0, 1), seat)
+        if site_feats.adds:
+            bezel = bezel + _union(site_feats.adds)
+        zhole = float(sculpt.solid.bounding_box()[5]) + 1.0
+        if site_feats.cuts:
+            bezel = bezel - _union(site_feats.cuts)
+        for w in site_feats.wall_cuts:
+            bezel = bezel - w
+    else:
+        bezel = _prism(outer_cs, seat, bezel_top)
+        zhole = bezel_top + crown + 1
     if holes_cs:
         bezel = bezel - _prism(
             mf.CrossSection.batch_boolean(holes_cs, mf.OpType.Add)
             if len(holes_cs) > 1
             else holes_cs[0],
             seat - 1,
-            bezel_top + 1,
+            zhole,
         )
+
+    for cs, z_top in pockets:
+        bezel = bezel - _prism(cs, seat - 1, z_top)
 
     # ---- USB openings through the wall (tray and bezel)
     cutouts: list[dict[str, Any]] = []
     usb_feats = [f for f in feats if f.role == "usb"] or [f for f in feats if f.role == "mcu"]
+    if sculpt is not None:  # the sculpted shell cut its ports at the form's anchors
+        usb_feats = []
+        cutouts.extend(site_feats.cutouts)
+        openings["usb"].extend(site_feats.ports)
     for f in usb_feats:
         face, exit_s = _port_exit(f.x, f.y, outer_cs)
         dx, dy = FACE_DIR[face]
@@ -645,6 +857,7 @@ def enclose_report(
                 "size_mm": [w, h],
             }
         )
+    bezel = _drop_slivers(bezel)
     for o in openings["encoders"]:
         f = next(x for x in feats if x.ref == o["ref"])
         cutouts.append(
@@ -709,6 +922,8 @@ def enclose_report(
     m34 = xform[:3, :].tolist()
     tray_w = tray.transform(m34)
     bezel_w = bezel.transform(m34)
+    caps_w = [c.transform(m34) for c in site_feats.caps]
+    glass_w = [c.transform(m34) for c in site_feats.glass]
     if tent > 0:
         up = xform[:3, :3] @ np.array([0, 0, 1.0])
         p0 = xform[:3, :3] @ np.array([0, 0, z_bot]) + xform[:3, 3]
@@ -721,6 +936,8 @@ def enclose_report(
     lift = -tray_w.bounding_box()[2]
     tray_w = tray_w.translate((0, 0, lift))
     bezel_w = bezel_w.translate((0, 0, lift))
+    caps_w = [c.translate((0, 0, lift)) for c in caps_w]
+    glass_w = [c.translate((0, 0, lift)) for c in glass_w]
     xform[2, 3] += lift
     t_geo_ms = (time.perf_counter() - t_geo) * 1000
 
@@ -737,14 +954,23 @@ def enclose_report(
             "tent": tent,
             "side": side,
             "hand": HAND_SET,
-            "v": 1,
+            "v": 3,
+            "anchors": brief.get("anchors"),
+            "body": body,
+            "edge": brief.get("edge_thickness_mm"),
         }
     )[:24]
     ident = np.eye(4)
     parts_mesh = [
-        mesh_part(f"{eid}_tray", tray_w, ident, hex_color),
-        mesh_part(f"{eid}_bezel", bezel_w, ident, hex_color),
+        mesh_part(f"{eid}_tray", tray_w, ident, hex_color, BODY_ROUGHNESS),
+        mesh_part(f"{eid}_bezel", bezel_w, ident, hex_color, BODY_ROUGHNESS),
     ]
+    if caps_w:
+        parts_mesh.append(
+            mesh_part(f"{eid}_caps", _union(caps_w), ident, cap_color(hex_color), CAP_ROUGHNESS)
+        )
+    if glass_w:
+        parts_mesh.append(mesh_part(f"{eid}_glass", _union(glass_w), ident, GLASS_HEX, 0.12))
     out_dir = enclosure_dir()
     out_dir.mkdir(parents=True, exist_ok=True)
     assets = []

@@ -827,7 +827,10 @@ function framePose(kind: FrameKind, cam: THREE.PerspectiveCamera, predictExplode
   const dir =
     kind === "top"
       ? new THREE.Vector3(0, -0.0001, 1)
-      : kind === "front"
+      : kind === "bottom"
+        ? // keyboards and most two-sided boards carry their circuit (diodes, sockets, routing) on the back
+          new THREE.Vector3(0, -0.0001, -1)
+        : kind === "front"
         ? new THREE.Vector3(0, -1, 0.18)
         : kind === "side"
           ? new THREE.Vector3(1, 0, 0.18)
@@ -1154,6 +1157,7 @@ function SceneContents(props: {
     return owner;
   }, [parts, hiddenPcbs]);
   const boardOnly = props.boardOnly;
+  const preset = useApp((s) => s.preset);
   const visible = parts.filter((p) => {
     if (hiddenPcbs.has(p.instance_id)) return false;
     const pcb = String(p.card.kind) === "pcb";
@@ -1166,7 +1170,7 @@ function SceneContents(props: {
   return (
     <>
       <StudioEnvironment palette={props.palette} post={props.post} />
-      <StudioFloor palette={props.palette} revision={revision} grid />
+      {preset !== "bottom" && <StudioFloor palette={props.palette} revision={revision} grid />}
       <ExplodeDriver />
       <group ref={rootRef}>
         {visible.map((p) => (
@@ -1333,7 +1337,7 @@ function ViewportToolbar(props: {
       </label>
       <span className="vp-sep" />
       <div className="seg">
-        {(["iso", "top", "front", "side"] as const).map((p) => (
+        {(["iso", "top", "bottom", "front", "side"] as const).map((p) => (
           <button key={p} type="button" className={`seg-btn ${preset === p ? "active" : ""}`} onClick={() => setPreset(p)}>
             {p}
           </button>

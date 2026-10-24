@@ -14,11 +14,17 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any
 
+from shapely.geometry import Polygon
+
 from bara.live import adapters as A
-from bara.live import archetype
+from bara.live import archetype, completeness, hero
+from bara.live import blocks as blocks_mod
+from bara.live import form as form_mod
+from bara.live import identity as identity_mod
 from bara.live.brief import BriefResult, normalise_brief, spec_from_brief, write_brief
 from bara.live.catalog_source import PartSource, merge_into_catalog, model_asset
 from bara.live.compose import Composer, ComposeResult, Slot
+from bara.live.fetch import as_overlay
 from bara.live.firmware import make_firmware
 from bara.live.layout import KeyboardPlan, plan_keyboard
 from bara.util import error_obj
@@ -148,10 +154,27 @@ class _Stage:
         self.emit("stage.completed", payload)
 
 
+def _spans(product: form_mod.Form, size: tuple[float, float]) -> bool:
+    """True when the form already has the declared width and height (either way round)."""
+    xs = [p[0] for p in product.silhouette]
+    ys = [p[1] for p in product.silhouette]
+    w, h = max(xs) - min(xs), max(ys) - min(ys)
+    return any(abs(a - b) <= 0.1 * b for a, b in ((w, size[0]), (h, size[1]))) and any(
+        abs(a - b) <= 0.1 * b for a, b in ((w, size[1]), (h, size[0]))
+    )
+
+
+def _extent(product: form_mod.Form) -> tuple[float, float, float]:
+    """Overall width, height and area of the silhouette."""
+    xs = [p[0] for p in product.silhouette]
+    ys = [p[1] for p in product.silhouette]
+    return max(xs) - min(xs), max(ys) - min(ys), Polygon(product.silhouette).area
+
+
 class LiveRunner:
     def __init__(self, engine: Engine, source: PartSource) -> None:
         self.engine = engine
-        self.source = source
+        self.source = as_overlay(source)
         self.catalog = engine.catalog
         self.settings = engine.settings
 
@@ -188,13 +211,65 @@ class LiveRunner:
         plan = plan_keyboard(brief)
         self.reuse(run, spec, brief)
         result = await self.compose(run, spec, brief, plan)
+        if not result.chosen_parts:  # nothing resolved is a failed build, never an empty DONE
+            why = result.error or "No part could be chosen for this request; nothing to build."
+            run.emit(
+                "build.failed",
+                {"error": error_obj("E_CRITICAL_PART_MISSING", why, stage="compose")},
+            )
+            return
         merge_into_catalog(self.catalog, list(result.chosen_parts.values()))
         board = await self.place(run, brief, plan, result, ctx)
         await self.enclose(run, brief, plan, result, board, ctx)
         board = await self.board_stage(run, board, result, ctx)
+        if plan is None:
+            critique = await self.identity(run, ctx)
+            if critique:  # one repair pass: redraw the form from the reviewer's notes
+                run.repair = critique  # type: ignore[attr-defined]
+                board = await self.place(run, brief, plan, result, ctx)
+                await self.enclose(run, brief, plan, result, board, ctx)
+                board = await self.board_stage(run, board, result, ctx)
+                await self.identity(run, ctx, final=True)
         self.firmware(run, brief, plan, result, board)
         self.render(run, result, board, ctx)
+        failure = self.gate(run)
+        if failure is not None:
+            run.emit("build.failed", {"error": failure})
+            return
         run.emit("build.done", self.engine._done_payload(run, {}))
+
+    # checks that decide whether the product exists: any one failing ends the build as failed
+    FIT_REPAIRS = 2
+    REQUIRED = {
+        "device.complete": "E_CRITICAL_PART_MISSING",
+        "slot.critical_filled": "E_CRITICAL_PART_MISSING",
+        "form.valid": "E_ENCLOSURE_FAILED",
+        "form.fit": "E_ENCLOSURE_FAILED",
+        "identity.reads_as_device": "E_ENCLOSURE_FAILED",
+        "board.drc": "E_BOARD_FAILED",
+        "board.routing.complete": "E_BOARD_FAILED",
+        "mech.fit.enclosure": "E_ENCLOSURE_FAILED",
+        "mech.fit.collision": "E_ENCLOSURE_FAILED",
+        "mech.fit.floating": "E_ENCLOSURE_FAILED",
+    }
+
+    def gate(self, run: BuildRun) -> dict[str, Any] | None:
+        """A failing required check is a failed build, never a clean DONE. The artefacts stay
+        in the build state so the failure can be looked at."""
+        latest: dict[str, dict[str, Any]] = {}
+        for check in run.state["checks"]:
+            latest[check.get("rule_id") or check.get("check_key") or ""] = check
+        bad = [
+            (rid, latest[rid])
+            for rid in self.REQUIRED
+            if latest.get(rid, {}).get("status") == "fail"
+        ]
+        if not bad:
+            return None
+        text = "; ".join(f"{rid}: {c.get('message', '')[:140]}" for rid, c in bad)
+        return error_obj(
+            self.REQUIRED[bad[0][0]], f"Build failed required checks. {text}", stage="render"
+        )
 
     # ---- classify ------------------------------------------------------------------------
     async def classify(self, run: BuildRun) -> tuple[dict[str, Any], dict[str, Any]] | None:
@@ -213,6 +288,15 @@ class LiveRunner:
             support = ("mech.", "interconnect.", "power.", "compute.", "comms.")
             if blocking and any(not f.startswith(support) for f in res.brief.get("functions", [])):
                 blocking = res.brief["blocking_facet"] = None
+            if blocking and res.brief["scope"] == "in_scope":
+                # a named device implies its job: the block diagram answers what the brief could not
+                got, _ = await blocks_mod.derive(run.prompt, self.catalog.function_ids())
+                if got is not None:
+                    run.live_blocks = got  # type: ignore[attr-defined]
+                    blocking = res.brief["blocking_facet"] = None
+                    msg = "The request names no function; built the usual "
+                    msg += f"{got['device_class']} from its function block diagram."
+                    self._warn(run, "classify", "w_blocking", "assumption_made", "warning", msg)
             if not blocking or round_no > MAX_CLARIFY_ROUNDS or res.brief["scope"] != "in_scope":
                 break
             st.done("needs_input", "The request names no function; asking instead of guessing.")
@@ -240,6 +324,25 @@ class LiveRunner:
         for warning in res.warnings:
             run.emit("warning", {"warning": copy.deepcopy(warning)}, stage="classify")
         assumptions = [a for r in resolutions for a in r["resolution"].get("assumptions", [])]
+        if res.brief["scope"] != "in_scope" and await completeness.low_voltage_mains(run.prompt):
+            # A charger or power strip is built as its low-voltage half around a certified
+            # AC-DC module; the mains side is never ours (see the safety.mains_wiring check).
+            res.brief["scope"] = "in_scope"
+            res.brief["blocking_facet"] = None
+            res.brief["device_class"] = (
+                res.brief.get("device_class")
+                if res.brief.get("device_class") not in (None, "other")
+                else "other"
+            )
+            self._warn(
+                run,
+                "classify",
+                "w_mains",
+                "assumption_made",
+                "warning",
+                "Mains device: built as the low-voltage half around a certified AC-DC module; "
+                "the mains side is the module's job.",
+            )
         if res.brief["scope"] == "in_scope":
             arch = archetype.apply(
                 prompt, res.brief, self.source, self.settings.data_dir / "archetypes.json"
@@ -337,6 +440,12 @@ class LiveRunner:
         )
         st.done()
 
+    def _write_chain(self, run: BuildRun, record: dict[str, Any]) -> None:
+        """Keep the jobs -> functions -> blocks -> parts chain next to the build's artefacts."""
+        out = self.settings.data_dir / "cache" / "chains"
+        out.mkdir(parents=True, exist_ok=True)
+        (out / f"{run.build_id}.json").write_text(json.dumps(record, indent=1))
+
     # ---- compose -------------------------------------------------------------------------
     async def compose(
         self,
@@ -347,7 +456,20 @@ class LiveRunner:
     ) -> ComposeResult:
         st = self._stage(run, "compose", "Choosing parts")
         controllers = A.board_controllers() if plan is not None else {}
-        composer = Composer(self.source, spec, brief, plan, self.settings, controllers)
+        blocks = getattr(run, "live_blocks", None)
+        if plan is None and blocks is None:
+            for _ in range(2):  # the diagram sets every part and quantity; one retry on failure
+                blocks, note = await blocks_mod.derive(run.prompt, self.catalog.function_ids())
+                if blocks is not None:
+                    break
+            if blocks is None:  # no silent defaults: guessed parts and counts are not a design
+                msg = f"The function block diagram could not be derived ({note}); nothing built."
+                st.done()
+                return ComposeResult(slots=[], error=msg)
+        run.live_blocks = blocks  # type: ignore[attr-defined]
+        composer = Composer(
+            self.source, spec, brief, plan, self.settings, controllers, blocks=blocks
+        )
         st.emit("slots.ready", {"slots": [s.json() for s in composer.slots]})
         if plan is not None:
             for half in plan.halves:
@@ -357,6 +479,16 @@ class LiveRunner:
                 )
                 st.emit("layout.added", {"layout": plan.layout_json(half, lid, name)})
         result = await composer.run(st.emit, st.progress)
+        record = blocks_mod.chain(blocks, composer.slots, composer.comp.dropped)
+        run.use_case_chain = record  # type: ignore[attr-defined]
+        uc = record["use_case"] or {}
+        jobs = "; ".join(uc.get("jobs") or [])
+        unresolved = sum(1 for k in record["links"] if k["outcome"].startswith("UNRESOLVED"))
+        tail = f" -> {len(record['links'])} blocks, {unresolved} unresolved"
+        room = 120 - len("use case: ") - len(tail)  # stage.progress message maxLength
+        head = jobs if len(jobs) <= room else jobs[: room - 3].rstrip() + "..."
+        st.progress(f"use case: {head}{tail}", None)
+        self._write_chain(run, record)
         checks = composer.checks()
         if checks:
             st.emit("check.result", {"results": checks})
@@ -439,6 +571,228 @@ class LiveRunner:
         st.done()
         return board
 
+    @staticmethod
+    def _touches(result: ComposeResult) -> list[form_mod.Touch]:
+        """Slots a person touches, sees or plugs into: the form stage gives each an anchor."""
+        out = []
+        for slot in result.slots:
+            if slot.chosen is None or not slot.quantity:
+                continue
+            fid = slot.function_id
+            plain = fid.split(".")[0] in ("input", "output", "display") or fid == "power.usb_in"
+            if (slot.need is not None and slot.need.touch) or (slot.need is None and plain):
+                groups = slot.need.groups if slot.need is not None else ()
+                out.append(
+                    form_mod.Touch(slot.slot_id, slot.label, fid, max(1, slot.quantity), groups)
+                )
+        return out
+
+    async def form_stage(
+        self,
+        run: BuildRun,
+        result: ComposeResult,
+        st: _Stage,
+        fit: dict[str, Any] | None = None,
+    ) -> form_mod.Form | None:
+        """The product's silhouette and anchors, from the model grounded on reference designs."""
+        touches = self._touches(result)
+        st.progress("Designing the product form", 0.0)
+        previous = getattr(run, "product_form", None)
+        repair = getattr(run, "repair", "")
+        floor = getattr(run, "fit_floor", None)
+        if repair and not fit and floor:  # the parts need this much: change the shape within it
+            repair += (
+                f"\nHard constraint: the parts only fit a form at least {floor[0]:.0f} x "
+                f"{floor[1]:.0f} mm overall with at least {floor[2]:.0f} mm2 of area. Keep every "
+                f"dimension and the area at or above that; change only the shape within it."
+            )
+        product, note = await form_mod.derive(
+            run.prompt, touches, previous if (repair or fit) else None, repair, fit
+        )
+        if repair and not fit and floor and product is not None and previous is not None:
+            w, h, area = _extent(product)
+            if w < 0.98 * floor[0] or h < 0.98 * floor[1] or area < 0.97 * floor[2]:
+                self._warn(
+                    run, "place", "w_floor", "assumption_made", "info",
+                    f"Identity redraw {w:.0f} x {h:.0f} mm is below the fit floor "
+                    f"{floor[0]:.0f} x {floor[1]:.0f} mm; the form that fits was kept.",
+                )  # fmt: skip
+                product = previous
+        run.product_form = product  # type: ignore[attr-defined]
+        if (repair or fit) and previous is not None and product is not None:
+            self._warn(
+                run,
+                "place",
+                "w_form_repair",
+                "assumption_made",
+                "info",
+                ("Fit repair resized the form: " if fit else "Identity repair redrew the form: ")
+                + form_mod.diff(previous, product),
+            )
+        problems = list(product.problems) if product is not None else [f"no form ({note})"]
+        poly_ok = product is not None and Polygon(product.silhouette).is_valid
+        result.log.append("form: " + (product.summary() if product is not None else note))
+        st.emit(
+            "check.result",
+            {
+                "results": [
+                    {
+                        "check_key": "form.valid",
+                        "rule_id": "form.valid",
+                        "status": "fail" if problems else "pass",
+                        "severity": "error",
+                        "message": (
+                            "Product form: " + "; ".join(problems)
+                            if problems
+                            else f"Silhouette {product.summary()}"  # type: ignore[union-attr]
+                        )[:300],
+                        "subjects": [],
+                        "stage": "place",
+                    }
+                ]
+            },
+        )
+        return product if poly_ok else None
+
+    async def identity(self, run: BuildRun, ctx: dict[str, Any], final: bool = False) -> str | None:
+        """Render the hero view and ask whether it reads as the requested device. Returns the
+        reviewer's critique when it does not (and this is not already the repair pass)."""
+        product = getattr(run, "product_form", None)
+        touch_slots = list((getattr(run, "touch_slots", None)) or [])
+        st = self._stage(run, "render", "Checking that it looks like the device")
+        recs = [(rec, False) for rec in run.state["enclosures"]] + [
+            (rec, True) for rec in run.state["boards"]
+        ]
+        root = self.settings.assets_dir
+        meshes: list[hero.Mesh] = []
+        for rec, is_board in recs:
+            pose = (
+                hero.pose_matrix(rec.get("position_mm") or [0, 0, 0], rec.get("rotation_deg"))
+                if is_board
+                else None
+            )
+            for a in rec.get("assets", []):
+                if a.get("kind") != "glb" or not a.get("url"):
+                    continue
+                path = root / a["url"].removeprefix("/assets/")
+                if path.is_file():
+                    plain = await asyncio.to_thread(hero.plain_copy, path, root / "cache" / "hero")
+                    if plain is not None:
+                        meshes += await asyncio.to_thread(hero.load_glb, plain, 1000.0, pose)
+        # the parts a person sees or touches, seated where the build puts them (never exploded)
+        for part in run.state["parts"]:
+            pl = part.get("placement") or {}
+            if pl.get("mode") == "layout" or part.get("side") not in ("none", None):
+                continue
+            pose = hero.pose_matrix(pl.get("position_mm") or [0, 0, 0], pl.get("rotation_deg"))
+            for a in part.get("assets", []):
+                if a.get("kind") != "glb" or not a.get("url"):
+                    continue
+                path = root / a["url"].removeprefix("/assets/")
+                if path.is_file() and part.get("slot_id") in set(touch_slots):
+                    plain = await asyncio.to_thread(hero.plain_copy, path, root / "cache" / "hero")
+                    if plain is not None:
+                        meshes += await asyncio.to_thread(hero.load_glb, plain, 1000.0, pose)
+                    break
+        verdict: dict[str, Any] | None = None
+        note = "no form" if product is None else "nothing to render"
+        if product is not None and meshes:
+            if product.rest_pose == "upright":
+                meshes = hero.stand_up(meshes)
+            eye, target = hero.hero_camera(meshes, product.rest_pose)
+            png = await asyncio.to_thread(hero.render, meshes, eye, target)
+            out = root / "cache" / "hero"
+            out.mkdir(parents=True, exist_ok=True)
+            run.hero_png = out / f"{run.build_id}{'_repaired' if final else ''}.png"  # type: ignore[attr-defined]
+            run.hero_png.write_bytes(png)  # type: ignore[attr-defined]
+            verdict, note = await identity_mod.judge(
+                run.prompt, product.description, product.reference, png
+            )
+        run.identity = verdict  # type: ignore[attr-defined]
+        ok = verdict is not None and bool(verdict["reads_as_device"])
+        message = (
+            f"Reads as the device: {verdict['sees']}"
+            if ok and verdict
+            else (
+                f"Does not read as the requested device: {verdict['sees']}"
+                if verdict
+                else f"Identity not judged ({note})"
+            )
+        )
+        if verdict and not ok and verdict["mismatches"]:
+            message += " | " + "; ".join(verdict["mismatches"])
+        st.emit(
+            "check.result",
+            {
+                "results": [
+                    {
+                        "check_key": "identity.reads_as_device",
+                        "rule_id": "identity.reads_as_device",
+                        "status": "pass" if ok else ("fail" if verdict else "unknown"),
+                        "severity": "error",
+                        "message": message[:300],
+                        "subjects": [],
+                        "stage": "render",
+                    }
+                ]
+            },
+        )
+        st.done()
+        if verdict is not None and not ok and not final:
+            return identity_mod.critique(verdict)
+        return None
+
+    def _form_fit_check(
+        self, run: BuildRun, st: _Stage, board: dict[str, Any], product: form_mod.Form
+    ) -> None:
+        over = [line for line in board.get("log", []) if line.startswith("FORM_OVERFLOW")]
+        grown = [line for line in board.get("log", []) if "grown" in line and "silhouette" in line]
+        st.emit(
+            "check.result",
+            {
+                "results": [
+                    {
+                        "check_key": "form.fit",
+                        "rule_id": "form.fit",
+                        "status": "fail" if over else "pass",
+                        "severity": "error",
+                        "message": (
+                            over[0] if over else (grown[0] if grown else "Parts fit the silhouette")
+                        )[:300],
+                        "subjects": [],
+                        "stage": "place",
+                    }
+                ]
+            },
+        )
+
+    WALL_STACK_MM = 3.0  # case wall above and below the stack
+    STACK_CLEARANCE_MM = 1.0
+
+    def _thicken_to_stack(
+        self, run: BuildRun, st: Any, brief: dict[str, Any], board: dict[str, Any], product: Any
+    ) -> None:
+        """The body is at least as thick as the real stack: the board, the tallest part on each
+        side (off-board modules count by their own thickness) and a wall on each face."""
+        top = bottom = 0.0
+        thick = 1.6
+        for entry in board["boards"]:
+            thick = float(entry.get("thickness_mm") or thick)
+            for pl in entry["placements"]:
+                h = float(pl.get("height_mm") or 0.0)
+                if pl.get("side") == "bottom":
+                    bottom = max(bottom, h)
+                else:
+                    top = max(top, h)
+        stack = top + thick + bottom + 2 * self.WALL_STACK_MM + self.STACK_CLEARANCE_MM
+        if stack > product.thickness_mm:
+            self._warn(
+                run, "place", "w_stack", "other", "info",
+                f"Body thickened {product.thickness_mm:.0f} -> {stack:.0f} mm: the parts stack "
+                f"{top:.1f} mm above and {bottom:.1f} mm below the board.",
+            )  # fmt: skip
+            brief["body_thickness_mm"] = stack
+
     async def _place_generic(
         self, run: BuildRun, brief: dict[str, Any], result: ComposeResult, ctx: dict[str, Any]
     ) -> dict[str, Any] | None:
@@ -451,8 +805,51 @@ class LiveRunner:
             except Exception:  # a part the source no longer has stays off the board
                 record = {}
             parts.append({**p, "record": record})
-        gb = {"generic": True, "form": brief.get("form")}
+        gb = {
+            "generic": True,
+            "form": brief.get("form"),
+            "touch_slots": [t.slot_id for t in self._touches(result)],
+        }
+        run.touch_slots = gb["touch_slots"]  # type: ignore[attr-defined]
+        product = await self.form_stage(run, result, st)
+        if product is not None:
+            gb["product_form"] = product.json()
+            brief["body_thickness_mm"] = product.thickness_mm
+            brief["edge_thickness_mm"] = product.edge_thickness_mm
+            brief["anchors"] = product.anchors
         board, err = await asyncio.to_thread(A.plan_board, gb, parts, run.build_id)
+        grown = False
+        for _ in range(
+            1 if getattr(run, "repair", "") else self.FIT_REPAIRS
+        ):  # one fit pass after an identity redraw; else a form too small is redrawn with numbers
+            report = (gb.get("product_form") or {}).get("fit_report")
+            if product is None or board is None or not report or report["ok"]:
+                break
+            declared = form_mod.declared_size(run.prompt)
+            if declared:  # the request fixes the size: the parts must fit it or the build fails
+                report = {**report, "declared_mm": list(declared)}
+                if _spans(product, declared):
+                    break
+            redrawn = await self.form_stage(run, result, st, fit=report)
+            if redrawn is None or redrawn.problems:
+                break
+            product = redrawn
+            grown = True
+            gb["product_form"] = product.json()
+            brief["body_thickness_mm"] = product.thickness_mm
+            brief["edge_thickness_mm"] = product.edge_thickness_mm
+            board, err = await asyncio.to_thread(A.plan_board, gb, parts, run.build_id)
+        report = (gb.get("product_form") or {}).get("fit_report")
+        if product is not None and report and report["ok"]:
+            w, h, area = _extent(product)
+            if not grown:  # no redraw proved a size: the floor is what the footprints need
+                need = report["parts_mm2"] / (1.2 * max(1, report["usable_mm2"]))
+                w, h = max(report["widest_mm"] + 7.0, 0.0), 0.0
+                area *= min(1.0, need)
+            run.fit_floor = (w, h, area)  # type: ignore[attr-defined]
+        if product is not None and board is not None:
+            self._thicken_to_stack(run, st, brief, board, product)
+            self._form_fit_check(run, st, board, product)
         if board is None or not any(
             pl.get("for_instance_id") for e in board["boards"] for pl in e["placements"]
         ):

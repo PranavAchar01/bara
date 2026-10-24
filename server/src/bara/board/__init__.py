@@ -14,6 +14,7 @@ from __future__ import annotations
 import fcntl
 import hashlib
 import json
+import shutil
 import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -32,7 +33,8 @@ from .libs import LIBRARIES, repo_commit
 __all__ = ["build_board", "plan_board", "route_board", "pending_board", "BoardBuildError"]
 
 Progress = Callable[[str, float | None], None]
-CACHE_VERSION = "board-v3"
+CACHE_VERSION = "board-v4"
+ROUTE_PADS_BASE = 150  # pads a board has before routing gets more than the base time
 PCB_THICKNESS_MM = 1.6
 
 # Composer part function / role words -> layout roles (for part_id mapping only).
@@ -217,15 +219,28 @@ def _route_one(
         timings: dict[str, float] = {}
 
         attempts: list[dict] = []
+        # routing time grows with the number of pads to connect
+        pads = sum(len(it.fp.pads) for it in plan.items if it.fp is not None)
+        route_timeout_s *= min(4.0, max(1.0, pads / ROUTE_PADS_BASE))
         deadline = time.monotonic() + route_timeout_s
         drc: dict = {}
         route: dict = {}
-        for i, (strategy, extra) in enumerate(K.ROUTE_STRATEGIES):
+        strategies: list[tuple[str, list[str], dict | None]] = [
+            (name, extra, None) for name, extra in K.ROUTE_STRATEGIES
+        ]
+        best: tuple[int, dict, Path] | None = None  # (score, drc, saved board)
+        widened = False
+        i = 0
+        while i < len(strategies):
+            strategy, extra, rules = strategies[i]
             remaining = deadline - time.monotonic()
             if i and remaining < 10:
                 break
             for stale in (pcb, dsn, ses):
                 stale.unlink(missing_ok=True)
+            if rules is not None:
+                widened_plan = {**plan_data, "rules": rules}
+                plan_path.write_text(json.dumps(widened_plan, indent=1))
             progress(f"{plan.name}: writing KiCad board", 0.1)
             t = time.monotonic()
             K.build_pcb(plan_path)
@@ -235,7 +250,24 @@ def _route_one(
                 f"{plan.name}: autorouting with Freerouting {K.FREEROUTING_VERSION} ({strategy})",
                 0.25,
             )
-            route = K.freeroute(dsn, ses, remaining, passes=passes, extra=extra)
+            try:
+                # leave room for a retry: one strategy never gets the whole budget
+                route = K.freeroute(
+                    dsn, ses, min(remaining, route_timeout_s * 0.6), passes=passes, extra=extra
+                )
+            except K.ToolError as exc:
+                if "timed out" not in str(exc):
+                    raise
+                # too slow on this board: try again with relaxed rules and fewer passes
+                attempts.append({"strategy": strategy, "timed_out": True})
+                passes = max(10, passes // 2)
+                if not widened:
+                    strategies.insert(i + 1, ("wide_rules", [], K.WIDE_RULES))
+                    widened = True
+                if i + 1 >= len(strategies) or deadline - time.monotonic() < 10:
+                    raise
+                i += 1
+                continue
             timings["route_s"] = round(timings.get("route_s", 0.0) + route["seconds"], 2)
 
             progress(f"{plan.name}: importing routes", 0.7)
@@ -256,11 +288,29 @@ def _route_one(
                     "unconnected": drc["unconnected"],
                 }
             )
+            score = drc["errors"] + 3 * drc["unconnected"]
+            if best is None or score < best[0]:
+                saved = work / "best.kicad_pcb"
+                shutil.copyfile(pcb, saved)
+                best = (score, drc, saved)
             if drc["errors"] == 0 and drc["unconnected"] == 0:
                 break
-            progress(
-                f"{plan.name}: {drc['unconnected']} unconnected after {strategy}, retrying", 0.3
-            )
+            if (
+                i == len(strategies) - 1
+                and not widened
+                and best is not None
+                and best[1]["unconnected"] == 0
+                and any(k.removeprefix("error:") in K.WIDENABLE for k in best[1].get("by_type", {}))
+            ):
+                strategies.append(("wide_rules", [], K.WIDE_RULES))
+                widened = True
+            progress(f"{plan.name}: {drc['errors']} DRC errors after {strategy}, retrying", 0.3)
+            i += 1
+        if best is None:
+            raise K.ToolError("no routing strategy finished inside the time budget")
+        if best[1] is not drc:  # the last pass was worse than an earlier one
+            shutil.copyfile(best[2], pcb)
+            drc = best[1]
 
         progress(f"{plan.name}: exporting GLB", 0.85)
         t = time.monotonic()
@@ -302,6 +352,8 @@ def _placements(
         size = list(it.size_mm) if it.size_mm else (list(it.fp.size_mm) if it.fp else [1, 1])
         if it.fp is not None and it.role == "switch":
             size = [round(v, 2) for v in it.fp.size_mm]
+        if it.meta.get("row_pitch_mm"):  # a stabilizer's body sits inside its keycap's row
+            size[1] = min(size[1], float(it.meta["row_pitch_mm"]))
         lib = LIBRARIES.get(it.fp.lib) if it.fp else None
         inst = _instance_id(f"{side_tag}_{it.ref}")
         # x/y and placement.position_mm are the footprint origin (where the KiCad model sits);
@@ -323,6 +375,7 @@ def _placements(
                 "rot_deg": round(it.rot, 3),
                 "side": it.side,
                 "on_pcb": it.on_pcb,
+                "touch": bool(it.meta.get("touch")),
                 "height_mm": it.height_mm,
                 "size_mm": [round(float(v), 3) for v in size],
                 "source_url": str(lib["url"]) if lib else "",

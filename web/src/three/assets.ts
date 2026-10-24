@@ -117,8 +117,9 @@ function boardMaterial(src: THREE.MeshStandardMaterial): THREE.MeshStandardMater
     m = new THREE.MeshPhysicalMaterial({
       color,
       transparent: true,
-      // KiCad exports mask at alpha .83; a palette pass drops it to 1. Either way, copper shows through faintly.
-      opacity: src.opacity < 1 ? Math.max(0.9, src.opacity) : 0.92,
+      // Thin enough that copper under it reads as lighter green lines, as on a real board and in
+      // KiCad's own 3D viewer; a palette pass drops alpha to 1, so cap it rather than trust it.
+      opacity: Math.min(src.opacity, 0.85),
       roughness: 0.45,
       metalness: 0,
       // Bara's studio environment is brighter than KiCad's: a lighter coat keeps the mask green at grazing angles.
@@ -134,7 +135,8 @@ function boardMaterial(src: THREE.MeshStandardMaterial): THREE.MeshStandardMater
   } else if (layer === "silk") {
     m = new THREE.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
   } else if (layer === "pad") {
-    m = new THREE.MeshStandardMaterial({ color: 0xdfb85e, metalness: 1, roughness: 0.24 });
+    // bright ENIG: exposed pads read gold, and tracks show through the mask as KiCad shows them
+    m = new THREE.MeshStandardMaterial({ color: 0xf0c869, metalness: 0.85, roughness: 0.3, emissive: 0x2a1e06 });
   } else if (layer === "copper") {
     m = new THREE.MeshStandardMaterial({ color, metalness: 0.5, roughness: 0.5 });
   } else {
