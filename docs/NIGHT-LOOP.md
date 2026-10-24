@@ -61,3 +61,4 @@ Engine-level, applies to every build; a build that misses a row reports a failin
 
 ### 2026-10-24 ~01:25 PT
 - His verdict: form inference is accurate, shell is ugly. Shell surface rules (solid skin, parting line, continuous fillets, blended bosses, taper from thickness profile, satin two-tone, decimated GLB) assigned to bara-quality under E12.
+- ~01:35 iteration: adea742 merged (no silent fallback, mating roles, stabilizer depth, board-v4). Suite on adea742 running under heavy lock. bara-quality still on E10-E14 + shell surface. bara-gaps/bara-render stay stopped.
