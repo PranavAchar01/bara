@@ -57,4 +57,8 @@ Rebuild:
 cd server
 uv run --with trimesh --with numpy python -m catalog_build.build check
 uv run --with trimesh --with numpy python -m catalog_build.build meshes
+uv run --with trimesh --with numpy python -m catalog_build.build parts
 ```
+
+`parts` writes `catalog.jsonl`, `kicad.jsonl` and `catalog.sqlite` (read through
+`server/src/bara/catalog_db.py`).
