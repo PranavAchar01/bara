@@ -1179,6 +1179,8 @@
 /* Landing (Figma: Landing C2). Step 1 is the prompt; the product window plays a recorded build. */
 .home.landing {
   display: block;
+  position: relative;
+  overflow-x: clip;
   padding: 0;
 }
 .landing > section,
@@ -1209,14 +1211,73 @@
   max-width: 560px;
 }
 .ld-ask {
-  display: grid;
-  grid-template-columns: 54px minmax(0, 1fr);
-  gap: 12px;
-  align-items: start;
+  min-width: 0;
 }
-.ld-one {
-  font: 800 66px/0.8 var(--font-sans);
-  letter-spacing: -0.05em;
+/* Where the agent rests; it roams from here (LandingAgent). */
+.ld-home {
+  height: 176px;
+  margin-top: 8px;
+}
+/* The agent is the mic on this page, so the small bot inside the bar steps out. */
+.ld-field .bot-mic {
+  display: none;
+}
+.ld-agent {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 20;
+  pointer-events: none;
+  opacity: 0;
+  will-change: transform;
+}
+.ld-agent.ready {
+  opacity: 1;
+  transition: opacity 500ms ease;
+}
+.ld-agent.m-chip .ld-agent-btn {
+  pointer-events: none;
+}
+/* A ring in the page colour keeps the oval readable over the light demo in dark mode. */
+.ld-agent .bb-oval {
+  stroke: var(--surface);
+  stroke-width: 3;
+}
+.ld-agent .bb-speech {
+  box-shadow: 0 0 0 1.5px var(--surface), 0 4px 14px rgb(0 0 0 / 0.18);
+}
+.ld-agent-lean {
+  width: 100%;
+  height: 100%;
+}
+.ld-agent-btn {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  border-radius: 50%;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+.ld-agent-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -14px;
+}
+.ld-agent-float {
+  display: block;
+  line-height: 0;
+  animation: ld-float 5.2s ease-in-out infinite;
+}
+@keyframes ld-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ld-agent-float { animation: none; }
+  .ld-agent.ready { transition: none; }
 }
 .ld-field .promptbar {
   border: 1.5px solid var(--ink);
@@ -1442,10 +1503,8 @@
   .ld-steps ol {
     grid-template-columns: 1fr;
   }
-  .ld-one {
-    display: none;
-  }
-  .ld-ask {
-    grid-template-columns: 1fr;
+  .ld-home {
+    height: 112px;
+    margin-top: 4px;
   }
 }

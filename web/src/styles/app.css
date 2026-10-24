@@ -129,6 +129,12 @@ mark {
   gap: 12px;
   flex: none;
 }
+/* Narrow screens: the model name gives way so the header never scrolls the page sideways. */
+@media (max-width: 560px) {
+  .topbar-right > .muted.small {
+    display: none;
+  }
+}
 .status-pill {
   font-family: var(--font-mono);
   font-size: 11px;
