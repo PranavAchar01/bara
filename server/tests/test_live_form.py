@@ -657,6 +657,10 @@ def test_locating_pegs_keep_the_other_side_clear() -> None:
     assert pf["fit_report"]["ok"] is False  # a hole through one is a hole through the other
 
 
+async def _no_photos(run: object) -> list[bytes]:
+    return []
+
+
 def test_identity_redraw_below_the_fit_floor_keeps_the_fitting_form(monkeypatch: Any) -> None:
     from types import SimpleNamespace
 
@@ -678,7 +682,10 @@ def test_identity_redraw_below_the_fit_floor_keeps_the_fitting_form(monkeypatch:
     )
     st = SimpleNamespace(progress=lambda *a: None, emit=lambda *a, **k: None)
     fake = SimpleNamespace(
-        _touches=lambda r: [], _warn=lambda *a: warned.append(a[-1]), _stage=None
+        _touches=lambda r: [],
+        _warn=lambda *a: warned.append(a[-1]),
+        _stage=None,
+        _photos=_no_photos,
     )
     result = SimpleNamespace(log=[])
     got = asyncio.run(rn.LiveRunner.form_stage(fake, run, result, st))  # type: ignore[arg-type]
