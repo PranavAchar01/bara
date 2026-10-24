@@ -1,9 +1,9 @@
 // Wires the socket (real or FakeSocket) and REST (real or stub) into the store.
 // This is the only place that knows about mock mode.
-import type { ClientEnvelope, EditOp, ServerEnvelope, ServerPayloads, Vocab, Health } from "../spec/types";
+import type { Build, ClientEnvelope, EditOp, ServerEnvelope, ServerPayloads, Vocab, Health } from "../spec/types";
 import { CONNECTION_SCOPED } from "../spec/types";
 import { createBuild, isKnownEvent, reduceBuild } from "../state/reducer";
-import { emptyView, editSent, reduceView } from "../state/view";
+import { emptyView, editSent, reduceView, type ViewState } from "../state/view";
 import { pushLog, showToast, useApp } from "../state/store";
 import { Connection, type SocketLike } from "./connection";
 import { FakeSocket, MockServer } from "./fakeSocket";
@@ -78,6 +78,10 @@ function onEnvelope(env: ServerEnvelope): void {
   }
   if (env.type === "error") {
     const p = env.payload as ServerPayloads["error"];
+    if (p.error.code === "E_UNKNOWN_BUILD" && s.openedFromLibrary && s.build?.build_id === s.openedFromLibrary) {
+      showToast("Opened from your library. The engine has restarted since, so this copy is for looking; build it again to change it.");
+      return;
+    }
     if (p.error.code !== "E_RESUME_GAP") showToast(p.error.message);
     return;
   }
@@ -198,6 +202,32 @@ export function startBuild(prompt: string): void {
     options: { force_tier: null, commercial_only: false, seed: null },
   });
   useApp.setState({ pendingStart: { msgId, prompt: text, ts, at: performance.now() } });
+}
+
+/**
+ * Opens a build from the library: shown at once from the saved copy, then the engine is asked to
+ * carry on from the last event it sent. If the engine no longer has it (restarted), the saved copy
+ * stays on screen to look at.
+ */
+export function openSaved(entry: { build: Build; view: ViewState }): void {
+  const { build } = entry;
+  useApp.setState({
+    build,
+    view: { ...entry.view, startAt: null, edit: null },
+    screen: "workspace",
+    selection: null,
+    overlay: null,
+    focusKey: null,
+    moving: null,
+    explode: 0,
+    dragPose: null,
+    dismissedWarnings: [],
+    openedFromLibrary: build.build_id,
+  });
+  if (!conn) return;
+  const seq = build.last_seq ?? 0;
+  conn.setCursor(build.build_id, seq);
+  conn.send("build.resume", { build_id: build.build_id, last_seq: seq });
 }
 
 export function cancelBuild(): void {
