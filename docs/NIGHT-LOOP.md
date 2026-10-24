@@ -100,3 +100,8 @@ Web: bara-merge agent merges Nithin's figma-design-in-code / agent-board-3d / fi
   - a841609: (1) the USBLC6 ESD IC, kept off-board, was read as a USB port because its label says "usb": a part nobody touches is never a port or control. (2) Off-board cells sat at the board centre over the mouse's downward sensor (U1/BT1): every off-board part now moves clear of board parts on its side. (3) "Rubberised scroll wheel" (mech.wheel) became a second EC11 encoder through an LCSC keyword search: touched mechanical blocks only search the part numbers they name, never keywords or recipes, and the case makes them. Cache row re-filed as input.rotary_encoder. (4) A button inside a wheel/stick opening is pressed through it (no own cap).
   - bara-merge and bara-bench were stopped by Pranav (SendMessage says so). Not relaunched.
   - Suite restarted on a841609 (server 93987, suite 94035).
+
+### 04:50-05:00 iter
+- Suite on a841609: controller failed "bezel 3 piece" (loose strips between merged openings); monitor failed DRC invalid_outline from the SJ1-3523N jack's own Edge.Cuts (an open notch drawn to splice into a board edge).
+- 17d3091: case.py `_drop_slivers` (bezel pieces < 150 mm3 dropped before encoder cuts; the saved controller case now passes every check). libs.py `_edges_close`: a footprint's Edge.Cuts count as a cutout only when every line/arc end meets another; open ones go to User.Comments in kicad_script (the PMW3360 lens slot still cuts). Tests: layout + case 25 passed, ruff clean.
+- Suite restarted on 17d3091 (server 24818, suite 24878). Next: read rows, then mp3 overflow / identity / shell surface / lit displays.
