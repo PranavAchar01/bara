@@ -9,14 +9,16 @@ import { AddPartPicker, ConnectDialog, PartInspector, ResizePanel, SwapDrawer } 
 import { FocusCard, FocusExit } from "./components/FocusCard";
 import { bindVoiceKeys } from "./voice/voice";
 import { Library } from "./components/Library";
+import { AgentSteps, LandingHero } from "./components/Landing";
 import { startAutosave } from "./library/autosave";
 import { Viewport3D } from "./three/Viewport3D";
 import { BotLab } from "./bot/BotLab";
+import { CanvasTabs } from "./components/CanvasTabs";
+import { startCanvasPersist } from "./state/canvases";
 import { AgentStage } from "./bot/AgentStage";
+import { ThoughtTrace } from "./bot/ThoughtTrace";
 import { Explainer } from "./bot/Explainer";
 import { CandidateFlyby } from "./bot/CandidateFlyby";
-import { SimView } from "./sim/SimView";
-import { useSim } from "./sim/simStore";
 
 function useKeys() {
   useEffect(() => {
@@ -48,25 +50,10 @@ function useKeys() {
 }
 
 function Home() {
-  const health = useApp((s) => s.health);
   return (
-    <main className="home">
-      <div className="home-hero">
-      <div className="home-inner">
-        <h1>Describe a device. It gets built from open hardware.</h1>
-        <p className="muted">
-          It reuses an open design when one fits, otherwise composes one from open source parts, and shows every decision, part, case, board and firmware
-          as it goes.
-        </p>
-        <PromptBar autoFocus />
-        <ExampleChips />
-        {health && (
-          <p className="muted small home-meta">
-            {health.part_count ?? 0} parts and {health.design_count ?? 0} designs in the catalog
-          </p>
-        )}
-      </div>
-      </div>
+    <main className="home landing">
+      <LandingHero />
+      <AgentSteps />
       <Library />
     </main>
   );
@@ -84,8 +71,37 @@ function RightOverlay() {
   return null;
 }
 
+/** A canvas with no build yet (or one still being fetched after a reload): just the prompt. */
+function EmptyCanvas() {
+  const restoring = useApp((s) => s.canvasRestoring.includes(s.activeCanvas));
+  return (
+    <main className="workspace">
+      <aside className="leftcol" aria-label="Layers">
+        <FileHeader />
+      </aside>
+      <section className="centre">
+        <CanvasTabs />
+        <div className="canvas-empty">
+          {restoring ? (
+            <p className="muted">Loading this canvas's build again…</p>
+          ) : (
+            <div className="canvas-empty-inner">
+              <h2>Describe a device for this canvas.</h2>
+              <PromptBar autoFocus />
+              <ExampleChips />
+            </div>
+          )}
+        </div>
+      </section>
+      <aside className="rightcol-wrap" aria-label="Details" />
+    </main>
+  );
+}
+
 function Workspace() {
   const overlay = useApp((s) => s.overlay);
+  const empty = useApp((s) => s.build === null);
+  if (empty) return <EmptyCanvas />;
   return (
     <main className="workspace">
       <aside className="leftcol" aria-label="Layers">
@@ -94,6 +110,7 @@ function Workspace() {
         <PartsList />
       </aside>
       <section className="centre">
+        <CanvasTabs />
         <Viewport3D />
         <div className="centre-top">
           <BuildProgress />
@@ -116,6 +133,7 @@ function Workspace() {
       {overlay === "connect" && <ConnectDialog />}
       {overlay === "addpart" && <AddPartPicker />}
       <AgentStage />
+      <ThoughtTrace />
       <CandidateFlyby />
       <Explainer />
     </main>
@@ -133,9 +151,8 @@ function Main() {
   useKeys();
   useEffect(() => bindVoiceKeys(), []);
   useEffect(() => startAutosave(), []);
+  useEffect(() => startCanvasPersist(), []);
   const screen = useApp((s) => s.screen);
-  const simOpen = useSim((s) => s.open) && screen === "workspace";
-  if (simOpen) return <SimView />;
   return (
     <div className="app">
       {screen === "home" && <TopBar />}

@@ -39,13 +39,14 @@ export function layerOf(p: PartLike): LayerId {
   const t = text(p);
   const kind = String(p.card.kind);
   if (isKeycapPart(p)) return "keycaps";
-  if (id.startsWith("sw:") || f === "input.key" || /\bswitch(es)?\b/.test(f)) return "switches";
+  // Key switches only: a slide power switch is a board part, not a keyboard layer.
+  if (f === "input.key" || (id.startsWith("sw:") && !f)) return "switches";
   if (/plate/.test(id) || f === "mech.plate") return "plate";
   if (kind === "pcb" || f === "interconnect.pcb") return "pcb";
   if (id.startsWith("bat:") || /battery|power\.cell/.test(f)) return "under";
   if (/case|enclosure|foam|feet|bumper/.test(f) || /^case:|^foam:/.test(id)) return "case";
   if (/sensor/.test(f) && /trackball|pmw|optical/.test(t)) return "under";
-  if (/trackball|\bball\b|knob|encoder|display|oled|screen/.test(t) || /^disp:|^enc:|^rot:|^knob:|^ball:/.test(id)) return "top";
+  if (/trackball|\bball\b|knob|encoder|oled|screen/.test(t) || (/^display\./.test(f) && f !== "display.indicator_led") || /^disp:|^enc:|^rot:|^knob:|^ball:/.test(id)) return "top";
   return "board_parts";
 }
 
@@ -73,6 +74,7 @@ const GROUP_NAME: Record<LayerId, string> = {
 const BY_FUNCTION: [RegExp, string][] = [
   [/battery/, "Battery"],
   [/mcu|controller|compute/, "MCU"],
+  [/indicator_led/, "LEDs"],
   [/oled|display|screen/, "Display"],
   [/trackball/, "Trackball"],
   [/encoder|knob/, "Knob"],
@@ -85,10 +87,14 @@ const BY_FUNCTION: [RegExp, string][] = [
   [/led|rgb/, "LEDs"],
 ];
 
-/** Short human name for a part ("Keycaps", "MCU"), never a raw catalog id. */
+/** Short human name for a part ("Keycaps", "MCU"), never a raw catalog id.
+ *  The plan's slot label ("Player/status LEDs") is the part's role, so it wins over
+ *  guessing from keywords; whole layers (case, PCB, keycaps) keep their layer name. */
 export function humanGroupName(p: PartLike): string {
   const layer = layerOf(p);
   if (GROUP_NAME[layer]) return GROUP_NAME[layer];
+  const slot = p.label?.replace(/\s*\((left|right|l|r)\)\s*$/i, "").trim();
+  if (slot) return slot;
   const t = `${fn(p)} ${p.card.display_name}`.toLowerCase();
   for (const [re, name] of BY_FUNCTION) if (re.test(t)) return name;
   return p.label ?? p.card.display_name;

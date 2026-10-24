@@ -380,6 +380,38 @@ The coverage audit of the live site found three places where the UI said two con
 
 **Minutes:** about 35. **Rating:** 4/5.
 
+### Landing C2: the real product, with Bara at work
+
+**Feedback:** make C "more like the actual product"; the boxed line drawings aren't how the product looks. Make the agent a big part of the page, with the agent cursor being built for generation, where Bara goes through the build acting it out.
+
+**What changed from C:**
+- **Hero:** a near-real workspace window (Layers, canvas, Build tab) instead of a line drawing.
+  - The canvas is a real render of a macropad build from `web/screenshots`, cropped to the model and grid.
+  - Bara is out on the canvas as in the agent-stage work: the Agent component (working state) beside a Figma-style blue selection box with corner handles and a "Placing SSD1306 OLED" chip, and the arrow cursor inside.
+  - A dashed trail leads back to the Layers row it picked from; green ticks mark parts already placed. The dock shows an empty dashed slot where Bara sits at home.
+  - The Build tab shows Place mid-way, with the decision card for the display.
+- **Prompt:** keeps the manual cue, a big "1" beside the field with Bara inside.
+- **"Bara works where you can see it":** four real-render stills, one per agent action: scan ("Reading 'one big knob'"), pick with a ripple, trace a dashed route across the board, type a firmware line in a code chip.
+- **Your builds:** cards use real renders (keyboard, split, smartwatch, macropad).
+
+**Tools:** HTML generated with real render crops (PIL, base64 JPEG) → `html_to_figma`. Then `use_figma` to link both Bara drawings to the Agent component and redraw the trail. The window is a Figma grid frame, so the trail had to be absolutely positioned or it stretched the window to 1198 px.
+
+**Minutes:** about 45. **Rating:** 4/5.
+
+### Landing C2 built into Home, with a recorded build as the hero
+
+**Asked:** implement C2, with the hero's product window as a video that plays, can't be interacted with, and shows the whole thing working.
+
+**What moved:**
+- **Home layout:** C2's headline beside a step-"1" prompt (the real prompt bar, with Bara and voice) plus example prompts; then the product window; then "Bara works where you can see it"; then "Your builds" (the library, renamed to match).
+- **The window:** a muted, looping, inline `<video>` (WebM, then MP4) with no controls, picture-in-picture or remote playback. It is out of the tab order, ignores the pointer, plays only while on screen, and shows a still under reduced motion. Until the recording exists it shows a real render of a macropad build.
+- **The four stills:** a real render with the agent's selection box, chip, cursor, scan line, trace and code chip drawn over it in CSS, so they scale.
+- **`web/scripts/record-demo.mjs`:** opens the app at 1440×900, types the prompt, and records through the whole build, the exploded view and a part pulled into focus. Capture is CDP screencast frames; encoding is ffmpeg (H.264 + VP9, 30 fps) plus a poster. Waits on the engine longer than half a second are shortened; nothing else is edited. Tested end to end against a mock build (22.8 s, 1.5 MB).
+
+**Not done yet:** the real recording. The engine was offline, and the local copy has almost no 3D models, so a mock recording would show placeholder blocks. The script runs once the engine is back, ideally against the dev server that has the agent stage, so Bara is seen working the canvas.
+
+**Minutes:** about 40. **Rating:** 4/5.
+
 ## Before and after
 
 | Change | Before | After |

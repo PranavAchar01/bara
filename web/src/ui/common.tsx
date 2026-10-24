@@ -108,7 +108,7 @@ export function useNow(active: boolean, ms = 100): number {
   return now;
 }
 
-export function Icon(props: { name: "x" | "stop" | "send" | "chevron" | "export" | "home" | "play"; size?: number }) {
+export function Icon(props: { name: "x" | "stop" | "send" | "chevron" | "export" | "home"; size?: number }) {
   const s = props.size ?? 14;
   const common = { width: s, height: s, viewBox: "0 0 16 16", "aria-hidden": true } as const;
   switch (props.name) {
@@ -146,12 +146,6 @@ export function Icon(props: { name: "x" | "stop" | "send" | "chevron" | "export"
       return (
         <svg {...common}>
           <path d="M2.5 7.5L8 3l5.5 4.5M4 6.5V13h8V6.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
-        </svg>
-      );
-    case "play":
-      return (
-        <svg {...common}>
-          <path d="M5 3.5v9l7-4.5z" fill="currentColor" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
         </svg>
       );
   }

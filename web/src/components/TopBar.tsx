@@ -5,7 +5,6 @@ import { serverUrl, storeKey } from "../net/mode";
 import { Icon } from "../ui/common";
 import { ReplayControl } from "../bot/ReplayControl";
 import type { ConnStatus } from "../net/connection";
-import { SimulateButton } from "../sim/SimulateButton";
 
 const CONN_LABEL: Record<ConnStatus, string> = {
   connecting: "Connecting",
@@ -141,7 +140,6 @@ export function PanelToolbar() {
         <Icon name="home" />
       </button>
       <span className="spacer" />
-      <SimulateButton />
       <ExportMenu primary />
     </div>
   );

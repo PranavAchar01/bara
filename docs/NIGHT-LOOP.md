@@ -29,6 +29,19 @@ His words: "keep going all night until the engine works and any prompt can actua
 - 10-23 22:00 iter 5: blank-board fix committed 24f1093 (mask opacity cap, gold pads, bottom view, floor hidden on bottom). The keyboard circuit lives on B.Cu. Ran his 27-device list live (suite1): 22 done, 2 mains out_of_scope, 1 timeout (glasses), 2 empty DONE (gamecube, touchpad). Every BOM is far below the Etch tile bar: no core-function part (GNSS, Pi, amp, DAC, sensor, modem), x1 lines left ungrouped, and some wrong picks. Dispatched to compose-complete: completeness invariant, missing-part fetch, grouping, HLK mains, never an empty DONE. Next: rerun into suite2 after it merges.
 - 10-23 22:20 ROOT CAUSE 2 (his push: "fix the intelligence, don't patch every device"): the engine builds inside out. generic.py packs parts around the MCU and the outline is the packed hull plus a margin; case.py wraps a box around that; nothing models the product's form or where hands touch it. Result: controller = 197x79 slab with buttons in rows. Fix: FORM stage (silhouette + thickness + interaction anchors, grounded on references) -> board = silhouette inset, user-facing parts on anchors -> case from silhouette -> BOM from function blocks that must all resolve -> vision identity judge with one repair. No device-name branches. Comparison image: scratchpad/ref/controller-compare.jpg.
 
+## Goal 2026-10-24 ~15:00 PT (his /goal, near-verbatim)
+"get the expansion view, like picking certain stuff, to be really good; voice agent sound really good, responsive, and fast (best OpenAI voice); actual size of the piece scales to the view, much smaller, not intimidating; a really good landing page with the agent playing a huge part, moving around in the live agent; click the agent to see its thoughts (better than the side panel); create new canvases: 'add a mouse to the keyboard' creates a mouse next to it; intelligence choosing the camera layout (keyboard + mouse = flat view side by side, or oriented top-down); KiCad's own circuit evaluation and benchmarking (ERC/DRC); a complete simulation mode: load the firmware and play it live (game on a handheld; keyboard = flat view, press a key and a K shows on a terminal); sync with Nithin's GitHub work; keep going autonomously."
+Split (avoid Nithin's files while his branches are open):
+- G1 exploded-view picking (web/src/three/explode.ts, focus.tsx) [main]
+- G2 voice: best OpenAI voice + streaming latency (Nithin's voice-openai has verse; tune after it lands) [after merge]
+- G3 scale-to-view: model framed small, real-size cue (web/src/three/fit.ts, stage.ts) [main]
+- G4 landing + agent on stage (Nithin: figma-design-in-code / agent-on-stage) [review after merge]
+- G5 click the agent -> thought bubble (web/src/bot) [main, coordinate]
+- G6 multi-device canvas: "add a mouse to the keyboard" = second device build in the same scene + camera layout intelligence (server runner + web layout.ts; Nithin's canvas-tabs = separate tabs) [main]
+- G7 KiCad ERC/DRC + bench via kicad-cli on every generated board, reported as checks [main, server]
+- G8 simulation mode: firmware-driven device sim; keyboard -> terminal echo, handheld -> playable screen [main, web + server]
+Status lines are appended in the Log below.
+
 ## Engine issue ledger (2026-10-23 ~23:30 PT, his ask: "take every issue and change the engine itself to make sure this applies to all builds")
 Every row is fixed by changing one generic mechanism. No device-name branches, part lists or constants outside tests. A row closes only when the full 27-prompt suite shows the failure class gone.
 
@@ -242,3 +255,25 @@ Web: bara-merge agent merges Nithin's figma-design-in-code / agent-board-3d / fi
 - 2026-10-24 13:45: Find design works for any device: 1711c50 adds GitHub repo search (product words + "kicad", by stars) ahead of the web search, and checks each repo's tree for a .kicad_pcb and shell files. Live probe: "a mechanical keyboard" gives piantor, ErgoTravel and taira-keyboard. The engine restarted on 1711c50 (tunnel wives-heavily-testimony-protection), and the self-hosted site was rebuilt against it. bara-keycaps finished: wide caps render at HEAD (2f4c9ad adds a test), so the screenshot was a stale viewer. Live suite paused while Pranav tests prompts by hand.
 
 - 2026-10-24 14:20: His "not 20% complete" Game Boy, traced to its source. (1) The screen slot became a 0603 LED: ad05642 put LEDs first from stock, and its regex matched the requirement's "LED backlight". The backlight driver also became an LED. (2) Catalog parts with a model that was never made, plus stock footprints that ship with no 3D model, drew as grey boxes or bare pads. (3) The OG's case layout made no sense because, with no screen, the form put the D-pad and buttons in the screen half. It also never knew any control's real size. Engine fixes, no device branches: 4937d03 gates each stock primitive by the block's function family and never lets a part named as a chip or panel be one. A missing catalog model borrows the part's own footprint model, and a model-less stock footprint borrows a same-body sibling's (VQFN gets the WQFN model). The next commit gives the form each touch part's real size, so its anchors leave room for the part. Web photos already went to the form model, which sets silhouette and anchors. Tests: test_part_sourcing_rules.py (6). Engine restarted on these while it was idle.
+
+- 2026-10-24 15:25: Goal items landed. G1 exploded-view picking (b7214b8): labels pick parts, hover outlines. G6 companion canvases (975b159): "add a mouse to the keyboard" goes to POST /v1/intent (companion vs modify, by whether the noun is a part word), opens a linked canvas, builds the new device beside the first in tab order, and frames the row from a front elevation chosen by how flat the devices are. G5 thought trace (4e6f382): tap the docked agent for "How it was built", per stage, with failed checks expanded. Pending: G8 simulation agent, G4 landing, engine restart so /v1/intent is live.
+
+- 16:20 3D models (his ask "make the engine produce 3d models properly"): audit harness run 1 found
+  quantized GLBs sized right; real gaps were catalog rows with no model file. Fixed at the source:
+  package_sig same-package KiCad lenders (generated tier too, 78b6498), LCSC/EasyEDA STEP by part
+  number with a courtyard-size guard (catalog_build.model_backfill, 8 parts so far; EasyEDA 403 rate
+  limit stopped the rest, rerun later), render.models check (0680a2f). G8 sim merged 655d070, G4
+  landing agent ae9c061. Engine restarted, tunnel agenda-ohio-greetings-levitra; Vercel deploy
+  blocked by the 100/day cap until tomorrow.
+
+- 16:05 3D models, round 2. Audit run 2 = run 1 (only RK097 pot + VZ30C motor boxed in the
+  controller; render.models check names them). Source fixes: (1) the catalog build never used
+  the KiCad lender, so 10 parts with a same-package library model drew as boxes; plan_entry now
+  borrows it (BQ24075, MAX17048, DRV8833, micro-USB, barrel jack, CR2032 holder now ready,
+  d12aa6c). (2) Name-alike lenders must match courtyard (1.2x) and pin grid, shared by the
+  generated tier: 3386P no longer borrows the smaller 3339P, SMD JST no longer a 3-pin THT.
+  (3) EasyEDA 403 is an IP block, not a miss: RateLimited error, backfill paces 20 s and stops on
+  a block (35691a9); Ra-01 added; waiter scratchpad/backfill-wait.sh retries every 20 min.
+  (4) GET /v1/parts/{id} read only the 21 fixtures; now falls back to the live source (715ab87).
+  Engine restarted alone behind the same tunnel (scratchpad/engine-only.sh), URL unchanged.
+  205/243 catalog parts have a mesh (was 198).

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { caseOverhang } from "./Viewport3D";
+import { caseOverhang, sizedFill } from "./Viewport3D";
 
 const box = (x0: number, y0: number, x1: number, y1: number) => new THREE.Box3(new THREE.Vector3(x0, y0, 0), new THREE.Vector3(x1, y1, 10));
 
@@ -17,5 +17,18 @@ describe("caseOverhang", () => {
   });
   it("counts a board that touches no case as its whole size", () => {
     expect(caseOverhang([box(0, 0, 10, 10)], [box(100, 100, 130, 120)])).toBe(30);
+  });
+});
+
+describe("sizedFill", () => {
+  const dev = (w: number, h: number, d: number) => new THREE.Box3(new THREE.Vector3(0, 0, 0), new THREE.Vector3(w, h, d));
+  it("gives a full-size keyboard the whole fill and a handheld less", () => {
+    expect(sizedFill(dev(310, 110, 30), 0.5)).toBeCloseTo(0.5, 2);
+    const handheld = sizedFill(dev(90, 148, 32), 0.5);
+    expect(handheld).toBeLessThan(0.4);
+    expect(handheld).toBeGreaterThan(0.3);
+  });
+  it("never shrinks a tiny part below 55% of the fill", () => {
+    expect(sizedFill(dev(10, 10, 5), 0.5)).toBeCloseTo(0.275, 3);
   });
 });

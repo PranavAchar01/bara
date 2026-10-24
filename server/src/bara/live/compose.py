@@ -89,6 +89,46 @@ COMPAT_PARAMS = ("family", "stem", "form_factor", "chemistry")
 DRIVER_CATEGORY = re.compile(
     r"lcsc\.com/product-detail/[^/_]*(Driver|Controller|Interface|Bridge)", re.I
 )
+# a panel is glass on a ribbon or a module board, never sold in a chip package
+IC_PACKAGE = re.compile(
+    r"^(SOIC|SOP|SSOP|TSSOP|MSOP|QFN|VQFN|WQFN|DFN|QFP|LQFP|TQFP|BGA|LGA|SOT|TSOT|SC-?70|WLCSP)",
+    re.I,
+)
+
+
+CONNECTOR_PACKAGE = re.compile(r"^(FPC|FFC|CONN|HDR|PinHeader|PinSocket)|connector", re.I)
+PANEL_MIN_MM = 6.0  # the smallest glass (a 0.42 in OLED, a 0.28 in digit) is wider than this
+
+
+def not_a_panel(part: dict[str, Any]) -> bool:
+    """A display slot's candidate that cannot be glass: a ribbon connector or header (it is
+    what a panel plugs into), or a body too narrow to hold any viewing area."""
+    facets = part.get("facets") or {}
+    if CONNECTOR_PACKAGE.search(str(facets.get("package") or "")):
+        return True
+    bbox = (part.get("mechanical") or {}).get("bbox_mm") or {}
+    lo, hi = bbox.get("min"), bbox.get("max")
+    if lo and hi:
+        w, d = sorted((abs(float(hi[0]) - float(lo[0])), abs(float(hi[1]) - float(lo[1]))))
+        return w < PANEL_MIN_MM
+    return False
+
+
+SCREEN_TOLERANCE = 0.35  # a 2.8 in ask takes 2.4 to 3.5 in glass, never a 4.3 in panel
+
+
+def wrong_size(part: dict[str, Any], want_in: float | None) -> bool:
+    """A panel whose stated diagonal is far from the asked size: it would regrow the case."""
+    have_in = cp.display_inches(part)
+    return bool(want_in and have_in and abs(have_in - want_in) / want_in > SCREEN_TOLERANCE)
+
+
+def is_chip(part: dict[str, Any]) -> bool:
+    """A part whose datasheet category or package says it is an IC, whatever it was tagged."""
+    package = str((part.get("facets") or {}).get("package") or "")
+    return bool(
+        DRIVER_CATEGORY.search(str(part.get("datasheet") or "")) or IC_PACKAGE.match(package)
+    )
 
 
 def _model_from_footprint(part: dict[str, Any], assets: list[dict[str, Any]]) -> None:
@@ -1315,8 +1355,13 @@ class Composer:
         """Parts that meet the block's key numbers (size, connector standard, rating). The ones
         that do not are rejected for good, so the next lookup moves on."""
         if slot.function_id.startswith("display.") and slot.function_id != "display.indicator_led":
-            chips = [p for p in parts if DRIVER_CATEGORY.search(str(p.get("datasheet") or ""))]
-            for p in chips:  # a panel's driver chip is not the panel
+            # the typed size, else the size the brief wrote into this block's requirement
+            need_text = f"{slot.need.label} {slot.need.requirement}" if slot.need else ""
+            want_in = self.comp.numbers.get("screen_in") or cp.parse_numbers(need_text).get(
+                "screen_in"
+            )
+            chips = [p for p in parts if is_chip(p) or not_a_panel(p) or wrong_size(p, want_in)]
+            for p in chips:  # a driver chip, ribbon connector or other-size glass is not it
                 self.resolver.rejected.add(p["part_id"])
             parts = [p for p in parts if p not in chips]
         need = slot.need

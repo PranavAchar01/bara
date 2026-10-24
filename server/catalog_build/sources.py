@@ -16,6 +16,8 @@ KICAD_SHARE = Path(
     os.environ.get("KICAD_SHARE", "/Applications/KiCad/KiCad.app/Contents/SharedSupport")
 )
 SOURCES_ROOT = Path(os.environ.get("BARA_SOURCES", str(Path.home() / "helloworld/bara-sources")))
+# STEP models fetched from LCSC/EasyEDA (catalog_build.fetch_lcsc), one folder per LCSC id
+LCSC_ROOT = Path(__file__).resolve().parents[1] / "data/catalog/fetched/src"
 
 
 @dataclass(frozen=True)
@@ -85,9 +87,28 @@ VENDOR_MODEL_LICENCE = Licence(
     ),
 )
 
+EASYEDA_MODEL_LICENCE = Licence(
+    spdx="NOASSERTION",
+    name="LCSC/EasyEDA component library model",
+    url="https://easyeda.com/page/terms",
+    commercial_ok="unknown",
+    copyleft="unknown",
+    attribution_required="unknown",
+    notes="Fetched by part number from the LCSC/EasyEDA library (catalog_build.fetch_lcsc).",
+)
+
 SOURCES: dict[str, Source] = {
     s.key: s
     for s in [
+        Source(
+            key="lcsc",
+            title="LCSC/EasyEDA component library (3D models by part number)",
+            root=LCSC_ROOT,
+            url="https://www.lcsc.com",
+            commit="fetched",
+            licence=EASYEDA_MODEL_LICENCE,
+            route="lcsc_easyeda",
+        ),
         Source(
             key="kicad",
             title="KiCad official libraries 10.0.7 (symbols, footprints, packages3D)",
@@ -297,4 +318,6 @@ def source_rel_url(src: Source, rel: str) -> str:
         return f"https://gitlab.com/kicad/libraries/kicad-footprints/-/tree/{src.commit}/{lib}"
     if src.key == "kicad3d":
         return f"{src.url}/-/blob/{src.commit}/{rel}"
+    if src.key == "lcsc":
+        return f"https://www.lcsc.com/product-detail/{rel.split('/')[0]}.html"
     return src.file_url(DOWNLOAD_PATHS.get(src.key, "") + rel)

@@ -89,6 +89,10 @@ def power_net(name: str) -> str | None:
 FLOOR_SENSOR = re.compile(r"\bpmw|\bpaw3|optical[ _]?(mouse )?sensor")
 
 
+# Mechanical caps (a knob, a keycap) have no circuit: never a wired off-board module.
+CAP_ROLES = {"knob", "keycap"}
+
+
 def _role(record: dict[str, Any]) -> str:
     fns = [f["function_id"] for f in record.get("functions", [])]
     primary = next((f["function_id"] for f in record.get("functions", []) if f.get("primary")), "")
@@ -172,6 +176,7 @@ def plan_device_board(
     items: list[Item] = []
     counters: dict[str, int] = {}
     skipped: list[str] = []
+    caps: list[str] = []
 
     def ref_for(prefix: str) -> str:
         counters[prefix] = counters.get(prefix, 0) + 1
@@ -181,6 +186,9 @@ def plan_device_board(
         record = part.get("record") or {}
         fp = _footprint(record)
         role = _role(record)
+        if role in CAP_ROLES and fp is None:  # no circuit: it rides its host's shaft
+            caps.append(str(part.get("label") or part["part_id"]))
+            continue
         if fp is None:
             if role == "battery":
                 items.append(_battery_cell(part, record, ref_for("BT")))
@@ -220,6 +228,8 @@ def plan_device_board(
             items.append(it)
     if skipped:
         log.append("no KiCad footprint, kept off the board: " + ", ".join(skipped[:6]))
+    if caps:
+        log.append("caps seated on their host's shaft, not wired: " + ", ".join(caps[:6]))
 
     mcu = next((it for it in items if it.role == "mcu"), None)
     _pads_from_pins(items, log)

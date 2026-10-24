@@ -1310,6 +1310,14 @@ ENTRIES: list[Entry] = [
         facets={"display_type": "led_bar"},
     ),
     E(
+        "disp:eadip_tft32",
+        "EA eDIP TFT 3.2 in",
+        "module",
+        "display.tft",
+        "kicad:Display:EA_eDIPTFT32-XXX",
+        facets={"display_type": "tft"},
+    ),
+    E(
         "disp:eadip_tft43",
         "EA eDIP TFT 4.3 in",
         "module",

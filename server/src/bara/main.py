@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from bara.access import AccessTokenMiddleware
-from bara.config import Settings, load_settings
+from bara.config import Settings, load_dotenv, load_settings
 from bara.rest import ApiError, build_router, error_response
 from bara.services import build_services
 from bara.ws import WsHandler
@@ -22,8 +22,10 @@ from bara.ws import WsHandler
 log = logging.getLogger(__name__)
 
 CORS_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
-# The Vercel deploys (production and previews) reach a local server through a tunnel.
-CORS_ORIGIN_REGEX = r"https://bara(-[a-z0-9-]+)?\.vercel\.app"
+# The Vercel deploys (production and previews) and the self-hosted site on its own quick tunnel
+# reach a local server through a tunnel. The engine is already open to anyone with its link, so
+# letting a quick-tunnel page read it exposes nothing new.
+CORS_ORIGIN_REGEX = r"https://(bara(-[a-z0-9-]+)?\.vercel\.app|[a-z0-9-]+\.trycloudflare\.com)"
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -94,6 +96,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
 
 def main() -> None:
+    load_dotenv()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     settings = load_settings()
     uvicorn.run(create_app(settings), host=settings.host, port=settings.port, log_level="info")

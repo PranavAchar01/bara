@@ -336,9 +336,11 @@ class Resolver:
     def _accept(self, part: dict[str, Any], need: Need) -> dict[str, Any]:
         part = self._retag(part, need)
         try:
-            from bara.kicad_generated import ensure_glb  # type: ignore[import-not-found]
+            from bara.kicad_generated import KicadIndex
 
-            ensure_glb(part["part_id"])
+            index = KicadIndex.open()
+            if index is not None and part["part_id"].startswith("kicadgen:"):
+                index.ensure_glb(part["part_id"])
         except Exception as exc:  # no 3D model is a warning on the part, not a failure
             log.info("no 3D model for %s: %s", part["part_id"], exc)
         self.source.add(part)

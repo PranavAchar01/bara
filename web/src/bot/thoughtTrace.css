@@ -1,0 +1,324 @@
+/* The thinking trace (ThoughtTrace.tsx): a popover that rides beside the bot.
+   Above the stage bot (55), below modal scrims (60). Positioned per frame by transform. */
+.thought-trace {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 58;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow-pop);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.4;
+  animation: tt-pop 220ms cubic-bezier(0.22, 0.9, 0.3, 1) both;
+}
+.thought-trace[data-side="right"] {
+  transform-origin: 0 var(--tt-tail-y, 24px);
+}
+.thought-trace[data-side="left"] {
+  transform-origin: 100% var(--tt-tail-y, 24px);
+}
+.thought-trace[data-side="top"] {
+  transform-origin: var(--tt-tail-x, 24px) 100%;
+}
+@keyframes tt-pop {
+  from {
+    opacity: 0;
+    scale: 0.92;
+  }
+}
+
+/* A small tail pointing at the bot. */
+.thought-trace::after {
+  content: "";
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  rotate: 45deg;
+}
+.thought-trace[data-side="right"]::after {
+  left: -6px;
+  top: calc(var(--tt-tail-y, 24px) - 5px);
+  border-right: 0;
+  border-top: 0;
+}
+.thought-trace[data-side="left"]::after {
+  right: -6px;
+  top: calc(var(--tt-tail-y, 24px) - 5px);
+  border-left: 0;
+  border-bottom: 0;
+}
+.thought-trace[data-side="top"]::after {
+  bottom: -6px;
+  left: calc(var(--tt-tail-x, 24px) - 5px);
+  border-left: 0;
+  border-top: 0;
+}
+
+.tt-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 10px 6px 14px;
+}
+.tt-title {
+  font-family: var(--font-display);
+  font-size: 15px;
+  letter-spacing: var(--track-display);
+}
+.tt-x {
+  display: inline-flex;
+  padding: 5px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.tt-x:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.tt-scroll {
+  overflow-y: auto;
+  min-height: 0;
+  padding: 0 8px 10px;
+  overscroll-behavior: contain;
+}
+.tt-empty {
+  margin: 4px 6px 6px;
+  color: var(--muted);
+}
+
+/* A stage: one line when folded, its rows when open. */
+.tt-group + .tt-group {
+  margin-top: 2px;
+}
+.tt-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.tt-head:hover {
+  background: var(--surface-2);
+}
+.tt-head:focus-visible,
+.tt-hit:focus-visible,
+.tt-x:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.tt-group:not(.open) .tt-head {
+  font-weight: 500;
+  color: var(--text-2);
+}
+.tt-sum {
+  flex: 1;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+.tt-chev {
+  flex: none;
+  color: var(--muted);
+  transition: transform 260ms cubic-bezier(0.3, 1.4, 0.5, 1);
+}
+.tt-group.open .tt-chev {
+  transform: rotate(180deg);
+}
+.tt-status {
+  flex: none;
+  animation: tt-check 320ms cubic-bezier(0.3, 1.5, 0.5, 1);
+}
+.tt-status.ok {
+  color: var(--ok);
+}
+.tt-status.bad {
+  color: var(--fail);
+}
+@keyframes tt-check {
+  from {
+    scale: 0.4;
+    opacity: 0;
+  }
+}
+.tt-spin {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin: 1px;
+  border-radius: 50%;
+  border: 2px solid var(--accent-soft);
+  border-top-color: var(--accent);
+  animation: tt-spin 800ms linear infinite;
+}
+@keyframes tt-spin {
+  to {
+    rotate: 360deg;
+  }
+}
+
+/* Rows: a hairline down the icons, like a timeline. */
+.tt-list {
+  position: relative;
+  margin: 0;
+  padding: 0 0 4px 8px;
+  list-style: none;
+}
+.tt-list::before {
+  content: "";
+  position: absolute;
+  left: 23px;
+  top: 6px;
+  bottom: 12px;
+  width: 1px;
+  background: var(--line);
+}
+.tt-row {
+  position: relative;
+  animation: tt-in 300ms cubic-bezier(0.22, 0.9, 0.3, 1) both;
+}
+@keyframes tt-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+.tt-hit {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  width: 100%;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+button.tt-hit {
+  cursor: pointer;
+}
+button.tt-hit:hover {
+  background: var(--surface-2);
+}
+.tt-ic {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  width: 16px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  color: var(--muted);
+}
+button.tt-hit:hover .tt-ic {
+  background: var(--surface-2);
+}
+.tt-ic.tone-ok {
+  color: var(--accent);
+}
+.tt-ic.tone-fail {
+  color: var(--fail);
+}
+.tt-ic.tone-warn {
+  color: var(--warn);
+}
+.tt-txt {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1px;
+}
+.tt-t {
+  font-weight: 500;
+}
+.tt-row[data-kind="check"] .tt-t {
+  color: var(--fail);
+}
+.tt-d {
+  color: var(--text-2);
+  font-size: 12.5px;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.tt-m {
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.tt-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 3px;
+}
+.tt-chip {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 11.5px;
+}
+.tt-chip.tone-fail {
+  background: var(--fail-soft);
+  color: var(--fail);
+}
+.tt-chip .mono {
+  font-family: var(--font-mono);
+  color: var(--muted);
+}
+.tt-quiet .tt-t {
+  color: var(--muted);
+  font-weight: 400;
+}
+.tt-final {
+  margin: 6px 8px 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  font-weight: 600;
+}
+.tt-final.tone-ok {
+  color: var(--ok);
+}
+.tt-final.tone-fail {
+  color: var(--fail);
+}
+
+/* The bots are buttons now. */
+.as-bot[data-phase="out"] {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thought-trace,
+  .tt-row,
+  .tt-status {
+    animation: none;
+  }
+  .tt-spin {
+    animation-duration: 2.4s;
+  }
+}
