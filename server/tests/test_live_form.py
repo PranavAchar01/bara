@@ -1019,3 +1019,22 @@ def test_a_pick_can_say_no_candidate_is_the_named_part(monkeypatch: Any) -> None
     ranked = [{"display_name": "Screw terminal 3-pin"}, {"display_name": "Screw terminal 2-pin"}]
     idx, method, *_ = asyncio.run(comp.pick(slot, ranked))
     assert (idx, method) == (0, "model_none")
+
+
+def test_a_battery_cell_matches_the_chemistry_the_controller_takes() -> None:
+    from bara.live import compose as cmp
+
+    comp = object.__new__(cmp.Composer)
+    comp.spec, comp.brief, comp.board_controllers = {}, {}, {}
+    ctrl = cmp.Slot("controller", "Controller", "compute.mcu", "critical", 1, [])
+    ctrl.chosen = {
+        "part_id": "mcu:x",
+        "interfaces": [{"type": "battery", "role": "requires", "params": {"chemistry": "lipo"}}],
+    }
+    bat = cmp.Slot("battery", "Battery", "power.battery", "critical", 1, [])
+    bat.need = object()  # resolver-backed slot: no size limits from the spec numbers
+    comp.slots = [ctrl, bat]
+    aa = {"part_id": "bat:aa", "facets": {"chemistry": "alkaline"}}
+    lipo = {"part_id": "bat:lipo", "facets": {"chemistry": "lipo"}}
+    tests = [f.test for f in comp.filters_for(bat, [aa, lipo]) if f.facet == "chemistry"]
+    assert tests and [all(t(p) for t in tests) for p in (aa, lipo)] == [False, True]
