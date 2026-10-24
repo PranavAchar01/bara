@@ -304,7 +304,8 @@ def _safe_rel(path: str) -> str | None:
 def _asset_bytes(svc: Services, url: str | None) -> bytes | None:
     if not url or not url.startswith("/assets/"):
         return None
-    rel = _safe_rel(url[len("/assets/") :])
+    # A ?v=<hash> suffix only versions the URL; the file is the path before it.
+    rel = _safe_rel(url.split("?", 1)[0].split("#", 1)[0][len("/assets/") :])
     if rel is None:
         return None
     root = svc.settings.assets_dir.resolve()

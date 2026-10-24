@@ -5,7 +5,7 @@
 // Missing assets render as translucent boxes with a label (SPEC 11.4);
 // failing checks get a red hull outline. The explode slider eases every part
 // along Z by layer; when it is held open, one leader-line label per part.
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { useShallow } from "zustand/react/shallow";
 import { GizmoHelper, GizmoViewcube, Html, OrbitControls, TransformControls } from "@react-three/drei";
@@ -25,6 +25,7 @@ import { defaultColor, ghost, placeholderMaterial, presetFor, presetMaterial, ti
 import { registerAnchor, stage, stageBox } from "./stage";
 import { StudioEnvironment, StudioFloor, studioPalette, type StudioPalette } from "./studio";
 import { DemandDriver, StudioPost, postEnabled } from "./post";
+import { BoardPlaceholder, BoardStatus, FootprintHover, footprintBoxes } from "./board";
 
 const DEG = Math.PI / 180;
 
@@ -594,7 +595,15 @@ function matchComponents(loaded: LoadedModel, board: Board, candidates: BoardCan
   return { owner, substrate };
 }
 
-function BoardPiece(props: { groups: MeshGroup[]; board: Board; layer: LayerId; labelKey: string | null; anchor: THREE.Vector3; onClick?: (e: ThreeEvent<MouseEvent>) => void }) {
+function BoardPiece(props: {
+  groups: MeshGroup[];
+  board: Board;
+  layer: LayerId;
+  labelKey: string | null;
+  anchor: THREE.Vector3;
+  onClick?: (e: ThreeEvent<MouseEvent>) => void;
+  children?: ReactNode;
+}) {
   const { board } = props;
   const pos = useMemo(() => board.position_mm ?? [0, 0, 0], [board.position_mm]);
   const rot = useMemo(() => board.rotation_deg ?? [0, 0, 0], [board.rotation_deg]);
@@ -603,17 +612,30 @@ function BoardPiece(props: { groups: MeshGroup[]; board: Board; layer: LayerId; 
     <group ref={ref}>
       <group position={[pos[0], pos[1], pos[2]]} rotation={new THREE.Euler(rot[0] * DEG, rot[1] * DEG, rot[2] * DEG, "XYZ")}>
         {props.groups.map((g) => (
-          <mesh key={`${g.geometry.uuid}:${g.material.uuid}`} geometry={g.geometry} material={g.material} onClick={props.onClick} />
+          // Without a click handler the mesh never raycasts: footprint hover uses boxes, not the board mesh.
+          <mesh key={`${g.geometry.uuid}:${g.material.uuid}`} geometry={g.geometry} material={g.material} onClick={props.onClick} raycast={props.onClick ? undefined : () => null} />
         ))}
+        {props.children}
       </group>
     </group>
   );
 }
 
-function BoardNode(props: { board: Board; labelKey: string | null; candidates: BoardCandidate[]; onCovered: (boardId: string, ids: string[]) => void }) {
+function BoardNode(props: {
+  board: Board;
+  labelKey: string | null;
+  candidates: BoardCandidate[];
+  onCovered: (boardId: string, ids: string[]) => void;
+  parts: BuildPart[];
+  theme: Theme;
+}) {
   const { board, onCovered } = props;
   const model = useModel(boardModelUrl(board), true);
   const loaded = model.status === "ready" && model.model.groups.length > 0 ? model.model : null;
+  // Routing (pending) or the GLB still on its way: the placeholder breathes and says which.
+  const busy = !loaded && (board.status === "pending" || model.status === "loading");
+  const statusText = board.status === "pending" ? "Routing on KiCad" : model.status === "loading" ? "Loading 3D board" : null;
+  const boxes = useMemo(() => footprintBoxes(board, loaded), [board, loaded]);
   const match = useMemo(() => (loaded ? matchComponents(loaded, board, props.candidates) : null), [loaded, board, props.candidates]);
   const coveredKey = useMemo(() => (match ? [...new Set([...match.owner.values()].map((c) => c.instanceId))].sort().join("|") : ""), [match]);
   useEffect(() => {
@@ -628,23 +650,6 @@ function BoardNode(props: { board: Board; labelKey: string | null; candidates: B
     const parts = [...byPart.values()].map((cand) => ({ cand, groups: groupPieces(loaded.pieces, (i) => match.owner.get(i)?.instanceId === cand.instanceId) }));
     return { base, parts };
   }, [loaded, match]);
-  const outline = useMemo(() => {
-    if (loaded) return null;
-    const pts: number[][] = board.outline_mm?.length
-      ? board.outline_mm
-      : board.size_mm
-        ? [
-            [0, 0],
-            [board.size_mm[0], 0],
-            [board.size_mm[0], -board.size_mm[1]],
-            [0, -board.size_mm[1]],
-          ]
-        : [];
-    if (pts.length < 3) return null;
-    const shape = new THREE.Shape(pts.map((p) => new THREE.Vector2(p[0], p[1])));
-    return new THREE.ExtrudeGeometry(shape, { depth: board.thickness_mm ?? 1.6, bevelEnabled: false });
-  }, [loaded, board.outline_mm, board.size_mm, board.thickness_mm]);
-  useEffect(() => () => outline?.dispose(), [outline]);
   const anchorLocal = useMemo(() => {
     const c = loaded ? loaded.bbox.getCenter(new THREE.Vector3()) : new THREE.Vector3((board.size_mm?.[0] ?? 0) / 2, -(board.size_mm?.[1] ?? 0) / 2, 0.8);
     if (loaded && match && match.substrate >= 0) {
@@ -654,16 +659,25 @@ function BoardNode(props: { board: Board; labelKey: string | null; candidates: B
     }
     return c.applyMatrix4(boardMatrix(board));
   }, [loaded, match, board]);
-  const groups: MeshGroup[] = pieces
-    ? pieces.base
-    : outline
-      ? [{ geometry: outline, material: board.status === "pending" ? ghost(presetMaterial("pcb", "#1F3D2B"), 0.5) : presetMaterial("pcb", "#1F3D2B"), weight: 0 }]
-      : [];
-  if (!groups.length) return null;
+  const hover = <FootprintHover boxes={boxes} parts={props.parts} accent={props.theme.accent} />;
+  if (!pieces) {
+    // No GLB yet (routing, exporting or loading): the board drawn from its record.
+    return (
+      <group userData={{ fit: `board:${board.board_id}` }}>
+        <BoardPiece groups={[]} board={board} layer="pcb" labelKey={props.labelKey} anchor={anchorLocal}>
+          <BoardPlaceholder board={board} busy={busy} />
+          {hover}
+          {busy && statusText && <BoardStatus board={board} text={statusText} />}
+        </BoardPiece>
+      </group>
+    );
+  }
   return (
     <>
       <group userData={{ fit: `board:${board.board_id}` }}>
-        <BoardPiece groups={groups} board={board} layer="pcb" labelKey={props.labelKey} anchor={anchorLocal} />
+        <BoardPiece groups={pieces.base} board={board} layer="pcb" labelKey={props.labelKey} anchor={anchorLocal}>
+          {hover}
+        </BoardPiece>
       </group>
       {pieces?.parts.map(({ cand, groups: g }) => (
         <BoardPiece
@@ -1188,7 +1202,9 @@ function SceneContents(props: {
         {showBoard &&
           boards
             .filter((b) => !b.part_instance_id || hiddenPcbs.has(b.part_instance_id))
-            .map((b, i) => <BoardNode key={b.board_id} board={b} labelKey={i === 0 ? "b:board" : null} candidates={candidates} onCovered={onCovered} />)}
+            .map((b, i) => (
+              <BoardNode key={b.board_id} board={b} labelKey={i === 0 ? "b:board" : null} candidates={candidates} onCovered={onCovered} parts={parts} theme={theme} />
+            ))}
       </group>
       <MoveGizmo mode={props.gizmoMode} />
       <CameraRig />
@@ -1205,7 +1221,8 @@ function SceneContents(props: {
 }
 
 export function Viewport3D() {
-  const hasParts = useApp((s) => (s.build?.parts.length ?? 0) > 0);
+  // A board streamed as pending before any part still counts as something on stage.
+  const hasParts = useApp((s) => (s.build?.parts.length ?? 0) + (s.build?.boards?.length ?? 0) > 0);
   const status = useApp((s) => s.build?.status);
   const missingCount = useApp((s) => (s.build?.parts ?? []).filter((p) => !modelAsset(p.assets, p.quantity > 1)).length);
   const build = useApp((s) => s.build);
