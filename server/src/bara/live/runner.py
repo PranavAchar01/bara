@@ -26,7 +26,7 @@ from bara.live import form as form_mod
 from bara.live import identity as identity_mod
 from bara.live.brief import BriefResult, normalise_brief, spec_from_brief, write_brief
 from bara.live.catalog_source import PartSource, merge_into_catalog, model_asset
-from bara.live.compose import Composer, ComposeResult, Slot
+from bara.live.compose import ASSETS_DIR, Composer, ComposeResult, Slot
 from bara.live.fetch import as_overlay
 from bara.live.firmware import make_firmware
 from bara.live.layout import KeyboardPlan, plan_keyboard
@@ -1422,7 +1422,42 @@ class LiveRunner:
             "preload": preload,
         }
         st.emit("scene.ready", {"scene": scene})
+        st.emit("check.result", {"results": [self._models_check(run)]})
         st.done()
+
+    @staticmethod
+    def _models_check(run: BuildRun) -> dict[str, Any]:
+        """Parts the viewer can only draw as a box: no model, or a model URL with no file."""
+
+        def served(url: str) -> bool:
+            if not url.startswith("/assets/") or "/kicad_gen/" in url:
+                return True  # remote, or converted on first request
+            return (ASSETS_DIR / url.removeprefix("/assets/")).is_file()
+
+        boxes: list[str] = []
+        for p in run.state["parts"]:
+            card = p.get("card") or {}
+            if card.get("kind") == "fastener":
+                continue  # a mounting hole is a hole in the board, drawn by the board
+            a = model_asset({"assets": p.get("assets") or card.get("assets") or []})
+            name = str(card.get("display_name") or p.get("part_id"))
+            if (
+                a is None or a.get("status") == "missing" or not served(str(a.get("url") or ""))
+            ) and name not in boxes:
+                boxes.append(name)
+        return {
+            "check_key": "render.models",
+            "rule_id": "render.models",
+            "status": "fail" if boxes else "pass",
+            "severity": "warning",
+            "message": (
+                f"No 3D model, drawn as a box: {', '.join(boxes)}"
+                if boxes
+                else "Every part has a 3D model"
+            )[:300],
+            "subjects": [],
+            "stage": "render",
+        }
 
 
 def make_runner(engine: Engine, source: PartSource) -> LiveRunner:
