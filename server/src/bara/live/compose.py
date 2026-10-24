@@ -8,7 +8,6 @@ survivor, the deterministic default (highest score) is used and the decision say
 
 from __future__ import annotations
 
-import asyncio
 import copy
 import logging
 import math
@@ -156,6 +155,15 @@ class ComposeResult:
     pin_budget: dict[str, Any] = field(default_factory=dict)
     log: list[str] = field(default_factory=list)
     error: str | None = None  # why nothing could be composed
+
+
+def open_source(part: dict[str, Any]) -> bool:
+    """A part from an open-source library: not a vendor download (LCSC/EasyEDA)."""
+    if part["part_id"].startswith("lcsc:"):
+        return False
+    lic = part.get("licence")
+    name = lic.get("name", "") if isinstance(lic, dict) else str(lic or "")
+    return "NOASSERTION" not in name
 
 
 def _side_suffix(side: str) -> str:
@@ -1384,13 +1392,9 @@ class Composer:
         need = slot.need
         assert need is not None
         for _ in range(3):  # a part that fails the spec check is rejected and the next tried
+            # open-source libraries only: no vendor (LCSC/EasyEDA) download
             part = self.resolver.generated(need)
             via = "the KiCad library"
-            if part is None:
-                part = await asyncio.to_thread(self.resolver.fetch, need)
-                via = "LCSC"
-                if part is not None:
-                    self.fetched.append(part)
             if part is None:
                 return None, via
             if await self.vet(slot, [part]):
@@ -1553,6 +1557,28 @@ class Composer:
                     else "Controller, power path and the I/O this device implies are all present"
                 )[:300],
                 "subjects": [{"slot_id": s.slot_id} for s in self.slots if s.unresolved][:8],
+                "stage": "compose",
+            }
+        )
+        closed = sorted(
+            {
+                str(s.chosen.get("display_name") or s.chosen["part_id"])[:40]
+                for s in self.slots
+                if s.chosen is not None and not open_source(s.chosen)
+            }
+        )
+        out.append(
+            {
+                "check_key": "provenance.open_source",
+                "rule_id": "provenance.open_source",
+                "status": "fail" if closed else "pass",
+                "severity": "error",
+                "message": (
+                    "Parts without an open-source library: " + ", ".join(closed)
+                    if closed
+                    else "Every part comes from an open-source library"
+                )[:300],
+                "subjects": [],
                 "stage": "compose",
             }
         )
