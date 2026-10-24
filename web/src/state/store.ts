@@ -73,7 +73,7 @@ let logId = 0;
 const LOG_CAP = 600;
 
 export const useApp = create<AppState>(() => ({
-  mode: { mock: false, speed: 1, fixture: null },
+  mode: { mock: false, speed: 1, fixture: null, server: null },
   conn: "connecting",
   hello: null,
   screen: "home",

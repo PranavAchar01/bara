@@ -7,12 +7,13 @@ import { emptyView, editSent, reduceView } from "../state/view";
 import { pushLog, showToast, useApp } from "../state/store";
 import { Connection, type SocketLike } from "./connection";
 import { FakeSocket, MockServer } from "./fakeSocket";
-import { readMode, socketUrl, type Mode } from "./mode";
+import { readMode, socketUrl, withPublishedServer, withServer, type Mode } from "./mode";
+import { DefaultLoadingManager } from "three";
 import { RestClient, httpFetcher, stubFetcher, paths } from "./rest";
 import { loadFixtures } from "../spec/fixtures";
 
 let conn: Connection | null = null;
-let rest: RestClient = new RestClient(httpFetcher);
+let rest: RestClient = new RestClient(httpFetcher(null));
 
 const RAW_CAP = 4000;
 function rawOf(v: unknown): string {
@@ -112,7 +113,7 @@ function onDrop(env: ServerEnvelope, reason: string): void {
 }
 
 export async function startClient(): Promise<Mode> {
-  const mode = readMode(window.location.search, import.meta.env as { VITE_MOCK?: string });
+  const mode = readMode(await withPublishedServer(window.location.search), import.meta.env as { VITE_MOCK?: string; VITE_SERVER_URL?: string });
   useApp.setState({ mode });
   let factory: (url: string) => SocketLike;
   if (mode.mock) {
@@ -121,11 +122,13 @@ export async function startClient(): Promise<Mode> {
     const server = new MockServer(fx, { speed: mode.speed, forcedFixture: mode.fixture });
     factory = () => new FakeSocket(server);
   } else {
-    rest = new RestClient(httpFetcher);
+    rest = new RestClient(httpFetcher(mode.server));
+    // GLB loaders resolve /assets/... against the page; send them to the remote server instead.
+    if (mode.server) DefaultLoadingManager.setURLModifier((u) => withServer(mode.server, u));
     factory = (url) => new WebSocket(url) as unknown as SocketLike;
   }
   conn = new Connection({
-    url: socketUrl(window.location),
+    url: socketUrl(mode.server ? new URL(mode.server) : window.location),
     socketFactory: factory,
     resumeTarget: () => {
       const b = useApp.getState().build;

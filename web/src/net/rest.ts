@@ -2,13 +2,14 @@
 // spec/fixtures/rest by method and path (SPEC 13).
 import type { ErrorObject, ErrorResponse, RestFixture } from "../spec/types";
 import { SPEC_VERSION } from "../spec/types";
+import { withServer } from "./mode";
 
 export type RestResult<T> = { ok: true; status: number; body: T } | { ok: false; status: number; error: ErrorObject };
 
 export type Fetcher = (method: "GET" | "POST", path: string, body?: unknown) => Promise<{ status: number; body: unknown }>;
 
-export const httpFetcher: Fetcher = async (method, path, body) => {
-  const res = await fetch(path, {
+export const httpFetcher = (server: string | null): Fetcher => async (method, path, body) => {
+  const res = await fetch(withServer(server, path), {
     method,
     headers: body === undefined ? undefined : { "content-type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),

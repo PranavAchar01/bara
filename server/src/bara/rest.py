@@ -3,7 +3,6 @@ ErrorResponse."""
 
 from __future__ import annotations
 
-import csv
 import io
 import json
 import re
@@ -14,14 +13,14 @@ from typing import Any
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response
 
-from bara import SERVER_VERSION, SPEC_VERSION
+from bara import SERVER_VERSION, SPEC_VERSION, geometry
 from bara.edits import Reject
 from bara.llm import providers_configured
 from bara.services import Services
 from bara.util import error_obj, http_status
 
 EXPORT_FORMATS = {"bom_csv", "stl", "3mf", "step", "kicad", "firmware_zip", "zip"}
-NO_ASSET_FORMATS = {"stl", "3mf", "step", "kicad"}
+GEOMETRY_FORMATS = {"stl": "stl", "3mf": "3mf", "step": "step", "kicad": "zip"}
 
 
 class ApiError(Exception):
@@ -263,9 +262,14 @@ def build_router(svc: Services) -> APIRouter:
             raise ApiError("E_BAD_MESSAGE", f"format must be one of {sorted(EXPORT_FORMATS)}.")
         if run.terminal != "build.done":
             raise ApiError("E_BUILD_NOT_READY", "Exports open once the build is done.")
-        if fmt in NO_ASSET_FORMATS:
-            raise ApiError("E_ASSET_MISSING", f"No {fmt} export exists for this build yet.")
         build = run.state
+        if fmt in GEOMETRY_FORMATS:
+            try:
+                data, media = geometry.export(build, fmt)
+            except geometry.ExportError as err:
+                raise ApiError(err.code, err.message) from err
+            suffix = "_kicad" if fmt == "kicad" else ""
+            return _download(data, f"{build_id}{suffix}.{GEOMETRY_FORMATS[fmt]}", media)
         if fmt == "bom_csv":
             return _download(bom_csv(build).encode(), f"{build_id}_bom.csv", "text/csv")
         include_all = fmt == "zip"
@@ -287,41 +291,7 @@ def _download(data: bytes, filename: str, media_type: str) -> Response:
 
 
 def bom_csv(build: dict[str, Any]) -> str:
-    rows: dict[str, dict[str, Any]] = {}
-    for part in build["parts"]:
-        card = part.get("card") or {}
-        row = rows.setdefault(
-            part["part_id"],
-            {
-                "part_id": part["part_id"],
-                "name": card.get("display_name", part["part_id"]),
-                "quantity": 0,
-                "instances": [],
-                "licence": card.get("licence_spdx", ""),
-                "commercial_ok": card.get("commercial_ok", ""),
-                "source_url": card.get("source_url") or "",
-            },
-        )
-        row["quantity"] += int(part.get("quantity", 1) or 1)
-        row["instances"].append(part["instance_id"])
-    out = io.StringIO()
-    writer = csv.writer(out, lineterminator="\n")
-    writer.writerow(
-        ["part_id", "name", "quantity", "instances", "licence", "commercial_ok", "source_url"]
-    )
-    for row in rows.values():
-        writer.writerow(
-            [
-                row["part_id"],
-                row["name"],
-                row["quantity"],
-                " ".join(row["instances"]),
-                row["licence"],
-                row["commercial_ok"],
-                row["source_url"],
-            ]
-        )
-    return out.getvalue()
+    return geometry.exports.bom_csv(build)
 
 
 def _safe_rel(path: str) -> str | None:
@@ -364,6 +334,7 @@ def build_zip(svc: Services, build: dict[str, Any], include_all: bool) -> bytes:
                 zf.writestr(prefix + rel, data)
         if include_all:
             zf.writestr("bom.csv", bom_csv(build))
+            zf.writestr("wiring.csv", geometry.exports.wiring_csv(build))
             zf.writestr("build.json", json.dumps(build, indent=2))
         lines = [f"Bara export of {build['build_id']} (revision {build['revision']})."]
         if missing:

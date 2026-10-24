@@ -20,6 +20,8 @@ from bara.ws import WsHandler
 log = logging.getLogger(__name__)
 
 CORS_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
+# The Vercel deploys (production and previews) reach a local server through a tunnel.
+CORS_ORIGIN_REGEX = r"https://bara(-[a-z0-9-]+)?\.vercel\.app"
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -36,6 +38,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=CORS_ORIGINS,
+        allow_origin_regex=CORS_ORIGIN_REGEX,
         allow_methods=["*"],
         allow_headers=["*"],
     )
