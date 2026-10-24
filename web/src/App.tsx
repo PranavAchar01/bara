@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useApp } from "./state/store";
 import { ConnectionBanner, EngineNotice, FileHeader, TopBar } from "./components/TopBar";
-import { ExampleChips, PromptBar } from "./components/PromptBar";
+import { PromptBar } from "./components/PromptBar";
 import { StepPlayer } from "./components/LeftColumn";
 import { BuildProgress, EditStatus, EventLog, FailureCard, LatencyHUD, Toast, WarningBanner } from "./components/Status";
 import { PartsList, RightColumn } from "./components/RightColumn";
@@ -9,6 +9,7 @@ import { AddPartPicker, ConnectDialog, PartInspector, ResizePanel, SwapDrawer } 
 import { FocusCard, FocusExit } from "./components/FocusCard";
 import { bindVoiceKeys } from "./voice/voice";
 import { Library } from "./components/Library";
+import { AgentSteps, LandingHero } from "./components/Landing";
 import { startAutosave } from "./library/autosave";
 import { Viewport3D } from "./three/Viewport3D";
 import { BotLab } from "./bot/BotLab";
@@ -43,25 +44,10 @@ function useKeys() {
 }
 
 function Home() {
-  const health = useApp((s) => s.health);
   return (
-    <main className="home">
-      <div className="home-hero">
-      <div className="home-inner">
-        <h1>Describe a device. It gets built from open hardware.</h1>
-        <p className="muted">
-          It reuses an open design when one fits, otherwise composes one from open source parts, and shows every decision, part, case, board and firmware
-          as it goes.
-        </p>
-        <PromptBar autoFocus />
-        <ExampleChips />
-        {health && (
-          <p className="muted small home-meta">
-            {health.part_count ?? 0} parts and {health.design_count ?? 0} designs in the catalog
-          </p>
-        )}
-      </div>
-      </div>
+    <main className="home landing">
+      <LandingHero />
+      <AgentSteps />
       <Library />
     </main>
   );
