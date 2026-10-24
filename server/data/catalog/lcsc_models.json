@@ -11,6 +11,12 @@
   "path": "C503581/C503581.step",
   "query": "ESP-01"
  },
+ "rf:ra_01_lora": {
+  "lcsc": "C90040",
+  "mpn": "Ra-01",
+  "path": "C90040/C90040.step",
+  "query": "Ra-01"
+ },
  "sens:am2302": {
   "lcsc": "C83988",
   "mpn": "AM2302",

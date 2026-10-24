@@ -16,6 +16,7 @@ import argparse
 import json
 import re
 import sys
+import time
 from typing import Any
 
 from bara.kicad_generated import KicadIndex
@@ -28,6 +29,8 @@ from .manifest import ENTRIES, Entry
 # how far the LCSC footprint's courtyard may differ from the catalog's, per side: a chip
 # (SH1106) is not the module it drives (a 1.3 in OLED board)
 SIZE_TOLERANCE = 1.5
+# EasyEDA blocks an address after a short burst of component requests; pace them
+FETCH_GAP_S = 20.0
 
 # a part number: letters and digits together, at least 4 long
 _PN = re.compile(r"^(?=.*[A-Za-z])(?=.*\d)[A-Za-z0-9.+-]{4,}$")
@@ -114,8 +117,13 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.write(f"{e.part_id}: {hit['query']} -> {hit['lcsc']} {hit['mpn']}\n")
         if args.dry_run:
             continue
+        time.sleep(FETCH_GAP_S)
         try:
             fetch_lcsc.fetch(hit["lcsc"], e.function)
+        except fetch_lcsc.RateLimited as exc:
+            # every further request extends the block: stop, keep what was found
+            misses.append(f"{e.part_id} ({exc}); stopped, rerun to continue")
+            break
         except Exception as exc:  # noqa: BLE001
             misses.append(f"{e.part_id} ({hit['lcsc']} fetch failed: {exc})")
             continue
