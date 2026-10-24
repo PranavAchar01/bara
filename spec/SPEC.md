@@ -856,15 +856,6 @@ A PCB. When part_instance_id is set, the board is also a BuildPart (from a desig
 | `position_mm` | Vec3 |  |  |
 | `rotation_deg` | Vec3 |  |  |
 | `nets` | Net[] |  |  |
-| `footprints` | object[] |  | Footprints on the board in build space. The viewport draws them on the placeholder board before the model exists, and names what the pointer hovers. A board is sent with status pending and its footprints as soon as it is laid out, before routing. |
-| `footprints[].ref` | string | yes | KiCad reference designator, e.g. SW3. Matches the footprint's node name in the board GLB. |
-| `footprints[].label` | string \| null |  |  |
-| `footprints[].role` | string \| null |  |  |
-| `footprints[].lib_id` | string \| null |  | KiCad footprint id, e.g. Diode_SMD:D_SOD-123. |
-| `footprints[].instance_id` | InstanceId \| null |  | The BuildPart this footprint mounts, when there is one. |
-| `footprints[].center_mm` | Vec2 |  | Courtyard centre. |
-| `footprints[].size_mm` | Vec2 |  | Courtyard size before rotation. |
-| `footprints[].rot_deg` | number |  |  |
 | `routing` | object |  |  |
 | `routing.status` | enum |  | Values: `routed`, `partial`, `unrouted`, `skipped`, `unknown`. |
 | `routing.unrouted_nets` | string[] |  |  |

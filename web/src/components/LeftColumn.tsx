@@ -26,33 +26,6 @@ export function StageTimeline() {
   );
 }
 
-/** Compact C04 for the left panel header (Figma step player): one dot per stage, the active one stretched into a bar. */
-export function StepPlayer() {
-  const stages = useApp((s) => s.view.stages);
-  const vocab = useApp((s) => s.vocab);
-  const done = useApp((s) => s.build?.status === "done");
-  const active = STAGE_IDS.find((id) => stages[id]?.status === "active" || stages[id]?.status === "needs_input");
-  const failed = STAGE_IDS.find((id) => stages[id]?.status === "failed");
-  const label = failed
-    ? `${vlabel(vocab, "stages", failed)} failed`
-    : active
-      ? vlabel(vocab, "stages", active)
-      : done
-        ? "Done"
-        : "";
-  return (
-    <div className="step-player" aria-label="Build progress">
-      <span className="step-dots">
-        {STAGE_IDS.map((id) => {
-          const st = stages[id]?.status ?? "pending";
-          return <span key={id} className={`step-dot st-${st}`} title={`${vlabel(vocab, "stages", id)}: ${st}`} />;
-        })}
-      </span>
-      {label && <span className={`step-label ${failed ? "tone-text-fail" : ""}`}>{label}</span>}
-    </div>
-  );
-}
-
 const STAGE_TONE: Record<string, Tone> = {
   ok: "ok",
   skipped: "muted",

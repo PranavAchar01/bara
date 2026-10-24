@@ -12,8 +12,8 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-sans);
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: 13px;
+  line-height: 1.45;
   -webkit-font-smoothing: antialiased;
 }
 button,
@@ -104,10 +104,9 @@ mark {
   background: none;
   padding: 0;
   cursor: pointer;
-  font-family: var(--font-display);
-  font-weight: 400;
-  font-size: 21px;
-  letter-spacing: -0.01em;
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: 0.01em;
 }
 .topbar-build {
   display: flex;
@@ -130,11 +129,10 @@ mark {
   flex: none;
 }
 .status-pill {
-  font-family: var(--font-mono);
   font-size: 11px;
-  font-weight: 400;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: var(--track-label);
+  letter-spacing: 0.04em;
   padding: 2px 8px;
   border-radius: 999px;
   background: var(--info-soft);
@@ -288,8 +286,99 @@ mark {
 /* prompt (C02, C03) */
 .promptbar {
   display: flex;
+  align-items: center;
   gap: 8px;
   width: 100%;
+}
+.prompt-bot {
+  margin: 0 2px;
+}
+
+/* BotLab (?botlab=1): the bot on its own. */
+.botlab {
+  min-height: 100vh;
+  padding: 24px 32px 48px;
+  background: var(--bg);
+  color: var(--text);
+  display: grid;
+  gap: 20px;
+  justify-items: center;
+}
+.botlab-head {
+  width: 100%;
+  max-width: 980px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.botlab-head h1 {
+  font-size: 18px;
+  margin: 0;
+  margin-right: auto;
+}
+.botlab-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+.botlab-stage {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 110px 0 12px;
+}
+.botlab-caption {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0;
+}
+.botlab-controls {
+  width: 100%;
+  max-width: 980px;
+  display: grid;
+  gap: 10px;
+}
+.botlab-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.botlab-label {
+  width: 56px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.botlab-input {
+  flex: 1;
+  min-width: 200px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+}
+.botlab-grid {
+  width: 100%;
+  max-width: 980px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 18px 8px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+.botlab-grid figure {
+  margin: 0;
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+}
+.botlab-grid figcaption {
+  font-size: 12px;
+  color: var(--muted);
 }
 .prompt-input {
   flex: 1;
@@ -356,18 +445,14 @@ mark {
   margin-bottom: 12vh;
 }
 .home h1 {
-  font-family: var(--font-display);
-  font-weight: 400;
-  font-size: 56px;
-  line-height: 0.95;
-  margin-bottom: 18px;
-  letter-spacing: var(--track-display);
+  font-size: 28px;
+  line-height: 1.25;
+  margin-bottom: 10px;
+  letter-spacing: -0.01em;
 }
 .home p {
-  margin: 0 0 28px;
+  margin: 0 0 24px;
   font-size: 15px;
-  letter-spacing: var(--track-body);
-  color: var(--text-2);
 }
 .home .home-meta {
   margin-top: 24px;
@@ -477,12 +562,11 @@ mark {
   padding: 9px 12px 0;
 }
 .panel-h h2 {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 400;
+  font-size: 11px;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: var(--track-label);
-  color: var(--text-2);
+  letter-spacing: 0.06em;
+  color: var(--muted);
 }
 .panel-meta {
   margin-left: auto;
@@ -687,7 +771,7 @@ button.chip {
   background: var(--accent);
 }
 .stage.over .stage-bar span {
-  background: var(--warn-fill);
+  background: var(--warn);
 }
 .stage-msg {
   grid-column: 2 / 5;
@@ -921,38 +1005,6 @@ select {
 .vp-label.failing {
   border-color: var(--fail);
   color: var(--fail);
-}
-/* A board still routing or loading: a quiet pill with a moving dot. */
-.vp-board-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--muted);
-}
-.vp-board-status::before {
-  content: "";
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
-  animation: vp-pulse 1.2s ease-in-out infinite;
-}
-@keyframes vp-pulse {
-  0%, 100% { opacity: 0.25; }
-  50% { opacity: 1; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .vp-board-status::before { animation: none; }
-}
-/* Footprint under the pointer: refdes, part, then the KiCad footprint name. */
-.vp-footprint b {
-  font-weight: 600;
-}
-.vp-footprint-lib {
-  margin-left: 6px;
-  color: var(--muted);
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 10px;
 }
 .vp-toolbar {
   position: absolute;

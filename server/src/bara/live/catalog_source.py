@@ -9,6 +9,7 @@ read through ``open_part_source``; nothing else in the live package knows which 
 from __future__ import annotations
 
 import copy
+import json
 import logging
 from pathlib import Path
 from typing import Any, Protocol
@@ -113,8 +114,57 @@ class StubCatalogDB:
         return sorted(keys)
 
 
+def load_fetched(catalog_dir: Path) -> list[dict[str, Any]]:
+    """Parts written by catalog_build.fetch_lcsc (catalog_dir/fetched/*.jsonl)."""
+    parts: list[dict[str, Any]] = []
+    for path in sorted((catalog_dir / "fetched").glob("*.jsonl")):
+        parts += [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+    return parts
+
+
+class WithFetched:
+    """Serves fetched parts beside a source that does not know them (CatalogDB)."""
+
+    def __init__(self, base: Any, parts: list[dict[str, Any]]) -> None:
+        self.base = base
+        self.name = base.name
+        self.extra = {p["part_id"]: p for p in parts}
+
+    def __getattr__(self, attr: str) -> Any:
+        return getattr(self.base, attr)
+
+    def get_part(self, part_id: str) -> dict[str, Any]:
+        return self.extra.get(part_id) or self.base.get_part(part_id)
+
+    def query(
+        self,
+        function: str | None = None,
+        facets: dict[str, Any] | None = None,
+        interfaces: list[str] | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        found = self.base.query(function, facets, interfaces, limit)
+        for part in self.extra.values():
+            types = {i.get("type") for i in part.get("interfaces", [])}
+            if (
+                (not function or function in part_functions(part))
+                and all(facet_match(part, k, "eq", v) for k, v in (facets or {}).items())
+                and (not interfaces or set(interfaces) <= types)
+            ):
+                found.append(part)
+        return found[:limit]
+
+
 def open_part_source(catalog: Catalog, catalog_dir: Path) -> PartSource:
-    """The real CatalogDB when its module and sqlite file exist, else the stub."""
+    """The real CatalogDB when its module and sqlite file exist, else the stub.
+    Fetched LCSC parts are added to either."""
+    fetched = load_fetched(catalog_dir)
+    merge_into_catalog(catalog, fetched)
+    source = _open_base(catalog, catalog_dir)
+    return WithFetched(source, fetched) if fetched and source.name != "stub" else source
+
+
+def _open_base(catalog: Catalog, catalog_dir: Path) -> PartSource:
     db_path = catalog_dir / "catalog.sqlite"
     if db_path.exists():
         try:

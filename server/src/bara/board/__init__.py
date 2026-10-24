@@ -29,7 +29,7 @@ from . import registry as R
 from .layout import HALF_GAP_MM, BoardPlan, plan_boards, sensor_lens
 from .libs import LIBRARIES, repo_commit
 
-__all__ = ["build_board", "plan_board", "route_board", "pending_board", "BoardBuildError"]
+__all__ = ["build_board", "plan_board", "route_board", "BoardBuildError"]
 
 Progress = Callable[[str, float | None], None]
 CACHE_VERSION = "board-v3"
@@ -463,65 +463,20 @@ def _nets(plan: BoardPlan, side_tag: str) -> list[dict]:
 
 def _glb_ref(path: Path, key: str) -> dict:
     data = path.read_bytes()
-    sha = hashlib.sha256(data).hexdigest()
     return {
         "asset_id": f"board_{key}",
         "kind": "glb",
         "role": "model",
-        # The file name is the routing cache key, which survives a change to how the GLB is
-        # made (compression, node names); the content hash keeps the URL immutable (SPEC 9).
-        "url": f"/assets/cache/boards/{path.name}?v={sha[:16]}",
+        "url": f"/assets/cache/boards/{path.name}",
         "content_type": "model/gltf-binary",
         "bytes": len(data),
-        "sha256": sha,
+        "sha256": hashlib.sha256(data).hexdigest(),
         "status": "ready",
         "origin": "generated",
     }
 
 
 # ---------------------------------------------------------------- entry
-
-
-def _footprints(placements: list[dict]) -> list[dict]:
-    """SPEC Board.footprints: what the viewport draws and names before and after the GLB."""
-    return [
-        {
-            "ref": p["ref"],
-            "label": p.get("label"),
-            "role": p.get("role"),
-            "lib_id": p.get("lib_id") or None,
-            "instance_id": p.get("instance_id"),
-            "center_mm": [round(p["x_mm"], 3), round(p["y_mm"], 3)],
-            "size_mm": [round(v, 3) for v in (p.get("size_mm") or [1, 1])[:2]],
-            "rot_deg": p.get("rot_deg", 0.0),
-        }
-        for p in placements
-        if p.get("on_pcb", True)
-    ]
-
-
-def pending_board(entry: dict) -> dict:
-    """SPEC Board for a planned (not yet routed) board: outline and footprints, status
-    pending, no model. Streamed before routing so the viewport has the board while
-    Freerouting and the GLB export run; route_board's record replaces it."""
-    return {
-        "board_id": entry["board_id"],
-        "source": "unknown",
-        "side": entry["side"],
-        "part_instance_id": None,
-        "for_instance_ids": [p["instance_id"] for p in entry["placements"]],
-        "outline_mm": entry["outline"],
-        "size_mm": entry["size_mm"],
-        "thickness_mm": PCB_THICKNESS_MM,
-        "layers": 2,
-        "position_mm": [0.0, 0.0, 0.0],
-        "rotation_deg": [0.0, 0.0, 0.0],
-        "footprints": entry["footprints"],
-        "routing": {"status": "unrouted", "method": "autorouted", "router": None},
-        "assets": [],
-        "status": "pending",
-        "revision": 0,
-    }
 
 
 def plan_board(brief: dict, parts: list[dict], *, build_id: str | None = None) -> dict:
@@ -600,7 +555,6 @@ def plan_board(brief: dict, parts: list[dict], *, build_id: str | None = None) -
                 "position_mm": [0.0, 0.0, 0.0],
                 "nets": _nets(plan, tag),
                 "placements": placements,
-                "footprints": _footprints(placements),
                 "cables": cables,
                 "controller": plan.controller["id"] if plan.controller else None,
                 "pin_budget": plan.pin_budget,
@@ -668,7 +622,6 @@ def route_board(
             "position_mm": [0.0, 0.0, 0.0],
             "rotation_deg": [0.0, 0.0, 0.0],
             "nets": entry["nets"],
-            "footprints": entry["footprints"],
             "routing": {
                 "status": "routed" if drc["unconnected"] == 0 else "partial",
                 "unrouted_nets": res["routing"].get("unrouted_nets", []),
