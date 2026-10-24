@@ -65,7 +65,22 @@ RECIPES: tuple[tuple[str, str, tuple[tuple[str, str], ...]], ...] = (
         "wire-to-board connector for an off-board load",
         (("fp", "JST_PH_B2B-PH-K_1x02_P2.00mm_Vertical"),),
     ),
+    (
+        r"\b(bi-?colou?r|dual[- ]colou?r|two[- ]colou?r)\b",
+        "bicolor LED",
+        (("fp", "LED_LiteOn_LTST-C19HE1WT"), ("fp", "LED_Kingbright_AAA3528ESGCT")),
+    ),
+    (r"\b(leds?|indicator|status light)\b", "indicator LED", (("fp", "LED_0603_1608Metric"),)),
+    (
+        r"\b(tactile|push ?buttons?|buttons?|bumper switch(es)?|keys?)\b",
+        "tactile switch",
+        (("fp", "SW_SPST_TL3342"), ("fp", "SW_Push_1P1T_NO_CK_KMR2")),
+    ),
 )
+
+
+# recipes whose primitive is the whole part: tried before an LCSC download, not after
+STOCK_FIRST = frozenset({"SMD fuse", "bicolor LED", "indicator LED", "tactile switch"})
 
 
 def recipe_for(need: Need) -> tuple[str, tuple[tuple[str, str], ...]] | None:
@@ -74,6 +89,12 @@ def recipe_for(need: Need) -> tuple[str, tuple[tuple[str, str], ...]] | None:
         if re.search(pattern, words):
             return name, steps
     return None
+
+
+def stock_primitive(need: Need) -> bool:
+    """The need is a generic part the KiCad library itself carries (no MPN needed)."""
+    found = recipe_for(need)
+    return found is not None and found[0] in STOCK_FIRST and not need.mechanical
 
 
 def slug(text: str) -> str:

@@ -33,7 +33,13 @@ from bara.live.catalog_source import (
     part_functions,
 )
 from bara.live.completeness import Completeness, Need
-from bara.live.fetch import BUDGET_PER_NEED_S, TOTAL_BUDGET_S, Resolver, as_overlay
+from bara.live.fetch import (
+    BUDGET_PER_NEED_S,
+    TOTAL_BUDGET_S,
+    Resolver,
+    as_overlay,
+    stock_primitive,
+)
 from bara.live.layout import PITCH_MM, KeyboardPlan, feature_sides, pin_need, stab_size
 from bara.live.llm_json import call_json
 
@@ -1396,7 +1402,15 @@ class Composer:
         the same with relaxed names (other drivers, library families) before it fails."""
         if slot.need is None:
             return
-        part, via = await self._find(slot)
+        part, via = None, ""
+        if stock_primitive(slot.need):
+            # a plain LED, button or fuse: the KiCad library part, not an LCSC download
+            part = self.resolver.composed(slot.need)
+            if part is not None and not await self.vet(slot, [part]):
+                part = None
+            via = f"a composed {part['composed']} (KiCad library)" if part else ""
+        if part is None:
+            part, via = await self._find(slot)
         for _ in range(self.RELAX_ROUNDS):
             if part is not None or not await self.relax(slot):
                 break

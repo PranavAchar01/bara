@@ -8,7 +8,8 @@ from typing import Any
 import pytest
 
 from bara.live import completeness as cp
-from bara.live.fetch import Overlay, Resolver, _names_part
+from bara.live.completeness import Need
+from bara.live.fetch import Overlay, Resolver, _names_part, recipe_for, stock_primitive
 
 SYMBOLS = ["DRV8833PW", "DRV8833PWP", "DRV8833RTY"]
 
@@ -53,3 +54,22 @@ def test_reel_suffix_finds_the_powerpad_symbol(tmp_path: Path) -> None:
 )
 def test_suffix_rule(query: str, name: str, ok: bool) -> None:
     assert _names_part(query, name) is ok
+
+
+@pytest.mark.parametrize(
+    ("label", "recipe"),
+    [
+        ("charge status led", "indicator LED"),
+        ("power/standby status led (bicolor)", "bicolor LED"),
+        ("Shoulder bumper switches", "tactile switch"),
+        ("Face buttons A/B/X/Y", "tactile switch"),
+    ],
+)
+def test_generic_parts_are_stock_first(label: str, recipe: str) -> None:
+    need = Need("k", "x", label)
+    assert recipe_for(need)[0] == recipe
+    assert stock_primitive(need)
+
+
+def test_a_haptic_driver_is_not_a_stock_primitive() -> None:
+    assert not stock_primitive(Need("k", "output.haptic", "haptic driver"))
