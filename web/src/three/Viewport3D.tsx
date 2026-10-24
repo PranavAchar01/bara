@@ -26,6 +26,7 @@ import { registerAnchor, stage, stageBox } from "./stage";
 import { StudioEnvironment, StudioFloor, studioPalette, type StudioPalette } from "./studio";
 import { DemandDriver, StudioPost, postEnabled } from "./post";
 import { BoardPlaceholder, BoardStatus, FootprintHover, footprintBoxes } from "./board";
+import { AgentTargetProbe, registerPart } from "./agentTargets";
 
 const DEG = Math.PI / 180;
 
@@ -210,6 +211,8 @@ interface PartNodeProps {
   selected: boolean;
   failing: boolean;
   highlight: boolean;
+  /** The agent on stage is working on this part: accent outline, no forced label. */
+  focus: boolean;
   labels: boolean;
   theme: Theme;
   pose: { position_mm: number[]; rotation_deg: number[] } | null;
@@ -272,7 +275,7 @@ function PartNode(props: PartNodeProps) {
   const hull = useMemo(() => (hullSrc ? hullGeometry(hullSrc, String(part.card.kind) === "pcb" ? 1.2 : 0.8) : null), [hullSrc, part.card.kind]);
   useEffect(() => () => hull?.dispose(), [hull]);
   const matrices = useMemo(() => poses.map((p) => elementMatrix(p)), [poses]);
-  const outline = props.failing ? theme.fail : props.selected || props.highlight ? theme.accent : null;
+  const outline = props.failing ? theme.fail : props.selected || props.highlight || props.focus ? theme.accent : null;
   const hullRef = useRef<THREE.InstancedMesh>(null);
   useLayoutEffect(() => {
     const ref = hullRef.current;
@@ -308,6 +311,15 @@ function PartNode(props: PartNodeProps) {
   }, [centroid, matrices, midZ]);
   const htmlAnchor = useMemo(() => new THREE.Vector3(centroid.x, centroid.y, centroid.z + topZ + 2), [centroid, topZ]);
   const ref = useLayerGroup(layerOf(part), props.labelKey, anchorLocal);
+  // Agent target: every element's box (model or placeholder) in the layer group's space; holds when covered too.
+  const localBox = useMemo(() => {
+    const out = new THREE.Box3();
+    const base = loaded ? loaded.bbox.clone() : new THREE.Box3(new THREE.Vector3(...box.min), new THREE.Vector3(...box.max));
+    const t = new THREE.Box3();
+    for (const m of matrices) out.union(t.copy(base).applyMatrix4(m));
+    return out;
+  }, [loaded, box, matrices]);
+  useEffect(() => (ref.current ? registerPart(part.instance_id, ref.current, localBox) : undefined), [ref, part.instance_id, localBox]);
   // A placeholder's "(no model)" tag shows on hover or when the parts panel points at it, never by
   // default: a tag pinned in the hero sat on top of real parts (battery under the OLED).
   const [hover, setHover] = useState(false);
@@ -601,13 +613,18 @@ function BoardPiece(props: {
   layer: LayerId;
   labelKey: string | null;
   anchor: THREE.Vector3;
+  /** Registers the piece as an agent target under this id, bounded by `targetBox` (board space). */
+  targetId?: string;
+  targetBox?: THREE.Box3 | null;
   onClick?: (e: ThreeEvent<MouseEvent>) => void;
   children?: ReactNode;
 }) {
-  const { board } = props;
+  const { board, targetId, targetBox } = props;
   const pos = useMemo(() => board.position_mm ?? [0, 0, 0], [board.position_mm]);
   const rot = useMemo(() => board.rotation_deg ?? [0, 0, 0], [board.rotation_deg]);
   const ref = useLayerGroup(props.layer, props.labelKey, props.anchor);
+  const localBox = useMemo(() => (targetBox && !targetBox.isEmpty() ? targetBox.clone().applyMatrix4(boardMatrix(board)) : null), [targetBox, board]);
+  useEffect(() => (targetId && localBox && ref.current ? registerPart(targetId, ref.current, localBox) : undefined), [ref, targetId, localBox]);
   return (
     <group ref={ref}>
       <group position={[pos[0], pos[1], pos[2]]} rotation={new THREE.Euler(rot[0] * DEG, rot[1] * DEG, rot[2] * DEG, "XYZ")}>
@@ -660,11 +677,21 @@ function BoardNode(props: {
     return c.applyMatrix4(boardMatrix(board));
   }, [loaded, match, board]);
   const hover = <FootprintHover boxes={boxes} parts={props.parts} accent={props.theme.accent} />;
+  const targetId = board.part_instance_id ?? board.board_id;
+  const targetBox = useMemo(() => {
+    if (loaded) return loaded.bbox;
+    const pts = board.outline_mm?.length ? board.outline_mm : board.size_mm ? [[0, 0], [board.size_mm[0], -board.size_mm[1]]] : [];
+    if (!pts.length) return null;
+    const b = new THREE.Box3();
+    for (const p of pts) b.expandByPoint(new THREE.Vector3(p[0], p[1], 0));
+    b.max.z = board.thickness_mm ?? 1.6;
+    return b;
+  }, [loaded, board.outline_mm, board.size_mm, board.thickness_mm]);
   if (!pieces) {
     // No GLB yet (routing, exporting or loading): the board drawn from its record.
     return (
       <group userData={{ fit: `board:${board.board_id}` }}>
-        <BoardPiece groups={[]} board={board} layer="pcb" labelKey={props.labelKey} anchor={anchorLocal}>
+        <BoardPiece groups={[]} board={board} layer="pcb" labelKey={props.labelKey} anchor={anchorLocal} targetId={targetId} targetBox={targetBox}>
           <BoardPlaceholder board={board} busy={busy} />
           {hover}
           {busy && statusText && <BoardStatus board={board} text={statusText} />}
@@ -675,7 +702,7 @@ function BoardNode(props: {
   return (
     <>
       <group userData={{ fit: `board:${board.board_id}` }}>
-        <BoardPiece groups={pieces.base} board={board} layer="pcb" labelKey={props.labelKey} anchor={anchorLocal}>
+        <BoardPiece groups={pieces.base} board={board} layer="pcb" labelKey={props.labelKey} anchor={anchorLocal} targetId={targetId} targetBox={targetBox}>
           {hover}
         </BoardPiece>
       </group>
@@ -1097,6 +1124,7 @@ function SceneContents(props: {
   const hoverConn = useApp((s) => s.hoverConnection);
   const toggles = useApp((s) => s.toggles);
   const dragPose = useApp((s) => s.dragPose);
+  const agentFocus = useApp((s) => s.agentFocus);
   const rootRef = useRef<THREE.Group>(null);
   useLayoutEffect(() => {
     stage.root = rootRef.current;
@@ -1185,6 +1213,7 @@ function SceneContents(props: {
             selected={selection === p.instance_id}
             failing={failing.has(p.instance_id)}
             highlight={hoverEnds.has(p.instance_id)}
+            focus={agentFocus === p.instance_id}
             labels={toggles.labels}
             theme={theme}
             pose={dragPose && dragPose.instance_id === p.instance_id ? dragPose : null}
@@ -1213,6 +1242,7 @@ function SceneContents(props: {
       <MoveGizmo mode={props.gizmoMode} />
       <CameraRig />
       <LabelProjector />
+      <AgentTargetProbe />
       <DemandDriver />
       <FitCheck onResult={props.onFit} />
       {props.post && <StudioPost dark={false} />}
@@ -1252,7 +1282,7 @@ export function Viewport3D() {
     [rows],
   );
   return (
-    <div ref={vpRef} className="viewport" style={{ background: palette.background }}>
+    <div ref={vpRef} className="viewport" data-agent="viewport" style={{ background: palette.background }}>
       <Canvas
         dpr={[1, 2]}
         frameloop="demand"

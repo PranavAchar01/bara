@@ -73,7 +73,7 @@ function StageRow(props: { stage: StageView; now: number; label: string; vocabBu
   const frac = budget && elapsed !== null ? Math.min(1, elapsed / budget) : 0;
   const statusText = stage.status === "needs_input" ? "needs input" : stage.status;
   return (
-    <li className={`stage st-${stage.status} ${over ? "over" : ""}`}>
+    <li data-agent={`stage:${stage.id}`} className={`stage st-${stage.status} ${over ? "over" : ""}`}>
       <span className={`stage-dot tone-${STAGE_TONE[stage.status] ?? "info"}`} />
       <span className="stage-label">{props.label}</span>
       <span className="stage-time mono">
@@ -390,7 +390,7 @@ function SlotRow(props: { slot: Slot }) {
     else useApp.setState({ selection: null, overlay: "inspector", inspectPartId: c.card.part_id });
   };
   return (
-    <div className={`slot st-${state} ${selected ? "selected" : ""}`}>
+    <div data-agent={`slot:${slot.slot_id}`} className={`slot st-${state} ${selected ? "selected" : ""}`}>
       <button
         type="button"
         className="slot-head"
@@ -418,7 +418,7 @@ function SlotRow(props: { slot: Slot }) {
         </div>
       )}
       {decision && (
-        <div className="decision">
+        <div className="decision" data-agent={`decision:${decision.decision_id}`}>
           {chosenCard ? (
             <div className="chosen">
               <strong>{chosenCard.display_name}</strong> <ProvenanceBadge card={chosenCard} />

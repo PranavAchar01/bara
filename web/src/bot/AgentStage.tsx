@@ -1,0 +1,526 @@
+// The agent on stage. While a build runs, the bot leaves the prompt bar and
+// works the canvas: it glides beside whatever the build is touching, steers a
+// small cursor onto it, frames it with a Figma-like selection box and acts the
+// step out (scan, pick, drop, trace, type, check, cheer). When the build ends
+// and the queue is played out it flies home to the prompt bar.
+//
+// Beats come from director.ts; part rects from three/agentTargets. One rAF
+// loop moves everything by writing styles to refs; React renders only when the
+// beat changes.
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useApp } from "../state/store";
+import { BaraBot } from "./BaraBot";
+import { agentEnabled, type AgentTarget, type Beat, type Rect } from "./agent";
+import { beatsFor, enqueue } from "./director";
+import { canvasRect, partRect } from "../three/agentTargets";
+import { clamp, lerp, PRESETS, reducedMotion, Spring, wander, type SpringCfg } from "./spring";
+import "./agentStage.css";
+
+/** The stage bot's rendered size; it scales to the docked bot's size at home. */
+const BOT = 44;
+/** Gap between the target box and the bot. */
+const GAP = 14;
+/** Padding of the selection box around its target. */
+const PAD = 6;
+/** No tab switching or scrolling for this long after the user touches anything. */
+const HANDS_OFF_MS = 5000;
+
+const FLOAT: SpringCfg = { stiffness: 85, damping: 14 }; // the bot: floaty, trails the cursor
+const STEER: SpringCfg = { stiffness: 200, damping: 23 }; // the cursor: gets there first
+const FRAME: SpringCfg = { stiffness: 240, damping: 26 }; // the selection box
+
+type Phase = "home" | "out" | "returning";
+
+const CODE_SNIPPETS = ["pinMode(8, OUTPUT);", "Wire.begin(6, 7);", "#define LED_PIN 8", "void setup() {", "analogRead(A0);", "Serial.begin(115200);"];
+
+function hash(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return h >>> 0;
+}
+
+/** A Manhattan route across the box, in 0..100 box units: [x, y] corners. */
+function tracePoints(id: string): [number, number][] {
+  const h = hash(id);
+  const y0 = 20 + (h % 60);
+  const x1 = 18 + ((h >> 6) % 25);
+  const y1 = 15 + ((h >> 11) % 70);
+  const x2 = 50 + ((h >> 17) % 30);
+  const y2 = 15 + ((h >> 22) % 70);
+  return [
+    [3, y0],
+    [x1, y0],
+    [x1, y1],
+    [x2, y1],
+    [x2, y2],
+    [97, y2],
+  ];
+}
+
+/** Point a fraction t (0..1) of the way along a polyline. */
+function along(pts: [number, number][], t: number): [number, number] {
+  const seg: number[] = [];
+  let total = 0;
+  for (let i = 1; i < pts.length; i++) {
+    const d = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+    seg.push(d);
+    total += d;
+  }
+  let left = clamp(t, 0, 1) * total;
+  for (let i = 0; i < seg.length; i++) {
+    if (left <= seg[i] || i === seg.length - 1) {
+      const k = seg[i] ? clamp(left / seg[i], 0, 1) : 0;
+      return [lerp(pts[i][0], pts[i + 1][0], k), lerp(pts[i][1], pts[i + 1][1], k)];
+    }
+    left -= seg[i];
+  }
+  return pts[pts.length - 1];
+}
+
+function domEl(key: string): HTMLElement | null {
+  return document.querySelector<HTMLElement>(`[data-agent="${CSS.escape(key)}"]`);
+}
+
+function domRect(key: string): Rect | null {
+  const el = domEl(key);
+  if (!el) return null;
+  const r = el.getBoundingClientRect();
+  if (r.width < 2 || r.height < 2) return null; // hidden (closed tab, collapsed section)
+  return { x: r.left, y: r.top, w: r.width, h: r.height };
+}
+
+const CODE_TABS = new Set(["connections", "board", "firmware"]);
+
+/** A code sub-tab target with no open of its own still needs its panel showing. */
+function impliedOpen(t: AgentTarget): Beat["open"] {
+  if (t.kind !== "dom") return undefined;
+  const [kind, id] = t.key.split(":");
+  if (kind === "codetab" && CODE_TABS.has(id)) return { rightTab: "code", codeTab: id as "connections" | "board" | "firmware" };
+  return undefined;
+}
+
+/** Where a target sits on screen right now, falling back to the canvas. */
+function resolve(t: AgentTarget | null): Rect | null {
+  if (t?.kind === "part") {
+    const r = partRect(t.id);
+    if (r && r.w > 1 && r.h > 1) return r;
+    const row = domRect(`row:${t.id}`);
+    if (row) return row;
+  } else if (t?.kind === "dom") {
+    const r = domRect(t.key);
+    if (r) return r;
+    // A code sub-tab while the Code tab is closed (hands off): point at the Code tab instead.
+    if (t.key.startsWith("codetab:")) {
+      const tab = domRect("tab:code");
+      if (tab) return tab;
+    }
+  }
+  return domRect("viewport") ?? canvasRect();
+}
+
+function homeRect(): Rect | null {
+  const el = document.querySelector<HTMLElement>(".promptbar.docked .prompt-bot") ?? document.querySelector<HTMLElement>(".prompt-bot");
+  if (!el) return null;
+  const r = el.getBoundingClientRect();
+  return { x: r.left, y: r.top, w: r.width, h: r.height };
+}
+
+/** A spot for the bot (its centre) just outside r, on screen, not over it. */
+function perch(r: Rect, fromX: number): { x: number; y: number } {
+  const W = window.innerWidth;
+  const H = window.innerHeight;
+  const half = BOT / 2;
+  const fits = (x: number, y: number) => x - half >= 8 && x + half <= W - 8 && y - half >= 8 && y + half <= H - 8;
+  const left = { x: r.x - GAP - half, y: r.y + half };
+  const right = { x: r.x + r.w + GAP + half, y: r.y + half };
+  const leftLow = { x: left.x, y: r.y + r.h - half };
+  const rightLow = { x: right.x, y: r.y + r.h - half };
+  const preferRight = fromX > r.x + r.w / 2;
+  const order = preferRight ? [right, left, rightLow, leftLow] : [left, right, leftLow, rightLow];
+  for (const p of order) if (fits(p.x, p.y)) return p;
+  // Too big to sit beside (the whole canvas): tuck into its top-left corner, under the label.
+  return { x: clamp(r.x + half + 14, half + 8, W - half - 8), y: clamp(r.y + half + 34, half + 8, H - half - 8) };
+}
+
+export function AgentStage() {
+  const enabled = useMemo(agentEnabled, []);
+  const screen = useApp((s) => s.screen);
+  if (!enabled || screen !== "workspace") return null;
+  return <Stage />;
+}
+
+function Stage() {
+  const [beat, setBeat] = useState<Beat | null>(null);
+  const [phase, setPhase] = useState<Phase>("home");
+  const stage = useRef<HTMLDivElement>(null);
+  const boxEl = useRef<HTMLDivElement>(null);
+  const cursorEl = useRef<HTMLDivElement>(null);
+  const rippleEl = useRef<HTMLDivElement>(null);
+  const botEl = useRef<HTMLDivElement>(null);
+  const botBody = useRef<HTMLDivElement>(null);
+  const queue = useRef<Beat[]>([]);
+  const phaseRef = useRef<Phase>("home");
+  const lastTouch = useRef(-Infinity);
+  const lastEvent = useRef(0);
+
+  // Beats from the event stream.
+  useEffect(() => {
+    let seen = useApp.getState().log.at(-1)?.id ?? 0;
+    return useApp.subscribe((s) => {
+      const last = s.log.at(-1)?.id ?? seen;
+      if (last === seen) return;
+      const fresh = s.log.filter((e) => e.id > seen && e.dir === "in");
+      seen = last;
+      if (!fresh.length) return;
+      lastEvent.current = performance.now();
+      const running = s.build?.status === "running" || s.build?.status === "awaiting_input";
+      // Stragglers after the build (late firmware progress) while flying home or at home: let them go.
+      if (phaseRef.current !== "out" && !running) {
+        queue.current = [];
+        return;
+      }
+      for (const e of fresh) queue.current = enqueue(queue.current, beatsFor(e, useApp.getState().build));
+    });
+  }, []);
+
+  // The user's hands: while they are busy, the agent does not move their UI.
+  useEffect(() => {
+    const touch = () => (lastTouch.current = performance.now());
+    const opts = { capture: true, passive: true } as const;
+    window.addEventListener("pointerdown", touch, opts);
+    window.addEventListener("wheel", touch, opts);
+    window.addEventListener("keydown", touch, opts);
+    return () => {
+      window.removeEventListener("pointerdown", touch, opts);
+      window.removeEventListener("wheel", touch, opts);
+      window.removeEventListener("keydown", touch, opts);
+    };
+  }, []);
+
+  // Leaving the workspace mid-build: hand the bot back.
+  useEffect(
+    () => () => {
+      if (useApp.getState().agentOut) useApp.setState({ agentOut: false, agentFocus: null });
+    },
+    [],
+  );
+
+  // The one animation loop.
+  useEffect(() => {
+    const bx = new Spring(0, FLOAT);
+    const by = new Spring(0, FLOAT);
+    const cx = new Spring(0, STEER);
+    const cy = new Spring(0, STEER);
+    const box = { x: new Spring(0, FRAME), y: new Spring(0, FRAME), w: new Spring(0, FRAME), h: new Spring(0, FRAME) };
+    const tilt = new Spring(0, PRESETS.smooth);
+    const squash = new Spring(0, PRESETS.wobbly);
+    const hop = new Spring(0, PRESETS.bouncy);
+    const scale = new Spring(1, PRESETS.smooth);
+    const press = new Spring(1, PRESETS.wobbly);
+    const all = [bx, by, cx, cy, box.x, box.y, box.w, box.h, tilt, squash, hop, scale, press];
+
+    let cur: Beat | null = null;
+    let beatAt = 0;
+    let boxShown = false;
+    let pressed = false;
+    let landed = true;
+    let lastSpeed = 0;
+    let trace: [number, number][] = [];
+    let last = performance.now();
+    let raf = 0;
+
+    const setPhaseBoth = (p: Phase) => {
+      phaseRef.current = p;
+      setPhase(p);
+    };
+
+    const handsOff = () => performance.now() - lastTouch.current < HANDS_OFF_MS;
+
+    const startBeat = (b: Beat | null, now: number) => {
+      cur = b;
+      beatAt = now;
+      pressed = false;
+      landed = false;
+      setBeat(b);
+      if (!b) return;
+      trace = b.action === "trace" ? tracePoints(b.id) : [];
+      useApp.setState({ agentFocus: b.target.kind === "part" ? b.target.id : null });
+      const free = !handsOff();
+      const open = b.open ?? impliedOpen(b.target);
+      if (open && free) {
+        const s = useApp.getState();
+        const patch: { rightTab?: typeof s.rightTab; codeTab?: typeof s.codeTab } = {};
+        if (open.rightTab && open.rightTab !== s.rightTab) patch.rightTab = open.rightTab;
+        if (open.codeTab && open.codeTab !== s.codeTab) patch.codeTab = open.codeTab;
+        if (patch.rightTab || patch.codeTab) useApp.setState(patch);
+      }
+      const key = b.target.kind === "dom" ? b.target.key : `row:${b.target.id}`;
+      if (free && (b.target.kind === "dom" || !partRect(b.target.id))) {
+        // After the tab it may have opened has rendered.
+        window.setTimeout(() => {
+          if (handsOff()) return;
+          domEl(key)?.scrollIntoView({ block: "nearest", behavior: reducedMotion() ? "auto" : "smooth" });
+        }, 80);
+      }
+      if (b.action === "cheer" && !reducedMotion()) {
+        hop.impulse(-520);
+        window.setTimeout(() => squash.impulse(-6), 330);
+        window.setTimeout(() => hop.impulse(-430), 520);
+        window.setTimeout(() => squash.impulse(-5), 830);
+      }
+    };
+
+    const launch = (now: number) => {
+      const home = homeRect();
+      const x = home ? home.x + home.w / 2 : window.innerWidth / 2;
+      const y = home ? home.y + home.h / 2 : window.innerHeight - 90;
+      for (const [s, v] of [
+        [bx, x],
+        [by, y],
+        [cx, x + 10],
+        [cy, y + 8],
+      ] as const) {
+        s.value = s.target = v;
+        s.velocity = 0;
+      }
+      scale.value = scale.target = home ? home.w / BOT : 0.8;
+      if (!reducedMotion()) {
+        by.impulse(-900); // springs up out of the bar
+        squash.impulse(7);
+      }
+      boxShown = false;
+      lastTouch.current = -Infinity; // the click that started the build does not count as hands on
+      useApp.setState({ agentOut: true });
+      setPhaseBoth("out");
+      startBeat(null, now);
+    };
+
+    const goHome = () => {
+      useApp.setState({ agentOut: false, agentFocus: null });
+      queue.current = [];
+      setPhaseBoth("home");
+      startBeat(null, performance.now());
+    };
+
+    const frame = (now: number) => {
+      raf = requestAnimationFrame(frame);
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      const st = useApp.getState();
+      const status = st.build?.status;
+      const running = status === "running" || status === "awaiting_input";
+      const reduced = reducedMotion();
+
+      if (phaseRef.current !== "out" && status === "running") {
+        if (phaseRef.current === "home") launch(now);
+        else setPhaseBoth("out");
+      }
+      const phaseNow = phaseRef.current;
+      if (phaseNow === "home") {
+        if (stage.current) stage.current.dataset.on = "0";
+        return;
+      }
+      if (stage.current) stage.current.dataset.on = "1";
+
+      // Next beat when this one has had its time.
+      const done = !cur || now - beatAt >= cur.dwellMs;
+      if (phaseNow === "out" && done) {
+        const next = queue.current.shift();
+        if (next) startBeat(next, now);
+        // Home only once the build is over, the queue is played out and the stream has gone quiet
+        // (some events trail build.done), so it never flies home and straight back out.
+        else if (!running && (!cur || now - beatAt >= cur.dwellMs + 350) && now - lastEvent.current > 1500) {
+          setPhaseBoth("returning");
+          startBeat(null, now);
+          useApp.setState({ agentFocus: null });
+        }
+      }
+      const b = cur;
+      const t = b ? (now - beatAt) / 1000 : 0;
+
+      // Where everything wants to be.
+      const target = phaseRef.current === "returning" ? null : resolve(b?.target ?? null);
+      if (target) {
+        let pad = PAD;
+        if (b?.action === "pick") pad = pressed ? 2 : 12;
+        const W = window.innerWidth;
+        const H = window.innerHeight;
+        const x0 = clamp(target.x - pad, 2, W - 4);
+        const y0 = clamp(target.y - pad, 2, H - 4);
+        const x1 = clamp(target.x + target.w + pad, x0 + 2, W - 2);
+        const y1 = clamp(target.y + target.h + pad, y0 + 2, H - 2);
+        box.x.target = x0;
+        box.y.target = y0;
+        box.w.target = x1 - x0;
+        box.h.target = y1 - y0;
+        if (!boxShown && b) {
+          // First box: start from a point at the cursor, so it grows out of it.
+          box.x.value = cx.value;
+          box.y.value = cy.value;
+          box.w.value = 0;
+          box.h.value = 0;
+          boxShown = true;
+        }
+        // The cursor: into the box, riding the action.
+        let px = x0 + (x1 - x0) * 0.58;
+        let py = y0 + (y1 - y0) * 0.52;
+        if (b?.action === "scan") {
+          const ph = (t / 1.2) % 1;
+          px = x1 - Math.min(18, (x1 - x0) * 0.2);
+          py = lerp(y0 + 4, y1 - 4, ph);
+        } else if (b?.action === "trace" && trace.length) {
+          const drawMs = Math.min(b.dwellMs * 0.7, 1400);
+          const [u, v] = along(trace, ((now - beatAt) / drawMs) % 1.6);
+          px = x0 + ((x1 - x0) * u) / 100;
+          py = y0 + ((y1 - y0) * v) / 100;
+        } else if (b?.action === "type") {
+          const flip = x1 + 190 > W; // the code chip sits under the box then (agentStage.css)
+          px = flip ? x1 - 12 : x1 + 4;
+          py = flip ? y1 + 22 : y0 + 14;
+        } else if (b?.action === "check") {
+          px = x1 - 6;
+          py = y0 + 6;
+        }
+        cx.target = clamp(px, 4, W - 16);
+        cy.target = clamp(py, 4, H - 20);
+        const p = perch({ x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, bx.value);
+        const bob = reduced ? 0 : 2.5 * wander(now / 900, 3);
+        bx.target = p.x;
+        by.target = p.y + bob;
+        scale.target = 1;
+      } else {
+        // Flying home.
+        const home = homeRect();
+        const hx = home ? home.x + home.w / 2 : window.innerWidth / 2;
+        const hy = home ? home.y + home.h / 2 : window.innerHeight - 90;
+        bx.target = hx;
+        by.target = hy;
+        cx.target = hx;
+        cy.target = hy;
+        scale.target = home ? home.w / BOT : 0.8;
+        if (phaseRef.current === "returning" && (reduced || (Math.hypot(bx.value - hx, by.value - hy) < 3 && Math.hypot(bx.velocity, by.velocity) < 40))) {
+          goHome();
+          return;
+        }
+      }
+
+      // Pick: press once the cursor has arrived.
+      if (b?.action === "pick" && !pressed && Math.hypot(cx.value - cx.target, cy.value - cy.target) < 4) {
+        pressed = true;
+        if (!reduced) press.impulse(-9);
+        const rip = rippleEl.current;
+        if (rip) {
+          rip.style.transform = `translate(${cx.value.toFixed(1)}px, ${cy.value.toFixed(1)}px)`;
+          rip.classList.remove("on");
+          void rip.offsetWidth; // restart the animation
+          rip.classList.add("on");
+        }
+      }
+
+      if (reduced) {
+        for (const s of all) {
+          s.value = s.target;
+          s.velocity = 0;
+        }
+      } else {
+        for (const s of all) s.step(dt);
+      }
+
+      // The bot leans into its travel, stretches with speed and squashes on arrival.
+      const speed = Math.hypot(bx.velocity, by.velocity);
+      tilt.target = reduced ? 0 : clamp(bx.velocity * 0.035, -16, 16);
+      if (!landed && lastSpeed > 140 && speed < 50) {
+        landed = true;
+        if (!reduced) squash.impulse(-6);
+      }
+      lastSpeed = speed;
+      const stretch = reduced ? 0 : clamp(speed / 3000, 0, 0.12);
+      const sq = squash.value * 0.03;
+      const sx = scale.value * (1 + sq - stretch * 0.5);
+      const sy = scale.value * (1 - sq + stretch);
+
+      if (botEl.current) botEl.current.style.transform = `translate(${(bx.value - BOT / 2).toFixed(1)}px, ${(by.value - BOT / 2 + hop.value * 0.06).toFixed(1)}px)`;
+      if (botBody.current) {
+        // Home size on the whole bot (bubbles included); lean and squash on the oval only, so speech never tilts.
+        const bs = botBody.current.style;
+        bs.transform = `scale(${scale.value.toFixed(3)})`;
+        bs.setProperty("--as-rot", `${tilt.value.toFixed(2)}deg`);
+        bs.setProperty("--as-sx", (sx / scale.value).toFixed(3));
+        bs.setProperty("--as-sy", (sy / scale.value).toFixed(3));
+      }
+      if (cursorEl.current) {
+        cursorEl.current.style.transform = `translate(${cx.value.toFixed(1)}px, ${cy.value.toFixed(1)}px) scale(${clamp(press.value, 0.6, 1.3).toFixed(3)})`;
+        cursorEl.current.dataset.on = phaseRef.current === "out" ? "1" : "0";
+      }
+      const be = boxEl.current;
+      if (be) {
+        const w = Math.max(0, box.w.value);
+        const h = Math.max(0, box.h.value);
+        be.style.transform = `translate(${box.x.value.toFixed(1)}px, ${box.y.value.toFixed(1)}px)`;
+        be.style.width = `${w.toFixed(1)}px`;
+        be.style.height = `${h.toFixed(1)}px`;
+        be.dataset.on = b && target ? "1" : "0";
+        be.dataset.top = box.y.value < 30 ? "1" : "0"; // no room for the label above
+        be.dataset.flip = box.x.value + w + 190 > window.innerWidth ? "1" : "0"; // no room for the code chip on the right
+      }
+    };
+    raf = requestAnimationFrame(frame);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  const pts = beat?.action === "trace" ? tracePoints(beat.id) : null;
+  const snippet = CODE_SNIPPETS[beat ? hash(beat.id) % CODE_SNIPPETS.length : 0];
+  const drawMs = beat ? Math.min(beat.dwellMs * 0.7, 1400) : 1000;
+
+  return (
+    <div ref={stage} className="agent-stage" data-on="0" aria-hidden="true">
+      <div ref={boxEl} className="as-box" data-on="0" data-bad={beat?.bad ? "1" : "0"} data-action={beat?.action ?? ""}>
+        {beat && (
+          <div key={beat.id} className="as-frame" style={{ ["--as-draw" as string]: `${drawMs}ms`, ["--as-n" as string]: snippet.length }}>
+            <span className="as-h tl" />
+            <span className="as-h tr" />
+            <span className="as-h bl" />
+            <span className="as-h br" />
+            <span className="as-chip">{beat.label}</span>
+            {beat.action === "scan" && <span className="as-scan" />}
+            {pts && (
+              <svg className="as-trace" viewBox="0 0 100 100" preserveAspectRatio="none">
+                <defs>
+                  <mask id={`as-m-${hash(beat.id)}`} maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100">
+                    <polyline className="as-trace-mask" points={pts.map((p) => p.join(",")).join(" ")} pathLength={100} />
+                  </mask>
+                </defs>
+                <polyline className="as-trace-line" points={pts.map((p) => p.join(",")).join(" ")} mask={`url(#as-m-${hash(beat.id)})`} />
+                <circle className="as-trace-dot" cx={pts[0][0]} cy={pts[0][1]} r="1.6" />
+              </svg>
+            )}
+            {beat.action === "type" && (
+              <span className="as-code">
+                <span className="as-code-text">{snippet}</span>
+                <span className="as-caret" />
+              </span>
+            )}
+            {beat.action === "check" && (
+              <span className="as-mark">
+                <svg viewBox="0 0 16 16" width="16" height="16">
+                  {beat.bad ? <path d="M4.5 4.5l7 7M11.5 4.5l-7 7" /> : <path d="M3.5 8.5l3 3 6-7" />}
+                </svg>
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+      <div ref={rippleEl} className="as-ripple" data-bad={beat?.bad ? "1" : "0"} />
+      <div ref={cursorEl} className="as-cursor" data-on="0" data-bad={beat?.bad ? "1" : "0"}>
+        <svg viewBox="0 0 16 20" width="16" height="20">
+          <path d="M1.5 1.5v15.2l4.1-3.9 2.7 6.1 2.6-1.1-2.7-6h5.7z" />
+        </svg>
+      </div>
+      <div ref={botEl} className="as-bot" data-phase={phase}>
+        <div ref={botBody} className="as-bot-body">
+          {phase !== "home" && <BaraBot size={BOT} bubbles />}
+        </div>
+      </div>
+    </div>
+  );
+}

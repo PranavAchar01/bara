@@ -74,6 +74,10 @@ export interface AppState {
   toast: string | null;
   /** Local pose shown while a move is committing (C20). */
   dragPose: { instance_id: string; position_mm: number[]; rotation_deg: number[] } | null;
+  /** Part the on-stage agent is working on; the viewport outlines it (bot/agent.ts). */
+  agentFocus: string | null;
+  /** The bot has left the prompt bar and is working on the canvas. */
+  agentOut: boolean;
 }
 
 let logId = 0;
@@ -111,6 +115,8 @@ export const useApp = create<AppState>(() => ({
   dismissedWarnings: [],
   toast: null,
   dragPose: null,
+  agentFocus: null,
+  agentOut: false,
 }));
 
 export function pushLog(entry: Omit<LogEntry, "id" | "t">): void {

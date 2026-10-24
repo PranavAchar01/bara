@@ -18,6 +18,8 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean }) {
   const running = status === "running" || status === "awaiting_input";
   const maxChars = useApp((s) => s.hello?.limits?.max_prompt_chars ?? 2000);
   const disabled = !helloSeen || !ready;
+  // The bot is out on the canvas (bot/AgentStage): the docked one steps away, keeping its place.
+  const away = useApp((s) => s.agentOut) && !!props.docked;
 
   const submit = () => {
     if (disabled || pending || !text.trim()) return;
@@ -33,7 +35,7 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean }) {
         submit();
       }}
     >
-      <BaraBot size={props.docked ? 36 : 46} typing={focused && text.length > 0} typingNonce={keys} bubbles={bubbles} className="prompt-bot" />
+      <BaraBot size={props.docked ? 36 : 46} typing={focused && text.length > 0} typingNonce={keys} bubbles={bubbles} className={away ? "prompt-bot is-away" : "prompt-bot"} />
       <input
         className="prompt-input"
         value={text}
