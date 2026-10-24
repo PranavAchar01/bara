@@ -737,6 +737,12 @@ function BoardNode(props: {
     b.max.z = board.thickness_mm ?? 1.6;
     return b;
   }, [loaded, board.outline_mm, board.size_mm, board.thickness_mm]);
+  // the bare board picks as the board, like its row in the label column
+  const onBoardClick = (e: ThreeEvent<MouseEvent>) => {
+    e.stopPropagation();
+    if (board.part_instance_id) select(board.part_instance_id);
+    focusPart("b:board");
+  };
   if (!pieces) {
     // No GLB yet (routing, exporting or loading): the board drawn from its record.
     return (
@@ -752,7 +758,7 @@ function BoardNode(props: {
   return (
     <>
       <group userData={{ fit: `board:${board.board_id}` }}>
-        <BoardPiece groups={pieces.base} board={board} layer="pcb" labelKey={props.labelKey} anchor={anchorLocal} targetId={targetId} targetBox={targetBox}>
+        <BoardPiece groups={pieces.base} board={board} layer="pcb" labelKey={props.labelKey} anchor={anchorLocal} targetId={targetId} targetBox={targetBox} onClick={onBoardClick}>
           {hover}
         </BoardPiece>
       </group>
@@ -1315,6 +1321,7 @@ function SceneContents(props: {
     }
     return out;
   }, [build?.checks]);
+  const hoverLabel = useApp((s) => s.hoverLabel);
   const hoverEnds = useMemo(() => {
     const c = build?.connections.find((x) => x.connection_id === hoverConn);
     return new Set(c ? [c.from.instance_id, c.to.instance_id] : []);
@@ -1385,7 +1392,7 @@ function SceneContents(props: {
             provisional={!placeDone}
             selected={selection === p.instance_id}
             failing={failing.has(p.instance_id)}
-            highlight={hoverEnds.has(p.instance_id)}
+            highlight={hoverEnds.has(p.instance_id) || hoverLabel === partLabel(p).key}
             focus={agentFocus === p.instance_id}
             labels={toggles.labels}
             theme={theme}
@@ -1440,6 +1447,8 @@ export function Viewport3D() {
   const [gizmoMode, setGizmoMode] = useState<"translate" | "rotate">("translate");
   const [boardOnly, setBoardOnly] = useState(false);
   const [misfit, setMisfit] = useState(0);
+  // a part pulled out into focus has left its case on purpose: the fit check does not apply
+  const focusOn = useApp((s) => s.focusKey !== null);
   // Narrow viewports get a compact toolbar so it stays one row and never covers the prompt bar.
   const vpRef = useRef<HTMLDivElement>(null);
   const [compact, setCompact] = useState(false);
@@ -1482,7 +1491,7 @@ export function Viewport3D() {
           {status === "running" || status === "awaiting_input" ? "Parts appear here as they are chosen." : status === "failed" ? "No parts were placed." : "Describe a device to start."}
         </div>
       )}
-      {hasParts && misfit > 0 && (
+      {hasParts && misfit > 0 && !focusOn && (
         <div style={MISFIT_CHIP} role="status">
           <span className="chip solid tone-warn" title="The case model does not contain the board in plan view. It is shown as generated and needs regenerating.">
             Case does not fit the board: off by {misfit} mm

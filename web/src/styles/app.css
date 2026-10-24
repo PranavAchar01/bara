@@ -1761,3 +1761,14 @@ label.check {
   box-shadow: var(--shadow-pop);
   max-width: calc(100% - 32px);
 }
+
+/* exploded-view label rows pick their part (three/labels.tsx) */
+.explode-label {
+  padding: 2px 6px;
+  margin: -2px -6px;
+  border-radius: 6px;
+  transition: background-color 120ms ease;
+}
+.explode-label:hover {
+  background: var(--accent-soft);
+}

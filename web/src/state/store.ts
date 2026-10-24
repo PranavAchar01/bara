@@ -125,6 +125,8 @@ export interface AppState {
   agentOut: boolean;
   /** Part under the pointer in the viewport (the bot explains it). */
   hoverPart: string | null;
+  /** Exploded-view label under the pointer: its part is outlined (three/labels.tsx). */
+  hoverLabel: string | null;
   /** A finished build is being re-performed (bot/replay.ts). */
   replaying: boolean;
 }
@@ -173,6 +175,7 @@ export const useApp = create<AppState>(() => ({
   agentFocus: null,
   agentOut: false,
   hoverPart: null,
+  hoverLabel: null,
   replaying: false,
 }));
 
