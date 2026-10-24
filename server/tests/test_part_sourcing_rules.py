@@ -61,3 +61,15 @@ def test_a_missing_catalog_model_is_replaced_by_the_footprint_model() -> None:
     kept = [{"kind": "glb", "url": "/assets/parts/never_made.glb", "status": "missing"}]
     _model_from_footprint({}, kept)  # no footprint: nothing to borrow
     assert kept[0]["url"] == "/assets/parts/never_made.glb"
+
+
+def test_the_form_is_told_each_control_part_real_size() -> None:
+    from bara.live import form as fm
+    from bara.live.runner import _footprint_size
+
+    screen = {"mechanical": {"bbox_mm": {"min": [-25.0, -35.0, 0], "max": [25.0, 35.0, 4]}}}
+    size = _footprint_size(screen)
+    assert size == (50.0, 70.0)
+    assert _footprint_size({}) is None
+    text = fm._prompt("a handheld", [fm.Touch("scr", "Screen", "display.tft", 1, (), size)], [], "")
+    assert "each 50 x 70 mm" in text

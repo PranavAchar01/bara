@@ -88,7 +88,7 @@ RECIPE_FAMILIES: dict[str, tuple[str, ...]] = {
     "IEC mains inlet": ("power.",),
     "rotary encoder": ("input.",),
     "buzzer": ("output.buzzer", "output.speaker", "output.sound", "output.audio"),
-    "wire-to-board connector for an off-board load": ("output.",),
+    "wire-to-board connector for an off-board load": ("output.", "actuator."),
     "bicolor LED": ("display.indicator", "output.light", "output.led", "indicator"),
     "indicator LED": ("display.indicator", "output.light", "output.led", "indicator"),
     "tactile switch": ("input.",),
