@@ -222,6 +222,28 @@ def test_blocks_become_one_need_per_identity_with_a_count() -> None:
     assert all(n.touch for n in keys)
 
 
+def test_same_function_blocks_merge_even_when_named_differently_but_ics_do_not() -> None:
+    spec: dict[str, Any] = {"functions": []}
+    blocks = {
+        "device_class": "gadget",
+        "mains_input": False,
+        "portable": True,
+        "avg_current_ma": 40,
+        "shell_g": 20,
+        "blocks": [
+            block("input.button", "Play", 1, search_terms=["TS-1187A"]),
+            block("input.button", "Menu", 2, search_terms=["tactile switch"]),
+            block("component.ic", "DAC", 1, search_terms=["PCM5102A"]),
+            block("component.ic", "Amp", 1, search_terms=["TPA6132A2"]),
+        ],
+    }
+    out = cp.apply(spec, {}, None, blocks)
+    buttons = [n for n in out.needs.values() if n.function_id == "input.button"]
+    ics = [n for n in out.needs.values() if n.function_id == "component.ic"]
+    assert [n.count for n in buttons] == [3] and set(buttons[0].terms) >= {"TS-1187A"}
+    assert len(ics) == 2
+
+
 def test_every_device_gets_a_controller_and_a_power_path() -> None:
     spec: dict[str, Any] = {"functions": []}
     blocks = {

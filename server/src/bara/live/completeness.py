@@ -234,7 +234,7 @@ def apply(
             out.notes.append("mains input: low-voltage half behind a certified AC-DC module")
         if blocks.get("mains_input"):
             out.mains = True
-        merged: dict[tuple[str, tuple[str, ...]], dict[str, Any]] = {}
+        merged: dict[tuple[str, Any], dict[str, Any]] = {}
         for block in listed:
             fid = block.get("function_id")
             terms = tuple(block.get("search_terms") or [])
@@ -246,7 +246,13 @@ def apply(
                 add(fid, f"block {block.get('label')}", max(1, int(block.get("count") or 1)))
                 continue
             # identical parts are one block with a quantity
-            row = merged.setdefault((fid, terms), {**block, "count": 0, "groups": []})
+            # (a generic IC differs by part; every other function is one part per requirement)
+            ident = terms if fid == "component.ic" else str(block.get("requirement") or "").lower()
+            row = merged.setdefault((fid, ident), {**block, "count": 0, "groups": []})
+            row["search_terms"] = list(dict.fromkeys([*row.get("search_terms", []), *terms]))
+            row["kicad_names"] = list(
+                dict.fromkeys([*row.get("kicad_names", []), *(block.get("kicad_names") or [])])
+            )
             row["count"] += max(1, int(block.get("count") or 1))
             row["groups"].append(f"{block.get('label')} x{max(1, int(block.get('count') or 1))}")
         for block in merged.values():
