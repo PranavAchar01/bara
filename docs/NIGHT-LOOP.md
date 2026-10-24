@@ -90,3 +90,6 @@ Web: bara-merge agent merges Nithin's figma-design-in-code / agent-board-3d / fi
 - dcc36a2: monitor failed identity ("flat slab seen from above"). Cause: every product is built face up and the hero camera looks down at it. ProductForm now declares rest_pose (face_up | upright); upright products are stood up (+90 deg about x) and seen from nearer eye height. Generic, no device names. test_live_form 37 passed.
 - Suite restarted on dcc36a2 (server 82140, suite 82189).
 - Next: controller floating tray/bezel pieces, J1 case cut (bara-quality), mouse optical sensor.
+- a7b918f: the controller bezel came out in 2 pieces. Cause: hidden parts above the seat got square through-holes, which left a lattice of holes in the top skin plus loose bars. They now get a blind pocket from inside, with the skin kept. The non-sculpted path is unchanged when a part is taller than the shell. test_case_shell 20 passed, test_geometry_case 15 passed.
+- bara-quality was stopped by Pranav (found 02:40). Not relaunched. Main owns the J1 cut, shell surface and lit displays now.
+- Suite restarted on a7b918f (server 87104, suite 87144).
