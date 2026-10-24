@@ -262,6 +262,24 @@ def _ccw(poly: np.ndarray) -> np.ndarray:
 HIDDEN_ROLES = {"battery", "mcu", "sensor", "other"}  # roles a part can have out of reach
 
 
+SLIVER_MM3 = 150.0  # a loose bezel strip smaller than this would snap off: the openings merge
+
+
+def _drop_slivers(m: mf.Manifold) -> mf.Manifold:
+    """Two openings a hair apart leave a loose strip of bezel between them; a strip that small
+    cannot be printed or held, so it goes and the openings join."""
+    pieces = m.decompose()
+    if len(pieces) <= 1:
+        return m
+    keep = [p for p in pieces if p.volume() >= SLIVER_MM3]
+    if not keep:
+        return m
+    out = keep[0]
+    for p in keep[1:]:
+        out = out + p
+    return out
+
+
 def infer_role(*texts: str | None) -> str:
     blob = " ".join(t.lower() for t in texts if t)
     for role, words in ROLE_KEYWORDS:
@@ -804,6 +822,7 @@ def enclose_report(
                 "size_mm": [w, h],
             }
         )
+    bezel = _drop_slivers(bezel)
     for o in openings["encoders"]:
         f = next(x for x in feats if x.ref == o["ref"])
         cutouts.append(

@@ -141,6 +141,7 @@ def plan_json(plan: BoardPlan, board_path: Path, dsn_path: Path) -> dict:
                 "y": round(it.y + oy, 4),
                 "rot": round(it.rot, 4),
                 "side": it.side,
+                "edge_cuts": it.fp.cutout is not None,
                 "pads": it.pads,
                 "models": _models_for(it),
             }

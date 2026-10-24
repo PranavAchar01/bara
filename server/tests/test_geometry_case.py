@@ -245,3 +245,15 @@ def test_a_board_side_role_reads_the_part_not_the_word_module():
     knob = {"role": "module", "label": "EC11E15244G1 encoder", "touch": True, "size_mm": [12, 14]}
     assert _feature_from_placement(esd).role == "other"
     assert _feature_from_placement(knob).role == "encoder"
+
+
+def test_a_loose_bezel_sliver_is_dropped_and_real_pieces_stay():
+    import manifold3d as mf
+
+    from bara.geometry.case import _drop_slivers
+
+    main = mf.Manifold.cube((60, 40, 4))
+    sliver = mf.Manifold.cube((3, 6, 4)).translate((70, 0, 0))
+    assert len(_drop_slivers(main + sliver).decompose()) == 1
+    big = mf.Manifold.cube((20, 20, 4)).translate((70, 0, 0))
+    assert len(_drop_slivers(main + big).decompose()) == 2  # a real piece is kept and reported

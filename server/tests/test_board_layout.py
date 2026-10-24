@@ -98,3 +98,13 @@ def test_right_half_is_mirrored() -> None:
     assert len(lx) == len(rx) == 17
     # same key cloud, reflected: spans match to within a key
     assert abs((max(lx) - min(lx)) - (max(rx) - min(rx))) < 1.0
+
+
+def test_open_footprint_edge_cuts_are_no_cutout_and_closed_ones_stay():
+    from bara.board.libs import footprint_ref
+
+    # the PMW3360 lens slot closes: it stays a cutout the board is cut around
+    assert footprint_ref("fingerpunch/fingerpunch:PMW3360").cutout is not None
+    # the SJ1-3523N jack's edge notch is an open chain meant to splice into the board edge
+    jack = footprint_ref("kicad/Connector_Audio:Jack_3.5mm_CUI_SJ1-3523N_Horizontal")
+    assert jack.cutout is None
