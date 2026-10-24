@@ -1055,6 +1055,8 @@ def _assign_gpio(mcu: Item, gpio: list[str], nets: list[str], items: list[Item])
     free = dict(pad_pos)
     out: dict[str, str] = {}
     for net in nets:
+        if not free:  # more signals than controller pads with a known position
+            break
         cx, cy = centroids[net]
         best = min(free, key=lambda n: math.hypot(free[n][0] - cx, free[n][1] - cy))
         out[best] = net

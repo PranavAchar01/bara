@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from bara.live import completeness as cp
+from bara.live.ask import ask_json
 from bara.live.catalog_source import (
     PartSource,
     card_for,
@@ -342,6 +343,7 @@ class Composer:
         plan: KeyboardPlan | None,
         settings: Any,
         board_controllers: dict[str, int] | None = None,
+        blocks: dict[str, Any] | None = None,
     ) -> None:
         self.source = as_overlay(source)
         self.spec = spec
@@ -352,7 +354,11 @@ class Composer:
         self.board_controllers = board_controllers or {}
         # completeness invariant: controller, power path and the I/O the device implies
         self.comp = cp.apply(
-            spec, brief, lambda fid: bool(self.source.query(function=fid, limit=1))
+            spec,
+            brief,
+            lambda fid: bool(self.source.query(function=fid, limit=1)),
+            blocks,
+            keyboard=plan is not None,
         )
         self.resolver = Resolver(self.source)
         self.fetched: list[dict[str, Any]] = []  # rows added during this build
@@ -992,6 +998,8 @@ class Composer:
                 self.mark_covered(slot, cover, step, emit)
                 continue
             slot.state = "narrowing"
+            if slot.need is not None and slot.need.requirement:
+                await self.vet(slot, self.base(slot))
             if slot.need is not None and not self.base(slot):
                 await self.resolve_missing(slot, emit)
             cands, ranked, applied = self.narrow(slot)
@@ -1158,18 +1166,69 @@ class Composer:
             progress(f"{step} of {n_slots} slots decided", step / max(1, n_slots))
         return self.result
 
+    async def vet(self, slot: Slot, parts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Parts that meet the block's key numbers (size, connector standard, rating). The ones
+        that do not are rejected for good, so the next lookup moves on."""
+        need = slot.need
+        if need is None or not need.requirement or not parts:
+            return parts
+        shown = parts[:12]
+        lines = "\n".join(
+            f"{i}: {p.get('display_name')} [{p.get('part_id')}] "
+            f"{str(p.get('description') or p.get('summary') or '')[:140]}"
+            for i, p in enumerate(shown)
+        )
+        schema = {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["meets"],
+            "properties": {"meets": {"type": "array", "items": {"type": "integer"}}},
+        }
+        data, note = await ask_json(
+            "You check parts against a requirement. Return the indexes of the candidates that "
+            "clearly meet every number in the requirement (size, resolution, connector "
+            "standard, rating). A part whose name shows a different size, standard or rating "
+            "does not meet it. When a candidate gives no evidence either way, include it.",
+            f"Product block: {need.label}\nRequirement: {need.requirement}\nCandidates:\n{lines}",
+            schema,
+            name="spec_check",
+            timeout_s=40,
+        )
+        if data is None:
+            return parts
+        keep = {i for i in data["meets"] if 0 <= i < len(shown)}
+        for i, p in enumerate(shown):
+            if i not in keep:
+                self.resolver.rejected.add(p["part_id"])
+        out = [p for i, p in enumerate(shown) if i in keep] + parts[12:]
+        if not out:
+            self.resolver.notes[slot.slot_id] = (
+                f"no candidate meets '{need.requirement}' (rejected: "
+                + ", ".join(str(p.get("display_name"))[:30] for p in shown[:4])
+                + ")"
+            )
+        return out
+
     async def resolve_missing(self, slot: Slot, emit: Emit) -> None:
         """A required need with no curated part: KiCad generated tier, then an LCSC fetch."""
         need = slot.need
         if need is None:
             return
-        part = self.resolver.generated(need)
+        part = None
         via = "the KiCad library"
-        if part is None:
-            part = await asyncio.to_thread(self.resolver.fetch, need)
-            via = "LCSC"
-            if part is not None:
-                self.fetched.append(part)
+        for _ in range(3):  # a part that fails the spec check is rejected and the next tried
+            part = self.resolver.generated(need)
+            via = "the KiCad library"
+            if part is None:
+                part = await asyncio.to_thread(self.resolver.fetch, need)
+                via = "LCSC"
+                if part is not None:
+                    self.fetched.append(part)
+            if part is None:
+                return
+            if await self.vet(slot, [part]):
+                break
+            part = None
         if part is None:
             return
         self.extra.setdefault(slot.slot_id, []).append(part)

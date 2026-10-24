@@ -323,6 +323,7 @@ def _placements(
                 "rot_deg": round(it.rot, 3),
                 "side": it.side,
                 "on_pcb": it.on_pcb,
+                "touch": bool(it.meta.get("touch")),
                 "height_mm": it.height_mm,
                 "size_mm": [round(float(v), 3) for v in size],
                 "source_url": str(lib["url"]) if lib else "",

@@ -14,8 +14,13 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any
 
+from shapely.geometry import Polygon
+
 from bara.live import adapters as A
-from bara.live import archetype, completeness
+from bara.live import archetype, completeness, hero
+from bara.live import blocks as blocks_mod
+from bara.live import form as form_mod
+from bara.live import identity as identity_mod
 from bara.live.brief import BriefResult, normalise_brief, spec_from_brief, write_brief
 from bara.live.catalog_source import PartSource, merge_into_catalog, model_asset
 from bara.live.compose import Composer, ComposeResult, Slot
@@ -197,9 +202,50 @@ class LiveRunner:
         board = await self.place(run, brief, plan, result, ctx)
         await self.enclose(run, brief, plan, result, board, ctx)
         board = await self.board_stage(run, board, result, ctx)
+        if plan is None:
+            critique = await self.identity(run, ctx)
+            if critique:  # one repair pass: redraw the form from the reviewer's notes
+                run.repair = critique  # type: ignore[attr-defined]
+                board = await self.place(run, brief, plan, result, ctx)
+                await self.enclose(run, brief, plan, result, board, ctx)
+                board = await self.board_stage(run, board, result, ctx)
+                await self.identity(run, ctx, final=True)
         self.firmware(run, brief, plan, result, board)
         self.render(run, result, board, ctx)
+        failure = self.gate(run)
+        if failure is not None:
+            run.emit("build.failed", {"error": failure})
+            return
         run.emit("build.done", self.engine._done_payload(run, {}))
+
+    # checks that decide whether the product exists: any one failing ends the build as failed
+    REQUIRED = {
+        "device.complete": "E_CRITICAL_PART_MISSING",
+        "slot.critical_filled": "E_CRITICAL_PART_MISSING",
+        "form.valid": "E_ENCLOSURE_FAILED",
+        "form.fit": "E_ENCLOSURE_FAILED",
+        "identity.reads_as_device": "E_ENCLOSURE_FAILED",
+        "board.drc": "E_BOARD_FAILED",
+        "board.routing.complete": "E_BOARD_FAILED",
+    }
+
+    def gate(self, run: BuildRun) -> dict[str, Any] | None:
+        """A failing required check is a failed build, never a clean DONE. The artefacts stay
+        in the build state so the failure can be looked at."""
+        latest: dict[str, dict[str, Any]] = {}
+        for check in run.state["checks"]:
+            latest[check.get("rule_id") or check.get("check_key") or ""] = check
+        bad = [
+            (rid, latest[rid])
+            for rid in self.REQUIRED
+            if latest.get(rid, {}).get("status") == "fail"
+        ]
+        if not bad:
+            return None
+        text = "; ".join(f"{rid}: {c.get('message', '')[:140]}" for rid, c in bad)
+        return error_obj(
+            self.REQUIRED[bad[0][0]], f"Build failed required checks. {text}", stage="render"
+        )
 
     # ---- classify ------------------------------------------------------------------------
     async def classify(self, run: BuildRun) -> tuple[dict[str, Any], dict[str, Any]] | None:
@@ -218,8 +264,15 @@ class LiveRunner:
             support = ("mech.", "interconnect.", "power.", "compute.", "comms.")
             if blocking and any(not f.startswith(support) for f in res.brief.get("functions", [])):
                 blocking = res.brief["blocking_facet"] = None
-            if blocking and completeness.kind_of(prompt):
-                blocking = res.brief["blocking_facet"] = None  # a known device names its job
+            if blocking and res.brief["scope"] == "in_scope":
+                # a named device implies its job: the block diagram answers what the brief could not
+                got, _ = await blocks_mod.derive(run.prompt, self.catalog.function_ids())
+                if got is not None:
+                    run.live_blocks = got  # type: ignore[attr-defined]
+                    blocking = res.brief["blocking_facet"] = None
+                    msg = "The request names no function; built the usual "
+                    msg += f"{got['device_class']} from its function block diagram."
+                    self._warn(run, "classify", "w_blocking", "assumption_made", "warning", msg)
             if not blocking or round_no > MAX_CLARIFY_ROUNDS or res.brief["scope"] != "in_scope":
                 break
             st.done("needs_input", "The request names no function; asking instead of guessing.")
@@ -247,7 +300,7 @@ class LiveRunner:
         for warning in res.warnings:
             run.emit("warning", {"warning": copy.deepcopy(warning)}, stage="classify")
         assumptions = [a for r in resolutions for a in r["resolution"].get("assumptions", [])]
-        if res.brief["scope"] != "in_scope" and completeness.low_voltage_mains(run.prompt):
+        if res.brief["scope"] != "in_scope" and await completeness.low_voltage_mains(run.prompt):
             # A charger or power strip is built as its low-voltage half around a certified
             # AC-DC module; the mains side is never ours (see the safety.mains_wiring check).
             res.brief["scope"] = "in_scope"
@@ -373,7 +426,16 @@ class LiveRunner:
     ) -> ComposeResult:
         st = self._stage(run, "compose", "Choosing parts")
         controllers = A.board_controllers() if plan is not None else {}
-        composer = Composer(self.source, spec, brief, plan, self.settings, controllers)
+        blocks = getattr(run, "live_blocks", None)
+        if plan is None and blocks is None:
+            blocks, note = await blocks_mod.derive(run.prompt, self.catalog.function_ids())
+            if blocks is None:
+                msg = f"No function block diagram ({note}); only the general invariants apply."
+                self._warn(run, "compose", "w_blocks", "other", "warning", msg)
+        run.live_blocks = blocks  # type: ignore[attr-defined]
+        composer = Composer(
+            self.source, spec, brief, plan, self.settings, controllers, blocks=blocks
+        )
         st.emit("slots.ready", {"slots": [s.json() for s in composer.slots]})
         if plan is not None:
             for half in plan.halves:
@@ -465,6 +527,162 @@ class LiveRunner:
         st.done()
         return board
 
+    @staticmethod
+    def _touches(result: ComposeResult) -> list[form_mod.Touch]:
+        """Slots a person touches, sees or plugs into: the form stage gives each an anchor."""
+        out = []
+        for slot in result.slots:
+            if slot.chosen is None or not slot.quantity:
+                continue
+            fid = slot.function_id
+            plain = fid.split(".")[0] in ("input", "output", "display") or fid == "power.usb_in"
+            if (slot.need is not None and slot.need.touch) or (slot.need is None and plain):
+                groups = slot.need.groups if slot.need is not None else ()
+                out.append(
+                    form_mod.Touch(slot.slot_id, slot.label, fid, max(1, slot.quantity), groups)
+                )
+        return out
+
+    async def form_stage(
+        self, run: BuildRun, result: ComposeResult, st: _Stage
+    ) -> form_mod.Form | None:
+        """The product's silhouette and anchors, from the model grounded on reference designs."""
+        touches = self._touches(result)
+        st.progress("Designing the product form", 0.0)
+        previous = getattr(run, "product_form", None)
+        repair = getattr(run, "repair", "")
+        product, note = await form_mod.derive(
+            run.prompt, touches, previous if repair else None, repair
+        )
+        run.product_form = product  # type: ignore[attr-defined]
+        if repair and previous is not None and product is not None:
+            self._warn(
+                run,
+                "place",
+                "w_form_repair",
+                "assumption_made",
+                "info",
+                "Identity repair redrew the form: " + form_mod.diff(previous, product),
+            )
+        problems = list(product.problems) if product is not None else [f"no form ({note})"]
+        poly_ok = product is not None and Polygon(product.silhouette).is_valid
+        result.log.append("form: " + (product.summary() if product is not None else note))
+        st.emit(
+            "check.result",
+            {
+                "results": [
+                    {
+                        "check_key": "form.valid",
+                        "rule_id": "form.valid",
+                        "status": "fail" if problems else "pass",
+                        "severity": "error",
+                        "message": (
+                            "Product form: " + "; ".join(problems)
+                            if problems
+                            else f"Silhouette {product.summary()}"  # type: ignore[union-attr]
+                        )[:300],
+                        "subjects": [],
+                        "stage": "place",
+                    }
+                ]
+            },
+        )
+        return product if poly_ok else None
+
+    async def identity(self, run: BuildRun, ctx: dict[str, Any], final: bool = False) -> str | None:
+        """Render the hero view and ask whether it reads as the requested device. Returns the
+        reviewer's critique when it does not (and this is not already the repair pass)."""
+        product = getattr(run, "product_form", None)
+        st = self._stage(run, "render", "Checking that it looks like the device")
+        recs = [(rec, False) for rec in run.state["enclosures"]] + [
+            (rec, True) for rec in run.state["boards"]
+        ]
+        root = self.settings.assets_dir
+        meshes: list[hero.Mesh] = []
+        for rec, is_board in recs:
+            pose = (
+                hero.pose_matrix(rec.get("position_mm") or [0, 0, 0], rec.get("rotation_deg"))
+                if is_board
+                else None
+            )
+            for a in rec.get("assets", []):
+                if a.get("kind") != "glb" or not a.get("url"):
+                    continue
+                path = root / a["url"].removeprefix("/assets/")
+                if path.is_file():
+                    plain = await asyncio.to_thread(hero.plain_copy, path, root / "cache" / "hero")
+                    if plain is not None:
+                        meshes += await asyncio.to_thread(hero.load_glb, plain, 1000.0, pose)
+        verdict: dict[str, Any] | None = None
+        note = "no form" if product is None else "nothing to render"
+        if product is not None and meshes:
+            eye, target = hero.hero_camera(meshes)
+            png = await asyncio.to_thread(hero.render, meshes, eye, target)
+            out = root / "cache" / "hero"
+            out.mkdir(parents=True, exist_ok=True)
+            run.hero_png = out / f"{run.build_id}{'_repaired' if final else ''}.png"  # type: ignore[attr-defined]
+            run.hero_png.write_bytes(png)  # type: ignore[attr-defined]
+            verdict, note = await identity_mod.judge(
+                run.prompt, product.description, product.reference, png
+            )
+        run.identity = verdict  # type: ignore[attr-defined]
+        ok = verdict is not None and bool(verdict["reads_as_device"])
+        message = (
+            f"Reads as the device: {verdict['sees']}"
+            if ok and verdict
+            else (
+                f"Does not read as the requested device: {verdict['sees']}"
+                if verdict
+                else f"Identity not judged ({note})"
+            )
+        )
+        if verdict and not ok and verdict["mismatches"]:
+            message += " | " + "; ".join(verdict["mismatches"])
+        st.emit(
+            "check.result",
+            {
+                "results": [
+                    {
+                        "check_key": "identity.reads_as_device",
+                        "rule_id": "identity.reads_as_device",
+                        "status": "pass" if ok else ("fail" if verdict else "unknown"),
+                        "severity": "error",
+                        "message": message[:300],
+                        "subjects": [],
+                        "stage": "render",
+                    }
+                ]
+            },
+        )
+        st.done()
+        if verdict is not None and not ok and not final:
+            return identity_mod.critique(verdict)
+        return None
+
+    def _form_fit_check(
+        self, run: BuildRun, st: _Stage, board: dict[str, Any], product: form_mod.Form
+    ) -> None:
+        over = [line for line in board.get("log", []) if line.startswith("FORM_OVERFLOW")]
+        grown = [line for line in board.get("log", []) if "grown" in line and "silhouette" in line]
+        st.emit(
+            "check.result",
+            {
+                "results": [
+                    {
+                        "check_key": "form.fit",
+                        "rule_id": "form.fit",
+                        "status": "fail" if over else "pass",
+                        "severity": "error",
+                        "message": (
+                            over[0] if over else (grown[0] if grown else "Parts fit the silhouette")
+                        )[:300],
+                        "subjects": [],
+                        "stage": "place",
+                    }
+                ]
+            },
+        )
+
     async def _place_generic(
         self, run: BuildRun, brief: dict[str, Any], result: ComposeResult, ctx: dict[str, Any]
     ) -> dict[str, Any] | None:
@@ -477,8 +695,19 @@ class LiveRunner:
             except Exception:  # a part the source no longer has stays off the board
                 record = {}
             parts.append({**p, "record": record})
-        gb = {"generic": True, "form": brief.get("form")}
+        gb = {
+            "generic": True,
+            "form": brief.get("form"),
+            "touch_slots": [t.slot_id for t in self._touches(result)],
+        }
+        product = await self.form_stage(run, result, st)
+        if product is not None:
+            gb["product_form"] = product.json()
+            brief["body_thickness_mm"] = product.thickness_mm
+            brief["edge_thickness_mm"] = product.edge_thickness_mm
         board, err = await asyncio.to_thread(A.plan_board, gb, parts, run.build_id)
+        if product is not None and board is not None:
+            self._form_fit_check(run, st, board, product)
         if board is None or not any(
             pl.get("for_instance_id") for e in board["boards"] for pl in e["placements"]
         ):

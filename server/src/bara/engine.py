@@ -13,6 +13,7 @@ import copy
 import logging
 import re
 import time
+import traceback
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -189,7 +190,21 @@ class Engine:
         except Exception as exc:  # a bug in replay must still end the build cleanly
             log.exception("build %s failed in replay", run.build_id)
             if run.terminal is None:
-                self._fail(run, error_obj("E_INTERNAL", f"Internal error: {type(exc).__name__}."))
+                tb = traceback.extract_tb(exc.__traceback__)
+                where = (
+                    f"{tb[-1].name} at {tb[-1].filename.rsplit('/', 1)[-1]}:{tb[-1].lineno}"
+                    if tb
+                    else "unknown"
+                )
+                self._fail(
+                    run,
+                    error_obj(
+                        "E_INTERNAL",
+                        f"Internal error in stage {run.open_stage or 'unknown'}: "
+                        f"{type(exc).__name__}: {exc} ({where}).",
+                        stage=run.open_stage,
+                    ),
+                )
         finally:
             run.replay_finished = True
 
