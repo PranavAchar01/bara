@@ -53,6 +53,11 @@ def build_services(settings: Settings) -> Services:
     router = Router(catalog, settings)
     edits = EditEngine(catalog, settings.catalog_dir / "check_rules.json", schemas)
     engine = Engine(catalog, settings, router, edits)
+    if not settings.mock:
+        from bara.live.catalog_source import open_part_source
+        from bara.live.runner import LiveRunner
+
+        engine.live = LiveRunner(engine, open_part_source(catalog, settings.catalog_dir))
     return Services(
         settings=settings,
         catalog=catalog,

@@ -54,7 +54,9 @@ def classify_schema(
             "device_class": {"type": "string", "enum": device_classes},
             "functions": {"type": "array", "items": {"type": "string", "enum": function_ids}},
             "main_purpose": {"type": "string"},
-            "blocking_facet": {"anyOf": [{"type": "string", "enum": CLARIFY_FACETS}, {"type": "null"}]},
+            "blocking_facet": {
+                "anyOf": [{"type": "string", "enum": CLARIFY_FACETS}, {"type": "null"}]
+            },
             "hard_requirements": {
                 "type": "array",
                 "items": {

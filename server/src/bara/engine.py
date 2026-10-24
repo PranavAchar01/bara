@@ -131,6 +131,8 @@ class Engine:
         self.router = router
         self.edits = edits
         self.builds: dict[str, BuildRun] = {}
+        # Live 8-stage runner for BARA_MOCK=0 (bara.live.runner.LiveRunner), set by services.
+        self.live: Any = None
         kw = router.keywords
         self.skip_words: list[str] = [normalize(w) for w in kw.get("skip_answers", [])]
 
@@ -174,7 +176,14 @@ class Engine:
 
     async def _run(self, run: BuildRun) -> None:
         try:
-            await self._replay(run)
+            if (
+                self.live is not None
+                and not self.settings.mock
+                and not run.options.get("mock_fixture")
+            ):
+                await self.live.run(run)
+            else:
+                await self._replay(run)
         except asyncio.CancelledError:
             raise
         except Exception as exc:  # a bug in replay must still end the build cleanly
