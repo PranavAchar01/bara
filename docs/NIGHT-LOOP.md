@@ -182,7 +182,7 @@ Web: bara-merge agent merges Nithin's figma-design-in-code / agent-board-3d / fi
 - Controller on 78230d2: identity PASS, fit PASS, routing fixed (cd33090).
 - Suite restarted on 98f210f: server 33627, suite 33676.
 
-### 10:20 iteration
+### 10:05 iteration
 - Monitor DRC: the one error is a 0.18 mm Freerouting neck at 0.12 mm (GND, F.Cu) between two 0.2 mm segments, squeezing past pad 124 of the 0.4 mm-pitch DF19G panel connector. Widening it to the 0.15 minimum after SES import trades it for 2 clearance errors against that pad (0.1488 vs 0.15), so it was not committed. Open: needs a reroute or a placement nudge around fine-pitch cable connectors.
 - mp4 identity ("portrait screen, a third of the face") root cause: the EA eDIP TFT43 footprint is drawn portrait (71.5 x 107.3) and kept rotation 0, so the 125x75 form could not hold it and fit repair grew the body to 220x140. Fix f7fc877: a screen >= 20 mm long turns a quarter when its long side runs across the body's long side (test_screen_orientation.py, 59 placement/form tests pass).
-- Suite restarted on f7d018f (server 39267, suite 39306) before f7fc877; mp4 re-check needs the next restart.
+- Suite restarted on a7145a5 (has f7fc877): server 42785, suite 42836.
