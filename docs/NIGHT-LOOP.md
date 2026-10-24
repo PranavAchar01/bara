@@ -127,3 +127,8 @@ Web: bara-merge agent merges Nithin's figma-design-in-code / agent-board-3d / fi
 - Suite on f853f67, controller FAIL mech.fit.floating (bezel 2 pieces, board 83% on the floor). Not the flip fix (the case reads plan features, not the board). Cause: the "thumbstick cap" block (mech.knob, filed by the model as input) fetched RKJXV1224005, the stick it fits, by its part number, so the build had four sticks and two hung 21.8 mm off the underside.
 - 37c0712: completeness: a touched mech.* block is mechanical whatever its category. fetch: a mechanical need never searches LCSC (made by the case). Test extended; live_form 42 + fetch_lcsc 13 passed, ruff clean.
 - Suite restarted on 37c0712 (server 39014, suite 39065). Mouse result on f853f67 never came in (suite stopped first).
+
+### 07:05-07:10 iter
+- Suite on 37c0712: MONITOR PASS (707 s). Controller FAIL mech.fit.floating again (bezel 2 pieces, board 93% on the floor). The sticks are off-board module cells; the left one, anchored to the front, overlapped a top part, and `_clear_of` jumped it to the back (side change cost only 2 mm), so it hung 21.8 mm under the board.
+- c0684e6: generic._clear_of: an anchored part moves only along its own face; unanchored parts may still use the back. Test added; live_form 43, board_layout + geometry_case 26 passed, ruff clean.
+- Suite restarted on c0684e6 (server 63384, suite 63439).
