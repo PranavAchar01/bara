@@ -1066,14 +1066,15 @@ class Composer:
 
     async def run(self, emit: Emit, progress: Callable[[str, float | None], None]) -> ComposeResult:
         n_slots = len(self.slots)
+        # every block's spec check at once: each is independent of the picks that follow
+        ahead = [s for s in self.slots if s.need is not None and s.need.requirement]
+        await asyncio.gather(*(self.vet(s, self.base(s)) for s in ahead))
         for step, slot in enumerate(self.slots, start=1):
             cover = self.covering_slot(slot)
             if cover is not None:
                 self.mark_covered(slot, cover, step, emit)
                 continue
             slot.state = "narrowing"
-            if slot.need is not None and slot.need.requirement:
-                await self.vet(slot, self.base(slot))
             if slot.need is not None and not self.base(slot):
                 await self.resolve_missing(slot, emit)
             if slot.need is not None and slot.criticality != "optional" and not self.base(slot):
@@ -1290,6 +1291,7 @@ class Composer:
             f"Product block: {need.label}\nRequirement: {need.requirement}\nCandidates:\n{lines}",
             schema,
             name="spec_check",
+            fast=True,
             timeout_s=40,
         )
         if data is None:
@@ -1368,6 +1370,7 @@ class Composer:
             f"Why they failed: {why or 'no match'}",
             schema,
             name="relax_names",
+            fast=True,
             timeout_s=45,
         )
         if data is None:
@@ -1417,9 +1420,21 @@ class Composer:
             part, via = await self._find(slot)
         if part is None:
             part = self.resolver.composed(slot.need)
-            if part is None or not await self.vet(slot, [part]):
+            if part is not None and not await self.vet(slot, [part]):
+                part = None
+            via = f"a composed {part['composed']} (KiCad library)" if part else ""
+        if part is None:
+            # nothing by name: a catalog part serving the function, spec-checked (a near miss
+            # is still taken later) beats a device missing it
+            pool = [
+                p
+                for p in self.source.query(function=slot.function_id, limit=500)
+                if p["part_id"] not in self.resolver.rejected
+            ]
+            kept = await self.vet(slot, pool)
+            if not kept:
                 return
-            via = f"a composed {part['composed']} (KiCad library)"
+            part, via = kept[0], "the catalog, by function"
         self.extra.setdefault(slot.slot_id, []).append(part)
         emit(
             "warning",

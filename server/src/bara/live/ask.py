@@ -7,9 +7,11 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
 import json
 import logging
 import os
+from pathlib import Path
 from typing import Any
 
 from jsonschema import Draft202012Validator
@@ -18,10 +20,25 @@ from bara.live.llm_json import _for_anthropic
 
 log = logging.getLogger(__name__)
 DEFAULT_MODEL = "claude-sonnet-5-5"
+FAST_MODEL = "claude-haiku-5-5"
+# answers by question: the same question (prompt, schema, images, model) is answered once
+CACHE = Path(__file__).resolve().parents[3] / "data/cache/llm"
 
 
-def model_name() -> str:
+def model_name(fast: bool = False) -> str:
+    if fast:
+        return os.environ.get("BARA_FAST_MODEL", FAST_MODEL)
     return os.environ.get("BARA_FORM_MODEL", DEFAULT_MODEL)
+
+
+def _cache_path(model: str, system: str, prompt: str, schema: dict, images: list[bytes]) -> Path:
+    h = hashlib.sha256()
+    for part in (model, system, prompt, json.dumps(schema, sort_keys=True)):
+        h.update(part.encode())
+        h.update(b"\0")
+    for img in images:
+        h.update(hashlib.sha256(img).digest())
+    return CACHE / f"{h.hexdigest()}.json"
 
 
 async def ask_json(
@@ -33,8 +50,16 @@ async def ask_json(
     timeout_s: float = 60.0,
     max_tokens: int = 4096,
     images: list[bytes] | None = None,
+    fast: bool = False,
 ) -> tuple[dict[str, Any] | None, str]:
-    """(data, note). data is None with a reason in note when no answer was usable."""
+    """(data, note). data is None with a reason in note when no answer was usable. `fast` asks
+    the small model: for short checks and picks, not for the reasoning stages."""
+    model = model_name(fast)
+    cached = _cache_path(model, system, prompt, schema, images or [])
+    try:
+        return json.loads(cached.read_text()), "ok (cached)"
+    except (OSError, ValueError):
+        pass
     key = os.environ.get("ANTHROPIC_API_KEY")
     if not key:
         return None, "no ANTHROPIC_API_KEY"
@@ -58,7 +83,7 @@ async def ask_json(
         for budget in (max_tokens, max_tokens * 2, max_tokens * 4):
             response = await asyncio.wait_for(
                 client.messages.create(
-                    model=model_name(),
+                    model=model,
                     max_tokens=budget,
                     system=system,
                     messages=[{"role": "user", "content": content}],
@@ -87,4 +112,9 @@ async def ask_json(
         return None, f"bad JSON: {exc}"
     if errors:
         return None, f"schema: {errors[0].message[:160]}"
+    try:
+        cached.parent.mkdir(parents=True, exist_ok=True)
+        cached.write_text(json.dumps(data))
+    except OSError:
+        log.warning("ask_json %s: answer not cached", name)
     return data, "ok"
