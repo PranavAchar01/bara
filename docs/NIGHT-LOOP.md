@@ -62,3 +62,17 @@ Engine-level, applies to every build; a build that misses a row reports a failin
 ### 2026-10-24 ~01:25 PT
 - His verdict: form inference is accurate, shell is ugly. Shell surface rules (solid skin, parting line, continuous fillets, blended bosses, taper from thickness profile, satin two-tone, decimated GLB) assigned to bara-quality under E12.
 - ~01:35 iteration: adea742 merged (no silent fallback, mating roles, stabilizer depth, board-v4). Suite on adea742 running under heavy lock. bara-quality still on E10-E14 + shell surface. bara-gaps/bara-render stay stopped.
+
+## Overnight goal (his ask, 2026-10-24 ~01:45 PT, up ~08:00)
+His words: "do like recursive loops of self-improvement... envision a very solid end goal... once you're done, go into more objects... keep going", plus merge Nithin's code into one working Vercel app; don't rename yet, tone down branding ("I hate the name Bara").
+
+North star (what a finished build looks like, any prompt):
+1. Reads instantly as the product from 3 m: silhouette, proportions and control layout match real products of that class.
+2. Shell looks injection-moulded: solid walls, one parting line, continuous fillets, blended bosses, satin two-tone, no raw edges, few-MB GLB.
+3. Board is a real routed PCB: visible copper, silk, vias, real 3D part models (placeholders = 0), DRC clean, fits inside with bosses + clearance.
+4. Exploded view stacks correctly (caps / top shell / board / battery / bottom) with no mirror or float.
+5. All checks required and green; failures are loud, never silent fallbacks.
+
+Loop: run suite -> rank worst element across devices -> one engine-level fix (no device names) -> rerun -> log. When the 27 pass, add a new batch of gadgets (prompts only, never engine special cases) and repeat.
+Expansion batches: (A) e-reader, digital camera, action camera, walkie-talkie, smart doorbell, thermostat, e-bike light, drone remote; (B) VR controller, stylus, earbuds case, bluetooth tracker, smart ring, baby monitor, label printer, dashcam; (C) mechanical numpad, macro pad, MIDI controller, handheld scanner, kitchen scale, alarm clock, portable fan, power bank.
+Web: bara-merge agent merges Nithin's figma-design-in-code / agent-board-3d / figma-stage-log, mutes branding, wires Vercel to the live engine behind a token.
