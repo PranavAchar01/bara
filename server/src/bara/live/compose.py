@@ -15,7 +15,7 @@ import math
 import os
 import re
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from bara.live import completeness as cp
@@ -1209,13 +1209,52 @@ class Composer:
             )
         return out
 
-    async def resolve_missing(self, slot: Slot, emit: Emit) -> None:
-        """A required need with no curated part: KiCad generated tier, then an LCSC fetch."""
+    RELAX_ROUNDS = 2
+
+    async def relax(self, slot: Slot) -> bool:
+        """The names tried found nothing usable: ask for other real parts and library families that
+        serve the same function and requirement, and widen the need with them."""
         need = slot.need
         if need is None:
-            return
-        part = None
-        via = "the KiCad library"
+            return False
+        tried = list(need.terms) + list(need.kicad)
+        schema = {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["search_terms", "kicad_names"],
+            "properties": {
+                "search_terms": {"type": "array", "items": {"type": "string"}},
+                "kicad_names": {"type": "array", "items": {"type": "string"}},
+            },
+        }
+        why = self.resolver.notes.get(slot.slot_id, "")
+        data, _ = await ask_json(
+            "You find substitute parts. Earlier lookups for a product block found nothing "
+            "usable. Give up to four other real manufacturer part numbers sold on LCSC that do "
+            "the same job (same function, meeting the requirement; alternative driver ICs, "
+            "pin-compatible modules, a different vendor) and up to four KiCad library symbol or "
+            "footprint names or family words that fit (for example the connector family or the "
+            "IC's generic name). Never repeat a name already tried. Never invent a part number.",
+            f"Block: {need.label}\nFunction: {need.function_id}\n"
+            f"Requirement: {need.requirement or 'none'}\nAlready tried: {', '.join(tried)}\n"
+            f"Why they failed: {why or 'no match'}",
+            schema,
+            name="relax_names",
+            timeout_s=45,
+        )
+        if data is None:
+            return False
+        terms = [t for t in data["search_terms"] if t and t not in need.terms][:4]
+        kicad = [t for t in data["kicad_names"] if t and t not in need.kicad][:4]
+        if not terms and not kicad:
+            return False
+        slot.need = replace(need, terms=need.terms + tuple(terms), kicad=need.kicad + tuple(kicad))
+        self.resolver.notes.pop(slot.slot_id, None)
+        return True
+
+    async def _find(self, slot: Slot) -> tuple[dict[str, Any] | None, str]:
+        need = slot.need
+        assert need is not None
         for _ in range(3):  # a part that fails the spec check is rejected and the next tried
             part = self.resolver.generated(need)
             via = "the KiCad library"
@@ -1225,10 +1264,21 @@ class Composer:
                 if part is not None:
                     self.fetched.append(part)
             if part is None:
-                return
+                return None, via
             if await self.vet(slot, [part]):
+                return part, via
+        return None, "the KiCad library"
+
+    async def resolve_missing(self, slot: Slot, emit: Emit) -> None:
+        """A required need with no curated part: KiCad generated tier, then an LCSC fetch, then
+        the same with relaxed names (other drivers, library families) before it fails."""
+        if slot.need is None:
+            return
+        part, via = await self._find(slot)
+        for _ in range(self.RELAX_ROUNDS):
+            if part is not None or not await self.relax(slot):
                 break
-            part = None
+            part, via = await self._find(slot)
         if part is None:
             return
         self.extra.setdefault(slot.slot_id, []).append(part)

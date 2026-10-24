@@ -300,6 +300,43 @@ def test_missing_part_is_fetched_cached_and_misses_are_remembered(tmp_path: Path
     assert r2.fetch(miss) is None and "NOPE9" in r2.notes["z"]
 
 
+def test_unresolved_block_is_retried_with_relaxed_names(monkeypatch: Any) -> None:
+    import asyncio
+
+    from bara.live import compose as cmp
+
+    seen: list[str] = []
+
+    class FakeResolver:
+        rejected: set[str] = set()
+        notes: dict[str, str] = {}
+
+        def generated(self, need: Any) -> Any:
+            seen.append("gen:" + ",".join(need.kicad))
+            return (
+                {"part_id": "kicadgen:ok", "display_name": "ok"} if "Family" in need.kicad else None
+            )
+
+        def fetch(self, need: Any) -> Any:
+            return None
+
+    async def fake_ask(system: str, user: str, schema: Any, **kw: Any) -> Any:
+        assert "Already tried: BAD1" in user
+        return {"search_terms": [], "kicad_names": ["Family"]}, ""
+
+    monkeypatch.setattr(cmp, "ask_json", fake_ask)
+    comp = object.__new__(cmp.Composer)
+    comp.resolver = FakeResolver()  # type: ignore[assignment]
+    comp.extra, comp.fetched = {}, []
+    comp.next_warning = lambda prefix: prefix + "1"  # type: ignore[method-assign]
+    comp.vet = lambda slot, parts: asyncio.sleep(0, parts)  # type: ignore[method-assign]
+    need = cp.Need("lcd", "display.lcd", "LCD", terms=("BAD1",), kicad=("Nope",))
+    slot = cmp.Slot("lcd", "LCD", "display.lcd", "required", 1, [], need=need)
+    asyncio.run(comp.resolve_missing(slot, lambda *a, **k: None))
+    assert comp.extra["lcd"][0]["part_id"] == "kicadgen:ok"
+    assert seen == ["gen:Nope", "gen:Nope,Family"]
+
+
 # ---------------------------------------------------------------- hero renderer
 
 
