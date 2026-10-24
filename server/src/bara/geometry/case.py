@@ -645,7 +645,8 @@ def enclose_report(
     sites: list[shell.Site] = []
     crown = 0.0
     if shaped:
-        sites = shell.sites_from_anchors(list(brief.get("anchors") or []), feats, t)
+        y_down = board.get("frame") != "y_up"
+        sites = shell.sites_from_anchors(list(brief.get("anchors") or []), feats, t, y_down)
         claimed_refs = {s_.ref for s_ in sites if s_.ref}
         port_parts = [f for f in feats if f.role == "usb"] or [f for f in feats if f.role == "mcu"]
         raw = _largest_polygon(outer_cs)
@@ -954,7 +955,8 @@ def enclose_report(
             "tent": tent,
             "side": side,
             "hand": HAND_SET,
-            "v": 3,
+            "v": 4,  # 4: anchors read in the record's own frame, speaker grilles
+            "frame": board.get("frame"),
             "anchors": brief.get("anchors"),
             "body": body,
             "edge": brief.get("edge_thickness_mm"),
