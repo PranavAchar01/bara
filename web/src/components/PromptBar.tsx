@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../state/store";
+import { setReplies, startListening, stopListening, useVoice } from "../voice/voice";
 import { BaraBot, botBubbles } from "../bot/BaraBot";
 import { cancelBuild, startBuild } from "../net/client";
 import { demoPrompts } from "../spec/fixtures";
@@ -24,6 +25,27 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean }) {
     startBuild(text.slice(0, maxChars));
     setText("");
   };
+  const listening = useVoice((s) => s.listening);
+  const heard = useVoice((s) => s.heard);
+  const transcribing = useVoice((s) => s.transcribing);
+  const caption = useVoice((s) => s.caption);
+  const replies = useVoice((s) => s.replies);
+  const voiceError = useVoice((s) => s.error);
+  const focusOpen = useApp((s) => s.focusKey !== null);
+  const sayN = useRef(0);
+  const say = useMemo(() => (caption ? { text: caption, n: ++sayN.current } : null), [caption]);
+  // Spoken words land here when no part is in focus (the focus card takes them otherwise).
+  useEffect(() => {
+    const onPrompt = (e: Event) => {
+      const t = (e as CustomEvent<string>).detail;
+      if (!t || disabled || pending) return;
+      setText(t);
+      startBuild(t.slice(0, maxChars));
+      setText("");
+    };
+    window.addEventListener("bara:prompt", onPrompt);
+    return () => window.removeEventListener("bara:prompt", onPrompt);
+  }, [disabled, pending, maxChars]);
 
   return (
     <form
@@ -33,13 +55,59 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean }) {
         submit();
       }}
     >
-      <BaraBot size={props.docked ? 36 : 46} typing={focused && text.length > 0} typingNonce={keys} bubbles={bubbles} className="prompt-bot" />
+      <button
+        type="button"
+        className={`bot-mic ${listening ? "on" : ""}`}
+        onPointerDown={(e) => {
+          e.preventDefault();
+          void startListening();
+        }}
+        onPointerUp={() => stopListening()}
+        onPointerLeave={() => listening && stopListening()}
+        title="Hold to talk (or hold Space)"
+        aria-label={listening ? "Listening, release to send" : "Hold to talk"}
+        aria-pressed={listening}
+      >
+        <BaraBot
+          size={props.docked ? 36 : 46}
+          typing={focused && text.length > 0}
+          typingNonce={keys}
+          bubbles={bubbles || !!say}
+          say={say}
+          mood={listening ? "listening" : transcribing ? "thinking" : undefined}
+          className="prompt-bot"
+        />
+      </button>
+      {listening && (
+        <span className="voice-bars" aria-hidden>
+          <i />
+          <i />
+          <i />
+          <i />
+          <i />
+        </span>
+      )}
       <input
-        className="prompt-input"
-        value={text}
+        className={`prompt-input ${listening ? "listening" : ""}`}
+        value={listening || transcribing ? heard : text}
+        readOnly={listening || transcribing}
         maxLength={maxChars}
         autoFocus={props.autoFocus}
-        placeholder={disabled ? "Waiting for the server" : props.docked ? "Describe another device" : "Describe the device you want"}
+        placeholder={
+          listening
+            ? focusOpen
+              ? "Listening… ask about this part"
+              : "Listening… describe the device"
+            : transcribing
+              ? "Writing down what you said…"
+              : voiceError
+                ? voiceError
+                : disabled
+                  ? "Waiting for the server"
+                  : props.docked
+                    ? "Describe another device, or hold Space to talk"
+                    : "Describe the device you want, or hold Space to talk"
+        }
         aria-label="Prompt"
         onChange={(e) => {
           setText(e.target.value);
@@ -49,6 +117,19 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean }) {
         onBlur={() => setFocused(false)}
         disabled={disabled}
       />
+      <button
+        type="button"
+        className={`icon-btn voice-toggle ${replies ? "on" : ""}`}
+        onClick={() => setReplies(!replies)}
+        title={replies ? "Spoken replies on (V)" : "Spoken replies off (V)"}
+        aria-label={replies ? "Turn spoken replies off" : "Turn spoken replies on"}
+        aria-pressed={replies}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M4 10v4h4l5 4V6L8 10H4z" />
+          {replies ? <path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12" /> : <path d="M17 9l5 6M22 9l-5 6" />}
+        </svg>
+      </button>
       {running && !text ? (
         <button type="button" className="btn stop" onClick={cancelBuild} title="Stop the build">
           <Icon name="stop" /> Stop

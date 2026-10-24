@@ -7,6 +7,7 @@ import { BuildProgress, EditStatus, EventLog, FailureCard, LatencyHUD, Toast, Wa
 import { PartsList, RightColumn } from "./components/RightColumn";
 import { AddPartPicker, ConnectDialog, PartInspector, ResizePanel, SwapDrawer } from "./components/Overlays";
 import { FocusCard } from "./components/FocusCard";
+import { bindVoiceKeys } from "./voice/voice";
 import { Viewport3D } from "./three/Viewport3D";
 import { BotLab } from "./bot/BotLab";
 
@@ -113,6 +114,7 @@ export function App() {
 
 function Main() {
   useKeys();
+  useEffect(() => bindVoiceKeys(), []);
   const screen = useApp((s) => s.screen);
   return (
     <div className="app">

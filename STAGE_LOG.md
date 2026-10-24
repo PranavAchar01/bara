@@ -237,6 +237,25 @@ The coverage audit of the live site found three places where the UI said two con
 
 **Minutes:** about 60. **Rating:** 4/5.
 
+### Talk to Bara
+
+**Tools:** Figma frame 19 as the spec; ElevenLabs for the voice (text to speech streamed, Scribe v2 for speech to text) through two new engine routes, so the key never reaches the browser.
+
+**What moved:**
+- **Talking:** hold Space, or press and hold Bara's eyes in the Ask pill. Level bars show and your words appear live where the browser can recognise speech; elsewhere the clip goes to the engine's `POST /v1/stt`, which hints Scribe with the build's part names. Releasing sends it: to the focus card when a part is pulled out, otherwise to the prompt. Esc throws it away.
+- **Answers:** spoken through the engine's `GET /v1/tts`, which streams ElevenLabs audio straight into an audio element, so playback starts while the rest is still being generated. The default model is `eleven_v4`, the most natural one; `BARA_TTS_MODEL=eleven_flash_v2_5` trades a little warmth for speed. The voice is Charlotte, chosen as warm and conversational; `BARA_TTS_VOICE` changes it. The words show in Bara's speech bubble as it talks. Without the engine's voice, the browser's best voice speaks instead.
+- **Replies:** spoken replies turn on the first time you talk. The speaker button in the Ask pill or `V` toggles them, and the choice is remembered per browser.
+
+**Checked:**
+- Web typecheck, lint and tests; 4 new server tests (settings follow the environment, long text is cut, part names reach Scribe, no key means no voice), plus the ask and contract tests.
+- In the browser: the caption shows in Bara's bubble and the fallback voice speaks.
+
+**Not checked:** a real ElevenLabs call, because no key is set on this machine. The engine needs `ELEVENLABS_API_KEY` and a restart on this commit. Six live-form and footprint server tests fail on `main` without this change (they need the KiCad libraries on Pranav's machine).
+
+**Changed from Figma:** frame 19 named Flash v2.5; we chose v4 because the brief was "sounds incredibly human", and Flash stays one setting away.
+
+**Minutes:** about 40. **Rating:** 4/5.
+
 ## Before and after
 
 | Change | Before | After |

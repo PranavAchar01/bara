@@ -11,9 +11,9 @@ import zipfile
 from typing import Any
 
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 
-from bara import SERVER_VERSION, SPEC_VERSION, geometry, part_ask
+from bara import SERVER_VERSION, SPEC_VERSION, geometry, part_ask, voice
 from bara.edits import Reject
 from bara.llm import providers_configured
 from bara.services import Services
@@ -277,6 +277,46 @@ def build_router(svc: Services) -> APIRouter:
                 "latency_ms": result.latency_ms,
             }
         )
+
+    @api.get("/v1/voice")
+    def voice_info() -> JSONResponse:
+        """Whether Bara can speak and listen here, and with which voice."""
+        return body(voice.settings())
+
+    @api.get("/v1/tts")
+    async def tts(request: Request) -> Response:
+        """Streams Bara saying `text` (GET, so an <audio> element can play it as it arrives)."""
+        text = (request.query_params.get("text") or "").strip()
+        if not text:
+            raise ApiError("E_BAD_MESSAGE", "Send text.")
+        try:
+            client, resp = await voice.open_speech(text)
+        except RuntimeError as exc:
+            raise ApiError("E_LLM_UNAVAILABLE", f"No voice: {exc}") from exc
+        return StreamingResponse(
+            voice.relay(client, resp),
+            media_type="audio/mpeg",
+            headers={"cache-control": "no-store"},
+        )
+
+    @api.post("/v1/stt")
+    async def stt(request: Request) -> JSONResponse:
+        """Text of a short recording (raw audio body), for browsers without speech recognition."""
+        audio = await request.body()
+        if not audio or len(audio) > voice.MAX_STT_BYTES:
+            raise ApiError("E_BAD_MESSAGE", "Send up to 8 MB of audio.")
+        build_id = request.query_params.get("build_id")
+        run = svc.engine.get(build_id) if build_id else None
+        terms = (
+            sorted({p["card"]["display_name"] for p in (run.state.get("parts") or [])})
+            if run
+            else None
+        )
+        try:
+            text = await voice.transcribe(audio, request.headers.get("content-type", ""), terms)
+        except RuntimeError as exc:
+            raise ApiError("E_LLM_UNAVAILABLE", f"No transcription: {exc}") from exc
+        return body({"text": text})
 
     @api.get("/v1/builds/{build_id}/slots/{slot_id}/alternatives")
     def alternatives(build_id: str, slot_id: str, request: Request) -> JSONResponse:
