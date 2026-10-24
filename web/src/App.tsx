@@ -6,6 +6,7 @@ import { StepPlayer } from "./components/LeftColumn";
 import { BuildProgress, EditStatus, EventLog, FailureCard, LatencyHUD, Toast, WarningBanner } from "./components/Status";
 import { PartsList, RightColumn } from "./components/RightColumn";
 import { AddPartPicker, ConnectDialog, PartInspector, ResizePanel, SwapDrawer } from "./components/Overlays";
+import { LibraryDialog } from "./components/Library";
 import { FocusCard, FocusExit } from "./components/FocusCard";
 import { bindVoiceKeys } from "./voice/voice";
 import { Viewport3D } from "./three/Viewport3D";
@@ -117,12 +118,14 @@ function Main() {
   useKeys();
   useEffect(() => bindVoiceKeys(), []);
   const screen = useApp((s) => s.screen);
+  const libraryOpen = useApp((s) => s.libraryOpen);
   return (
     <div className="app">
       {screen === "home" && <TopBar />}
       <EngineNotice />
       <ConnectionBanner />
       {screen === "home" ? <Home /> : <Workspace />}
+      {libraryOpen && <LibraryDialog />}
       <EventLog />
       <Toast />
     </div>

@@ -46,6 +46,10 @@ export interface AppState {
   conn: ConnStatus;
   hello: ServerPayloads["hello"] | null;
   screen: "home" | "workspace";
+  /** The Library list is open (listed builds are stored on the engine, shared by every visitor). */
+  libraryOpen: boolean;
+  /** Build id of a stored build being shown from the Library; it is not on the live engine. */
+  replaying: string | null;
   build: Build | null;
   view: ViewState;
   pendingStart: PendingStart | null;
@@ -88,6 +92,8 @@ export const useApp = create<AppState>(() => ({
   conn: "connecting",
   hello: null,
   screen: "home",
+  libraryOpen: false,
+  replaying: null,
   build: null,
   view: emptyView(),
   pendingStart: null,

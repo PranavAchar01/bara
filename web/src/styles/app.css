@@ -1761,3 +1761,15 @@ label.check {
   box-shadow: var(--shadow-pop);
   max-width: calc(100% - 32px);
 }
+
+/* Library */
+.modal.library { width: min(640px, 100%); }
+.library-list { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; }
+.library-row { display: flex; align-items: center; gap: 8px; }
+.library-open { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 6px; text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); cursor: pointer; font: inherit; color: inherit; }
+.library-open:hover:not(:disabled) { background: var(--surface-2); }
+.library-thumb { flex: none; width: 56px; height: 56px; background: var(--sunken); border-radius: var(--radius); overflow: hidden; }
+.library-thumb img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.library-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.library-prompt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.library-confirm { display: flex; gap: 4px; }

@@ -53,6 +53,7 @@ function onEnvelope(env: ServerEnvelope): void {
           build: createBuild(p.build_id, s.pendingStart.prompt, s.pendingStart.ts),
           view: emptyView(s.pendingStart.at),
           pendingStart: null,
+          replaying: null,
           screen: "workspace",
           selection: null,
           overlay: null,
@@ -159,6 +160,7 @@ export async function startClient(): Promise<Mode> {
     resumeTarget: () => {
       const b = useApp.getState().build;
       if (!b || b.status === "failed" || b.status === "cancelled") return null;
+      if (useApp.getState().replaying === b.build_id) return null;
       return { build_id: b.build_id, last_seq: b.last_seq };
     },
     onEnvelope,
@@ -220,4 +222,54 @@ export function applyEdit(ops: EditOp[], label?: string): void {
   if (!b || !conn || ops.length === 0) return;
   const msgId = conn.send("edit.apply", { build_id: b.build_id, base_revision: b.revision, ops });
   useApp.setState({ view: editSent(useApp.getState().view, msgId, ops, label) });
+}
+
+export interface LibraryEntry {
+  build_id: string;
+  prompt: string;
+  device: string | null;
+  created_at: string | null;
+  status: "done" | "failed";
+  hero_url: string | null;
+}
+
+/** Stored builds, newest first. Mock mode and an engine without a library both give an empty list. */
+export async function fetchLibrary(): Promise<LibraryEntry[]> {
+  const res = await rest.get<{ builds: LibraryEntry[] }>(paths.library());
+  return res.ok && Array.isArray(res.body.builds) ? res.body.builds : [];
+}
+
+/** Shows a stored build by feeding its recorded events through the same handler as a live socket. */
+export async function openLibraryBuild(buildId: string): Promise<boolean> {
+  const res = await rest.get<LibraryEntry & { events: ServerEnvelope[] }>(paths.libraryBuild(buildId));
+  if (!res.ok) {
+    showToast(res.error.message);
+    return false;
+  }
+  const { events, prompt, created_at } = res.body;
+  useApp.setState({
+    build: createBuild(buildId, prompt, created_at ?? undefined),
+    view: emptyView(performance.now()),
+    replaying: buildId,
+    pendingStart: null,
+    screen: "workspace",
+    libraryOpen: false,
+    selection: null,
+    overlay: null,
+    focusKey: null,
+    dismissedWarnings: [],
+    explode: 0,
+    dragPose: null,
+  });
+  for (const env of events) onEnvelope(env);
+  return true;
+}
+
+export async function deleteLibraryBuild(buildId: string): Promise<boolean> {
+  const res = await rest.delete<{ deleted: string }>(paths.libraryBuild(buildId));
+  if (!res.ok && res.status !== 404) {
+    showToast(res.error.message);
+    return false;
+  }
+  return true;
 }
