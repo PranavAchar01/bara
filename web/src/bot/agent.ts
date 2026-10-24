@@ -38,6 +38,8 @@ export interface Beat {
   dwellMs: number;
   /** Something went wrong here (check fail, warning): red box, worried face. */
   bad?: boolean;
+  /** A line the bot says as this beat starts (under 60 chars). */
+  say?: string;
   /** UI the agent opens itself when this beat starts, so the panel follows the work. */
   open?: { rightTab?: "design" | "build" | "code"; codeTab?: "connections" | "board" | "firmware" };
 }

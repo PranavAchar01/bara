@@ -26,7 +26,8 @@ import { registerAnchor, stage, stageBox } from "./stage";
 import { StudioEnvironment, StudioFloor, studioPalette, type StudioPalette } from "./studio";
 import { DemandDriver, StudioPost, postEnabled } from "./post";
 import { BoardPlaceholder, BoardStatus, FootprintHover, footprintBoxes } from "./board";
-import { AgentTargetProbe, registerPart } from "./agentTargets";
+import { AgentTargetProbe, partWorldBox, registerPart } from "./agentTargets";
+import { agentPose, easeOut } from "./agentCam";
 
 const DEG = Math.PI / 180;
 
@@ -164,6 +165,7 @@ function InstancedGroups(props: {
   groups: MeshGroup[];
   matrices: THREE.Matrix4[];
   onClick?: (e: ThreeEvent<MouseEvent>) => void;
+  onHover?: (on: boolean) => void;
 }) {
   const refs = useRef<(THREE.InstancedMesh | null)[]>([]);
   useLayoutEffect(() => {
@@ -191,9 +193,11 @@ function InstancedGroups(props: {
             if (!props.onClick) return;
             e.stopPropagation();
             document.body.style.cursor = "pointer";
+            props.onHover?.(true);
           }}
           onPointerOut={() => {
             document.body.style.cursor = "";
+            props.onHover?.(false);
           }}
         />
       ))}
@@ -323,13 +327,24 @@ function PartNode(props: PartNodeProps) {
   // A placeholder's "(no model)" tag shows on hover or when the parts panel points at it, never by
   // default: a tag pinned in the hero sat on top of real parts (battery under the OLED).
   const [hover, setHover] = useState(false);
+  // hoverPart: the nearest part mesh under the pointer (its over handler stops propagation), for the agent on stage.
+  const id = part.instance_id;
+  const onHover = useCallback(
+    (on: boolean) => {
+      const cur = useApp.getState().hoverPart;
+      if (on && cur !== id) useApp.setState({ hoverPart: id });
+      else if (!on && cur === id) useApp.setState({ hoverPart: null });
+    },
+    [id],
+  );
+  useEffect(() => () => onHover(false), [onHover, props.covered]);
   return (
     <group
       ref={ref}
       onPointerOver={missing ? () => setHover(true) : undefined}
       onPointerOut={missing ? () => setHover(false) : undefined}
     >
-      {!props.covered && <InstancedGroups groups={provisionalGroups} matrices={matrices} onClick={onClick} />}
+      {!props.covered && <InstancedGroups groups={provisionalGroups} matrices={matrices} onClick={onClick} onHover={onHover} />}
       {!props.covered &&
         placeholderEdges &&
         matrices.map((m, i) => (
@@ -1008,6 +1023,102 @@ function CameraRig() {
   return null;
 }
 
+const USER_QUIET_MS = 6000;
+const AGENT_HOME_MS = 1500;
+const AGENT_EASE_S = 0.8;
+const reducedMotion = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/**
+ * Drifts the camera toward the part the agent on stage works on (agentFocus), and back to
+ * the rig's framing 1.5 s after it lets go. Never while the user has touched the view or
+ * picked a preset in the last 6 s, while the explode is open, the MoveGizmo is up, the rig
+ * is easing, or the user prefers reduced motion. Runs after CameraRig in the frame order.
+ */
+function AgentCam() {
+  const { camera, controls, gl, invalidate } = useThree();
+  const cam = camera as THREE.PerspectiveCamera;
+  const focus = useApp((s) => s.agentFocus);
+  const nonce = useApp((s) => s.cameraNonce);
+  const touched = useRef(-Infinity);
+  const drifted = useRef(false);
+  const anim = useRef<{ fromP: THREE.Vector3; fromT: THREE.Vector3; toP: THREE.Vector3; toT: THREE.Vector3; t: number } | null>(null);
+  useEffect(() => {
+    const ctl = controls as unknown as OrbitLike | null;
+    const el = gl.domElement;
+    const on = () => {
+      touched.current = performance.now();
+      anim.current = null;
+      drifted.current = false;
+    };
+    el.addEventListener("pointerdown", on, { passive: true });
+    el.addEventListener("wheel", on, { passive: true });
+    ctl?.addEventListener("start", on);
+    return () => {
+      el.removeEventListener("pointerdown", on);
+      el.removeEventListener("wheel", on);
+      ctl?.removeEventListener("start", on);
+    };
+  }, [controls, gl]);
+  const lastNonce = useRef(nonce);
+  useEffect(() => {
+    if (lastNonce.current === nonce) return;
+    lastNonce.current = nonce;
+    touched.current = performance.now();
+    anim.current = null;
+    drifted.current = false;
+  }, [nonce]);
+  useEffect(() => {
+    const blocked = () => {
+      const s = useApp.getState();
+      return reducedMotion() || performance.now() - touched.current < USER_QUIET_MS || !!s.moving || s.explode > 0.05 || stage.explode > 0.05 || (stage.animating && !anim.current);
+    };
+    const go = (toP: THREE.Vector3, toT: THREE.Vector3) => {
+      const ctl = controls as unknown as OrbitLike | null;
+      if (!ctl) return;
+      anim.current = { fromP: cam.position.clone(), fromT: ctl.target.clone(), toP, toT, t: 0 };
+      invalidate();
+    };
+    if (focus) {
+      const ctl = controls as unknown as OrbitLike | null;
+      const box = partWorldBox(focus, new THREE.Box3());
+      if (!ctl || !box || blocked()) return;
+      const to = agentPose(cam.position, ctl.target, box, cam.fov, cam.aspect);
+      drifted.current = true;
+      go(to.pos, to.target);
+      return;
+    }
+    if (!drifted.current) return;
+    const id = window.setTimeout(() => {
+      if (!drifted.current || blocked()) return;
+      const p = useApp.getState().preset;
+      const to = framePose(p === "scene" || p === "iso" ? "hero" : p, cam, null);
+      drifted.current = false;
+      go(to.pos, to.target);
+    }, AGENT_HOME_MS);
+    return () => window.clearTimeout(id);
+  }, [focus, cam, controls, invalidate]);
+  useFrame((_, dt) => {
+    const a = anim.current;
+    if (!a) return;
+    // The rig's own ease (refit, preset, explode) wins; so does a gizmo or the explode opening.
+    if (stage.animating || useApp.getState().moving || stage.explode > 0.05) {
+      anim.current = null;
+      return;
+    }
+    const ctl = controls as unknown as OrbitLike | null;
+    stage.animating = true;
+    a.t = Math.min(1, a.t + dt / AGENT_EASE_S);
+    const k = easeOut(a.t);
+    cam.position.lerpVectors(a.fromP, a.toP, k);
+    if (ctl) {
+      ctl.target.lerpVectors(a.fromT, a.toT, k);
+      ctl.update();
+    }
+    if (a.t >= 1) anim.current = null;
+  });
+  return null;
+}
+
 /** C20 MoveGizmo: drag locally, send one absolute move with lock on release. */
 function MoveGizmo(props: { mode: "translate" | "rotate" }) {
   const moving = useApp((s) => s.moving);
@@ -1241,6 +1352,7 @@ function SceneContents(props: {
       </group>
       <MoveGizmo mode={props.gizmoMode} />
       <CameraRig />
+      <AgentCam />
       <LabelProjector />
       <AgentTargetProbe />
       <DemandDriver />

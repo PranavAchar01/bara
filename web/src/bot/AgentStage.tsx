@@ -4,6 +4,10 @@
 // step out (scan, pick, drop, trace, type, check, cheer). When the build ends
 // and the queue is played out it flies home to the prompt bar.
 //
+// Other features ask it to do things through agentBus.ts (explain a part, act
+// out an ask, replays). Those requests play through the same queue and fly the
+// bot out from home the same way, build or no build.
+//
 // Beats come from director.ts; part rects from three/agentTargets. One rAF
 // loop moves everything by writing styles to refs; React renders only when the
 // beat changes.
@@ -11,7 +15,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../state/store";
 import { BaraBot } from "./BaraBot";
 import { agentEnabled, type AgentTarget, type Beat, type Rect } from "./agent";
-import { beatsFor, enqueue } from "./director";
+import { onAgentDo, setAgentPos } from "./agentBus";
+import { beatsFor, enqueue, paceFor } from "./director";
+import { speechFor } from "./mood";
 import { canvasRect, partRect } from "../three/agentTargets";
 import { clamp, lerp, PRESETS, reducedMotion, Spring, wander, type SpringCfg } from "./spring";
 import "./agentStage.css";
@@ -24,6 +30,17 @@ const GAP = 14;
 const PAD = 6;
 /** No tab switching or scrolling for this long after the user touches anything. */
 const HANDS_OFF_MS = 5000;
+/** Out of things to do and the stream quiet this long: fly home. */
+const QUIET_MS = 1200;
+/** The bot never acts out something that happened longer ago than this: older glances are skipped. */
+const LAG_MAX_MS = 6000;
+/** Behind by this much: every beat gets the shortest dwell. */
+const LAG_HURRY_MS = 3000;
+/** Events that fly the bot out after the build is over (edits land on a finished build). */
+const AFTER_BUILD = new Set(["edit.applied", "edit.rejected"]);
+/** Store speech while the stage drives the bubble (mirrors BaraBot): one line this often, these always. */
+const SPEECH_GAP_MS = 3000;
+const ALWAYS_SPEAK = new Set(["build.done", "build.failed", "clarify.request"]);
 
 const FLOAT: SpringCfg = { stiffness: 85, damping: 14 }; // the bot: floaty, trails the cursor
 const STEER: SpringCfg = { stiffness: 200, damping: 23 }; // the cursor: gets there first
@@ -159,13 +176,35 @@ function Stage() {
   const botEl = useRef<HTMLDivElement>(null);
   const botBody = useRef<HTMLDivElement>(null);
   const queue = useRef<Beat[]>([]);
+  /** When each queued beat came in, to keep the bot from lagging far behind. */
+  const arrived = useRef(new WeakMap<Beat, number>());
   const phaseRef = useRef<Phase>("home");
   const lastTouch = useRef(-Infinity);
   const lastEvent = useRef(0);
+  /** Something other than a running build wants the bot out (a bus request, an edit). */
+  const wantOut = useRef(false);
+  /** Cut the current beat short (an interrupting request). */
+  const cut = useRef(false);
+  // Speech: null leaves the bubble to BaraBot's own store-driven lines. Once a beat speaks,
+  // the stage drives the bubble for the rest of the flight and forwards the store's lines too.
+  const [say, setSay] = useState<{ text: string; n: number } | null>(null);
+  const sayN = useRef(0);
+  const sayOn = useRef(false);
+  const speak = (text: string) => {
+    sayOn.current = true;
+    setSay({ text, n: ++sayN.current });
+  };
+
+  const push = (beats: Beat[]) => {
+    const now = performance.now();
+    for (const b of beats) if (!arrived.current.has(b)) arrived.current.set(b, now);
+    queue.current = enqueue(queue.current, beats);
+  };
 
   // Beats from the event stream.
   useEffect(() => {
     let seen = useApp.getState().log.at(-1)?.id ?? 0;
+    let lastSpoke = 0;
     return useApp.subscribe((s) => {
       const last = s.log.at(-1)?.id ?? seen;
       if (last === seen) return;
@@ -174,14 +213,43 @@ function Stage() {
       if (!fresh.length) return;
       lastEvent.current = performance.now();
       const running = s.build?.status === "running" || s.build?.status === "awaiting_input";
-      // Stragglers after the build (late firmware progress) while flying home or at home: let them go.
-      if (phaseRef.current !== "out" && !running) {
-        queue.current = [];
-        return;
+      for (const e of fresh) {
+        if (sayOn.current) {
+          const line = speechFor(e);
+          const t = performance.now();
+          if (line && (ALWAYS_SPEAK.has(e.type) || t - lastSpoke > SPEECH_GAP_MS)) {
+            lastSpoke = t;
+            speak(line);
+          }
+        }
+        // After the build, at home or flying home: only edits bring the bot out; stragglers
+        // (late firmware progress) are let go.
+        const after = AFTER_BUILD.has(e.type);
+        if (phaseRef.current !== "out" && !running && !after) continue;
+        const beats = beatsFor(e, useApp.getState().build);
+        if (!beats.length) continue;
+        if (after && !running) wantOut.current = true;
+        push(beats);
       }
-      for (const e of fresh) queue.current = enqueue(queue.current, beatsFor(e, useApp.getState().build));
     });
   }, []);
+
+  // Requests from the side door (agentBus): same queue, same flight.
+  useEffect(
+    () =>
+      onAgentDo((r) => {
+        if (!r.beats.length) return;
+        const beats = r.say ? [{ ...r.beats[0], say: r.beats[0].say ?? r.say }, ...r.beats.slice(1)] : r.beats;
+        if (r.interrupt) {
+          queue.current = [];
+          cut.current = true;
+        }
+        lastEvent.current = performance.now();
+        wantOut.current = true;
+        push(beats);
+      }),
+    [],
+  );
 
   // The user's hands: while they are busy, the agent does not move their UI.
   useEffect(() => {
@@ -200,6 +268,7 @@ function Stage() {
   // Leaving the workspace mid-build: hand the bot back.
   useEffect(
     () => () => {
+      setAgentPos(null);
       if (useApp.getState().agentOut) useApp.setState({ agentOut: false, agentFocus: null });
     },
     [],
@@ -236,13 +305,17 @@ function Stage() {
 
     const handsOff = () => performance.now() - lastTouch.current < HANDS_OFF_MS;
 
-    const startBeat = (b: Beat | null, now: number) => {
+    const startBeat = (next: Beat | null, now: number, behindMs = 0) => {
+      // Dwell shrinks as the queue fills or the bot falls behind, so it keeps up.
+      const b = next && { ...next, dwellMs: behindMs > LAG_HURRY_MS ? paceFor(next, Infinity) : paceFor(next, queue.current.length + 1) };
       cur = b;
       beatAt = now;
       pressed = false;
       landed = false;
+      cut.current = false;
       setBeat(b);
       if (!b) return;
+      if (b.say) speak(b.say);
       trace = b.action === "trace" ? tracePoints(b.id) : [];
       useApp.setState({ agentFocus: b.target.kind === "part" ? b.target.id : null });
       const free = !handsOff();
@@ -270,7 +343,7 @@ function Stage() {
       }
     };
 
-    const launch = (now: number) => {
+    const launch = (now: number, byBuild: boolean) => {
       const home = homeRect();
       const x = home ? home.x + home.w / 2 : window.innerWidth / 2;
       const y = home ? home.y + home.h / 2 : window.innerHeight - 90;
@@ -289,7 +362,9 @@ function Stage() {
         squash.impulse(7);
       }
       boxShown = false;
-      lastTouch.current = -Infinity; // the click that started the build does not count as hands on
+      // The click that started the build does not count as hands on; a hover or click that asked
+      // for the bot (bus request) does, so it does not switch the user's tabs under them.
+      if (byBuild) lastTouch.current = -Infinity;
       useApp.setState({ agentOut: true });
       setPhaseBoth("out");
       startBeat(null, now);
@@ -298,6 +373,10 @@ function Stage() {
     const goHome = () => {
       useApp.setState({ agentOut: false, agentFocus: null });
       queue.current = [];
+      wantOut.current = false;
+      sayOn.current = false;
+      setSay(null);
+      setAgentPos(null);
       setPhaseBoth("home");
       startBeat(null, performance.now());
     };
@@ -311,8 +390,10 @@ function Stage() {
       const running = status === "running" || status === "awaiting_input";
       const reduced = reducedMotion();
 
-      if (phaseRef.current !== "out" && status === "running") {
-        if (phaseRef.current === "home") launch(now);
+      const asked = wantOut.current && queue.current.length > 0;
+      if (phaseRef.current !== "out" && (status === "running" || asked)) {
+        wantOut.current = false;
+        if (phaseRef.current === "home") launch(now, status === "running");
         else setPhaseBoth("out");
       }
       const phaseNow = phaseRef.current;
@@ -322,14 +403,18 @@ function Stage() {
       }
       if (stage.current) stage.current.dataset.on = "1";
 
-      // Next beat when this one has had its time.
-      const done = !cur || now - beatAt >= cur.dwellMs;
+      // Next beat when this one has had its time (or an interrupting request cut it short).
+      const done = !cur || cut.current || now - beatAt >= cur.dwellMs;
       if (phaseNow === "out" && done) {
-        const next = queue.current.shift();
-        if (next) startBeat(next, now);
+        const q = queue.current;
+        const age = (x: Beat) => now - (arrived.current.get(x) ?? now);
+        // Too far behind: skip glances that are old news (never problems, cheers or lines to say).
+        while (q.length > 1 && age(q[0]) > LAG_MAX_MS && !q[0].bad && !q[0].say && q[0].action !== "cheer") q.shift();
+        const next = q.shift();
+        if (next) startBeat(next, now, age(next));
         // Home only once the build is over, the queue is played out and the stream has gone quiet
         // (some events trail build.done), so it never flies home and straight back out.
-        else if (!running && (!cur || now - beatAt >= cur.dwellMs + 350) && now - lastEvent.current > 1500) {
+        else if (!running && (!cur || cut.current || now - beatAt >= cur.dwellMs + 350) && now - lastEvent.current > QUIET_MS) {
           setPhaseBoth("returning");
           startBeat(null, now);
           useApp.setState({ agentFocus: null });
@@ -439,6 +524,9 @@ function Stage() {
       const sx = scale.value * (1 + sq - stretch * 0.5);
       const sy = scale.value * (1 - sq + stretch);
 
+      // Where the stage bot is, for features that point at it (agentBus.agentPos).
+      const size = BOT * scale.value;
+      setAgentPos(phaseRef.current === "home" ? null : { x: bx.value - size / 2, y: by.value - size / 2, w: size, h: size });
       if (botEl.current) botEl.current.style.transform = `translate(${(bx.value - BOT / 2).toFixed(1)}px, ${(by.value - BOT / 2 + hop.value * 0.06).toFixed(1)}px)`;
       if (botBody.current) {
         // Home size on the whole bot (bubbles included); lean and squash on the oval only, so speech never tilts.
@@ -462,6 +550,8 @@ function Stage() {
         be.dataset.on = b && target ? "1" : "0";
         be.dataset.top = box.y.value < 30 ? "1" : "0"; // no room for the label above
         be.dataset.flip = box.x.value + w + 190 > window.innerWidth ? "1" : "0"; // no room for the code chip on the right
+        // Most of the screen (the whole canvas): no tint, or a problem there turns everything red.
+        be.dataset.big = w * h > window.innerWidth * window.innerHeight * 0.25 ? "1" : "0";
       }
     };
     raf = requestAnimationFrame(frame);
@@ -471,12 +561,13 @@ function Stage() {
   const pts = beat?.action === "trace" ? tracePoints(beat.id) : null;
   const snippet = CODE_SNIPPETS[beat ? hash(beat.id) % CODE_SNIPPETS.length : 0];
   const drawMs = beat ? Math.min(beat.dwellMs * 0.7, 1400) : 1000;
+  const typeMs = beat ? Math.min(beat.dwellMs * 0.8, 1400) : 1400;
 
   return (
     <div ref={stage} className="agent-stage" data-on="0" aria-hidden="true">
       <div ref={boxEl} className="as-box" data-on="0" data-bad={beat?.bad ? "1" : "0"} data-action={beat?.action ?? ""}>
         {beat && (
-          <div key={beat.id} className="as-frame" style={{ ["--as-draw" as string]: `${drawMs}ms`, ["--as-n" as string]: snippet.length }}>
+          <div key={beat.id} className="as-frame" style={{ ["--as-draw" as string]: `${drawMs}ms`, ["--as-type" as string]: `${typeMs}ms`, ["--as-n" as string]: snippet.length }}>
             <span className="as-h tl" />
             <span className="as-h tr" />
             <span className="as-h bl" />
@@ -484,14 +575,11 @@ function Stage() {
             <span className="as-chip">{beat.label}</span>
             {beat.action === "scan" && <span className="as-scan" />}
             {pts && (
+              // The route only ever runs left to right, so revealing the svg left to right draws it in
+              // (agentStage.css as-reveal). An SVG mask did this before but did not render in Chrome.
               <svg className="as-trace" viewBox="0 0 100 100" preserveAspectRatio="none">
-                <defs>
-                  <mask id={`as-m-${hash(beat.id)}`} maskUnits="userSpaceOnUse" x="0" y="0" width="100" height="100">
-                    <polyline className="as-trace-mask" points={pts.map((p) => p.join(",")).join(" ")} pathLength={100} />
-                  </mask>
-                </defs>
-                <polyline className="as-trace-line" points={pts.map((p) => p.join(",")).join(" ")} mask={`url(#as-m-${hash(beat.id)})`} />
-                <circle className="as-trace-dot" cx={pts[0][0]} cy={pts[0][1]} r="1.6" />
+                <polyline className="as-trace-glow" points={pts.map((p) => p.join(",")).join(" ")} />
+                <polyline className="as-trace-line" points={pts.map((p) => p.join(",")).join(" ")} />
               </svg>
             )}
             {beat.action === "type" && (
@@ -518,7 +606,7 @@ function Stage() {
       </div>
       <div ref={botEl} className="as-bot" data-phase={phase}>
         <div ref={botBody} className="as-bot-body">
-          {phase !== "home" && <BaraBot size={BOT} bubbles />}
+          {phase !== "home" && <BaraBot size={BOT} bubbles say={say} />}
         </div>
       </div>
     </div>

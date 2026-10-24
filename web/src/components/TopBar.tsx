@@ -3,6 +3,7 @@ import { useApp } from "../state/store";
 import { paths } from "../net/rest";
 import { serverUrl, storeKey } from "../net/mode";
 import { Icon } from "../ui/common";
+import { ReplayControl } from "../bot/ReplayControl";
 import type { ConnStatus } from "../net/connection";
 
 const CONN_LABEL: Record<ConnStatus, string> = {
@@ -93,6 +94,7 @@ export function FileHeader() {
           {(mock || hello?.mock) && <span className="status-pill">mock</span>}
         </div>
       )}
+      <ReplayControl />
       <div className="file-meta">
         <span className={`conn-dot tone-${CONN_TONE[conn]}`} aria-hidden />
         <span aria-live="polite">{CONN_LABEL[conn]}</span>

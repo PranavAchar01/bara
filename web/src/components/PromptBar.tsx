@@ -15,7 +15,9 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean }) {
   const helloSeen = useApp((s) => s.hello !== null);
   const pending = useApp((s) => s.pendingStart !== null);
   const status = useApp((s) => s.build?.status);
-  const running = status === "running" || status === "awaiting_input";
+  const replaying = useApp((s) => s.replaying);
+  // A replay re-performs a finished build; Stop there would cancel nothing real.
+  const running = !replaying && (status === "running" || status === "awaiting_input");
   const maxChars = useApp((s) => s.hello?.limits?.max_prompt_chars ?? 2000);
   const disabled = !helloSeen || !ready;
   // The bot is out on the canvas (bot/AgentStage): the docked one steps away, keeping its place.

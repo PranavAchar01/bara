@@ -9,6 +9,8 @@ import { AddPartPicker, ConnectDialog, PartInspector, ResizePanel, SwapDrawer } 
 import { Viewport3D } from "./three/Viewport3D";
 import { BotLab } from "./bot/BotLab";
 import { AgentStage } from "./bot/AgentStage";
+import { Explainer } from "./bot/Explainer";
+import { CandidateFlyby } from "./bot/CandidateFlyby";
 
 function useKeys() {
   useEffect(() => {
@@ -92,6 +94,8 @@ function Workspace() {
       {overlay === "connect" && <ConnectDialog />}
       {overlay === "addpart" && <AddPartPicker />}
       <AgentStage />
+      <CandidateFlyby />
+      <Explainer />
     </main>
   );
 }

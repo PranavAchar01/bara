@@ -78,6 +78,10 @@ export interface AppState {
   agentFocus: string | null;
   /** The bot has left the prompt bar and is working on the canvas. */
   agentOut: boolean;
+  /** Part under the pointer in the viewport (the bot explains it). */
+  hoverPart: string | null;
+  /** A finished build is being re-performed (bot/replay.ts). */
+  replaying: boolean;
 }
 
 let logId = 0;
@@ -117,6 +121,8 @@ export const useApp = create<AppState>(() => ({
   dragPose: null,
   agentFocus: null,
   agentOut: false,
+  hoverPart: null,
+  replaying: false,
 }));
 
 export function pushLog(entry: Omit<LogEntry, "id" | "t">): void {

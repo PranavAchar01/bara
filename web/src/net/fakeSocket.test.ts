@@ -3,7 +3,7 @@ import { loadFixtures } from "../spec/fixtures";
 import type { Build, ClientEnvelope, EditOp, ServerEnvelope, ServerPayloads } from "../spec/types";
 import { createBuild, reduceBuild } from "../state/reducer";
 import { Connection } from "./connection";
-import { FakeSocket, MockServer, MOCK_EDIT_MESSAGE, selectEditFixture, selectFixture } from "./fakeSocket";
+import { FakeSocket, MockServer, MOCK_EDIT_MESSAGE, pacedDelays, selectEditFixture, selectFixture } from "./fakeSocket";
 import { RestClient, paths, stubFetcher } from "./rest";
 
 const fx = await loadFixtures();
@@ -187,5 +187,51 @@ describe("REST stub", () => {
     const missing = await rest.get(paths.part("mod:nope"));
     expect(missing.ok).toBe(false);
     if (!missing.ok) expect(missing.error.code).toBe("E_NOT_FOUND");
+  });
+});
+
+describe("mock pacing", () => {
+  const buildTime = (name: string) => {
+    const f = fx.streams.get(name);
+    if (!f) throw new Error(name);
+    const start = f.steps.findIndex((s) => s.dir === "client" && s.msg.type === "build.start");
+    const steps = f.steps.slice(start + 1);
+    const delays = pacedDelays(steps);
+    const end = steps.findIndex((s) => s.dir === "server" && (s.msg.type === "build.done" || s.msg.type === "build.failed"));
+    return delays.slice(0, end + 1).reduce((a, b) => a + b, 0);
+  };
+
+  it("spaces a build out to a watchable 12 to 21 s at mock_speed=1", () => {
+    for (const name of ["exact_keyboard", "compose_wireless_split_oled"]) {
+      const ms = buildTime(name);
+      expect(ms, name).toBeGreaterThanOrEqual(12_000);
+      expect(ms, name).toBeLessThanOrEqual(21_000);
+    }
+  });
+
+  it("keeps the fixture's own delays after the build ends and for edits", () => {
+    const f = fx.streams.get("compose_wireless_split_oled");
+    const steps = f?.steps.slice(f.steps.findIndex((s) => s.dir === "client") + 1) ?? [];
+    const delays = pacedDelays(steps);
+    const done = steps.findIndex((s) => s.dir === "server" && s.msg.type === "build.done");
+    steps.slice(done + 1).forEach((s, i) => expect(delays[done + 1 + i]).toBe(s.dir === "server" ? (s.delay_ms ?? 0) : 0));
+    const edit = fx.streams.get("edit_swap_switches")?.steps ?? [];
+    expect(pacedDelays(edit, false)).toEqual(edit.map((s) => (s.dir === "server" ? (s.delay_ms ?? 0) : 0)));
+  });
+
+  it("is still building after a few seconds and done after the paced time; mock_speed scales it", async () => {
+    const h = harness();
+    await run(100);
+    h.start("a keyboard");
+    await run(4_000);
+    expect(h.state.build?.status).toBe("running");
+    await run(20_000);
+    expect(h.state.build?.status).toBe("done");
+
+    const fast = harness({ speed: 0.1 });
+    await run(100);
+    fast.start("a keyboard");
+    await run(2_500);
+    expect(fast.state.build?.status).toBe("done");
   });
 });

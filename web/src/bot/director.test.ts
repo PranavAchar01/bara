@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Build, BuildPart } from "../spec/types";
 import type { Beat } from "./agent";
-import { beatsFor, DWELL_MS, enqueue } from "./director";
+import { beatsFor, DWELL_MS, enqueue, paceFor, QUEUE_MAX } from "./director";
 
 let seq = 0;
 const ev = (type: string, payload: unknown, s = ++seq) => ({
@@ -184,6 +184,75 @@ describe("director beats", () => {
     expect(next.id).not.toBe(a.id);
   });
 
+  it("traces board routing and every new connection", () => {
+    const routed = beatsFor(ev("board.updated", { board: { board_id: "pcb_l" } }), build);
+    const wired = beatsFor(
+      ev("connection.added", { connection: { connection_id: "c1", from: { instance_id: "u_mcu_l", interface_id: "i2c" }, to: { instance_id: "u_pcb_l", interface_id: "i2c" } } }),
+      build,
+    );
+    for (const beats of [routed, wired]) {
+      expect(beats).toHaveLength(1);
+      expect(beats[0].action).toBe("trace");
+      expect(beats[0].dwellMs).toBe(DWELL_MS.trace);
+    }
+    expect(wired[0].target).toEqual({ kind: "part", id: "u_mcu_l" });
+    // Real work: traces survive a long queue that drops glances.
+    let q: Beat[] = [];
+    for (let i = 0; i < 12; i++) q = enqueue(q, [mk(`l${i}`, "look", `stage:s${i}`)]);
+    q = enqueue(q, [...routed, ...wired]);
+    expect(q.filter((b) => b.action === "trace")).toHaveLength(2);
+  });
+
+  it("acts an applied edit out on the parts it touched", () => {
+    const swapped = {
+      ...build,
+      parts: [
+        ...build.parts,
+        bp("u_sw_l", "sw:cherry_mx2a_brown", "Switches left", "Cherry MX2A Brown"),
+        bp("u_sw_r", "sw:cherry_mx2a_brown", "Switches right", "Cherry MX2A Brown"),
+      ],
+    } as Build;
+    const beats = beatsFor(
+      ev("edit.applied", {
+        edit_id: "ed_1",
+        msg_id: "m1",
+        revision: 2,
+        duration_ms: 20,
+        ops: [
+          { op: "swap_part", instance_id: "u_sw_l", part_id: "sw:cherry_mx2a_brown" },
+          { op: "swap_part", instance_id: "u_sw_r", part_id: "sw:cherry_mx2a_brown" },
+        ],
+      }),
+      swapped,
+    );
+    expect(beats).toHaveLength(2);
+    expect(beats[0]).toMatchObject({ target: { kind: "part", id: "u_sw_l" }, action: "drop", label: "Swapped to Cherry MX2A Brown" });
+    expect(beats[1].target).toEqual({ kind: "part", id: "u_sw_r" });
+    expect(new Set(beats.map((b) => b.id)).size).toBe(2);
+
+    const moved = one("edit.applied", { edit_id: "ed_2", ops: [{ op: "move", instance_id: "u_mcu_l", mode: "delta", position_mm: [1, 0, 0] }] });
+    expect(moved).toMatchObject({ target: { kind: "part", id: "u_mcu_l" }, action: "pick", label: "Moved Controller left" });
+    // The swapped-in part not on the build yet: name it by its id, never by the part it replaced.
+    expect(one("edit.applied", { edit_id: "ed_3", ops: [{ op: "swap_part", instance_id: "u_mcu_l", part_id: "mod:xiao_ble" }] }).label).toBe("Swapped to mod:xiao_ble");
+    expect(one("edit.applied", { edit_id: "ed_4", ops: [{ op: "remove_part", instance_id: "u_oled_l" }] })).toMatchObject({ action: "pick", label: "Removed a part" });
+    const many = Array.from({ length: 6 }, (_, i) => ({ op: "move", instance_id: `u_${i}`, mode: "delta" }));
+    expect(beatsFor(ev("edit.applied", { edit_id: "ed_5", ops: many }), build).length).toBeLessThanOrEqual(3);
+    expect(beatsFor(ev("edit.applied", { edit_id: "ed_6" }), build)).toEqual([]);
+  });
+
+  it("looks worried at a rejected edit, with the reason", () => {
+    const b = one("edit.rejected", {
+      edit_id: "ed_1",
+      msg_id: "m1",
+      error: { code: "E_INCOMPATIBLE", message: "Kailh Choc v1 Red does not fit the left PCB's MX sockets.", retryable: false, subjects: [{ part_id: "sw:kailh_choc_red" }, { instance_id: "u_sw_l" }] },
+    });
+    expect(b).toMatchObject({ target: { kind: "part", id: "u_sw_l" }, action: "look", bad: true });
+    expect(b.label).toMatch(/^Kailh Choc v1 Red/);
+    expect(b.label.length).toBeLessThan(32);
+    const vague = one("edit.rejected", { edit_id: "ed_2", error: { code: "E_INVALID_EDIT", message: "not available in mock mode", retryable: false } });
+    expect(vague).toMatchObject({ target: { kind: "dom", key: "viewport" }, bad: true, label: "not available in mock mode" });
+  });
+
   it("keeps every label on the chip", () => {
     const b = one("stage.started", { stage: "compose", label: "x".repeat(80) });
     expect(b.label.length).toBeLessThan(32);
@@ -218,11 +287,11 @@ describe("director queue", () => {
       mk("p2", "pick", "decision:d2"),
       mk("p3", "pick", "decision:d3"),
       mk("p4", "pick", "decision:d4"),
-    ]);
+    ], 6);
     expect(q).toHaveLength(6);
     expect(ids(q)).toEqual(["p1", "d1", "s1", "p2", "p3", "p4"]);
     // Out of glances: the oldest real work goes next.
-    expect(ids(enqueue(q, [mk("p5", "pick", "decision:d5"), mk("p6", "pick", "decision:d6")]))).toEqual(["d1", "p2", "p3", "p4", "p5", "p6"]);
+    expect(ids(enqueue(q, [mk("p5", "pick", "decision:d5"), mk("p6", "pick", "decision:d6")], 6))).toEqual(["d1", "p2", "p3", "p4", "p5", "p6"]);
   });
 
   it("never drops a cheer or a problem", () => {
@@ -245,9 +314,10 @@ describe("director queue", () => {
     expect(ids(q)).toEqual(["other", "p", "new"]);
   });
 
-  it("defaults to six beats", () => {
-    const many = Array.from({ length: 10 }, (_, i) => mk(`p${i}`, "pick", `decision:d${i}`));
-    expect(enqueue([], many)).toHaveLength(6);
+  it("defaults to ten beats", () => {
+    const many = Array.from({ length: 14 }, (_, i) => mk(`p${i}`, "pick", `decision:d${i}`));
+    expect(QUEUE_MAX).toBe(10);
+    expect(enqueue([], many)).toHaveLength(10);
     expect(enqueue([], many, 3)).toHaveLength(3);
   });
 
@@ -262,8 +332,24 @@ describe("director queue", () => {
       ev("build.done", {}),
     ];
     for (const e of stream) q = enqueue(q, beatsFor(e, build));
-    expect(q.length).toBeLessThanOrEqual(6);
+    expect(q.length).toBeLessThanOrEqual(QUEUE_MAX);
     expect(q[q.length - 1].action).toBe("cheer");
     expect(q.some((b) => b.bad)).toBe(true);
+  });
+
+  it("never drops a beat that has a line to say", () => {
+    const q = enqueue([mk("said", "look", "viewport", { say: "This is the controller" })], Array.from({ length: 12 }, (_, i) => mk(`l${i}`, "look", `stage:s${i}`)));
+    expect(ids(q)).toContain("said");
+  });
+});
+
+describe("director pacing", () => {
+  it("gives full dwell to a short queue and hurries a long one, never below 35%", () => {
+    const b = { dwellMs: 1000 };
+    expect(paceFor(b, 0)).toBe(1000);
+    expect(paceFor(b, 3)).toBe(1000);
+    expect(paceFor(b, 6)).toBe(500);
+    expect(paceFor(b, 10)).toBe(350);
+    expect(paceFor(b, Infinity)).toBe(350);
   });
 });

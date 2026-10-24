@@ -5,7 +5,7 @@
 //   beatsFor  one event -> zero or more beats (where to fly, what to do, what to say)
 //   enqueue   adds beats to the queue and trims it, so the bot stays close behind the build
 
-import type { Build, BuildPart, CheckResult, Subject } from "../spec/types";
+import type { Build, BuildPart, CheckResult, EditOp, ErrorObject, Subject } from "../spec/types";
 import type { AgentAction, AgentTarget, Beat } from "./agent";
 
 interface EventLike {
@@ -71,6 +71,66 @@ function nameOf(p: Pick<BuildPart, "label" | "card"> | undefined): string | null
 
 /** The first instance a list of subjects points at, if any. */
 const instanceOf = (subjects: Subject[] | undefined) => subjects?.find((s) => s.instance_id)?.instance_id ?? null;
+
+/** How many beats one edit may turn into. */
+const EDIT_BEATS = 3;
+
+/** Beats for an applied edit: the bot acts each op out on the part it touched. */
+function editBeats(ops: EditOp[], build: Build | null, tag: (i: number) => string): Beat[] {
+  const byInstance = (id: string) => build?.parts.find((x) => x.instance_id === id);
+  const named = (id: string) => nameOf(byInstance(id)) ?? "a part";
+  const out: Beat[] = [];
+  ops.forEach((op, i) => {
+    const id = tag(i);
+    switch (op.op) {
+      case "swap_part": {
+        const bp = byInstance(op.instance_id);
+        // The build already has the new part when the edit lands; an older card is the part it replaced.
+        const name = (bp?.part_id === op.part_id ? str(bp.card?.display_name) : null) ?? op.part_id;
+        out.push(beat(id, part(op.instance_id), "drop", `Swapped to ${name}`));
+        break;
+      }
+      case "move":
+        out.push(beat(id, part(op.instance_id), "pick", `Moved ${named(op.instance_id)}`));
+        break;
+      case "recolor":
+        out.push(
+          op.instance_id
+            ? beat(id, part(op.instance_id), "pick", `Recolored ${named(op.instance_id)}`)
+            : beat(id, dom("viewport"), "pick", "Recolored the case"),
+        );
+        break;
+      case "add_part": {
+        // The new instance id is not in the op: the newest instance of that part is it.
+        const added = build?.parts.filter((x) => x.part_id === op.part_id).at(-1);
+        const name = nameOf(added) ?? op.part_id;
+        out.push(beat(id, added ? part(added.instance_id) : dom("viewport"), "drop", `Added ${name}`));
+        break;
+      }
+      case "remove_part":
+        // Gone from the build by now: point at where it was.
+        out.push(beat(id, part(op.instance_id), "pick", "Removed a part"));
+        break;
+      case "connect": {
+        const short = (x: string) => clip(named(x), 10);
+        out.push(
+          beat(id, part(op.from.instance_id), "trace", `Wired ${short(op.from.instance_id)} → ${short(op.to.instance_id)}`, {
+            open: { rightTab: "code", codeTab: "connections" },
+          }),
+        );
+        break;
+      }
+      case "disconnect":
+        out.push(beat(id, dom("codetab:connections"), "pick", "Removed a connection"));
+        break;
+      case "resize":
+        out.push(beat(id, dom("viewport"), "scan", op.target.board_id ? "Resized the board" : "Resized the case"));
+        break;
+    }
+  });
+  // Both halves of a split swapped to the same part read as one change: keep at most a few.
+  return out.slice(0, EDIT_BEATS);
+}
 
 /** Beats for one incoming event. build is the build after this event was reduced (may be null). */
 export function beatsFor(e: EventLike, build: Build | null): Beat[] {
@@ -170,6 +230,20 @@ export function beatsFor(e: EventLike, build: Build | null): Beat[] {
       return [beat(tag(w?.warning_id), inst ? part(inst) : dom("viewport"), "look", str(w?.message) ?? "Heads up", { bad: true })];
     }
 
+    case "edit.applied": {
+      const ops = (p.ops as EditOp[] | undefined) ?? [];
+      const edit = str(p.edit_id);
+      return editBeats(ops, build, (i) => `${tag(edit)}:${i}`);
+    }
+
+    case "edit.rejected": {
+      const err = p.error as ErrorObject | undefined;
+      const failed = (p.failed_checks as CheckResult[] | undefined) ?? [];
+      const inst = instanceOf(err?.subjects) ?? failed.map((r) => instanceOf(r.subjects)).find(Boolean) ?? null;
+      const label = str(err?.message) ?? str(failed[0]?.message) ?? "Can't make that change";
+      return [beat(tag(str(p.edit_id)), inst ? part(inst) : dom("viewport"), "look", label, { bad: true })];
+    }
+
     case "build.done":
       return [beat(tag(), dom("viewport"), "cheer", "Done")];
 
@@ -181,17 +255,29 @@ export function beatsFor(e: EventLike, build: Build | null): Beat[] {
   }
 }
 
-/** Beats the queue may lose when it runs long: glances first, then real work. Never cheers or problems. */
+/** Beats the queue may lose when it runs long: glances first, then real work. Never cheers, problems or lines to say. */
 function dropRank(b: Beat): number {
-  if (b.bad || b.action === "cheer") return Infinity;
+  if (b.bad || b.say || b.action === "cheer") return Infinity;
   return b.action === "look" || b.action === "scan" ? 0 : 1;
 }
 
 const sameTarget = (a: AgentTarget, b: AgentTarget) =>
   a.kind === b.kind && (a.kind === "part" ? a.id === (b as typeof a).id : a.key === (b as typeof a).key);
 
+/** Longest the queue gets before glances are dropped. The player speeds up as it fills (paceFor). */
+export const QUEUE_MAX = 10;
+
+/**
+ * How long to spend on a beat given how many are still waiting: full dwell
+ * when the queue is short, down to 35% when it is long, so the bot keeps up
+ * with a fast build instead of dropping its steps.
+ */
+export function paceFor(b: Pick<Beat, "dwellMs">, waiting: number): number {
+  return Math.round(b.dwellMs * Math.min(1, Math.max(0.35, 3 / Math.max(1, waiting))));
+}
+
 /** Append incoming beats to the queue, keeping it short so the bot never lags far behind the build. */
-export function enqueue(queue: Beat[], incoming: Beat[], max = 6): Beat[] {
+export function enqueue(queue: Beat[], incoming: Beat[], max = QUEUE_MAX): Beat[] {
   let q = [...queue];
   for (const b of incoming) {
     if (q.some((x) => x.id === b.id)) continue;

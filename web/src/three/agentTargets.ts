@@ -64,6 +64,16 @@ export function canvasRect(): Rect | null {
 const box = new THREE.Box3();
 const v = new THREE.Vector3();
 
+/** World box of a registered part into `out`, or null when it is not in the scene / empty. */
+export function partWorldBox(instanceId: string, out: THREE.Box3): THREE.Box3 | null {
+  const e = parts.get(instanceId);
+  if (!e || !e.obj.parent) return null;
+  e.obj.updateWorldMatrix(true, false);
+  if (e.local) out.copy(e.local).applyMatrix4(e.obj.matrixWorld);
+  else out.setFromObject(e.obj);
+  return out.isEmpty() ? null : out;
+}
+
 /**
  * Client-pixel rect of a part's on-screen bounds, or null when it is not in the scene / off screen.
  * Cheap enough to call every animation frame for one part. Pass `out` to reuse a rect.
