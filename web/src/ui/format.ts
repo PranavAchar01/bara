@@ -35,8 +35,8 @@ export function checkTone(c: Pick<CheckResult, "status" | "severity">): Tone {
   if (status === "unknown") return "info";
   const sev = known(c.severity, SEVERITIES);
   if (sev === "critical" || sev === "error") return "fail";
-  if (sev === "warning") return "warn";
-  return "info";
+  // a failed check is never grey: grey reads as "not checked"
+  return "warn";
 }
 
 export function severityTone(s: Severity | undefined): Tone {

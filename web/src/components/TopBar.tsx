@@ -218,7 +218,7 @@ export function ConnectionBanner() {
     conn === "resyncing"
       ? "Reconnected. Catching up on missed events; editing is paused."
       : conn === "offline"
-        ? "Offline. Still retrying every 8 s; the last state stays on screen."
+        ? "Can't reach the build engine. Trying again every 8 s; what's on screen stays, and your saved builds still open."
         : conn === "connecting"
           ? "Connecting to the build server."
           : "Connection lost. Reconnecting; the last state stays on screen.";

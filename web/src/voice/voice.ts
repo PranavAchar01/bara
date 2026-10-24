@@ -3,7 +3,7 @@
 // the engine's voice, the browser's own speech fills in, so nothing depends on one service.
 import { create } from "zustand";
 import { authHeaders, serverUrl } from "../net/mode";
-import { useApp } from "../state/store";
+import { showToast, useApp } from "../state/store";
 
 export interface VoiceState {
   /** The mic is open. */
@@ -37,8 +37,9 @@ export const useVoice = create<VoiceState>(() => ({
   error: null,
 }));
 
-export function setReplies(on: boolean): void {
+export function setReplies(on: boolean, announce = false): void {
   useVoice.setState({ replies: on });
+  if (announce) showToast(on ? "Bara will answer out loud. Press V to turn it off." : "Bara will answer in text only. Press V to hear it.");
   try {
     localStorage.setItem(STORE_KEY, on ? "1" : "0");
   } catch {
@@ -281,7 +282,7 @@ export function bindVoiceKeys(): () => void {
       if (useVoice.getState().listening) cancelListening();
       stopSpeaking();
     } else if (e.key === "v" || e.key === "V") {
-      setReplies(!useVoice.getState().replies);
+      setReplies(!useVoice.getState().replies, true);
     }
   };
   const up = (e: KeyboardEvent) => {

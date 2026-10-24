@@ -21,7 +21,7 @@ import { placeholderBox, type Box } from "./bbox";
 import { LAYER_RANK, explodeZ, isKeycapPart, layerGap, layerOf, partLabel, type LayerId, type PartLabel } from "./explode";
 import { elementPoses, type ElementPose } from "./layout";
 import { LabelOverlay, LabelProjector, labelOpacity } from "./labels";
-import { FocusDriver } from "./focus";
+import { FocusDriver, nearFocused } from "./focus";
 import { defaultColor, ghost, placeholderMaterial, presetFor, presetMaterial, tinted, usesPreset } from "./materials";
 import { registerAnchor, stage, stageBox } from "./stage";
 import { StudioEnvironment, StudioFloor, studioPalette, type StudioPalette } from "./studio";
@@ -1310,8 +1310,11 @@ export function Viewport3D() {
           // a click on empty space steps back: out of focus first, then clears the selection
           // (R3F only reports a miss for a click, not for the end of an orbit drag)
           if (e.type !== "click") return;
-          if (useApp.getState().focusKey) focusPart(null);
-          else select(null);
+          if (useApp.getState().focusKey) {
+            // a click in a gap inside the part (between keys) keeps it out; only clearly empty space puts it back
+            const r = (e.currentTarget as HTMLElement | null)?.getBoundingClientRect?.() ?? (e.target as HTMLElement).getBoundingClientRect();
+            if (!nearFocused(e.clientX - r.left, e.clientY - r.top, r.width, r.height)) focusPart(null);
+          } else select(null);
         }}
         gl={{ antialias: !post, preserveDrawingBuffer: true, powerPreference: "high-performance" }}
       >

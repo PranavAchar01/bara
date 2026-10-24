@@ -317,6 +317,26 @@ The coverage audit of the live site found three places where the UI said two con
 
 **Minutes:** about 45. **Rating:** 3/5; most of these should not have shipped.
 
+### Pressure test, round two
+
+**Fixed:**
+- A click in a gap inside the focused part (between keys) no longer puts it back. Only a click clearly outside the part's outline on screen (with a 12% margin) does.
+- The swap and resize panels had lost their padding: the inspector restyle had flattened every side panel. It is now scoped to the inspector.
+- Offline banner: "Can't reach the build engine. Trying again every 8 s; what's on screen stays, and your saved builds still open." It used to read like a passing blip.
+- A failed check is never grey (grey read as "not checked"); low-severity failures are amber.
+- V now says what it did ("Bara will answer out loud. Press V to turn it off.").
+
+**Checked:**
+- Typecheck, lint, 71 tests.
+- Reopened the build from the library after a reload and focused a part. A real click beside it kept the focus; a click in clear space put it back.
+
+**Still open:**
+- The bot bubble's small type.
+- "Build done" toasts again when a library build reopens in mock mode.
+- Real-engine checks of the library, voice and ask routes, once the engine is back up on the new code.
+
+**Minutes:** about 20. **Rating:** 4/5.
+
 ## Before and after
 
 | Change | Before | After |

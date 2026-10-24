@@ -392,16 +392,17 @@
   font-family: var(--font-mono);
   font-size: 11px;
 }
-.side-b {
+/* flat hairline sections are the inspector's; the swap and resize panels keep their padding */
+.inspector .side-b {
   padding: 0;
   gap: 0;
 }
-.side-b > section,
-.side-b > .insp-actions {
+.inspector .side-b > section,
+.inspector .side-b > .insp-actions {
   padding: 14px 16px;
   border-bottom: 1px solid var(--line);
 }
-.side-b > section:last-child {
+.inspector .side-b > section:last-child {
   border-bottom: 0;
 }
 .side-b h3 {
