@@ -3,7 +3,7 @@
 Keys stay on the server. ELEVENLABS_API_KEY wins when both are set; otherwise OPENAI_API_KEY
 uses OpenAI's speech and transcription. The voice and model can be changed without a code
 change: BARA_TTS_VOICE and BARA_TTS_MODEL. ElevenLabs defaults to Charlotte on eleven_v4,
-OpenAI to verse on gpt-4o-mini-tts (gpt-4o-transcribe listens).
+OpenAI to cedar on gpt-4o-mini-tts (gpt-4o-transcribe listens).
 """
 
 from __future__ import annotations
@@ -25,8 +25,9 @@ MAX_STT_BYTES = 8 * 1024 * 1024
 
 
 OPENAI_API = "https://api.openai.com/v1"
-OPENAI_VOICE = "verse"
-OPENAI_TTS_MODEL = "gpt-4o-mini-tts"
+# cedar: picked by ear against ash, onyx, echo, verse and ballad (2026-10-17)
+OPENAI_VOICE = "cedar"
+OPENAI_TTS_MODEL = "gpt-4o-mini-tts-2025-12-15"
 OPENAI_STT_MODEL = "gpt-4o-transcribe"
 # gpt-4o-mini-tts takes delivery instructions. Bara is a small, curious maker that is always
 # moving and says little, so it sounds like that: bright, a little playful, light on its feet.
@@ -75,13 +76,24 @@ def tts_body(text: str, model: str) -> dict:
     return body
 
 
+_client: httpx.AsyncClient | None = None
+
+
+def _shared() -> httpx.AsyncClient:
+    """One kept-alive connection pool, so each spoken line skips the TLS handshake."""
+    global _client
+    if _client is None or _client.is_closed:
+        _client = httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=10.0))
+    return _client
+
+
 async def open_speech(text: str) -> tuple[httpx.AsyncClient, httpx.Response]:
-    """Starts a streamed synthesis. The caller iterates the response and closes both."""
+    """Starts a streamed synthesis. The caller iterates the response with `relay`."""
     k = key()
     if not k:
         raise RuntimeError("no ELEVENLABS_API_KEY or OPENAI_API_KEY")
     s = settings()
-    client = httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=10.0))
+    client = _shared()
     if s["provider"] == "openai":
         req = client.build_request(
             "POST",
@@ -107,7 +119,6 @@ async def open_speech(text: str) -> tuple[httpx.AsyncClient, httpx.Response]:
     if resp.status_code != 200:
         detail = (await resp.aread())[:200]
         await resp.aclose()
-        await client.aclose()
         raise RuntimeError(f"{s['provider']} tts {resp.status_code}: {detail!r}")
     return client, resp
 
@@ -118,7 +129,6 @@ async def relay(client: httpx.AsyncClient, resp: httpx.Response) -> AsyncIterato
             yield chunk
     finally:
         await resp.aclose()
-        await client.aclose()
 
 
 async def transcribe(audio: bytes, content_type: str, keyterms: list[str] | None = None) -> str:
@@ -143,13 +153,12 @@ async def transcribe(audio: bytes, content_type: str, keyterms: list[str] | None
         if keyterms:
             # A prompt with the build's part names helps it spell them right.
             form["prompt"] = "Parts: " + ", ".join(t[:50] for t in keyterms[:50])
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(
-                f"{OPENAI_API}/audio/transcriptions",
-                data=form,
-                files=upload,
-                headers={"authorization": f"Bearer {k}"},
-            )
+        resp = await _shared().post(
+            f"{OPENAI_API}/audio/transcriptions",
+            data=form,
+            files=upload,
+            headers={"authorization": f"Bearer {k}"},
+        )
         if resp.status_code != 200:
             raise RuntimeError(f"openai stt {resp.status_code}: {resp.text[:200]}")
         return str(resp.json().get("text") or "").strip()
