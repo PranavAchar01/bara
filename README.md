@@ -67,6 +67,8 @@ scripts/serve-public.sh        # engine on :8797 + Cloudflare quick tunnel; publ
 scripts/serve-public.sh open   # opens the site with the access key, once per browser
 ```
 
+For local UI work against that engine, `cd web && BARA_SERVER=auto pnpm dev` looks up the published tunnel and the dev proxy adds the key for you (from `BARA_ACCESS_TOKEN`, else the keychain), so http://localhost:5173 needs no `?key=`.
+
 The engine refuses every request without the access key (keychain item `bara-access-token`, also the Vercel env var `BARA_ACCESS_TOKEN`). The site asks `/api/engine` for the tunnel URL with that key, then talks to the engine directly. When the engine is down or the key is missing, the site says "Engine offline" or "Engine locked" and plays the recorded demo instead.
 
 ### Environment variables
