@@ -472,3 +472,24 @@ def test_hero_renders_a_png_of_a_box() -> None:
     png = hero.render([(v, tris, (0.5, 0.6, 0.7))], (20, -120, 90), (20, 20, 5), size=160)
     assert png[:8] == b"\x89PNG\r\n\x1a\n"
     assert Polygon(PILL).is_valid
+
+
+def test_footprintless_module_becomes_an_off_board_item_with_a_board_connector() -> None:
+    from bara.board.generic import plan_device_board
+
+    def rec(name: str, role: str, bbox: Any = None) -> dict[str, Any]:
+        r: dict[str, Any] = {"display_name": name, "role": role, "kind": "module"}
+        if bbox:
+            r["mechanical"] = {"bbox_mm": bbox}
+        return r
+
+    parts = [
+        {
+            "instance_id": "i1", "part_id": "p1", "slot_id": "panel", "quantity": 1,
+            "label": "Panel", "record": rec("Panel", "screen", {"min": [0, 0, 0], "max": [60, 40, 3]}),
+        },
+    ]  # fmt: skip
+    plan = plan_device_board(parts, [], {})
+    mods = [i for i in plan.items if i.role == "module"]
+    assert len(mods) == 1 and not mods[0].on_pcb and mods[0].size_mm == (60.0, 40.0)
+    assert any(i.role == "module_connector" for i in plan.items)

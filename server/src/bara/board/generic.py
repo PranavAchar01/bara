@@ -171,6 +171,8 @@ def plan_device_board(
         if fp is None:
             if role == "battery":
                 items.append(_battery_cell(part, record, ref_for("BT")))
+            elif _bbox_mm(record) is not None:  # a module with no footprint: off-board, wired
+                items.append(_module_cell(part, record, ref_for("M"), touch_slots))
             else:
                 skipped.append(str(part.get("label") or part["part_id"]))
             continue
@@ -236,9 +238,14 @@ def plan_device_board(
         it.x, it.y = _best_spot(it, anchor, blocked, gap, form)
         placed.append(it)
         blocked.append(it.footprint_poly())
-    for it in off_board:  # battery cells: under the board, centred
+    seat = _anchor_targets(pf, off_board, 1.0) if pf and off_board else {}
+    for it in off_board:  # cells and modules: a module that has an anchor sits at it, on top
         it.side = "bottom"
         cx, cy = _centre(blocked) if fitted is None else (fitted.centroid.x, fitted.centroid.y)
+        spot = seat.get(id(it))
+        if it.role == "module" and spot is not None:
+            cx, cy = spot[0], spot[1]
+            it.side = "bottom" if spot[2] == "back" else "top"
         it.x, it.y = cx, cy
 
     # controller GPIO for every peripheral signal, nearest pad first
@@ -447,6 +454,17 @@ def _support_parts(items: list[Item], log: list[str]) -> list[Item]:
                 bat = next((k for k, v in mcu.meta["pins"].items() if power_net(v) == "VBAT"), None)
                 if bat is not None:
                     mcu.pads[bat] = "VBAT"
+    for it in items:  # an off-board module reaches the board through a power connector
+        if it.role == "module" and not it.on_pcb:
+            conn = Item(
+                f"J_{it.ref}", "module_connector", footprint_ref(BAT_CONN_FP), 0, 0, 0, "top",
+                pads={"1": "VBUS", "2": "GND"},
+                label=f"JST PH 2-pin connector to {it.label}"[:60],
+                height_mm=R.BATTERY_CONN["height_mm"],
+            )  # fmt: skip
+            mcu = next((m for m in items if m.role == "mcu"), None)
+            conn.meta = {"near": mcu} if mcu is not None else {}
+            out.append(conn)
     if out:
         log.append(
             "support parts: "
@@ -454,6 +472,32 @@ def _support_parts(items: list[Item], log: list[str]) -> list[Item]:
             + f" ({len(out)} in all)"
         )
     return out
+
+
+def _bbox_mm(record: dict[str, Any]) -> tuple[float, float, float] | None:
+    bbox = (record.get("mechanical") or {}).get("bbox_mm") or {}
+    lo, hi = bbox.get("min"), bbox.get("max")
+    if not (lo and hi):
+        return None
+    w, h, t = (float(hi[i]) - float(lo[i]) for i in range(3))
+    return (w, h, t) if min(w, h) > 0 else None
+
+
+def _module_cell(part: dict[str, Any], record: dict[str, Any], ref: str, touch: set[str]) -> Item:
+    """A module with its own envelope (panel, power supply, driver board): placed on the form,
+    not packed on the PCB; a connector on the main board carries its supply."""
+    w, h, t = _bbox_mm(record) or (1.0, 1.0, 1.0)
+    return Item(
+        ref, "module", None, 0, 0, 0, "bottom",
+        label=str(record.get("display_name") or part.get("label") or "module")[:60],
+        on_pcb=False, size_mm=(w, h), height_mm=t,
+        meta={
+            "instance_id": part["instance_id"],
+            "pins": {},
+            "slot_id": part.get("slot_id"),
+            "touch": part.get("slot_id") in touch,
+        },
+    )  # fmt: skip
 
 
 def _battery_cell(part: dict[str, Any], record: dict[str, Any], ref: str) -> Item:
