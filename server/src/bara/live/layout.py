@@ -11,6 +11,17 @@ import math
 from dataclasses import dataclass, field
 from typing import Any
 
+
+def matrix_dims(n: int) -> tuple[int, int]:
+    """Fewest-pin electrical matrix for n switches (same rule as bara.board.layout)."""
+    best = (n, 1)
+    for cols in range(1, max(n, 1) + 1):
+        rows = math.ceil(n / cols)
+        if (rows + cols, abs(rows - cols)) < (best[0] + best[1], abs(best[0] - best[1])):
+            best = (rows, cols)
+    return best
+
+
 PITCH_MM = 19.05  # 0.75 in key unit, the MX and Choc-spaced standard (SPEC 3.3)
 
 CONSTANTS: dict[str, dict[str, Any]] = {
@@ -63,10 +74,14 @@ class Half:
     keys: list[dict[str, Any]] = field(default_factory=list)
     keepouts: list[Keepout] = field(default_factory=list)
 
+    elec_matrix: tuple[int, int] | None = None  # set from the KiCad board when it has run
+
     @property
     def matrix(self) -> tuple[int, int]:
-        rows = self.rows + (1 if self.thumbs else 0)
-        return rows, max(self.cols, self.thumbs)
+        """Electrical rows x cols: the board's when known, else the fewest-pin grid."""
+        if self.elec_matrix is not None:
+            return self.elec_matrix
+        return matrix_dims(len(self.keys))
 
     @property
     def width_u(self) -> float:
@@ -121,7 +136,7 @@ def _half_keys(n: int, rows: int, cols: int, thumbs: int, stagger: bool, mirror:
         if (r, c) in drop:
             continue
         x = (cols - 1 - c) if mirror else c
-        keys.append({"x_u": float(x), "y_u": round(r + offsets[c], 4), "matrix": [r, c]})
+        keys.append({"x_u": float(x), "y_u": round(r + offsets[c], 4), "pos": [r, c]})
     fan = CONSTANTS["thumb_fan_deg"]["value"]
     base_y = rows + max(offsets[-1] if offsets else 0.0, 0.0) + 0.15
     for i in range(thumbs):
@@ -131,13 +146,15 @@ def _half_keys(n: int, rows: int, cols: int, thumbs: int, stagger: bool, mirror:
         if mirror:
             x = (cols - 1) - x
             r = -r
-        key = {"x_u": round(x, 4), "y_u": round(y, 4), "matrix": [rows, i]}
+        key = {"x_u": round(x, 4), "y_u": round(y, 4), "pos": [rows, i], "thumb": True}
         if r:
             key.update({"r_deg": r, "rx_u": round(x + 0.5, 4), "ry_u": round(y + 0.5, 4)})
         keys.append(key)
-    keys.sort(key=lambda k: (k["matrix"][0], k["x_u"]))
+    keys.sort(key=lambda k: (k["pos"][0], k["x_u"]))
+    _, mcols = matrix_dims(len(keys))
     for i, key in enumerate(keys):
         key["i"] = i
+        key["matrix"] = list(divmod(i, mcols))
     return [{"i": k.pop("i"), **k} for k in keys]
 
 
@@ -238,6 +255,9 @@ def _keepouts(plan: KeyboardPlan, brief: dict[str, Any]) -> None:
             )
 
 
+KEYBOARD_PIN_COST = {"knob": 2, "screen": 2, "trackball": 5}
+
+
 def pin_need(
     half: Half | None, peripherals: list[dict[str, Any]], wired_split: bool
 ) -> tuple[int, list[str]]:
@@ -245,13 +265,23 @@ def pin_need(
     cost = CONSTANTS["pin_cost"]["value"]
     items: list[str] = []
     total = 0
+    keyboard = half is not None and bool(half.keys)
     if half is not None and half.keys:
         rows, cols = half.matrix
+        knobs = sum(1 for p in peripherals if p["kind"] == "knob")
+        if half.elec_matrix is None and rows * cols - len(half.keys) < knobs:
+            cols += 1  # encoder push switches take an extra matrix column
         total += rows + cols
         items.append(f"matrix {rows}x{cols} = {rows + cols}")
     buses: set[str] = set()
     for p in peripherals:
         kind = p["kind"]
+        if keyboard and kind in KEYBOARD_PIN_COST:
+            # keyboard rule (same as the KiCad board): encoder A/B, I2C screen, SPI sensor
+            n = KEYBOARD_PIN_COST[kind]
+            items.append(f"{p['label']} {n}")
+            total += n
+            continue
         part = p.get("part") or {}
         ifaces = [i for i in part.get("interfaces", []) if i.get("role") == "requires"]
         types = {i.get("type") for i in ifaces}

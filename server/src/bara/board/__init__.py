@@ -336,6 +336,10 @@ def _placements(
                 },
             }
         )
+        if it.meta.get("instance_id"):
+            out[-1]["for_instance_id"] = it.meta["instance_id"]
+        if it.role == "switch" and it.meta.get("matrix") is not None:
+            out[-1]["matrix"] = list(it.meta["matrix"])
         cap = it.meta.get("keycap_mm") if it.role == "switch" else None
         if cap:
             out.append(
@@ -446,7 +450,7 @@ def _nets(plan: BoardPlan, side_tag: str) -> list[dict]:
             "ground"
             if name == "GND"
             else "power"
-            if name in ("3V3", "BAT+", "VBAT_IN", "VDD18", "VDDPIX", "5V")
+            if name in ("3V3", "BAT+", "VBAT_IN", "VDD18", "VDDPIX", "5V", "VBUS", "VBAT")
             else "signal"
         )
         out.append({"name": name, "kind": kind, "members": members[name]})
@@ -494,7 +498,13 @@ def build_board(
     glb_root.mkdir(parents=True, exist_ok=True)
 
     t = time.monotonic()
-    b, plans, log = plan_boards(brief)
+    if brief.get("generic"):
+        from .generic import plan_device_board
+
+        b, log = None, []
+        plans = [plan_device_board(parts, log)]
+    else:
+        b, plans, log = plan_boards(brief)
     plan_s = round(time.monotonic() - t, 3)
     report(f"planned {len(plans)} board(s)", 0.05)
     roles = _parts_by_role(parts)
@@ -627,7 +637,11 @@ def build_board(
             "freerouting": K.FREEROUTING_VERSION,
             "strategies": K.ROUTE_STRATEGIES,
         },
-        "brief": {"key_count": b.key_count, "split": b.split, "switch": b.switch},
+        "brief": (
+            {"key_count": b.key_count, "split": b.split, "switch": b.switch}
+            if b is not None
+            else {"generic": True}
+        ),
         "timings": {
             "plan_s": plan_s,
             "total_s": total,
