@@ -611,3 +611,40 @@ def test_locating_pegs_keep_the_other_side_clear() -> None:
     pf = {"silhouette": [(-13, -9), (13, -9), (13, 9), (-13, 9)], "anchors": []}
     place_in_form([a, b], None, pf, [])
     assert pf["fit_report"]["ok"] is False  # a hole through one is a hole through the other
+
+
+def test_identity_redraw_below_the_fit_floor_keeps_the_fitting_form(monkeypatch: Any) -> None:
+    from types import SimpleNamespace
+
+    from bara.live import runner as rn
+
+    def form(w: float, h: float) -> fm.Form:
+        sil = [(0.0, 0.0), (w, 0.0), (w, h), (0.0, h)]
+        return fm.Form("x", sil, 20.0, 10.0, [], {}, "d")
+
+    fits, smaller = form(170, 110), form(150, 100)
+
+    async def fake_derive(*a: Any, **k: Any) -> Any:
+        return smaller, "ok"
+
+    monkeypatch.setattr(rn.form_mod, "derive", fake_derive)
+    warned: list[str] = []
+    run = SimpleNamespace(
+        prompt="a thing", product_form=fits, repair="too round", fit_floor=(170.0, 110.0, 18700.0)
+    )
+    st = SimpleNamespace(progress=lambda *a: None, emit=lambda *a, **k: None)
+    fake = SimpleNamespace(
+        _touches=lambda r: [], _warn=lambda *a: warned.append(a[-1]), _stage=None
+    )
+    result = SimpleNamespace(log=[])
+    got = asyncio.run(rn.LiveRunner.form_stage(fake, run, result, st))  # type: ignore[arg-type]
+    assert got is fits and any("below the fit floor" in w for w in warned)
+    # at or above the floor the redraw is accepted
+    bigger = form(172, 112)
+
+    async def fake_big(*a: Any, **k: Any) -> Any:
+        return bigger, "ok"
+
+    monkeypatch.setattr(rn.form_mod, "derive", fake_big)
+    got2 = asyncio.run(rn.LiveRunner.form_stage(fake, run, result, st))  # type: ignore[arg-type]
+    assert got2 is bigger
