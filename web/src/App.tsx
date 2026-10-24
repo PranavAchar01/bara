@@ -12,6 +12,8 @@ import { Library } from "./components/Library";
 import { startAutosave } from "./library/autosave";
 import { Viewport3D } from "./three/Viewport3D";
 import { BotLab } from "./bot/BotLab";
+import { SimView } from "./sim/SimView";
+import { useSim } from "./sim/simStore";
 
 function useKeys() {
   useEffect(() => {
@@ -126,6 +128,8 @@ function Main() {
   useEffect(() => bindVoiceKeys(), []);
   useEffect(() => startAutosave(), []);
   const screen = useApp((s) => s.screen);
+  const simOpen = useSim((s) => s.open) && screen === "workspace";
+  if (simOpen) return <SimView />;
   return (
     <div className="app">
       {screen === "home" && <TopBar />}

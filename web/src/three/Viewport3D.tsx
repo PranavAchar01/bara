@@ -1444,3 +1444,13 @@ function ViewportToolbar(props: {
     </div>
   );
 }
+
+const noFit = () => undefined;
+
+/** The build drawn as the workspace draws it, for another canvas (the simulator): no toolbar, no move gizmo. */
+export function DeviceScene() {
+  const theme = useTheme();
+  const palette = useMemo(() => studioPalette(), []);
+  const post = useMemo(postEnabled, []);
+  return <SceneContents gizmoMode="translate" theme={theme} palette={palette} boardOnly={false} post={post} onFit={noFit} />;
+}
