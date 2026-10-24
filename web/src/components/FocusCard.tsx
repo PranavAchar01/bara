@@ -163,8 +163,8 @@ export function FocusCard() {
           </span>
           <h2>{name}</h2>
         </div>
-        <button type="button" className="icon-btn" onClick={() => focusPart(null)} title="Put it back (Esc)" aria-label="Put it back">
-          ×
+        <button type="button" className="btn sm fc-back" onClick={() => focusPart(null)} title="Put it back in the build (Esc)">
+          Put back <kbd>Esc</kbd>
         </button>
       </header>
       <div className="fc-body">
@@ -269,5 +269,25 @@ export function FocusCard() {
         <span>put it back</span>
       </footer>
     </aside>
+  );
+}
+
+/** On the canvas while a part is in focus: the one obvious way back to the whole build. */
+export function FocusExit() {
+  const key = useApp((s) => s.focusKey);
+  const build = useApp((s) => s.build);
+  if (!key) return null;
+  const row = labelRows(build).find((r) => r.key === key);
+  return (
+    <div className="focus-exit">
+      <button type="button" className="focus-exit-btn" onClick={() => focusPart(null)} title="Back to the whole build (Esc, or click empty space)">
+        <span aria-hidden>←</span> Whole build <kbd>Esc</kbd>
+      </button>
+      {row && (
+        <span className="focus-crumb">
+          <span className="sep">/</span> {row.title}
+        </span>
+      )}
+    </div>
   );
 }

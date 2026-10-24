@@ -134,7 +134,12 @@ export function select(instanceId: string | null): void {
 
 /** Pulls one part out into focus (null puts it back); the right column shows the agent card. */
 export function focusPart(key: string | null): void {
-  useApp.setState((s) => ({ focusKey: key, overlay: key ? "focus" : s.overlay === "focus" ? null : s.overlay }));
+  useApp.setState((s) =>
+    key
+      ? { focusKey: key, overlay: "focus" }
+      : // putting it back leaves nothing selected: no outline or name tag lingers on the whole build
+        { focusKey: null, overlay: s.overlay === "focus" ? null : s.overlay, selection: s.focusKey ? null : s.selection, moving: null },
+  );
 }
 
 export function setView(preset: ViewPreset): void {

@@ -256,6 +256,20 @@ The coverage audit of the live site found three places where the UI said two con
 
 **Minutes:** about 40. **Rating:** 4/5.
 
+### Focus, second pass: shadows and the way back
+
+**Found by Nithin:** leaving focus left stray shadows on the main view, and nothing said how to get back (it took a moment to try Esc).
+
+**What moved:**
+- **Shadows:** the floor shadow is baked once from wherever the parts are. A model finishing loading while a part was in focus re-baked it with the parts on the shelf, and that shadow stayed after going back. Re-bakes now wait until focus has eased out, then run once. Ambient occlusion was also smearing the shrunken shelf parts dark (its 5 mm radius is bigger than a shrunk part), so it is lighter and tighter during focus.
+- **Leftovers:** putting a part back now clears the selection. The blue outline and floating name tag no longer linger on the whole build.
+- **The way back, three ways:** a "← Whole build `Esc`" pill at the top of the canvas with a crumb naming the part; a labelled "Put back `Esc`" button in the card instead of a bare ×; and clicking empty space on the canvas (orbit drags don't count).
+- The timings panel hides during focus, and long part names wrap in the card instead of being cut off.
+
+**Checked:** typecheck, lint; mock build: focus from a Layers row, back with the pill, back with a real click on empty canvas. Card, pill, selection, outline and tag are all gone after each.
+
+**Minutes:** about 25. **Rating:** 3/5; this should have been caught before the first push.
+
 ## Before and after
 
 | Change | Before | After |

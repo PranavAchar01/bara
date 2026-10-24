@@ -160,15 +160,34 @@ export function StudioFloor(props: { palette: StudioPalette; revision: string; g
   const [footing, setFooting] = useState<Footing | null>(null);
   const [version, setVersion] = useState(0);
   const settleSeen = useRef(stage.settleVersion);
-  useEffect(() => onModelsChanged(() => setVersion((v) => v + 1)), []);
+  // While a part is in focus the parts sit on the shelf: measuring or baking then would leave the
+  // shelf's shadow on the floor after the build comes back. Changes wait until focus has eased out.
+  const stale = useRef(false);
+  useEffect(
+    () =>
+      onModelsChanged(() => {
+        if (stage.focusK > 0) stale.current = true;
+        else setVersion((v) => v + 1);
+      }),
+    [],
+  );
   useEffect(() => {
     // Measure after the parts committed their instance matrices.
-    const id = requestAnimationFrame(() => setFooting(measure()));
+    const id = requestAnimationFrame(() => {
+      if (stage.focusK > 0) stale.current = true;
+      else setFooting(measure());
+    });
     return () => cancelAnimationFrame(id);
   }, [version, props.revision]);
   useFrame(() => {
-    if (settleSeen.current !== stage.settleVersion) {
+    if (stage.focusK > 0) {
+      if (settleSeen.current !== stage.settleVersion) stale.current = true;
       settleSeen.current = stage.settleVersion;
+      return;
+    }
+    if (settleSeen.current !== stage.settleVersion || stale.current) {
+      settleSeen.current = stage.settleVersion;
+      stale.current = false;
       setFooting(measure());
       setVersion((v) => v + 1);
     }
