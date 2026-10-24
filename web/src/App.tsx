@@ -17,7 +17,10 @@ function useKeys() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
+      const inField = !!t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable);
+      // Esc from a field (the prompt, the explode slider) leaves the field and steps back as usual
+      if (inField && e.key === "Escape") t.blur();
+      else if (inField) return;
       const tab = e.altKey && !e.metaKey && !e.ctrlKey ? ({ Digit1: "design", Digit2: "build", Digit3: "code" } as const)[e.code as "Digit1"] : undefined;
       if (tab) {
         e.preventDefault();
@@ -91,12 +94,12 @@ function Workspace() {
           <BuildProgress />
           <WarningBanner />
         </div>
-        <FocusExit />
         <LatencyHUD />
         <div className="centre-mid">
           <FailureCard />
         </div>
         <div className="centre-bottom">
+          <FocusExit />
           <EditStatus />
           <PromptBar docked />
         </div>

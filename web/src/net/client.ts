@@ -56,6 +56,7 @@ function onEnvelope(env: ServerEnvelope): void {
           screen: "workspace",
           selection: null,
           overlay: null,
+          focusKey: null,
           dismissedWarnings: [],
           explode: 0,
           dragPose: null,

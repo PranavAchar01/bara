@@ -11,7 +11,7 @@ import { useShallow } from "zustand/react/shallow";
 import { GizmoHelper, GizmoViewcube, Html, OrbitControls, TransformControls } from "@react-three/drei";
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
-import { focusPart, select, useApp, type ViewPreset } from "../state/store";
+import { focusPart, select, setView, useApp, type ViewPreset } from "../state/store";
 import { applyEdit } from "../net/client";
 import { fetchPart } from "../components/Overlays";
 import type { BBox, Board, Build, BuildPart, Enclosure, Layout } from "../spec/types";
@@ -300,6 +300,7 @@ function PartNode(props: PartNodeProps) {
   const matrices = useMemo(() => poses.map((p) => elementMatrix(p)), [poses]);
   // in focus the part is already singled out; a selection outline would only drown it in blue
   const inFocus = useApp((s) => s.focusKey === partLabel(part).key);
+  const focusOn = useApp((s) => s.focusKey !== null);
   const outline = props.failing ? theme.fail : (props.selected || props.highlight) && !inFocus ? theme.accent : null;
   const hullRef = useRef<THREE.InstancedMesh>(null);
   useLayoutEffect(() => {
@@ -359,7 +360,7 @@ function PartNode(props: PartNodeProps) {
           <meshBasicMaterial color={outline} side={THREE.BackSide} transparent opacity={0.95} depthWrite={false} toneMapped={false} />
         </instancedMesh>
       )}
-      {(props.labels || props.selected || (missing && !props.covered && assembled && (hover || props.highlight))) && (
+      {!focusOn && (props.labels || props.selected || (missing && !props.covered && assembled && (hover || props.highlight))) && (
         <Html position={htmlAnchor} center zIndexRange={[20, 0]} style={{ pointerEvents: "none" }}>
           <span className={`vp-label ${missing ? "missing" : ""} ${props.failing ? "failing" : ""}`}>
             {part.label ?? part.card.display_name}
@@ -1379,13 +1380,16 @@ function ViewportToolbar(props: {
       };
     }),
   );
-  const setPreset = (p: ViewPreset) => useApp.setState((s) => ({ preset: p, cameraNonce: s.cameraNonce + 1 }));
+  const setPreset = (p: ViewPreset) => setView(p);
   const toggle = (k: keyof typeof toggles) => useApp.setState((s) => ({ toggles: { ...s.toggles, [k]: !s.toggles[k] } }));
   return (
     <div className="vp-toolbar" role="toolbar" aria-label="View" style={props.compact ? { ...TOOLBAR_FIT, gap: 4, padding: "4px 6px" } : TOOLBAR_FIT}>
       <label className="vp-explode">
         {!props.compact && <span className="small">Explode</span>}
-        <input style={props.compact ? { width: 56 } : undefined} type="range" min={0} max={1} step={0.01} value={explode} onChange={(e) => useApp.setState({ explode: Number(e.target.value) })} aria-label="Explode" />
+        <input style={props.compact ? { width: 56 } : undefined} type="range" min={0} max={1} step={0.01} value={explode} onChange={(e) => {
+            if (useApp.getState().focusKey) focusPart(null);
+            useApp.setState({ explode: Number(e.target.value) });
+          }} aria-label="Explode" />
       </label>
       <span className="vp-sep" />
       <div className="seg">

@@ -164,8 +164,17 @@ export function ExportMenu(props: { primary?: boolean }) {
     const close = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
+    const esc = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopImmediatePropagation();
+      setOpen(false);
+    };
     window.addEventListener("mousedown", close);
-    return () => window.removeEventListener("mousedown", close);
+    window.addEventListener("keydown", esc, true);
+    return () => {
+      window.removeEventListener("mousedown", close);
+      window.removeEventListener("keydown", esc, true);
+    };
   }, [open]);
   const ready = build?.status === "done";
   return (

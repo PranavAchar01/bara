@@ -148,12 +148,17 @@ export function PartsList() {
                 className={`part-row ${selection === p.instance_id ? "selected" : ""} ${p.placement.source === "intent" ? "provisional" : ""}`}
                 role="button"
                 tabIndex={0}
+                aria-pressed={selection === p.instance_id}
+                data-focus-key={focusKeyOf(build, p)}
                 onClick={() => {
                   select(p.instance_id);
                   focusPart(focusKeyOf(useApp.getState().build, p));
                 }}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") select(p.instance_id);
+                  if (e.target !== e.currentTarget || (e.key !== "Enter" && e.key !== " ")) return;
+                  e.preventDefault();
+                  select(p.instance_id);
+                  focusPart(focusKeyOf(useApp.getState().build, p));
                 }}
               >
                 <Dot tone={instanceTone(build, p.instance_id) ?? (known(p.status, ["ok", "warning", "failed"] as const) === "failed" ? "fail" : "ok")} />

@@ -129,6 +129,7 @@ export function focusPoses(key: string, camera: THREE.Camera): Map<THREE.Group, 
 export function FocusDriver() {
   const key = useApp((s) => s.focusKey);
   const explode = useApp((s) => s.explode);
+  const revision = useApp((s) => `${s.build?.revision ?? 0}:${s.build?.parts.length ?? 0}`);
   const { camera, invalidate } = useThree();
   useEffect(() => {
     if (key) {
@@ -138,7 +139,7 @@ export function FocusDriver() {
     }
     invalidate();
     // the shelf is laid out again when the explode slider moves under the focus
-  }, [key, explode, camera, invalidate]);
+  }, [key, explode, revision, camera, invalidate]);
   useFrame((_, dt) => {
     const target = key && stage.focusPose.size ? 1 : 0;
     const d = target - stage.focusK;
