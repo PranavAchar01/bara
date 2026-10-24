@@ -46,10 +46,6 @@ export interface AppState {
   conn: ConnStatus;
   hello: ServerPayloads["hello"] | null;
   screen: "home" | "workspace";
-  /** The Library list is open (listed builds are stored on the engine, shared by every visitor). */
-  libraryOpen: boolean;
-  /** Build id of a stored build being shown from the Library; it is not on the live engine. */
-  replaying: string | null;
   build: Build | null;
   view: ViewState;
   pendingStart: PendingStart | null;
@@ -64,6 +60,8 @@ export interface AppState {
   moving: string | null;
   /** Part pulled out of the build into focus: its label key (one per catalog part, the case, the board). */
   focusKey: string | null;
+  /** Build id when the open build came from the library (not started in this page). */
+  openedFromLibrary: string | null;
   hoverConnection: string | null;
   explode: number;
   preset: ViewPreset;
@@ -92,8 +90,6 @@ export const useApp = create<AppState>(() => ({
   conn: "connecting",
   hello: null,
   screen: "home",
-  libraryOpen: false,
-  replaying: null,
   build: null,
   view: emptyView(),
   pendingStart: null,
@@ -105,6 +101,7 @@ export const useApp = create<AppState>(() => ({
   inspectPartId: null,
   moving: null,
   focusKey: null,
+  openedFromLibrary: null,
   hoverConnection: null,
   explode: 0,
   preset: "scene",

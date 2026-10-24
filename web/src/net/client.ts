@@ -1,9 +1,9 @@
 // Wires the socket (real or FakeSocket) and REST (real or stub) into the store.
 // This is the only place that knows about mock mode.
-import type { ClientEnvelope, EditOp, ServerEnvelope, ServerPayloads, Vocab, Health } from "../spec/types";
+import type { Build, ClientEnvelope, EditOp, ServerEnvelope, ServerPayloads, Vocab, Health } from "../spec/types";
 import { CONNECTION_SCOPED } from "../spec/types";
 import { createBuild, isKnownEvent, reduceBuild } from "../state/reducer";
-import { emptyView, editSent, reduceView } from "../state/view";
+import { emptyView, editSent, reduceView, type ViewState } from "../state/view";
 import { pushLog, showToast, useApp } from "../state/store";
 import { Connection, type SocketLike } from "./connection";
 import { FakeSocket, MockServer } from "./fakeSocket";
@@ -53,7 +53,6 @@ function onEnvelope(env: ServerEnvelope): void {
           build: createBuild(p.build_id, s.pendingStart.prompt, s.pendingStart.ts),
           view: emptyView(s.pendingStart.at),
           pendingStart: null,
-          replaying: null,
           screen: "workspace",
           selection: null,
           overlay: null,
@@ -79,6 +78,10 @@ function onEnvelope(env: ServerEnvelope): void {
   }
   if (env.type === "error") {
     const p = env.payload as ServerPayloads["error"];
+    if (p.error.code === "E_UNKNOWN_BUILD" && s.openedFromLibrary && s.build?.build_id === s.openedFromLibrary) {
+      showToast("Opened from your library. The engine has restarted since, so this copy is for looking; build it again to change it.");
+      return;
+    }
     if (p.error.code !== "E_RESUME_GAP") showToast(p.error.message);
     return;
   }
@@ -160,7 +163,6 @@ export async function startClient(): Promise<Mode> {
     resumeTarget: () => {
       const b = useApp.getState().build;
       if (!b || b.status === "failed" || b.status === "cancelled") return null;
-      if (useApp.getState().replaying === b.build_id) return null;
       return { build_id: b.build_id, last_seq: b.last_seq };
     },
     onEnvelope,
@@ -202,6 +204,32 @@ export function startBuild(prompt: string): void {
   useApp.setState({ pendingStart: { msgId, prompt: text, ts, at: performance.now() } });
 }
 
+/**
+ * Opens a build from the library: shown at once from the saved copy, then the engine is asked to
+ * carry on from the last event it sent. If the engine no longer has it (restarted), the saved copy
+ * stays on screen to look at.
+ */
+export function openSaved(entry: { build: Build; view: ViewState }): void {
+  const { build } = entry;
+  useApp.setState({
+    build,
+    view: { ...entry.view, startAt: null, edit: null },
+    screen: "workspace",
+    selection: null,
+    overlay: null,
+    focusKey: null,
+    moving: null,
+    explode: 0,
+    dragPose: null,
+    dismissedWarnings: [],
+    openedFromLibrary: build.build_id,
+  });
+  if (!conn) return;
+  const seq = build.last_seq ?? 0;
+  conn.setCursor(build.build_id, seq);
+  conn.send("build.resume", { build_id: build.build_id, last_seq: seq });
+}
+
 export function cancelBuild(): void {
   const b = useApp.getState().build;
   if (!b || !conn) return;
@@ -224,7 +252,8 @@ export function applyEdit(ops: EditOp[], label?: string): void {
   useApp.setState({ view: editSent(useApp.getState().view, msgId, ops, label) });
 }
 
-export interface LibraryEntry {
+/** One row of the engine's shared build library (GET /v1/library): the same list for every visitor. */
+export interface StoredBuild {
   build_id: string;
   prompt: string;
   device: string | null;
@@ -234,14 +263,14 @@ export interface LibraryEntry {
 }
 
 /** Stored builds, newest first. Mock mode and an engine without a library both give an empty list. */
-export async function fetchLibrary(): Promise<LibraryEntry[]> {
-  const res = await rest.get<{ builds: LibraryEntry[] }>(paths.library());
+export async function fetchLibrary(): Promise<StoredBuild[]> {
+  const res = await rest.get<{ builds: StoredBuild[] }>(paths.library());
   return res.ok && Array.isArray(res.body.builds) ? res.body.builds : [];
 }
 
 /** Shows a stored build by feeding its recorded events through the same handler as a live socket. */
 export async function openLibraryBuild(buildId: string): Promise<boolean> {
-  const res = await rest.get<LibraryEntry & { events: ServerEnvelope[] }>(paths.libraryBuild(buildId));
+  const res = await rest.get<StoredBuild & { events: ServerEnvelope[] }>(paths.libraryBuild(buildId));
   if (!res.ok) {
     showToast(res.error.message);
     return false;
@@ -250,10 +279,9 @@ export async function openLibraryBuild(buildId: string): Promise<boolean> {
   useApp.setState({
     build: createBuild(buildId, prompt, created_at ?? undefined),
     view: emptyView(performance.now()),
-    replaying: buildId,
+    openedFromLibrary: buildId,
     pendingStart: null,
     screen: "workspace",
-    libraryOpen: false,
     selection: null,
     overlay: null,
     focusKey: null,

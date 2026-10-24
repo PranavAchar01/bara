@@ -6,9 +6,10 @@ import { StepPlayer } from "./components/LeftColumn";
 import { BuildProgress, EditStatus, EventLog, FailureCard, LatencyHUD, Toast, WarningBanner } from "./components/Status";
 import { PartsList, RightColumn } from "./components/RightColumn";
 import { AddPartPicker, ConnectDialog, PartInspector, ResizePanel, SwapDrawer } from "./components/Overlays";
-import { LibraryDialog } from "./components/Library";
 import { FocusCard, FocusExit } from "./components/FocusCard";
 import { bindVoiceKeys } from "./voice/voice";
+import { Library } from "./components/Library";
+import { startAutosave } from "./library/autosave";
 import { Viewport3D } from "./three/Viewport3D";
 import { BotLab } from "./bot/BotLab";
 
@@ -42,6 +43,7 @@ function Home() {
   const health = useApp((s) => s.health);
   return (
     <main className="home">
+      <div className="home-hero">
       <div className="home-inner">
         <h1>Describe a device. It gets built from open hardware.</h1>
         <p className="muted">
@@ -56,6 +58,8 @@ function Home() {
           </p>
         )}
       </div>
+      </div>
+      <Library />
     </main>
   );
 }
@@ -117,15 +121,14 @@ export function App() {
 function Main() {
   useKeys();
   useEffect(() => bindVoiceKeys(), []);
+  useEffect(() => startAutosave(), []);
   const screen = useApp((s) => s.screen);
-  const libraryOpen = useApp((s) => s.libraryOpen);
   return (
     <div className="app">
       {screen === "home" && <TopBar />}
       <EngineNotice />
       <ConnectionBanner />
       {screen === "home" ? <Home /> : <Workspace />}
-      {libraryOpen && <LibraryDialog />}
       <EventLog />
       <Toast />
     </div>

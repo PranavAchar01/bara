@@ -3,7 +3,6 @@ import { useApp } from "../state/store";
 import { paths } from "../net/rest";
 import { serverUrl, storeKey } from "../net/mode";
 import { Icon } from "../ui/common";
-import { openLibrary } from "./Library";
 import type { ConnStatus } from "../net/connection";
 
 const CONN_LABEL: Record<ConnStatus, string> = {
@@ -56,9 +55,6 @@ export function TopBar() {
           <span className="dot" />
           {CONN_LABEL[conn]}
         </span>
-        <button type="button" className="btn ghost sm" onClick={openLibrary}>
-          Library
-        </button>
         {screen === "workspace" && (
           <button type="button" className="btn ghost sm" onClick={() => useApp.setState({ screen: "home" })}>
             <Icon name="home" /> Home
@@ -140,9 +136,6 @@ export function PanelToolbar() {
     <div className="panel-toolbar">
       <button type="button" className="btn ghost sm icon" onClick={() => useApp.setState({ screen: "home" })} title="Home">
         <Icon name="home" />
-      </button>
-      <button type="button" className="btn ghost sm" onClick={openLibrary}>
-        Library
       </button>
       <span className="spacer" />
       <ExportMenu primary />
