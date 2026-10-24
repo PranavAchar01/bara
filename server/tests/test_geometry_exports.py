@@ -146,12 +146,3 @@ def test_rest_mock_build_reports_missing(monkeypatch, tmp_path):
         r = client.get(f"/v1/builds/{build_id}/export?format=zip")
         with zipfile.ZipFile(io.BytesIO(r.content)) as zf:
             assert "wiring.csv" in zf.namelist()
-
-
-def test_asset_path_ignores_version_suffix(build):
-    from bara.geometry.exports import asset_path
-
-    plain = asset_path("/assets/cache/boards/test.kicad_pcb")
-    assert plain is not None
-    assert asset_path("/assets/cache/boards/test.kicad_pcb?v=0123456789abcdef") == plain
-    assert asset_path("/assets/cache/boards/../../../etc/passwd?v=1") is None

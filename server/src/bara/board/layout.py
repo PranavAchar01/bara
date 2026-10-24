@@ -665,12 +665,33 @@ def plan_keyboard_board(name: str, n_keys: int, b: Brief, log: list[str]) -> lis
             },
         )
         items.append(it)
+        stab_fp = _stab_fp(b.switch, k.w)
+        if stab_fp is not None:
+            # wide keys (space, shift, enter, backspace) need a stabilizer or the cap rocks
+            stab = Item(
+                f"ST{i + 1}",
+                "stabilizer",
+                stab_fp,
+                k.x,
+                k.y,
+                k.rot,
+                "top",
+                label=f"Cherry MX plate/PCB stabilizer ({k.w:g}u)",
+                height_mm=sw["height_mm"],
+                meta={"w_u": k.w},
+            )
+            items.append(stab)
         rect = affinity.translate(
             affinity.rotate(_key_rect((pitch[0] * k.w, pitch[1])), -k.rot, origin=(0, 0)),
             k.x,
             k.y,
         )
-        blocked_top.append(unary_union([rect, it.footprint_poly()]))
+        blocked_top.append(
+            unary_union(
+                [rect, it.footprint_poly()]
+                + ([stab.footprint_poly()] if stab_fp is not None else [])
+            )
+        )
     key_cloud = unary_union(blocked_top)
     thumbs_poly = (
         unary_union([p for p, k in zip(blocked_top, keys, strict=True) if k.thumb])

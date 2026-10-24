@@ -275,6 +275,24 @@ ENTRIES: list[Entry] = [
         standards=["MX"],
         color="#efeae0",
     ),
+    *(
+        E(
+            f"cap:dsa_{u:g}u",
+            f"DSA {u:g}u {'spacebar' if u >= 6 else 'keycap'}",
+            "mechanical",
+            "mech.keycap",
+            models=[ModelSpec("dsa", path, rotate=(-90.0, 0.0, 0.0))],
+            facets={"switch_family": "mx", "profile": "dsa", "key_units": u},
+            standards=["MX"],
+            color="#efeae0",
+        )
+        for u, path in (
+            (1.75, "DSA 1.75u.step"),
+            (2.25, "DSA 2.25u.step"),
+            (2.75, "DSA 2.75u.step"),
+            (6.25, "spacebars/DSA Spacebar 6.25u (50mm spacing).step"),
+        )
+    ),
     E(
         "cap:klp_choc_1u",
         "KLP Lame 1u keycap (Choc)",

@@ -42,31 +42,6 @@ export interface LoadedModel {
   components: Component[];
   /** Per-mesh pieces, kept so a subset of components can be regrouped. */
   pieces: Piece[];
-  /** Board models: one box per footprint node (refdes), in build space, for hover. */
-  footprints: FootprintBox[];
-}
-
-export interface FootprintBox {
-  ref: string;
-  box: THREE.Box3;
-}
-
-/** KiCad reference designators (SW3, U1, USB-UART1, LED3A); not OpenCASCADE labels. */
-const REFDES = /^[A-Z][A-Za-z0-9]*([_-][A-Za-z0-9]+)*\d+[A-Za-z]?$/;
-
-/**
- * The footprint a mesh belongs to: the outermost refdes-named node above it.
- * Names nearer the mesh can look like refdes too (a switch model's STEP part
- * SW_Cherry_MX_PCB_cp_36 inside footprint SW5), so the one nearest the root wins.
- */
-function footprintOf(o: THREE.Object3D | null): string | null {
-  let ref: string | null = null;
-  for (let n = o; n; n = n.parent) {
-    // GLTFLoader makes repeated node names unique with a suffix: SW11, SW11_1.
-    const name = REFDES.test(n.name) ? n.name : n.name.replace(/_\d+$/, "");
-    if (REFDES.test(name)) ref = name;
-  }
-  return ref;
 }
 
 const cache = new Map<string, Promise<LoadedModel | null>>();
@@ -359,7 +334,6 @@ function convert(gltf: GLTF, board: boolean): LoadedModel {
   const matCache = new Map<string, THREE.MeshStandardMaterial>();
   const pieces: Piece[] = [];
   const all: THREE.BufferGeometry[] = [];
-  const fpBoxes = new Map<string, THREE.Box3>();
   root.traverse((o) => {
     const mesh = o as THREE.Mesh;
     if (!mesh.isMesh) return;
@@ -405,13 +379,6 @@ function convert(gltf: GLTF, board: boolean): LoadedModel {
       const plain = g.clone();
       if (plain.attributes.uv) plain.deleteAttribute("uv");
       all.push(plain);
-      const ref = board ? footprintOf(mesh) : null;
-      if (ref) {
-        plain.computeBoundingBox();
-        const b = fpBoxes.get(ref) ?? new THREE.Box3();
-        if (plain.boundingBox) b.union(plain.boundingBox);
-        fpBoxes.set(ref, b);
-      }
     }
   });
   const merged = all.length ? mergeGeometries(sameIndexing(all), false) : null;
@@ -420,8 +387,7 @@ function convert(gltf: GLTF, board: boolean): LoadedModel {
     merged.computeBoundingBox();
     if (merged.boundingBox) bbox.copy(merged.boundingBox);
   }
-  const footprints = [...fpBoxes].map(([ref, box]) => ({ ref, box }));
-  return { groups: groupPieces(pieces), merged, bbox, components, pieces, footprints };
+  return { groups: groupPieces(pieces), merged, bbox, components, pieces };
 }
 
 /** `board`: a kicad-cli board export, whose layers get the KiCad board look. */

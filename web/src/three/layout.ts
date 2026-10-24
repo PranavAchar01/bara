@@ -70,7 +70,10 @@ export function elementPoses(placement: Placement, quantity: number, layout: Lay
       h_u: 1,
     }));
   }
-  const keys = [...layout.keys].sort((a, b) => a.i - b.i);
+  const widths = placement.key_widths_u;
+  const keys = [...layout.keys]
+    .filter((k) => !widths || widths.some((w) => Math.abs(w - (k.w_u ?? 1)) < 1e-6))
+    .sort((a, b) => a.i - b.i);
   return keys.map((k) => {
     const c = rotateXYZ(keyCentreLocal(k, layout.pitch_x_mm, layout.pitch_y_mm), rot);
     return {
