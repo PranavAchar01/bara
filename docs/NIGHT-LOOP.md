@@ -76,3 +76,7 @@ North star (what a finished build looks like, any prompt):
 Loop: run suite -> rank worst element across devices -> one engine-level fix (no device names) -> rerun -> log. When the 27 pass, add a new batch of gadgets (prompts only, never engine special cases) and repeat.
 Expansion batches: (A) e-reader, digital camera, action camera, walkie-talkie, smart doorbell, thermostat, e-bike light, drone remote; (B) VR controller, stylus, earbuds case, bluetooth tracker, smart ring, baby monitor, label printer, dashcam; (C) mechanical numpad, macro pad, MIDI controller, handheld scanner, kitchen scale, alarm clock, portable fan, power bank.
 Web: bara-merge agent merges Nithin's figma-design-in-code / agent-board-3d / figma-stage-log, mutes branding, wires Vercel to the live engine behind a token.
+
+### 2026-10-24 ~02:00 PT: use case + one-to-one benchmark (his ask)
+- North star 6: the engine understands each device's use case (jobs -> functions -> blocks -> parts) and organizes or composes new components to meet it; nothing dropped silently. Ledger E15 (compose agent).
+- North star 7: every device is compared one-to-one with a real open-source KiCad project of its class (bench/references.json), same kicad-cli renderer both sides, metrics + function recall + side-by-side sheets + UI/UX comparison (bara-bench agent; scripts/compare_reference.py re-scores each iteration).
