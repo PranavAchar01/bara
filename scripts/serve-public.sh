@@ -66,7 +66,7 @@ while kill -0 "$server_pid" 2>/dev/null; do
   tunnel_pid=$!
   url=""
   for _ in $(seq 60); do
-    url="$(grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' "$log_dir/tunnel.log" | head -1 || true)"
+    url="$(grep -a -o 'https://[a-z0-9-]*\.trycloudflare\.com' "$log_dir/tunnel.log" | head -1 || true)"
     [ -n "$url" ] && break
     sleep 1
   done
