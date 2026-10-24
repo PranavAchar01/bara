@@ -216,6 +216,11 @@
             "null"
           ]
         },
+        "key_widths_u": {
+          "type": "array",
+          "items": {"type": "number"},
+          "description": "mode layout: only the layout keys of these widths (u); absent = every key."
+        },
         "explode_offset_mm": {
           "$ref": "common.schema.json#/$defs/Vec3",
           "description": "Offset at explode factor 1.0. The viewer adds factor * offset."

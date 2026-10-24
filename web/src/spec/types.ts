@@ -279,6 +279,8 @@ export interface Placement {
   position_mm: Vec3;
   rotation_deg: Vec3;
   layout_id?: string | null;
+  /** Layout keys this instance covers, by key width in u (absent = every key). */
+  key_widths_u?: number[];
   explode_offset_mm?: Vec3;
   source?: Open<"design" | "solver" | "intent" | "user" | "unknown">;
   locked?: boolean;
