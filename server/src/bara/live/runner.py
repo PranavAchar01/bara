@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any
 from shapely.geometry import Polygon
 
 from bara.live import adapters as A
-from bara.live import archetype, completeness, hero
+from bara.live import archetype, completeness, hero, websearch
 from bara.live import blocks as blocks_mod
 from bara.live import form as form_mod
 from bara.live import identity as identity_mod
@@ -586,6 +586,16 @@ class LiveRunner:
                 )
         return out
 
+    async def _photos(self, run: BuildRun) -> list[bytes]:
+        """Web photos of the real product, searched once per build and shared by the form and
+        the identity judge."""
+        if not hasattr(run, "web_photos"):
+            photos, sources, note = await websearch.reference_photos(run.prompt)
+            run.web_photos = photos  # type: ignore[attr-defined]
+            run.web_sources = sources  # type: ignore[attr-defined]
+            log.info("web reference photos for %s: %d (%s)", run.build_id, len(photos), note)
+        return run.web_photos  # type: ignore[attr-defined]
+
     async def form_stage(
         self,
         run: BuildRun,
@@ -605,8 +615,9 @@ class LiveRunner:
                 f"{floor[1]:.0f} mm overall with at least {floor[2]:.0f} mm2 of area. Keep every "
                 f"dimension and the area at or above that; change only the shape within it."
             )
+        photos = await self._photos(run)
         product, note = await form_mod.derive(
-            run.prompt, touches, previous if (repair or fit) else None, repair, fit
+            run.prompt, touches, previous if (repair or fit) else None, repair, fit, photos
         )
         if repair and not fit and floor and product is not None and previous is not None:
             w, h, area = _extent(product)
@@ -705,7 +716,7 @@ class LiveRunner:
             run.hero_png = out / f"{run.build_id}{'_repaired' if final else ''}.png"  # type: ignore[attr-defined]
             run.hero_png.write_bytes(png)  # type: ignore[attr-defined]
             verdict, note = await identity_mod.judge(
-                run.prompt, product.description, product.reference, png
+                run.prompt, product.description, product.reference, png, await self._photos(run)
             )
         run.identity = verdict  # type: ignore[attr-defined]
         ok = verdict is not None and bool(verdict["reads_as_device"])
