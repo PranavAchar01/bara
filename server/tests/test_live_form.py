@@ -559,3 +559,32 @@ def test_off_board_modules_do_not_share_a_spot() -> None:
         for b in mods[k + 1 :]:
             if a.side == b.side:
                 assert a.footprint_poly().intersection(b.footprint_poly()).area < 0.01
+
+
+def test_body_is_thickened_to_the_real_stack() -> None:
+    from types import SimpleNamespace
+
+    from bara.live.runner import LiveRunner as Runner
+
+    seen: list[str] = []
+    fake = SimpleNamespace(
+        WALL_STACK_MM=3.0, STACK_CLEARANCE_MM=1.0, _warn=lambda *a: seen.append(a[-1])
+    )
+    board = {
+        "boards": [
+            {
+                "thickness_mm": 1.6,
+                "placements": [
+                    {"side": "top", "height_mm": 12.0},
+                    {"side": "bottom", "height_mm": 20.0, "on_pcb": False},
+                ],
+            }
+        ]
+    }
+    brief: dict[str, Any] = {}
+    Runner._thicken_to_stack(fake, None, None, brief, board, SimpleNamespace(thickness_mm=25.0))  # type: ignore[arg-type]
+    assert brief["body_thickness_mm"] == pytest.approx(12 + 1.6 + 20 + 7)
+    assert seen
+    brief2: dict[str, Any] = {}
+    Runner._thicken_to_stack(fake, None, None, brief2, board, SimpleNamespace(thickness_mm=60.0))  # type: ignore[arg-type]
+    assert brief2 == {}

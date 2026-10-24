@@ -238,6 +238,9 @@ class LiveRunner:
         "identity.reads_as_device": "E_ENCLOSURE_FAILED",
         "board.drc": "E_BOARD_FAILED",
         "board.routing.complete": "E_BOARD_FAILED",
+        "mech.fit.enclosure": "E_ENCLOSURE_FAILED",
+        "mech.fit.collision": "E_ENCLOSURE_FAILED",
+        "mech.fit.floating": "E_ENCLOSURE_FAILED",
     }
 
     def gate(self, run: BuildRun) -> dict[str, Any] | None:
@@ -715,6 +718,33 @@ class LiveRunner:
             },
         )
 
+    WALL_STACK_MM = 3.0  # case wall above and below the stack
+    STACK_CLEARANCE_MM = 1.0
+
+    def _thicken_to_stack(
+        self, run: BuildRun, st: Any, brief: dict[str, Any], board: dict[str, Any], product: Any
+    ) -> None:
+        """The body is at least as thick as the real stack: the board, the tallest part on each
+        side (off-board modules count by their own thickness) and a wall on each face."""
+        top = bottom = 0.0
+        thick = 1.6
+        for entry in board["boards"]:
+            thick = float(entry.get("thickness_mm") or thick)
+            for pl in entry["placements"]:
+                h = float(pl.get("height_mm") or 0.0)
+                if pl.get("side") == "bottom":
+                    bottom = max(bottom, h)
+                else:
+                    top = max(top, h)
+        stack = top + thick + bottom + 2 * self.WALL_STACK_MM + self.STACK_CLEARANCE_MM
+        if stack > product.thickness_mm:
+            self._warn(
+                run, "place", "w_stack", "other", "info",
+                f"Body thickened {product.thickness_mm:.0f} -> {stack:.0f} mm: the parts stack "
+                f"{top:.1f} mm above and {bottom:.1f} mm below the board.",
+            )  # fmt: skip
+            brief["body_thickness_mm"] = stack
+
     async def _place_generic(
         self, run: BuildRun, brief: dict[str, Any], result: ComposeResult, ctx: dict[str, Any]
     ) -> dict[str, Any] | None:
@@ -760,6 +790,7 @@ class LiveRunner:
             brief["edge_thickness_mm"] = product.edge_thickness_mm
             board, err = await asyncio.to_thread(A.plan_board, gb, parts, run.build_id)
         if product is not None and board is not None:
+            self._thicken_to_stack(run, st, brief, board, product)
             self._form_fit_check(run, st, board, product)
         if board is None or not any(
             pl.get("for_instance_id") for e in board["boards"] for pl in e["placements"]

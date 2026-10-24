@@ -578,8 +578,7 @@ def _clear_of(
     """Move an off-board module to the nearest spot, on either side, where its envelope overlaps
     no other module and, unless it is anchored to a feature, no board part on that side."""
     others = {
-        side: list(held[side])
-        + ([] if anchored else [o.footprint_poly() for o in on_board if o.side == side])
+        side: list(held[side]) + [o.footprint_poly() for o in on_board if o.side == side]
         for side in ("top", "bottom")
     }
     x0, y0 = it.x, it.y
