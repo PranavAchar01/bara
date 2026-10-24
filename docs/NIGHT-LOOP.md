@@ -137,3 +137,8 @@ Web: bara-merge agent merges Nithin's figma-design-in-code / agent-board-3d / fi
 - Suite on c0684e6: CONTROLLER PASS (439 s, BOM: 2 RKJXV sticks, 13 TL3342, 2 trigger pots, rumble, IMU), MONITOR PASS (718 s). Mouse running.
 - Monitor gap even though it passes: HDMI and DisplayPort receptacles resolved to Phoenix screw terminals; the model said "no candidate is an HDMI receptacle" and had to pick anyway.
 - 3323217: compose pick may answer NONE; the slot then runs resolve_missing (KiCad generated, LCSC fetch) and takes the new part if it passes the filters. Test added; live_form 44 passed. Not restarted yet so the mouse result on c0684e6 lands first.
+
+### 07:43-07:48 iter
+- Mouse on c0684e6: board.drc no longer fails (the f853f67 flip fix cleared its 8 errors). Still FAIL: device.complete (2.4 GHz chip antenna, function component.other, so the nice!nano's built-in radio does not cover it; no LCSC match), 1 unconnected, mech.access.panel (bezel overhangs encoder M5, 2/8 rays), identity ("top mostly open or cut away, showing internal clutter").
+- Suite restarted on 16b24f2 (code = 3323217; server 98063, suite 98119).
+- Next gaps, in order: antenna covered by a radio module (block function mapping), mouse top shell closing over parts, routing leftover, scroll-wheel overhang. Vercel URL and bench not done (agents stopped).
