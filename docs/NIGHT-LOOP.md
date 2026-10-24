@@ -173,3 +173,11 @@ Web: bara-merge agent merges Nithin's figma-design-in-code / agent-board-3d / fi
 - Fix 78230d2: best_stocked skips connector-category hits unless the block is interconnect; FH12-40S, FH12-14S, DF19G-30P rows retagged interconnect.connector (monitor may now flag its panel; check).
 - Restarted server 17852 + suite 17889 on 78230d2 (27 devices).
 - Next gaps: status LEDs missing on monitor/mp4 (catalog/LED filter), mouse shell identity, pockets breaking through the skin.
+
+### 10:00 iteration
+- 90dca15: a spec screen-type requirement (display_type eq tft) only filters screen slots; it was emptying the status-LED slot (8 to 0) on monitor and mp4.
+- 078c228: the top skin rises over the tallest hidden part (plate kept at 1.5 mm) instead of a blind pocket opening through it (the mouse's rectangular recesses).
+- 61dc051: a product with a desk-facing sensor keeps a flat floor and domes over the board (spread goes to crown, no belly). New `mouse` shell fixture; gamepad output byte-identical.
+- 98f210f: new site kind `wheel` (scroll / thumb wheel / roller): a 20 mm wheel on edge in a slot along the plan's long axis; the encoder-access check probes the slot for wheeled encoders.
+- Controller on 78230d2: identity PASS, fit PASS, routing fixed (cd33090).
+- Suite restarted on 98f210f: server 33627, suite 33676.
