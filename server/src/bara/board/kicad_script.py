@@ -120,6 +120,12 @@ def _place_footprint(board, nets: dict, spec: dict) -> None:
     for zone in list(fp.Zones()):
         if zone.GetIsRuleArea() and not zone.GetDoNotAllowTracks():
             fp.Remove(zone)
+    # Edge.Cuts that do not close (a jack drawn to splice into the board edge) are not
+    # a cutout on our outline; keep them as a drawing so the outline stays closed.
+    if not spec.get("edge_cuts", True):
+        for g in fp.GraphicalItems():
+            if g.GetLayer() == pcbnew.Edge_Cuts:
+                g.SetLayer(pcbnew.Cmts_User)
     # Models: replace the library paths with resolved absolute files.
     models = fp.Models()
     models.clear()
@@ -134,10 +140,13 @@ def _place_footprint(board, nets: dict, spec: dict) -> None:
         mod.m_Scale = pcbnew.VECTOR3D(sc[0], sc[1], sc[2])
         models.push_back(mod)
     board.Add(fp)
-    if spec.get("side") == "bottom":
+    bottom = spec.get("side") == "bottom"
+    if bottom:
         fp.Flip(fp.GetPosition(), pcbnew.FLIP_DIRECTION_LEFT_RIGHT)
     fp.SetPosition(_vec(spec["x"], spec["y"]))
-    fp.SetOrientationDegrees(float(spec.get("rot", 0.0)))
+    # A flip stores the pads mirrored in y; the extra half turn makes it the x
+    # mirror the packer laid out (layout.Item.world), so pads land where planned.
+    fp.SetOrientationDegrees(float(spec.get("rot", 0.0)) + (180.0 if bottom else 0.0))
     pads = spec.get("pads", {})
     for pad in fp.Pads():
         net_name = pads.get(pad.GetNumber())

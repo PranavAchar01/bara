@@ -156,6 +156,23 @@ def _shape_points(item: list) -> list[tuple[float, float]]:
     return []
 
 
+def _edges_close(items: list[list]) -> bool:
+    """True when a footprint's Edge.Cuts shapes close: every line and arc end meets another.
+
+    A connector drawn to sit in the board edge (a 3.5 mm jack's notch) ships an open
+    chain meant to splice into the outline; it is no cutout, and on our own outline it
+    leaves Edge.Cuts that never close."""
+    ends: dict[tuple[int, int], int] = {}
+    for item in items:
+        if item[0] not in ("fp_line", "fp_arc"):
+            continue
+        for key in ("start", "end"):
+            x, y = _floats(_child(item, key), 2)
+            k = (round(x * 100), round(y * 100))
+            ends[k] = ends.get(k, 0) + 1
+    return all(n % 2 == 0 for n in ends.values())
+
+
 def _bbox(points: list[tuple[float, float]]) -> tuple[float, float, float, float] | None:
     if not points:
         return None
@@ -191,6 +208,7 @@ def load_footprint(lib: str, pretty: str, name: str) -> FootprintInfo:
     crt_b: list[tuple[float, float]] = []
     fab: list[tuple[float, float]] = []
     cuts: list[tuple[float, float]] = []
+    cut_items: list[list] = []
     for item in tree:
         if not isinstance(item, list) or not item or not str(item[0]).startswith("fp_"):
             continue
@@ -204,6 +222,7 @@ def load_footprint(lib: str, pretty: str, name: str) -> FootprintInfo:
             fab += pts
         elif layer == "Edge.Cuts":
             cuts += pts
+            cut_items.append(item)
     pad_pts = [(p.x - p.w / 2, p.y - p.h / 2) for p in pads] + [
         (p.x + p.w / 2, p.y + p.h / 2) for p in pads
     ]
@@ -230,7 +249,7 @@ def load_footprint(lib: str, pretty: str, name: str) -> FootprintInfo:
         descr=str(descr_node[1]) if descr_node else "",
         source_url=str(meta["url"]),
         licence=str(meta["licence"]),
-        cutout=_bbox(cuts),
+        cutout=_bbox(cuts) if _edges_close(cut_items) else None,
         extra={"model_xforms": xforms},
     )
 

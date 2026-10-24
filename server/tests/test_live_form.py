@@ -119,7 +119,8 @@ def test_parts_snap_to_anchors_inside_the_inset_silhouette() -> None:
     region = form_region(pf, pf.get("scale", 1.0))
     assert outline.equals(region) or outline.area == pytest.approx(region.area, rel=0.3)
     for it in [mcu, *keys, cap]:
-        assert outline.buffer(0.01).contains(it.footprint_poly()), it.ref
+        # courtyards stay clear of the outline by the copper-to-edge clearance
+        assert outline.buffer(-0.45).contains(it.footprint_poly()), it.ref
     # keys sit near the anchor (board y is flipped, the row is horizontal so x is enough)
     xs = [k.centre()[0] for k in keys]
     assert min(xs) > 10.0 and max(xs) < 50.0
@@ -363,6 +364,42 @@ def test_missing_part_is_fetched_cached_and_misses_are_remembered(tmp_path: Path
     assert r2.fetch(miss) is None and "NOPE9" in r2.notes["z"]
 
 
+def test_a_part_number_fetched_under_another_function_serves_the_block_that_names_it(
+    tmp_path: Path,
+) -> None:
+    class Source:
+        name = "stub"
+
+        def query(self, *a: Any, **k: Any) -> list[dict[str, Any]]:
+            return []
+
+        def get_part(self, part_id: str) -> dict[str, Any]:
+            raise KeyError(part_id)
+
+    path = tmp_path / "fetched.jsonl"
+    row = {
+        "part_id": "lcsc:pmw3360dm_t2qu_c1",
+        "display_name": "PMW3360DM-T2QU (PixArt)",
+        "mpn": "PMW3360DM-T2QU",
+        "functions": [{"function_id": "component.ic", "primary": True}],
+    }
+    path.write_text(json.dumps(row) + "\n")
+
+    def cli(term: str, function: str, timeout: float) -> tuple[int, str]:
+        raise AssertionError("the cache should answer")
+
+    need = cp.Need("s", "sense.motion", "Motion sensor", terms=("PMW3360DM-T2QU",))
+    part = Resolver(Overlay(Source()), cli=cli, fetched_path=path).fetch(need)
+    assert part is not None and part["functions"][0]["function_id"] == "sense.motion"
+    # a description search never borrows a row filed under another function
+    vague = cp.Need("v", "sense.motion", "pmw3360dm t2qu", terms=())
+    calls: list[str] = []
+    r = Resolver(
+        Overlay(Source()), cli=lambda t, f, s: (calls.append(t), (1, "no"))[1], fetched_path=path
+    )
+    assert r.fetch(vague) is None
+
+
 def test_unresolved_block_is_retried_with_relaxed_names(monkeypatch: Any) -> None:
     import asyncio
 
@@ -517,6 +554,13 @@ def test_fetch_falls_back_to_a_description_when_no_part_number_matches(tmp_path:
     calls.clear()
     r.fetch(named)
     assert calls == ["X1", "keyword:Some IC"]  # then the block described in words
+    cap = cp.need_from_block(
+        {"function_id": "mech.knob", "label": "Thumbstick cap", "category": "input",
+         "touchpoint": True, "count": 2, "search_terms": ["RKJXV1224005"]}, set()
+    )  # fmt: skip
+    calls.clear()
+    assert cap.mechanical and r.fetch(cap) is None
+    assert calls == []  # the part number a cap names is the stick it fits
 
 
 def test_touched_mechanical_block_without_a_part_is_made_by_the_case() -> None:
@@ -884,3 +928,94 @@ def test_a_cable_connector_sits_on_the_rim_with_its_mouth_out() -> None:
     nearest = region.exterior.interpolate(region.exterior.project(c))
     out = (nearest.x - pads.x, nearest.y - pads.y)
     assert (c.x - pads.x) * out[0] + (c.y - pads.y) * out[1] > 0  # mouth toward that edge
+
+
+def test_an_off_board_cell_moves_clear_of_the_parts_on_its_side() -> None:
+    from bara.board.generic import _clear_of
+
+    sensor = _item("U1", "sensor", "s", w=5.0)
+    sensor.side = "bottom"
+    cell = Item("BT1", "battery", None, 0.0, 0.0, 0.0, "bottom", on_pcb=False, size_mm=(12, 30))
+    region = Polygon([(-30, -60), (30, -60), (30, 60), (-30, 60)])
+    _clear_of(cell, {"top": [], "bottom": []}, [sensor], region, False)
+    # either side works: beside the sensor, or flipped above the board where nothing sits
+    clear = cell.footprint_poly().intersection(sensor.footprint_poly()).area < 0.01
+    assert clear or cell.side == "top"
+
+
+def test_two_catch_all_blocks_on_one_part_are_one_part() -> None:
+    from bara.live import compose as cmp
+
+    comp = object.__new__(cmp.Composer)
+    sensor = cmp.Slot("sensor", "Optical sensor", "other", "critical", 1, [])
+    sensor.chosen = {"part_id": "lcsc:pmw3360"}
+    lens = cmp.Slot("lens", "Lens matched to the sensor", "other", "critical", 1, [])
+    left = cmp.Slot("left", "Left click", "input.button", "critical", 1, [])
+    left.chosen = {"part_id": "lcsc:d2fc"}
+    middle = cmp.Slot("middle", "Middle click", "input.button", "critical", 1, [])
+    comp.slots = [sensor, lens, left, middle]
+    assert comp.twin_slot(lens, {"part_id": "lcsc:pmw3360"}) is sensor
+    # the same switch under two clicks is two switches
+    assert comp.twin_slot(middle, {"part_id": "lcsc:d2fc"}) is None
+
+
+def test_a_required_block_nothing_meets_takes_the_closest_real_part(monkeypatch: Any) -> None:
+    from bara.live import compose as cmp
+
+    async def none_meet(system: str, user: str, schema: Any, **kw: Any) -> Any:
+        return {"meets": []}, ""
+
+    monkeypatch.setattr(cmp, "ask_json", none_meet)
+    comp = object.__new__(cmp.Composer)
+    comp.resolver = type("R", (), {"rejected": set(), "notes": {}})()  # type: ignore[assignment]
+    comp.extra, comp.near_miss, comp.warning_n = {}, {}, 0
+    need = cp.Need("sensor", "sense.distance", "Mouse sensor", requirement="26000 DPI")
+    slot = cmp.Slot("sensor", "Mouse sensor", "sense.distance", "critical", 1, [], need=need)
+    pmw = {"part_id": "lcsc:pmw3360", "display_name": "PMW3360DM-T2QU"}
+    assert asyncio.run(comp.vet(slot, [pmw])) == []
+    assert "lcsc:pmw3360" in comp.resolver.rejected
+    seen: list[Any] = []
+    comp.take_closest(slot, lambda *a, **k: seen.append(a))
+    assert comp.extra["sensor"] == [pmw] and "lcsc:pmw3360" not in comp.resolver.rejected
+    assert "falls short" in seen[0][1]["warning"]["message"]
+
+
+def test_an_off_board_part_anchored_to_the_front_stays_on_the_front() -> None:
+    from shapely.geometry import box
+
+    from bara.board.generic import _clear_of
+    from bara.board.layout import Item
+
+    def cell(ref: str, side: str) -> Item:
+        return Item(ref, "module", None, 0, 0, 0, side, on_pcb=False, size_mm=(10.0, 10.0))
+
+    stick, under = cell("M1", "top"), cell("U1", "top")
+    _clear_of(stick, {"top": [], "bottom": []}, [under], box(-60, -60, 60, 60), True)
+    assert (
+        stick.side == "top"
+        and stick.footprint_poly().intersection(under.footprint_poly()).area < 0.01
+    )
+    loose = cell("M2", "top")
+    _clear_of(loose, {"top": [], "bottom": []}, [under], box(-60, -60, 60, 60), False)
+    assert loose.side == "bottom"  # an unanchored part may still use the back
+
+
+def test_a_pick_can_say_no_candidate_is_the_named_part(monkeypatch: Any) -> None:
+    from bara.live import compose as cmp
+
+    async def none_fits(system: str, user: str, schema: Any, **kw: Any) -> Any:
+        assert "NONE" in schema["properties"]["choice"]["enum"]
+        data = {"choice": "NONE", "reason": "a screw terminal is not an HDMI receptacle"}
+        res = type("Res", (), {"data": data, "provider": "x", "model": "m", "latency_ms": 1})
+        return type("Res", (res,), {"fallback": False})(), []
+
+    monkeypatch.setattr(cmp, "call_json", none_fits)
+    comp = object.__new__(cmp.Composer)
+    comp.use_model, comp.spec, comp.brief = True, {"prompt": "a monitor"}, {}
+    comp.settings = type(
+        "S", (), {"cerebras_model": "", "anthropic_model": "", "llm_timeout_s": 1}
+    )()
+    slot = cmp.Slot("hdmi", "HDMI receptacle", "interconnect.connector", "critical", 1, [])
+    ranked = [{"display_name": "Screw terminal 3-pin"}, {"display_name": "Screw terminal 2-pin"}]
+    idx, method, *_ = asyncio.run(comp.pick(slot, ranked))
+    assert (idx, method) == (0, "model_none")

@@ -31,6 +31,7 @@ from .layout import BoardPlan, Item, _assign_gpio, _search
 from .libs import FootprintInfo, find_footprint, footprint_ref, symbol_pins
 
 PART_GAP = 1.2  # courtyard to courtyard between packed parts
+EDGE_COPPER_MM = 0.5  # widest board-edge clearance kicad.py rules ask (0.45 mm)
 PASSIVE_GAP = 0.6
 BOARD_MARGIN = 2.0
 CORNER_R = 2.0
@@ -248,8 +249,9 @@ def plan_device_board(
             cx, cy = spot[0], spot[1]
             it.side = "bottom" if spot[2] == "back" else "top"
         it.x, it.y = cx, cy
-        if it.role == "module":
-            _clear_of(it, held, on_board, fitted, spot is not None)
+        # every off-board part (module or cell) moves clear of the parts on its side: a cell
+        # left at the centre sat over a mouse's downward-facing sensor
+        _clear_of(it, held, on_board, fitted, spot is not None)
         held[it.side].append(it.footprint_poly())
 
     # controller GPIO for every peripheral signal, nearest pad first
@@ -575,8 +577,9 @@ def _clear_of(
     region: Polygon | None,
     anchored: bool,
 ) -> None:
-    """Move an off-board module to the nearest spot, on either side, where its envelope overlaps
-    no other module and, unless it is anchored to a feature, no board part on that side."""
+    """Move an off-board part to the nearest spot where its envelope overlaps no other module
+    and no board part on that side. Only an unanchored part may change sides: one anchored to
+    a face (a thumbstick on the front) moves along that face, never through the board."""
     others = {
         side: list(held[side]) + [o.footprint_poly() for o in on_board if o.side == side]
         for side in ("top", "bottom")
@@ -587,7 +590,8 @@ def _clear_of(
     best: tuple[float, float, float, str] | None = None
     step = 1.0
     reach = min(40, int(max(bx1 - bx0, by1 - by0) / step) + 1)
-    for side in (it.side, "top" if it.side == "bottom" else "bottom"):
+    sides = (it.side,) if anchored else (it.side, "top" if it.side == "bottom" else "bottom")
+    for side in sides:
         for ring in range(reach):
             hit = None
             for i in range(-ring, ring + 1):
@@ -769,6 +773,8 @@ def _attempt(
     """Put each item at the free spot nearest its target, on its own side first and, for a
     surface-mount part that has no spot there, on the other side; returns the first item that
     cannot go, None when all fit."""
+    # a courtyard may not reach the outline: its pads need the copper-to-edge clearance
+    region = region.buffer(-EDGE_COPPER_MM, join_style="mitre")
     prep = prepared.prep(region)
     x0, y0, x1, y1 = region.bounds
     step = max(1.0, math.sqrt(region.area / FORM_GRID_POINTS))

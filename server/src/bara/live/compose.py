@@ -399,6 +399,7 @@ class Composer:
         )
         self.fetched: list[dict[str, Any]] = []  # rows added during this build
         self.extra: dict[str, list[dict[str, Any]]] = {}  # slot id -> parts found for it
+        self.near_miss: dict[str, list[dict[str, Any]]] = {}  # slot id -> parts vet turned down
         self.slots = derive_slots(spec, brief, plan, self.comp)
         self.result = ComposeResult(slots=self.slots)
         self.decision_n = 0
@@ -780,12 +781,13 @@ class Composer:
             f"Brief: {self.brief.get('summary')}\n"
             f"Slot: {slot.label} ({slot.function_id}), quantity {slot.quantity}.\n"
             "Every candidate below already passed the compatibility filters. "
-            "Pick the best fit for the request.\n" + "\n".join(lines)
+            "Pick the best fit for the request. Answer NONE when no candidate is the part the "
+            "slot names (a screw terminal is not an HDMI receptacle).\n" + "\n".join(lines)
         )
         schema = {
             "type": "object",
             "properties": {
-                "choice": {"type": "string", "enum": ids},
+                "choice": {"type": "string", "enum": [*ids, "NONE"]},
                 "reason": {"type": "string"},
             },
             "required": ["choice", "reason"],
@@ -802,7 +804,8 @@ class Composer:
         )
         if result is None:
             return 0, "default", "No model answered; used the highest score.", None, notes
-        idx = ids.index(result.data["choice"])
+        none = result.data["choice"] == "NONE"
+        idx = 0 if none else ids.index(result.data["choice"])
         model = {
             "provider": result.provider,
             "model": result.model,
@@ -810,7 +813,8 @@ class Composer:
             "cached": False,
             "fallback": result.fallback,
         }
-        return idx, "model_pick", str(result.data["reason"])[:280], model, notes
+        method = "model_none" if none else "model_pick"
+        return idx, method, str(result.data["reason"])[:280], model, notes
 
     # ---- events -------------------------------------------------------------------
     def next_decision(self) -> str:
@@ -1038,6 +1042,8 @@ class Composer:
                 await self.vet(slot, self.base(slot))
             if slot.need is not None and not self.base(slot):
                 await self.resolve_missing(slot, emit)
+            if slot.need is not None and slot.criticality != "optional" and not self.base(slot):
+                self.take_closest(slot, emit)
             cands, ranked, applied = self.narrow(slot)
             emit("slot.updated", {"slot": slot.json()}, stage="compose")
             top = ranked[:MAX_SURVIVORS]
@@ -1063,6 +1069,20 @@ class Composer:
                 stage="compose",
             )
             idx, method, reason, model, notes = await self.pick(slot, ranked)
+            if method == "model_none":
+                # nothing in the catalog is the named part: look further (KiCad, LCSC) before
+                # settling for the closest catalog part
+                had = len(self.extra.get(slot.slot_id, []))
+                await self.resolve_missing(slot, emit)
+                new = self.extra.get(slot.slot_id, [])[had:]
+                cands, ranked, applied = self.narrow(slot)
+                hit = next(
+                    (i for i, p in enumerate(ranked) for n in new if p["part_id"] == n["part_id"]),
+                    None,
+                )
+                if hit is not None:
+                    idx, reason = hit, f"No catalog part is a {slot.label.lower()}; looked further."
+                method = "model_pick"
             if notes and method != "model_pick" and self.use_model:
                 emit(
                     "warning",
@@ -1142,6 +1162,10 @@ class Composer:
                 )
             else:
                 part = ranked[idx]
+                twin = self.twin_slot(slot, part)
+                if twin is not None:
+                    self.mark_covered(slot, twin, step, emit)
+                    continue
                 slot.chosen = part
                 self.result.chosen_parts[slot.slot_id] = part
                 if method == "default":
@@ -1240,6 +1264,7 @@ class Composer:
         for i, p in enumerate(shown):
             if i not in keep:
                 self.resolver.rejected.add(p["part_id"])
+                self.near_miss.setdefault(slot.slot_id, []).append(p)
         out = [p for i, p in enumerate(shown) if i in keep] + parts[12:]
         if not out:
             self.resolver.notes[slot.slot_id] = (
@@ -1248,6 +1273,33 @@ class Composer:
                 + ")"
             )
         return out
+
+    def take_closest(self, slot: Slot, emit: Emit) -> None:
+        """A required block nothing meets takes the first part its spec check turned down: a
+        real part that falls short of one number beats a device missing the function."""
+        near = self.near_miss.get(slot.slot_id, [])
+        if not near or slot.need is None:
+            return
+        part = near[0]
+        self.resolver.rejected.discard(part["part_id"])
+        self.extra.setdefault(slot.slot_id, []).append(part)
+        emit(
+            "warning",
+            {
+                "warning": {
+                    "warning_id": self.next_warning(),
+                    "code": "other",
+                    "severity": "warning",
+                    "message": (
+                        f"{slot.label}: no part found meets '{slot.need.requirement}'; "
+                        f"{part.get('display_name')} is the closest and falls short of it."
+                    )[:300],
+                    "subjects": [{"slot_id": slot.slot_id}],
+                    "stage": "compose",
+                }
+            },
+            stage="compose",
+        )
 
     RELAX_ROUNDS = 2
 
@@ -1375,6 +1427,21 @@ class Composer:
             if slot.function_id not in part_functions(other.chosen):
                 continue
             if sides <= ({i.side for i in other.instances} | {"none"}):
+                return other
+        return None
+
+    def twin_slot(self, slot: Slot, part: dict[str, Any]) -> Slot | None:
+        """A decided catch-all slot that already holds this very part.
+
+        A block with no function in the taxonomy is found by its names alone; when two such
+        blocks land on one part (an optical sensor, and its lens "matched to" that sensor),
+        the second named the first's part, so it is one part, not two."""
+        if slot.function_id != "other":
+            return None
+        for other in self.slots:
+            if other is slot or other.chosen is None or other.covered_by:
+                continue
+            if other.function_id == "other" and other.chosen["part_id"] == part["part_id"]:
                 return other
         return None
 

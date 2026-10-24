@@ -259,6 +259,30 @@ def _ccw(poly: np.ndarray) -> np.ndarray:
 # ---------------------------------------------------------------- inputs
 
 
+HIDDEN_ROLES = {"battery", "mcu", "sensor", "other"}  # roles a part can have out of reach
+
+
+SLIVER_MM3 = 150.0  # a loose bezel strip smaller than this would snap off: the openings merge
+ISLAND_FRACTION = 0.02  # nor can an island ringed by openings (the middle of a button diamond)
+
+
+def _drop_slivers(m: mf.Manifold) -> mf.Manifold:
+    """Two openings a hair apart leave a loose strip of bezel between them; a strip that small
+    cannot be printed or held, so it goes and the openings join. So does an island the
+    openings ring round: nothing holds it to the shell."""
+    pieces = m.decompose()
+    if len(pieces) <= 1:
+        return m
+    floor = max(SLIVER_MM3, ISLAND_FRACTION * max(p.volume() for p in pieces))
+    keep = [p for p in pieces if p.volume() >= floor]
+    if not keep:
+        return m
+    out = keep[0]
+    for p in keep[1:]:
+        out = out + p
+    return out
+
+
 def infer_role(*texts: str | None) -> str:
     blob = " ".join(t.lower() for t in texts if t)
     for role, words in ROLE_KEYWORDS:
@@ -279,7 +303,11 @@ def _feature_from_placement(p: dict[str, Any]) -> Feature | None:
     size = p.get("size_mm") or [0, 0]
     role = p.get("role") or infer_role(p.get("lib_id"), p.get("ref"))
     if role not in {r for r, _ in ROLE_KEYWORDS} and role != "other":
-        role = infer_role(role, p.get("lib_id"))
+        # a board-side role (module, module_connector, connector) says where a part sits, not
+        # what it is: read the part itself, so a connector to a module is not a controller
+        role = infer_role(p.get("lib_id")) if p.get("lib_id") else infer_role(p.get("label"))
+        if not p.get("touch") and role not in HIDDEN_ROLES:
+            role = "other"  # a part nobody touches is no port or control (USBLC6 is an ESD IC)
     w, d = _num(size[0], 0.0), _num(size[1] if len(size) > 1 else size[0], 0.0)
     if w <= 0 or d <= 0:
         return None
@@ -532,15 +560,24 @@ def enclose_report(
     # Pockets for bottom-side parts; the floor goes under the deepest one.
     pockets: list[mf.Manifold] = []
     deepest = 0.0
+    balls = [f for f in feats if f.role == "trackball"]
+
+    def under_ball(f: Feature) -> bool:
+        return any(math.hypot(f.x - b.x, f.y - b.y) < max(b.w, b.d) / 2 for b in balls)
+
+    # a sensor facing the desk (an optical mouse) looks through the floor; under a ball the
+    # cup below gives it its own pocket
+    desk_sensors = [
+        f for f in feats if f.role == "sensor" and f.side == "bottom" and not under_ball(f)
+    ]
     for f in feats:
-        if f.side != "bottom" or f.height <= 0 or f.role == "sensor":
+        if f.side != "bottom" or f.height <= 0 or (f.role == "sensor" and under_ball(f)):
             continue
         depth = f.height + H["floor_clearance_mm"]
         deepest = max(deepest, depth)
         c = H["pocket_clearance_mm"] * 2
         pockets.append(_prism(_rect_cs(f.x, f.y, f.w + c, f.d + c, f.rot_deg), -depth, 0.01))
 
-    balls = [f for f in feats if f.role == "trackball"]
     ball_geo: list[dict[str, float]] = []
     z_bot = -deepest - H["floor_mm"]
     for b in balls:
@@ -603,9 +640,9 @@ def enclose_report(
             face, _ = _port_exit(f.x, f.y, outer_cs)
             dx, dy = FACE_DIR[face]
             deg = math.degrees(math.atan2(dy, dx))
-            sites.append(
-                shell.Site("port", -1, f.x, f.y, "edge", deg, f.w, f.d, f.rot_deg, ref=f.ref)
-            )
+            site = shell.Site("port", -1, f.x, f.y, "edge", deg, f.w, f.d, f.rot_deg, ref=f.ref)
+            site.z_hi = f.z_range(t)[1]
+            sites.append(site)
         for st in sites:
             if st.kind == "port":
                 st.normal_deg = shell.snap_axis(st.normal_deg, 20.0)
@@ -653,6 +690,8 @@ def enclose_report(
         solids.append(_prism(_circle_cs(g["x"], g["y"], rr), z_bot, wall_top))
     tray = _union(solids)
     cuts = [_prism(inner_cs, 0.0, wall_top + 1.0), *pockets]
+    for f in desk_sensors:
+        cuts.append(_prism(_circle_cs(f.x, f.y, H["sensor_window_d_mm"] / 2), z_bot - 1.0, 0.01))
     tray = tray - _union(cuts)
     for g in ball_geo:
         rin = g["r"] + H["ball_clearance_mm"]
@@ -728,6 +767,8 @@ def enclose_report(
                 .offset(-r, mf.JoinType.Round)
                 .offset(r, mf.JoinType.Round)
             )
+            # the soft corners must not clip the part: its own clearance box is cut too
+            holes_cs.append(_rect_cs(f.x, f.y, f.w + c, f.d + c, f.rot_deg))
         elif z_hi > seat - 0.01:
             # hidden, so it gets a blind pocket under the skin, not a hole a person sees; a part
             # taller than the shell still breaks through and the fit checks report it
@@ -795,6 +836,7 @@ def enclose_report(
                 "size_mm": [w, h],
             }
         )
+    bezel = _drop_slivers(bezel)
     for o in openings["encoders"]:
         f = next(x for x in feats if x.ref == o["ref"])
         cutouts.append(

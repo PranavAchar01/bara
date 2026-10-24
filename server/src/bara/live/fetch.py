@@ -228,8 +228,8 @@ class Resolver:
         the function (RECIPES), tagged so the audit chain shows it was composed."""
         found = recipe_for(need)
         search = getattr(self.source, "search", None)
-        if found is None or search is None:
-            return None
+        if found is None or search is None or need.mechanical:
+            return None  # recipes are electrical; the case makes a touched mechanical part
         name, steps = found
         for kind, exact in steps:
             try:
@@ -251,9 +251,7 @@ class Resolver:
         return None
 
     def _accept(self, part: dict[str, Any], need: Need) -> dict[str, Any]:
-        part = dict(part)
-        fids = [f for f in part.get("functions", []) if f.get("function_id") != need.function_id]
-        part["functions"] = [{"function_id": need.function_id, "primary": True}, *fids]
+        part = self._retag(part, need)
         try:
             from bara.kicad_generated import ensure_glb  # type: ignore[import-not-found]
 
@@ -265,6 +263,11 @@ class Resolver:
 
     def fetch(self, need: Need) -> dict[str, Any] | None:
         """Search + download from LCSC. Returns the new catalog row, or None with a note."""
+        if need.mechanical:
+            # LCSC sells electronics: "scroll wheel" finds an encoder, and the part number a
+            # cap names is the stick it fits. The case makes a touched mechanical part.
+            self.notes[need.key] = "made by the case"
+            return None
         reasons: list[str] = []
         terms = list(need.terms)
         # no MPN worked (or none was named): search by what the block is, in words
@@ -299,11 +302,23 @@ class Resolver:
         return None
 
     def _cached(self, term: str, need: Need) -> dict[str, Any] | None:
+        named = not term.startswith("keyword:")
         for p in read_fetched(self.path):
             if p["part_id"] in self.rejected:
                 continue
-            if slug(term).replace("_", "") in name_slug(p).replace("_", "") and self._serves(
-                p, need
-            ):
+            if slug(term).replace("_", "") not in name_slug(p).replace("_", ""):
+                continue
+            if self._serves(p, need):
                 return p
+            # a row keeps the function it was first fetched for; the part number this block
+            # named is the part it asked for, whatever that function was
+            if named and slug(term) and slug(term) in slug(p.get("mpn") or ""):
+                return self._retag(p, need)
         return None
+
+    @staticmethod
+    def _retag(part: dict[str, Any], need: Need) -> dict[str, Any]:
+        part = dict(part)
+        fids = [f for f in part.get("functions", []) if f.get("function_id") != need.function_id]
+        part["functions"] = [{"function_id": need.function_id, "primary": True}, *fids]
+        return part

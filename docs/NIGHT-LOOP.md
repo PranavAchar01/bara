@@ -95,3 +95,50 @@ Web: bara-merge agent merges Nithin's figma-design-in-code / agent-board-3d / fi
 - Suite restarted on a7b918f (server 87104, suite 87144).
 - 03:05-03:35 iter: a7b918f rows: controller left only J1 cut (rumble, floating fixed); monitor refused as a mains appliance; mouse missing optical sensor + dongle plug, J1 cut; mp3 FORM_OVERFLOW at 38% density + identity fail. Fixes: 04e6998 cable connectors (usb_in, jack, usb_device, usb_host) go to the board rim with the mouth facing out; e0f94df scope: a low-voltage product behind a wall adapter or certified AC-DC module is in scope, only mains-side appliances out (brief + SPEC); d70bea8 FORM_OVERFLOW names the first part with no free spot. Suite restarted on d70bea8 (server 21516, suite 21555). Next: read the mp3 stuck part, fix placement; mouse optical sensor.
 - 03:50 iter: found three leftover suite processes from earlier restarts still writing rows on old code (killing the run3 parent left the uv/python grandchildren). Killed them (own PIDs). scratchpad/stop.sh now stops the whole tree. Rows before 03:50 mixed code versions, so they are not trusted. 1b8e8fe: a case that fails a check keeps its inputs in server/data/cache/enclose/ for offline rebuild, and the cut check gives the z range where the case meets the part (roof or wall). Clean suite restarted on 1b8e8fe (server 46339, suite 46377). Controller cuts seen so far are on sculpted shells only (fixture shells pass the same probe parts).
+- 04:00-04:40 iter: a36c01c (shell): every claimed part gets its pocket, finger holes keep part corners clear, port sites know the part height, board-side roles read the part. Saved controller and monitor cases now pass enclosure. Mouse diagnosis on saved cases, three engine fixes:
+  - bb2c9fd: the PMW3360 the mouse block named was already in the fetch cache, filed under component.ic, so the cache never served it ("cached miss"). A part number a block names now serves it whatever function the row was first fetched for. Companion devices (receiver dongle, dock, remote) are separate boards and no longer go into the product's BOM (block + audit prompts).
+  - a841609: (1) the USBLC6 ESD IC, kept off-board, was read as a USB port because its label says "usb": a part nobody touches is never a port or control. (2) Off-board cells sat at the board centre over the mouse's downward sensor (U1/BT1): every off-board part now moves clear of board parts on its side. (3) "Rubberised scroll wheel" (mech.wheel) became a second EC11 encoder through an LCSC keyword search: touched mechanical blocks only search the part numbers they name, never keywords or recipes, and the case makes them. Cache row re-filed as input.rotary_encoder. (4) A button inside a wheel/stick opening is pressed through it (no own cap).
+  - bara-merge and bara-bench were stopped by Pranav (SendMessage says so). Not relaunched.
+  - Suite restarted on a841609 (server 93987, suite 94035).
+
+### 04:50-05:00 iter
+- Suite on a841609: controller failed "bezel 3 piece" (loose strips between merged openings); monitor failed DRC invalid_outline from the SJ1-3523N jack's own Edge.Cuts (an open notch drawn to splice into a board edge).
+- 17d3091: case.py `_drop_slivers` (bezel pieces < 150 mm3 dropped before encoder cuts; the saved controller case now passes every check). libs.py `_edges_close`: a footprint's Edge.Cuts count as a cutout only when every line/arc end meets another; open ones go to User.Comments in kicad_script (the PMW3360 lens slot still cuts). Tests: layout + case 25 passed, ruff clean.
+- Suite restarted on 17d3091 (server 24818, suite 24878). Next: read rows, then mp3 overflow / identity / shell surface / lit displays.
+
+### 05:17-05:25 iter
+- Suite on 17d3091: monitor PASSES (open Edge.Cuts fix held). Controller: knob M8 box corners cut the bezel, ringed island in the face-button cluster (171 mm3, bezel 2 piece), 1 DRC copper_edge_clearance. Mouse: two PMW3360s (the "lens matched to the sensor" block landed on the sensor) hanging under the board into a solid floor; identity fail. mp3: identity fail.
+- bab0c6b: case.py desk-facing (bottom, no trackball) sensors get a pocket plus a floor window; validate.py knobs fit as discs; `_drop_slivers` also drops pieces under 2% of the largest (islands ringed by openings); compose.py `twin_slot`: two catch-all ("other") blocks that land on one part share it. Saved mouse + controller cases now pass every check.
+- e181d0c: generic.py packs inside the outline inset 0.5 mm, so pads keep the copper-to-edge clearance (ProMicro pad 12 at 0.03 mm, SKQG pads at 0.25 mm before). Note: the commit also carried 616 new fetched part sources (fetched/src, tracked by design).
+- Tests: geometry_case + case_shell + live_form + board_layout 87 passed; ruff clean. Suite restarted on e181d0c (server 57475, suite 57509). Open: identity (mouse, mp3), shell surface, lit displays.
+
+### 05:50-06:00 iter
+- Suite on e181d0c: CONTROLLER PASSES every required check (281 s). Monitor: "internal speakers" unresolved. Mouse: sensor + lens unresolved, identity fail. Cause for both: the spec check (vet) rejected the closest real part for good (PMW3360 vs a 26000 DPI line), and the other MPNs are not on LCSC.
+- 0564b0a: compose.py `take_closest`: a required block with no candidate left takes the first part vet turned down, with a "falls short" warning. Test added; live_form 42 passed, ruff clean.
+- Suite restarted on 0564b0a (server 84898, suite 84920).
+
+### 06:17-06:35 iter
+- Suite on 0564b0a: CONTROLLER PASS (297 s), MONITOR PASS (718 s). Mouse FAIL: identity ("wavy, peanut-like outline"), board.drc 8 errors + 1 unconnected.
+- Mouse DRC root cause: every asymmetric bottom-side footprint sat half a turn from its plan. KiCad stores a flipped footprint mirrored in y, and SetOrientationDegrees(rot) dropped the 180 deg that makes it the packer's x mirror (layout.Item.world). SW4 (bottom) landed on J_M8.
+- f853f67: kicad_script adds 180 deg for bottom parts. New tests/test_kicad_flip.py runs real pcbnew at 0/90/30 deg: 3 passed with the fix, 3 failed without. The board cache key hashes the script, so boards rebuild.
+- Suite restarted on f853f67 (server 15812, suite 15876).
+
+### 06:42-07:00 iter
+- Suite on f853f67, controller FAIL mech.fit.floating (bezel 2 pieces, board 83% on the floor). Not the flip fix (the case reads plan features, not the board). Cause: the "thumbstick cap" block (mech.knob, filed by the model as input) fetched RKJXV1224005, the stick it fits, by its part number, so the build had four sticks and two hung 21.8 mm off the underside.
+- 37c0712: completeness: a touched mech.* block is mechanical whatever its category. fetch: a mechanical need never searches LCSC (made by the case). Test extended; live_form 42 + fetch_lcsc 13 passed, ruff clean.
+- Suite restarted on 37c0712 (server 39014, suite 39065). Mouse result on f853f67 never came in (suite stopped first).
+
+### 07:05-07:10 iter
+- Suite on 37c0712: MONITOR PASS (707 s). Controller FAIL mech.fit.floating again (bezel 2 pieces, board 93% on the floor). The sticks are off-board module cells; the left one, anchored to the front, overlapped a top part, and `_clear_of` jumped it to the back (side change cost only 2 mm), so it hung 21.8 mm under the board.
+- c0684e6: generic._clear_of: an anchored part moves only along its own face; unanchored parts may still use the back. Test added; live_form 43, board_layout + geometry_case 26 passed, ruff clean.
+- Suite restarted on c0684e6 (server 63384, suite 63439).
+
+### 07:29-07:32 iter
+- Suite on c0684e6: CONTROLLER PASS (439 s, BOM: 2 RKJXV sticks, 13 TL3342, 2 trigger pots, rumble, IMU), MONITOR PASS (718 s). Mouse running.
+- Monitor gap even though it passes: HDMI and DisplayPort receptacles resolved to Phoenix screw terminals; the model said "no candidate is an HDMI receptacle" and had to pick anyway.
+- 3323217: compose pick may answer NONE; the slot then runs resolve_missing (KiCad generated, LCSC fetch) and takes the new part if it passes the filters. Test added; live_form 44 passed. Not restarted yet so the mouse result on c0684e6 lands first.
+
+### 07:43-07:48 iter
+- Mouse on c0684e6: board.drc no longer fails (the f853f67 flip fix cleared its 8 errors). Still FAIL: device.complete (2.4 GHz chip antenna, function component.other, so the nice!nano's built-in radio does not cover it; no LCSC match), 1 unconnected, mech.access.panel (bezel overhangs encoder M5, 2/8 rays), identity ("top mostly open or cut away, showing internal clutter").
+- Suite restarted on 16b24f2 (code = 3323217; server 98063, suite 98119).
+- Next gaps, in order: antenna covered by a radio module (block function mapping), mouse top shell closing over parts, routing leftover, scroll-wheel overhang. Vercel URL and bench not done (agents stopped).
