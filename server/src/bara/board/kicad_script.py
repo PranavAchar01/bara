@@ -106,6 +106,36 @@ def _rule_area(board, outer: list, holes: list, layers: list, name: str) -> None
     board.Add(zone)
 
 
+_DROPPED: list = []
+
+
+def _fit_holes(board, fp) -> None:
+    """Bring a footprint's plated holes inside the board's hole rules.
+
+    Footprints converted from other tools carry mil-rounded rings a hair under the minimum
+    and unnumbered thermal vias drilled below the minimum hole; those vias only stitch an
+    exposed pad, so they are dropped, and thin rings are grown to the minimum.
+    """
+    ds = board.GetDesignSettings()
+    min_hole, ring = ds.m_MinThroughDrill, ds.m_ViasMinAnnularWidth
+    pth = [p for p in fp.Pads() if p.GetAttribute() == pcbnew.PAD_ATTRIB_PTH]
+    vias = [p for p in pth if not p.GetNumber() and min(p.GetDrillSize()) < min_hole]
+    for pad in vias:
+        fp.Remove(pad)
+    # a removed pad freed by Python corrupts the footprint's pad list; keep it alive
+    _DROPPED.extend(vias)
+    for pad in pth:
+        if pad in vias:
+            continue
+        drill = pad.GetDrillSize()
+        size = pad.GetSize(pcbnew.F_Cu)
+        want = pcbnew.VECTOR2I(
+            max(size.x, drill.x + 2 * ring + _mm(0.01)), max(size.y, drill.y + 2 * ring + _mm(0.01))
+        )
+        if want.x != size.x or want.y != size.y:
+            pad.SetSize(pcbnew.F_Cu, want)
+
+
 def _place_footprint(board, nets: dict, spec: dict) -> None:
     fp = pcbnew.FootprintLoad(spec["lib_dir"], spec["name"])
     if fp is None:
@@ -140,6 +170,7 @@ def _place_footprint(board, nets: dict, spec: dict) -> None:
         mod.m_Scale = pcbnew.VECTOR3D(sc[0], sc[1], sc[2])
         models.push_back(mod)
     board.Add(fp)
+    _fit_holes(board, fp)
     bottom = spec.get("side") == "bottom"
     if bottom:
         fp.Flip(fp.GetPosition(), pcbnew.FLIP_DIRECTION_LEFT_RIGHT)
