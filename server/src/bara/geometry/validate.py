@@ -112,6 +112,18 @@ def _feature_box(f: Feature, t: float, z_lo: float | None = None) -> mf.Manifold
     return _prism(_rect_cs(f.x, f.y, f.w, f.d, f.rot_deg), lo, max(hi, lo + 0.01))
 
 
+# Parts built to share one position, beyond the stacked ones: a stabilizer wraps its switch
+# and sits under the cap.
+MATING_ROLES = STACKED_ROLES | {("stabilizer", "switch"), ("stabilizer", "keycap")}
+
+
+def _mates(a: Feature, b: Feature) -> bool:
+    """True when two parts are designed to occupy the same spot (declared pair, same centre)."""
+    if (a.role, b.role) not in MATING_ROLES and (b.role, a.role) not in MATING_ROLES:
+        return False
+    return math.hypot(a.x - b.x, a.y - b.y) < max(a.w, a.d, b.w, b.d) / 2
+
+
 def _stack_partner(f: Feature, feats: list[Feature]) -> Feature | None:
     for g in feats:
         if (f.role, g.role) in STACKED_ROLES and math.hypot(f.x - g.x, f.y - g.y) < max(
@@ -320,7 +332,7 @@ def validate(report: EncloseReport) -> list[dict[str, Any]]:
     for i in range(len(feats)):
         for j in range(i + 1, len(feats)):
             a, b = feats[i], feats[j]
-            if (a.role, b.role) in STACKED_ROLES or (b.role, a.role) in STACKED_ROLES:
+            if _mates(a, b):
                 continue
             if min(zr[i][1], zr[j][1]) - max(zr[i][0], zr[j][0]) <= LIMITS["overlap_depth_mm"]:
                 continue

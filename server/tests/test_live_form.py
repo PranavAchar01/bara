@@ -718,3 +718,16 @@ def test_ask_json_asks_again_when_the_answer_was_cut_off(monkeypatch: pytest.Mon
     data, note = asyncio.run(ask.ask_json("s", "p", schema, name="t", max_tokens=100))
     assert data == {"a": "done"}, note
     assert budgets == [100, 200]
+
+
+def test_mating_parts_share_a_spot_but_strangers_still_collide() -> None:
+    from bara.geometry.case import Feature
+    from bara.geometry.validate import _mates
+
+    def feat(ref: str, role: str, x: float, w: float) -> Feature:
+        return Feature(ref, role, x, 0.0, 0.0, "top", 5.0, w, 10.0)
+
+    sw, stab = feat("SW1", "switch", 0.0, 14.0), feat("ST1", "stabilizer", 0.0, 40.0)
+    assert _mates(sw, stab)
+    assert not _mates(feat("SW2", "switch", 30.0, 14.0), stab)  # another switch under it
+    assert not _mates(sw, feat("BT1", "battery", 0.0, 20.0))

@@ -33,7 +33,7 @@ from .libs import LIBRARIES, repo_commit
 __all__ = ["build_board", "plan_board", "route_board", "BoardBuildError"]
 
 Progress = Callable[[str, float | None], None]
-CACHE_VERSION = "board-v3"
+CACHE_VERSION = "board-v4"
 PCB_THICKNESS_MM = 1.6
 
 # Composer part function / role words -> layout roles (for part_id mapping only).
@@ -329,6 +329,8 @@ def _placements(
         size = list(it.size_mm) if it.size_mm else (list(it.fp.size_mm) if it.fp else [1, 1])
         if it.fp is not None and it.role == "switch":
             size = [round(v, 2) for v in it.fp.size_mm]
+        if it.meta.get("row_pitch_mm"):  # a stabilizer's body sits inside its keycap's row
+            size[1] = min(size[1], float(it.meta["row_pitch_mm"]))
         lib = LIBRARIES.get(it.fp.lib) if it.fp else None
         inst = _instance_id(f"{side_tag}_{it.ref}")
         # x/y and placement.position_mm are the footprint origin (where the KiCad model sits);

@@ -71,6 +71,7 @@ CAP_ROUGHNESS = 0.42
 
 # Roles taller than the bezel underside get an opening; these keep their own opening shape.
 ROLE_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
+    ("stabilizer", ("stabilizer",)),
     ("keycap", ("keycap",)),
     ("knob", ("knob",)),
     ("trackball", ("trackball", "ball")),

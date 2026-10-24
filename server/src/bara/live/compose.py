@@ -148,6 +148,7 @@ class ComposeResult:
     chosen_parts: dict[str, dict[str, Any]] = field(default_factory=dict)  # slot -> part
     pin_budget: dict[str, Any] = field(default_factory=dict)
     log: list[str] = field(default_factory=list)
+    error: str | None = None  # why nothing could be composed
 
 
 def _side_suffix(side: str) -> str:

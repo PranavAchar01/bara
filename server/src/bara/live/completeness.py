@@ -281,7 +281,7 @@ def apply(
     # a part that only exists on top of another is dropped when the device has no such base
     present = {f["function_id"] for f in functions} | {n.function_id for n in out.needs.values()}
     for fid, base in DEPENDS_ON.items():
-        if fid in present and base not in present and not keyboard:
+        if fid in present and base not in present:
             functions[:] = [f for f in functions if f["function_id"] != fid]
             have.pop(fid, None)
             for key in [k for k, n in out.needs.items() if n.function_id == fid]:

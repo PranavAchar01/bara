@@ -212,8 +212,11 @@ class LiveRunner:
         self.reuse(run, spec, brief)
         result = await self.compose(run, spec, brief, plan)
         if not result.chosen_parts:  # nothing resolved is a failed build, never an empty DONE
-            why = "No part could be chosen for this request; nothing to build."
-            run.emit("build.failed", {"error": error_obj("E_NO_PARTS", why, stage="compose")})
+            why = result.error or "No part could be chosen for this request; nothing to build."
+            run.emit(
+                "build.failed",
+                {"error": error_obj("E_CRITICAL_PART_MISSING", why, stage="compose")},
+            )
             return
         merge_into_catalog(self.catalog, list(result.chosen_parts.values()))
         board = await self.place(run, brief, plan, result, ctx)
@@ -453,9 +456,10 @@ class LiveRunner:
                 blocks, note = await blocks_mod.derive(run.prompt, self.catalog.function_ids())
                 if blocks is not None:
                     break
-            if blocks is None:
-                msg = f"No function block diagram ({note}); only the general invariants apply."
-                self._warn(run, "compose", "w_blocks", "other", "warning", msg)
+            if blocks is None:  # no silent defaults: guessed parts and counts are not a design
+                msg = f"The function block diagram could not be derived ({note}); nothing built."
+                st.done()
+                return ComposeResult(slots=[], error=msg)
         run.live_blocks = blocks  # type: ignore[attr-defined]
         composer = Composer(
             self.source, spec, brief, plan, self.settings, controllers, blocks=blocks
