@@ -15,10 +15,11 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from bara.live import adapters as A
-from bara.live import archetype
+from bara.live import archetype, completeness
 from bara.live.brief import BriefResult, normalise_brief, spec_from_brief, write_brief
 from bara.live.catalog_source import PartSource, merge_into_catalog, model_asset
 from bara.live.compose import Composer, ComposeResult, Slot
+from bara.live.fetch import as_overlay
 from bara.live.firmware import make_firmware
 from bara.live.layout import KeyboardPlan, plan_keyboard
 from bara.util import error_obj
@@ -151,7 +152,7 @@ class _Stage:
 class LiveRunner:
     def __init__(self, engine: Engine, source: PartSource) -> None:
         self.engine = engine
-        self.source = source
+        self.source = as_overlay(source)
         self.catalog = engine.catalog
         self.settings = engine.settings
 
@@ -188,6 +189,10 @@ class LiveRunner:
         plan = plan_keyboard(brief)
         self.reuse(run, spec, brief)
         result = await self.compose(run, spec, brief, plan)
+        if not result.chosen_parts:  # nothing resolved is a failed build, never an empty DONE
+            why = "No part could be chosen for this request; nothing to build."
+            run.emit("build.failed", {"error": error_obj("E_NO_PARTS", why, stage="compose")})
+            return
         merge_into_catalog(self.catalog, list(result.chosen_parts.values()))
         board = await self.place(run, brief, plan, result, ctx)
         await self.enclose(run, brief, plan, result, board, ctx)
@@ -213,6 +218,8 @@ class LiveRunner:
             support = ("mech.", "interconnect.", "power.", "compute.", "comms.")
             if blocking and any(not f.startswith(support) for f in res.brief.get("functions", [])):
                 blocking = res.brief["blocking_facet"] = None
+            if blocking and completeness.kind_of(prompt):
+                blocking = res.brief["blocking_facet"] = None  # a known device names its job
             if not blocking or round_no > MAX_CLARIFY_ROUNDS or res.brief["scope"] != "in_scope":
                 break
             st.done("needs_input", "The request names no function; asking instead of guessing.")
@@ -240,6 +247,25 @@ class LiveRunner:
         for warning in res.warnings:
             run.emit("warning", {"warning": copy.deepcopy(warning)}, stage="classify")
         assumptions = [a for r in resolutions for a in r["resolution"].get("assumptions", [])]
+        if res.brief["scope"] != "in_scope" and completeness.low_voltage_mains(run.prompt):
+            # A charger or power strip is built as its low-voltage half around a certified
+            # AC-DC module; the mains side is never ours (see the safety.mains_wiring check).
+            res.brief["scope"] = "in_scope"
+            res.brief["blocking_facet"] = None
+            res.brief["device_class"] = (
+                res.brief.get("device_class")
+                if res.brief.get("device_class") not in (None, "other")
+                else "other"
+            )
+            self._warn(
+                run,
+                "classify",
+                "w_mains",
+                "assumption_made",
+                "warning",
+                "Mains device: built as the low-voltage half around a certified AC-DC module; "
+                "the mains side is the module's job.",
+            )
         if res.brief["scope"] == "in_scope":
             arch = archetype.apply(
                 prompt, res.brief, self.source, self.settings.data_dir / "archetypes.json"
