@@ -1322,7 +1322,10 @@ class Composer:
                 break
             part, via = await self._find(slot)
         if part is None:
-            return
+            part = self.resolver.composed(slot.need)
+            if part is None or not await self.vet(slot, [part]):
+                return
+            via = f"a composed {part['composed']} (KiCad library)"
         self.extra.setdefault(slot.slot_id, []).append(part)
         emit(
             "warning",

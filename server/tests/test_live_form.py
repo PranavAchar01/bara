@@ -806,3 +806,27 @@ def test_a_routing_timeout_retries_with_relaxed_rules(
     assert seen[1][1] == 50  # fewer passes on the retry
     assert res["routing"]["strategy"] == "wide_rules"
     assert res["routing"]["attempts"][0]["timed_out"] is True
+
+
+def test_a_function_with_no_part_is_composed_from_a_generic_primitive() -> None:
+    fp = "kicadgen:kicad:fp:Connector_JST:JST_PH_B2B-PH-K_1x02_P2.00mm_Vertical"
+
+    class Src:
+        extra: dict[str, Any] = {}
+
+        def search(self, text: str, kind: str | None = None, limit: int = 20) -> list[dict]:
+            if kind == "footprint" and fp.endswith(":" + text):
+                return [{"part_id": fp, "fp_ok": True, "functions": []}]
+            return []
+
+        def add(self, part: dict[str, Any]) -> None:
+            self.extra[part["part_id"]] = part
+
+    r = Resolver(Src())  # type: ignore[arg-type]
+    motor = cp.Need(key="rumble", function_id="actuator.motor", label="ERM rumble motor")
+    part = r.composed(motor)
+    assert part is not None and part["part_id"] == fp
+    assert part["composed"].startswith("wire-to-board")
+    assert part["functions"][0]["function_id"] == "actuator.motor"
+    sensor = cp.Need(key="optic", function_id="sensor.optical", label="optical tracking sensor")
+    assert r.composed(sensor) is None  # a sensor is never faked by a connector
