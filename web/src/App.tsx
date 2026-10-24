@@ -6,7 +6,7 @@ import { StepPlayer } from "./components/LeftColumn";
 import { BuildProgress, EditStatus, EventLog, FailureCard, LatencyHUD, Toast, WarningBanner } from "./components/Status";
 import { PartsList, RightColumn } from "./components/RightColumn";
 import { AddPartPicker, ConnectDialog, PartInspector, ResizePanel, SwapDrawer } from "./components/Overlays";
-import { FocusCard } from "./components/FocusCard";
+import { FocusCard, FocusExit } from "./components/FocusCard";
 import { bindVoiceKeys } from "./voice/voice";
 import { Viewport3D } from "./three/Viewport3D";
 import { BotLab } from "./bot/BotLab";
@@ -29,7 +29,7 @@ function useKeys() {
         useApp.setState((s) =>
           s.focusKey && s.overlay !== "focus"
             ? { overlay: "focus", moving: null, inspectPartId: null }
-            : { overlay: null, moving: null, inspectPartId: null, focusKey: null },
+            : { overlay: null, moving: null, inspectPartId: null, focusKey: null, selection: s.focusKey ? null : s.selection },
         );
     };
     window.addEventListener("keydown", onKey);
@@ -86,6 +86,7 @@ function Workspace() {
           <BuildProgress />
           <WarningBanner />
         </div>
+        <FocusExit />
         <LatencyHUD />
         <div className="centre-mid">
           <FailureCard />

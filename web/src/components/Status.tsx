@@ -60,11 +60,14 @@ export function BuildProgress() {
 /** C05 LatencyHUD: time to first part, per stage, total, model calls. */
 export function LatencyHUD() {
   const view = useApp((s) => s.view);
+  const focused = useApp((s) => s.focusKey !== null);
   const decisions = useApp((s) => s.build?.decisions ?? []);
   const vocab = useApp((s) => s.vocab);
   const models = decisions.filter((d) => d.model);
   const modelMs = models.reduce((a, d) => a + (d.model?.latency_ms ?? 0), 0);
   const total = view.done?.total_ms ?? view.doneMs;
+  // the part in focus has the canvas to itself
+  if (focused) return null;
   return (
     <div className="hud" aria-label="Latency">
       <div className="hud-row">

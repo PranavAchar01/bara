@@ -596,9 +596,22 @@
   font-size: 22px;
   letter-spacing: var(--track-display);
   line-height: 1.05;
+  /* long part names wrap to two lines rather than losing their end */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.fc-head {
+  align-items: flex-start;
+}
+.fc-head .fc-back {
+  margin-top: 2px;
+}
+.fc-title .fc-kicker {
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .fc-kicker {
   font-family: var(--font-mono);
@@ -804,4 +817,75 @@
 }
 .voice-toggle.on {
   color: var(--ink);
+}
+
+/* The way back from focus, top left of the canvas (and "Put back" in the card) */
+.focus-exit {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  translate: -50% 0;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: focus-exit-in 220ms ease-out;
+}
+@keyframes focus-exit-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .focus-exit {
+    animation: none;
+  }
+}
+.focus-exit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 8px 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 17px;
+  background: var(--paper);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+.focus-exit-btn:hover {
+  background: var(--paper-2);
+}
+.focus-exit-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.focus-exit kbd,
+.fc-back kbd {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1;
+  padding: 3px 5px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--paper);
+  color: var(--text-2);
+}
+.focus-crumb {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+  color: var(--text-2);
+}
+.focus-crumb .sep {
+  color: var(--ink-faint);
+}
+.fc-back {
+  flex: none;
+  gap: 6px;
 }
