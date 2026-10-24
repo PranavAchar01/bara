@@ -587,10 +587,12 @@ class LiveRunner:
         return out
 
     async def _photos(self, run: BuildRun) -> list[bytes]:
-        """Web photos of the real product, searched once per build and shared by the form and
-        the identity judge."""
+        """Web pictures of the product (its name plus "3d model"), searched once per build and
+        shared by the form and the identity judge."""
         if not hasattr(run, "web_photos"):
-            photos, sources, note = await websearch.reference_photos(run.prompt)
+            brief = getattr(run, "live_brief", None) or {}
+            product = str(brief.get("device") or "") or run.prompt
+            photos, sources, note = await websearch.reference_photos(product)
             run.web_photos = photos  # type: ignore[attr-defined]
             run.web_sources = sources  # type: ignore[attr-defined]
             log.info("web reference photos for %s: %d (%s)", run.build_id, len(photos), note)

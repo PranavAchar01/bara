@@ -1,5 +1,6 @@
-"""Photos of the real product from a web search (You.com), so the form and the identity judge
-see what the device actually looks like instead of drawing it from memory.
+"""Pictures of the real product from a You.com web search for its name plus "3d model", so
+the form and the identity judge see what the device looks like instead of drawing it from
+memory.
 
 The key comes from the environment only (YOU_API_KEY). Search results and downloaded images
 are untrusted data: they are only ever shown to the model as pictures, never as instructions.
@@ -39,8 +40,9 @@ def media_type(data: bytes) -> str | None:
     return None
 
 
-def _query(prompt: str) -> str:
-    return f"{prompt.strip()[:160]} product photo"
+def _query(product: str) -> str:
+    # the plain product name plus "3d model" finds clean studio renders of the whole device
+    return f"{product.strip()[:120]} 3d model"
 
 
 async def _search(client: httpx.AsyncClient, query: str, key: str) -> list[dict[str, Any]]:
@@ -62,9 +64,9 @@ async def _fetch(client: httpx.AsyncClient, url: str) -> bytes | None:
     return data if media_type(data) else None
 
 
-async def reference_photos(prompt: str, limit: int = 3) -> tuple[list[bytes], list[str], str]:
+async def reference_photos(product: str, limit: int = 3) -> tuple[list[bytes], list[str], str]:
     """(images, source pages, note). Empty with a reason in note when nothing was usable."""
-    query = _query(prompt)
+    query = _query(product)
     folder = CACHE / hashlib.sha256(query.encode()).hexdigest()[:24]
     index = folder / "index.json"
     try:
