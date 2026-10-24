@@ -73,3 +73,34 @@ def test_no_device_names_in_the_engine() -> None:
 
     src = inspect.getsource(shell)
     assert not re.search(r"xbox|dualshock|iphone|pixel|casio|maglite|airpods", src, re.I)
+
+
+def test_a_tall_hidden_part_gets_a_pocket_not_a_hole(tmp_path, monkeypatch) -> None:
+    """A part above the seat that nobody touches is pocketed from inside; the skin over it stays
+    whole (holes punched for hidden parts left lattices and loose bars in the bezel)."""
+    import copy
+
+    import manifold3d as mf
+
+    monkeypatch.setenv("BARA_DATA_DIR", str(tmp_path))
+    fx = copy.deepcopy(FIXTURES["gamepad"]())
+    fx["board"]["placements"].append(
+        {
+            "ref": "C99",
+            "lib_id": "X:C99",
+            "role": "capacitor",
+            "x_mm": 0.0,
+            "y_mm": 0.0,
+            "rot_deg": 0,
+            "side": "top",
+            "height_mm": 4.0,
+            "size_mm": [6.0, 6.0],
+        }
+    )
+    rep = enclose_report(fx["board"], [], brief_for(fx))
+    f = next(x for x in rep.features if x.ref == "C99")
+    top = f.z_range(fx["board"].get("thickness_mm", 1.6))[1]
+    column = mf.Manifold.cube((0.4, 0.4, 200.0), center=True).translate((f.x, f.y, top + 100.6))
+    assert (rep.bezel ^ column).volume() > 0.16 * 1.0  # at least 1 mm of skin over the part
+    assert len(rep.bezel.decompose()) == 1
+    assert not [c["message"] for c in rep.checks if c["status"] != "pass"]
