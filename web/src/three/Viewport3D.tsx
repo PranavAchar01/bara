@@ -153,7 +153,6 @@ function useLayerGroup(layer: LayerId, anchorKey: string | null, anchorLocal: TH
         if (g) out.z += g.position.z;
         return out;
       },
-      owner: () => ref.current,
     });
   }, [anchorKey, anchorLocal]);
   return ref;

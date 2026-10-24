@@ -13,7 +13,7 @@ from typing import Any
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response
 
-from bara import SERVER_VERSION, SPEC_VERSION, geometry, part_ask
+from bara import SERVER_VERSION, SPEC_VERSION, geometry
 from bara.edits import Reject
 from bara.llm import providers_configured
 from bara.services import Services
@@ -243,38 +243,6 @@ def build_router(svc: Services) -> APIRouter:
                 "events": page,
                 "next_after_seq": next_after,
                 "complete": run.stream_complete and next_after >= run.seq,
-            }
-        )
-
-    @api.post("/v1/builds/{build_id}/ask")
-    async def ask_part(build_id: str, request: Request) -> JSONResponse:
-        """A spoken-style answer about one part of the build (focus card, voice agent)."""
-        run = run_or_404(build_id)
-        try:
-            data = await request.json()
-        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-            raise ApiError("E_BAD_MESSAGE", "Body is not JSON.") from exc
-        part_id, question = data.get("part_id"), data.get("question")
-        if not isinstance(part_id, str) or not isinstance(question, str) or not question.strip():
-            raise ApiError("E_BAD_MESSAGE", "Send part_id and question.")
-        result, note = await part_ask.answer(
-            run.state,
-            part_id,
-            question,
-            cerebras_model=svc.settings.cerebras_model,
-            anthropic_model=svc.settings.anthropic_model,
-        )
-        if result is None:
-            if note == "unknown part":
-                raise ApiError("E_UNKNOWN_PART", f"No part {part_id} in build {build_id}.")
-            raise ApiError("E_LLM_UNAVAILABLE", f"No model answered: {note}")
-        return body(
-            {
-                "answer": result.answer,
-                "follow_ups": result.follow_ups,
-                "provider": result.provider,
-                "model": result.model,
-                "latency_ms": result.latency_ms,
             }
         )
 

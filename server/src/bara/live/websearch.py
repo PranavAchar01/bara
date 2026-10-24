@@ -42,7 +42,10 @@ def media_type(data: bytes) -> str | None:
 
 def _query(product: str) -> str:
     # the plain product name plus "3d model" finds clean studio renders of the whole device
-    return f"{product.strip()[:120]} 3d model"
+    words = product.strip().split()
+    if words and words[0].lower() in ("a", "an", "the", "my"):
+        words = words[1:]
+    return f"{' '.join(words)[:120]} 3d model"
 
 
 async def _search(client: httpx.AsyncClient, query: str, key: str) -> list[dict[str, Any]]:
