@@ -71,10 +71,16 @@ function StageRow(props: { stage: StageView; now: number; label: string; vocabBu
     stage.status === "active" && stage.startedAt !== undefined ? props.now - stage.startedAt : (stage.duration_ms ?? null);
   const over = budget !== undefined && elapsed !== null && elapsed > budget;
   const frac = budget && elapsed !== null ? Math.min(1, elapsed / budget) : 0;
-  const statusText = stage.status === "needs_input" ? "needs input" : stage.status;
+  // A finished stage past its budget says so; "ok" next to an amber time read as a contradiction.
+  const late = over && stage.status !== "active" && stage.status !== "failed";
+  const ratio = late ? elapsed / budget : 0;
+  const statusText = late ? `over ${ratio < 10 ? ratio.toFixed(1) : Math.round(ratio)}×` : stage.status === "needs_input" ? "needs input" : stage.status;
   return (
     <li className={`stage st-${stage.status} ${over ? "over" : ""}`}>
-      <span className={`stage-dot tone-${STAGE_TONE[stage.status] ?? "info"}`} />
+      <span
+        className={`stage-dot tone-${late ? "warn" : (STAGE_TONE[stage.status] ?? "info")}`}
+        title={late ? `Finished, but took ${Math.round(elapsed)} ms against a ${budget} ms budget` : undefined}
+      />
       <span className="stage-label">{props.label}</span>
       <span className="stage-time mono">
         {elapsed !== null && stage.status !== "skipped" ? `${Math.round(elapsed)}` : ""}

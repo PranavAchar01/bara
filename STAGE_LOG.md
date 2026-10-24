@@ -169,6 +169,20 @@ Branch `figma-design-in-code`, pushed after each step so the backend work can co
 
 **Minutes:** about 12. **Rating:** 4/5.
 
+### Trust fixes from the live-site audit
+
+The coverage audit of the live site found three places where the UI said two contradicting things. Each is now one honest statement. Tools: Claude Code against the existing components; the Figma status colours (warn amber) for the new states.
+
+**Stages over budget.** A stage that finished past its budget showed an amber time and the word "ok" ("Find design 123 / 30 ms ok"). Now the status reads "over 4.1×", the dot turns amber, and hovering says it finished but took 123 ms against 30. Running and failed stages are unchanged.
+
+**Unexplained model switch.** The header named the configured model while the build's calls could have gone to the backup. Now the header reads the models the build actually used (classifier and decisions): if any call fell back, it shows ~~llama-4-scout~~ → claude-haiku-5-5 BACKUP in amber, with the server's fallback warning as the hover reason.
+
+**Firmware "Compiled" and "compile skipped" together.** The server's `mode: compiled` means the source was generated for this board, not that a binary exists. The badges now read "Generated source" and "not built" (amber, with the reason on hover); the other states read "build queued", "building", "binary built", "build failed".
+
+**Checked:** typecheck, lint, 50 tests; mock build shows "over 4.1×" on Find design and "Prebuilt · not built" on firmware; the backup-model header was checked by setting a fallback classifier in the store, since the mock never falls back.
+
+**Minutes:** about 20. **Rating:** 4/5.
+
 ## Before and after
 
 | Change | Before | After |
