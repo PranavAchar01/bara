@@ -27,8 +27,8 @@ def board_module() -> tuple[Any | None, str | None]:
         import bara.board as board  # type: ignore[import-not-found]
     except Exception as exc:  # missing package or a broken import: report, do not guess
         return None, f"board package unavailable ({type(exc).__name__})"
-    if not hasattr(board, "build_board"):
-        return None, "bara.board.build_board is not available yet"
+    if not hasattr(board, "route_board"):
+        return None, "bara.board.route_board is not available yet"
     return board, None
 
 
@@ -49,8 +49,14 @@ def board_controllers() -> dict[str, int]:
     return out
 
 
-def board_brief(brief: dict[str, Any], mcu_label: str | None) -> dict[str, Any]:
-    """The BOARD brief keys, typed the way bara.board.layout.normalize_brief reads them."""
+def board_brief(
+    brief: dict[str, Any], mcu_label: str | None, plan: Any | None = None
+) -> dict[str, Any]:
+    """The BOARD brief keys, typed the way bara.board.layout.normalize_brief reads them.
+
+    With the live key plan, the board gets its exact keys (key_points, per board name), so
+    the parts list, the layout and the KiCad board all hold the same keys.
+    """
     feats = []
     for f in brief.get("features", []):
         if f["kind"] not in ("knob", "screen", "trackball"):
@@ -59,7 +65,6 @@ def board_brief(brief: dict[str, Any], mcu_label: str | None) -> dict[str, Any]:
         feats.append({"kind": f["kind"], "count": int(f.get("count") or 1), "position": hint})
     style = brief.get("layout_style")
     return {
-        "key_count": brief.get("key_count"),
         "layout_style": style,
         "rows": brief.get("rows"),
         "cols": brief.get("cols"),
@@ -71,17 +76,43 @@ def board_brief(brief: dict[str, Any], mcu_label: str | None) -> dict[str, Any]:
         "battery": brief.get("power_source") == "battery",
         "column_stagger": (brief.get("stagger") or ("column" if style == "split" else "ortho"))
         == "column",
+        "key_points": (
+            {
+                {"left": "left", "right": "right"}.get(h.side, "main"): [
+                    {
+                        k2: k[k2]
+                        for k2 in ("x_u", "y_u", "w_u", "r_deg", "rx_u", "ry_u", "thumb")
+                        if k2 in k
+                    }
+                    for k in h.keys
+                ]
+                for h in plan.halves
+            }
+            if plan is not None
+            else None
+        ),
+        "key_count": sum(len(h.keys) for h in plan.halves) if plan is not None else None,
     }
 
 
-async def run_board(
-    brief: dict[str, Any],
-    parts: list[dict[str, Any]],
-    build_id: str,
-    on_progress: Progress,
-    heartbeat_s: float = 2.0,
+def plan_board(
+    brief: dict[str, Any], parts: list[dict[str, Any]], build_id: str
 ) -> tuple[dict[str, Any] | None, str | None]:
-    """Run build_board in a worker thread, relaying its progress. (result, error)."""
+    """Phase 1 of the KiCad board: placements, outline, nets (no KiCad run). (plan, error)."""
+    board, why = board_module()
+    if board is None:
+        return None, why
+    try:
+        return board.plan_board(brief, parts, build_id=build_id), None
+    except Exception as exc:  # a layout that cannot be planned; the stage reports it
+        log.exception("live: plan_board failed")
+        return None, f"KiCad board plan failed: {type(exc).__name__}: {str(exc)[:160]}"
+
+
+async def route_board(
+    planned: dict[str, Any], on_progress: Progress, heartbeat_s: float = 2.0
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Phase 2: pcbnew + Freerouting + DRC + GLB in a worker thread. (result, error)."""
     board, why = board_module()
     if board is None:
         return None, why
@@ -92,9 +123,7 @@ async def run_board(
         loop.call_soon_threadsafe(queue.put_nowait, (str(message), fraction))
 
     started = time.monotonic()
-    task = asyncio.ensure_future(
-        asyncio.to_thread(board.build_board, brief, parts, build_id=build_id, progress=progress)
-    )
+    task = asyncio.ensure_future(asyncio.to_thread(board.route_board, planned, progress=progress))
     last = "Building the KiCad board"
     while not task.done():
         try:
@@ -109,7 +138,7 @@ async def run_board(
     try:
         return task.result(), None
     except Exception as exc:  # KiCad, Freerouting or DRC failed; the stage reports it
-        log.exception("live: build_board failed")
+        log.exception("live: route_board failed")
         return None, f"KiCad board build failed: {type(exc).__name__}: {str(exc)[:160]}"
 
 
@@ -118,17 +147,20 @@ def layout_from_keys(
 ) -> tuple[dict[str, Any], list[float]]:
     """SPEC 3.3 layout + its position_mm from per-key board centres (build space, Y up)."""
     px, py = pitch
-    xs = [k["x"] for k in keys]
+    ws = [float(k.get("w_u") or 1.0) for k in keys]
     ys = [k["y"] for k in keys]
-    ox, oy = min(xs) - px / 2, max(ys) + py / 2
+    ox = min(k["x"] - w * px / 2 for k, w in zip(keys, ws, strict=True))
+    oy = max(ys) + py / 2
     out = []
-    for i, k in enumerate(keys):
-        x_u = round((k["x"] - ox) / px - 0.5, 4)
+    for i, (k, w) in enumerate(zip(keys, ws, strict=True)):
+        x_u = round((k["x"] - ox) / px - w / 2, 4)
         y_u = round(-(k["y"] - oy) / py - 0.5, 4)
         entry: dict[str, Any] = {"i": i, "x_u": x_u, "y_u": y_u}
+        if abs(w - 1.0) > 1e-6:
+            entry["w_u"] = w
         rot = float(k.get("rot") or 0.0)
         if abs(rot) > 1e-6:
-            entry.update({"r_deg": round(-rot, 3), "rx_u": x_u + 0.5, "ry_u": y_u + 0.5})
+            entry.update({"r_deg": round(-rot, 3), "rx_u": x_u + w / 2, "ry_u": y_u + 0.5})
         if k.get("matrix") is not None:
             entry["matrix"] = k["matrix"]
         out.append(entry)
@@ -259,8 +291,10 @@ def geometry_board(entry: dict[str, Any]) -> dict[str, Any]:
     spec_board = entry.get("board") or {}
     outline = entry.get("outline") or entry.get("outline_mm") or spec_board.get("outline_mm")
     return {
-        "board_id": spec_board.get("board_id") or f"pcb_{entry.get('name', 'main')}",
-        "side": spec_board.get("side") or entry.get("name"),
+        "board_id": spec_board.get("board_id")
+        or entry.get("board_id")
+        or f"pcb_{entry.get('name', 'main')}",
+        "side": spec_board.get("side") or entry.get("side") or entry.get("name"),
         "outline": outline,
         "holes": entry.get("holes") or [],
         "thickness_mm": spec_board.get("thickness_mm") or 1.6,

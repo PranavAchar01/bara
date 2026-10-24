@@ -57,6 +57,43 @@ CONSTANTS: dict[str, dict[str, Any]] = {
 }
 
 
+# Row-staggered presets: key widths per row, in key units, left to right. These are the
+# standard ANSI row widths (each row of a 60% sums to 15u, a 65% to 16u), as in the
+# Bakeneko60 / Bakeneko65 open designs (github.com/kkatano/bakeneko-60, -65; MIT).
+PRESETS: dict[str, list[list[float]]] = {
+    "ansi_60": [
+        [1.0] * 13 + [2.0],
+        [1.5] + [1.0] * 12 + [1.5],
+        [1.75] + [1.0] * 11 + [2.25],
+        [2.25] + [1.0] * 10 + [2.75],
+        [1.25, 1.25, 1.25, 6.25, 1.25, 1.25, 1.25, 1.25],
+    ],
+    "ansi_65": [
+        [1.0] * 13 + [2.0, 1.0],
+        [1.5] + [1.0] * 12 + [1.5, 1.0],
+        [1.75] + [1.0] * 11 + [2.25, 1.0],
+        [2.25] + [1.0] * 10 + [1.75, 1.0, 1.0],
+        [1.25, 1.25, 1.25, 6.25, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+    ],
+}
+STABILIZED_U = 2.0  # keys this wide or wider sit on a plate/PCB stabilizer
+
+
+def preset_keys(name: str) -> list[dict[str, Any]]:
+    """Row-staggered preset -> SPEC 3.3 keys (x_u, y_u, w_u), reading order."""
+    keys: list[dict[str, Any]] = []
+    for r, widths in enumerate(PRESETS[name]):
+        x = 0.0
+        for c, w in enumerate(widths):
+            key: dict[str, Any] = {"x_u": round(x, 4), "y_u": float(r), "pos": [r, c]}
+            if w != 1.0:
+                key["w_u"] = w
+            keys.append(key)
+            x += w
+    _, mcols = matrix_dims(len(keys))
+    return [{"i": i, **k, "matrix": list(divmod(i, mcols))} for i, k in enumerate(keys)]
+
+
 @dataclass
 class Keepout:
     feature: str
@@ -85,7 +122,11 @@ class Half:
 
     @property
     def width_u(self) -> float:
-        return max((k["x_u"] + 1 for k in self.keys), default=0.0)
+        return max((k["x_u"] + k.get("w_u", 1.0) for k in self.keys), default=0.0)
+
+    @property
+    def stabilized(self) -> list[dict[str, Any]]:
+        return [k for k in self.keys if k.get("w_u", 1.0) >= STABILIZED_U]
 
     @property
     def height_u(self) -> float:
@@ -118,6 +159,7 @@ def _stagger(cols: int) -> list[float]:
 
 def _half_keys(n: int, rows: int, cols: int, thumbs: int, stagger: bool, mirror: bool) -> list:
     main = n - thumbs
+    cols = max(cols, math.ceil(main / max(rows, 1)))  # never fewer keys than declared
     offsets = _stagger(cols) if stagger else [0.0] * cols
     positions = [(r, c) for r in range(rows) for c in range(cols)]
     # Drop surplus positions from the outer column's bottom upward, then the next column.
@@ -163,6 +205,20 @@ def plan_keyboard(brief: dict[str, Any]) -> KeyboardPlan | None:
     if style not in ("split", "unibody", "macropad"):
         return None
     log: list[str] = []
+    preset = brief.get("layout_preset")
+    if preset in PRESETS and style == "unibody":
+        keys = preset_keys(preset)
+        half = Half(side="none", rows=len(PRESETS[preset]), cols=0, thumbs=0, keys=keys)
+        half.cols = max(len(r) for r in PRESETS[preset])
+        widths = sorted({k.get("w_u", 1.0) for k in keys})
+        log.append(
+            f"board: {len(keys)} keys, {preset} row-staggered preset (widths "
+            + ", ".join(f"{w:g}u" for w in widths)
+            + f"; {len(half.stabilized)} stabilized)"
+        )
+        plan = KeyboardPlan(style=style, halves=[half], key_count=len(keys), log=log)
+        _keepouts(plan, brief)
+        return plan
     rows_default = CONSTANTS["rows_default"]["value"][style]
     rows = int(brief.get("rows") or rows_default)
     halves_n = 2 if style == "split" else 1

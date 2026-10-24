@@ -258,6 +258,7 @@ class Key:
     row: int
     col: int
     thumb: bool = False
+    w: float = 1.0  # key width in units (1, 1.25 ... 6.25)
 
 
 @dataclass
@@ -314,9 +315,87 @@ def _grid_shape(n: int, b: Brief) -> tuple[int, int, int]:
     return rows, cols, n - rows * cols
 
 
+STAB_SIZES = (2.0, 3.0, 6.0, 6.25, 7.0, 8.0)  # kiswitch Stabilizer_Cherry_MX_*u footprints
+
+
+def _switch_fp(base: str, w: float) -> FootprintInfo | None:
+    """The width-specific kiswitch footprint (same socket, key outline drawn at that width)."""
+    if abs(w - 1.0) < 1e-6 or "_1.00u" not in base:
+        return None
+    try:
+        return footprint_ref(base.replace("_1.00u", f"_{w:.2f}u"))
+    except Exception:  # no footprint for that width: the 1u one is used
+        return None
+
+
+def _stab_fp(switch: str, w: float) -> FootprintInfo | None:
+    if switch != "mx" or w < 2.0 - 1e-6:
+        return None
+    size = max(s for s in STAB_SIZES if s <= w + 1e-6)
+    try:
+        return footprint_ref(
+            f"kiswitch/Mounting_Keyboard_Stabilizer:Stabilizer_Cherry_MX_{size:.2f}u"
+        )
+    except Exception:
+        return None
+
+
 def _key_rect(pitch: tuple[float, float]) -> Polygon:
     px, py = pitch
     return box(-px / 2, -py / 2, px / 2, py / 2)
+
+
+def _keys_from_points(
+    points: list[dict],
+    pitch: tuple[float, float],
+    shape_for: Any,
+    log: list[str],
+) -> list[Key]:
+    """Exact keys from the live layout (SPEC 3.3 units, y down), centres in mm.
+
+    Thumb keys are pushed down (and apart) only as far as needed for their sockets and caps
+    to clear the main block; the count and order never change.
+    """
+    px, py = pitch
+    keys: list[Key] = []
+    for i, p in enumerate(points):
+        w = float(p.get("w_u") or 1.0)
+        cx, cy = (float(p["x_u"]) + w / 2) * px, (float(p["y_u"]) + 0.5) * py
+        r = float(p.get("r_deg") or 0.0)
+        if r:
+            ox, oy = float(p.get("rx_u", p["x_u"])) * px, float(p.get("ry_u", p["y_u"])) * py
+            a = math.radians(r)
+            dx, dy = cx - ox, cy - oy
+            ca, sa = math.cos(a), math.sin(a)
+            cx, cy = ox + dx * ca - dy * sa, oy + dx * sa + dy * ca
+        keys.append(Key(cx, cy, -r, i, 0, bool(p.get("thumb")), w))
+
+    def poly(k: Key) -> Polygon:
+        return affinity.translate(affinity.rotate(shape_for(k.w), -k.rot, origin=(0, 0)), k.x, k.y)
+
+    main = [k for k in keys if not k.thumb]
+    thumbs = [k for k in keys if k.thumb]
+    if thumbs and main:
+        placed = unary_union([poly(k) for k in main]).buffer(THUMB_CAP_GAP / 2)
+        for _ in range(40):  # spread neighbours that touch
+            moved = False
+            for a, b in zip(thumbs, thumbs[1:], strict=False):
+                if poly(a).buffer(THUMB_CAP_GAP / 2).intersects(poly(b)):
+                    step = 0.5 if b.x >= a.x else -0.5
+                    for t in thumbs[thumbs.index(b) :]:
+                        t.x += step
+                    moved = True
+            if not moved:
+                break
+        push = 0.0
+        while any(poly(t).intersects(placed) for t in thumbs) and push < 40:
+            for t in thumbs:
+                t.y += 0.5
+            push += 0.5
+        if push:
+            log.append(f"thumb keys moved {push:.1f} mm down to clear the main block")
+    log.append(f"{len(keys)} keys from the live layout (pitch {px}x{py} mm)")
+    return keys
 
 
 def _place_keys(
@@ -547,7 +626,19 @@ def plan_keyboard_board(name: str, n_keys: int, b: Brief, log: list[str]) -> lis
     cw, ch = sw["keycap_mm"]
     # thumb fan spacing must clear the keycaps as well as the sockets
     key_shape = unary_union([sw_shape, box(-cw / 2, -ch / 2, cw / 2, ch / 2)])
-    keys = _place_keys(n_keys, b, pitch, key_shape, mirror, log)
+
+    def cap_w(w: float) -> float:
+        return cw + (w - 1.0) * pitch[0]
+
+    def shape_for(w: float) -> Polygon:
+        c = cap_w(w)
+        return unary_union([sw_shape, box(-c / 2, -ch / 2, c / 2, ch / 2)])
+
+    points = (b.raw.get("key_points") or {}).get(name)
+    if points:
+        keys = _keys_from_points(points, pitch, shape_for, log)
+    else:
+        keys = _place_keys(n_keys, b, pitch, key_shape, mirror, log)
     inner_sign = -1.0 if mirror else 1.0  # inner = towards the other half
     feats = _features_for(name, b)
     items: list[Item] = []
@@ -556,25 +647,28 @@ def plan_keyboard_board(name: str, n_keys: int, b: Brief, log: list[str]) -> lis
         it = Item(
             f"SW{i + 1}",
             "switch",
-            sw_fp,
+            _switch_fp(sw["footprint"], k.w) or sw_fp,
             k.x,
             k.y,
             k.rot,
             "top",
-            label=sw["label"],
+            label=sw["label"] + (f" ({k.w:g}u)" if k.w != 1.0 else ""),
             height_mm=sw["height_mm"],
             extra_models=list(sw["extra_models"]),
             meta={
                 "row": k.row,
                 "col": k.col,
                 "thumb": k.thumb,
-                "keycap_mm": sw["keycap_mm"],
+                "w_u": k.w,
+                "keycap_mm": (cap_w(k.w), ch),
                 "keycap_top_mm": sw["keycap_top_mm"],
             },
         )
         items.append(it)
         rect = affinity.translate(
-            affinity.rotate(_key_rect(pitch), -k.rot, origin=(0, 0)), k.x, k.y
+            affinity.rotate(_key_rect((pitch[0] * k.w, pitch[1])), -k.rot, origin=(0, 0)),
+            k.x,
+            k.y,
         )
         blocked_top.append(unary_union([rect, it.footprint_poly()]))
     key_cloud = unary_union(blocked_top)

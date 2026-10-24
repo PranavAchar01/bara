@@ -456,19 +456,27 @@ def spec_from_brief(
 ) -> dict[str, Any]:
     hard: list[dict[str, Any]] = []
     soft: list[dict[str, Any]] = []
+    from_arch = set(brief.get("archetype_fields") or [])
+
+    def src(field: str, default: str = "explicit") -> str:
+        return "default" if field in from_arch else default
+
     if brief.get("layout_style") == "split":
         hard.append(_req("split", "eq", True, "explicit", "Split"))
     if brief.get("wireless") in ("ble", "wifi"):
         label = "Wireless (BLE)" if brief["wireless"] == "ble" else "Wi-Fi"
-        hard.append(_req("wireless", "eq", brief["wireless"], "explicit", label))
+        hard.append(_req("wireless", "eq", brief["wireless"], src("wireless"), label))
     if brief.get("display_type"):
-        hard.append(_req("display_type", "eq", brief["display_type"], "explicit", "Screen"))
-    if brief.get("power_source") == "battery":
-        hard.append(_req("power_source", "has", "battery", "implicit", "Battery powered"))
-    if brief.get("key_count"):
         hard.append(
-            _req("key_count", "eq", brief["key_count"], "explicit", f"{brief['key_count']} keys")
+            _req("display_type", "eq", brief["display_type"], src("display_type"), "Screen")
         )
+    if brief.get("power_source") == "battery":
+        hard.append(
+            _req("power_source", "has", "battery", src("power_source", "implicit"), "Battery")
+        )
+    if brief.get("key_count"):
+        n = brief["key_count"]
+        hard.append(_req("key_count", "eq", n, src("key_count"), f"{n} keys"))
     if brief.get("switch_family"):
         soft.append(_req("switch_family", "eq", brief["switch_family"], "default", "Switches"))
     if brief.get("switch_type"):
@@ -480,7 +488,9 @@ def spec_from_brief(
     for i, req in enumerate(hard + soft, start=1):
         req["req_id"] = f"r{i}"
 
-    counts: dict[str, int] = {}
+    counts: dict[str, int] = {
+        fid: int(n) for fid, n in (brief.get("function_counts") or {}).items() if int(n) > 1
+    }
     for feature in brief.get("features", []):
         if feature["kind"] == "knob":
             counts["input.rotary_encoder"] = counts["mech.knob"] = int(feature["count"])

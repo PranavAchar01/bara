@@ -7,6 +7,7 @@
 // along Z by layer; when it is held open, one leader-line label per part.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
+import { useShallow } from "zustand/react/shallow";
 import { GizmoHelper, GizmoViewcube, Html, OrbitControls, TransformControls } from "@react-three/drei";
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
@@ -458,7 +459,11 @@ function CasePieceNode(props: {
   });
   return (
     <group ref={ref}>
-      <group position={[pos[0], pos[1], pos[2]]} rotation={new THREE.Euler(rot[0] * DEG, rot[1] * DEG, rot[2] * DEG, "XYZ")}>
+      <group
+        position={[pos[0], pos[1], pos[2]]}
+        rotation={new THREE.Euler(rot[0] * DEG, rot[1] * DEG, rot[2] * DEG, "XYZ")}
+        userData={props.enc.status === "pending" ? undefined : { fit: `case:${props.enc.enclosure_id}` }}
+      >
         {piece.geoms.map((g) => (
           <mesh
             key={g.uuid}
@@ -657,7 +662,9 @@ function BoardNode(props: { board: Board; labelKey: string | null; candidates: B
   if (!groups.length) return null;
   return (
     <>
-      <BoardPiece groups={groups} board={board} layer="pcb" labelKey={props.labelKey} anchor={anchorLocal} />
+      <group userData={{ fit: `board:${board.board_id}` }}>
+        <BoardPiece groups={groups} board={board} layer="pcb" labelKey={props.labelKey} anchor={anchorLocal} />
+      </group>
       {pieces?.parts.map(({ cand, groups: g }) => (
         <BoardPiece
           key={cand.instanceId}
@@ -676,6 +683,70 @@ function BoardNode(props: { board: Board; labelKey: string | null; candidates: B
   );
 }
 
+// ---------------------------------------------------------------- case fit check
+
+/** How far (mm) a board may poke past its case in plan before it is flagged; connectors overhang a little. */
+const FIT_TOLERANCE_MM = 3;
+
+/**
+ * Worst plan-view overhang (mm) of any board past the case that overlaps it
+ * most; a board touching no case counts its whole size. 0 when all fit.
+ * Explode moves parts only in Z, so the check holds at any explode factor.
+ */
+export function caseOverhang(cases: THREE.Box3[], boards: THREE.Box3[]): number {
+  let worst = 0;
+  for (const b of boards) {
+    let best: THREE.Box3 | null = null;
+    let bestArea = 0;
+    for (const c of cases) {
+      const w = Math.min(b.max.x, c.max.x) - Math.max(b.min.x, c.min.x);
+      const h = Math.min(b.max.y, c.max.y) - Math.max(b.min.y, c.min.y);
+      const a = w > 0 && h > 0 ? w * h : 0;
+      if (a > bestArea) {
+        bestArea = a;
+        best = c;
+      }
+    }
+    if (!best) worst = Math.max(worst, b.max.x - b.min.x, b.max.y - b.min.y);
+    else worst = Math.max(worst, best.min.x - b.min.x, b.max.x - best.max.x, best.min.y - b.min.y, b.max.y - best.max.y);
+  }
+  return worst;
+}
+
+/**
+ * Measures the drawn cases and boards every 0.7 s while the scene is still and
+ * reports the misfit in whole mm (0 = fits). A timer, not useFrame: with the
+ * demand frame loop no frame follows the one where the last model lands.
+ */
+function FitCheck(props: { onResult: (overhangMm: number) => void }) {
+  const scene = useThree((s) => s.scene);
+  const { onResult } = props;
+  useEffect(() => {
+    let last = -1;
+    const id = window.setInterval(() => {
+      if (stage.moving) return;
+      const cases = new Map<string, THREE.Box3>();
+      const boards: THREE.Box3[] = [];
+      scene.traverseVisible((o) => {
+        const tag = o.userData?.fit as string | undefined;
+        if (!tag) return;
+        const box = new THREE.Box3().setFromObject(o);
+        if (box.isEmpty()) return;
+        if (tag.startsWith("case:")) cases.set(tag, (cases.get(tag) ?? new THREE.Box3()).union(box));
+        else boards.push(box);
+      });
+      const over = cases.size && boards.length ? caseOverhang([...cases.values()], boards) : 0;
+      const v = over > FIT_TOLERANCE_MM ? Math.round(over) : 0;
+      if (v !== last) {
+        last = v;
+        onResult(v);
+      }
+    }, 700);
+    return () => window.clearInterval(id);
+  }, [scene, onResult]);
+  return null;
+}
+
 // ---------------------------------------------------------------- camera
 
 const HERO_DIR = new THREE.Vector3(-0.55, -1, 1.1).normalize();
@@ -692,13 +763,45 @@ function fallbackBox(): THREE.Box3 {
   return new THREE.Box3(new THREE.Vector3(-80, -50, 0), new THREE.Vector3(80, 50, 25));
 }
 
-function fitPose(box: THREE.Box3, dir: THREE.Vector3, cam: THREE.PerspectiveCamera, widthFrac: number, margin: number) {
-  const sphere = box.getBoundingSphere(new THREE.Sphere());
-  const vf = cam.fov * DEG;
-  const hf = 2 * Math.atan(Math.tan(vf / 2) * cam.aspect * widthFrac);
-  const f = Math.min(vf, hf);
-  const dist = (Math.max(sphere.radius, 20) / Math.sin(f / 2)) * margin;
-  return { pos: sphere.center.clone().addScaledVector(dir, dist), target: sphere.center.clone(), dist };
+/**
+ * Fit the box's eight corners (not its bounding sphere, which leaves a lot of
+ * empty grid) so the projected assembly spans `fill` of the view on its
+ * tighter axis. `lift` raises the model by that fraction of the view height,
+ * keeping it clear of the prompt bar and toolbar along the bottom edge.
+ */
+function fitPose(box: THREE.Box3, dir: THREE.Vector3, cam: THREE.PerspectiveCamera, widthFrac: number, fill: number, lift = 0) {
+  const tanV = Math.tan((cam.fov * DEG) / 2);
+  const tanH = tanV * cam.aspect * widthFrac;
+  const fwd = dir.clone().negate();
+  const right = new THREE.Vector3().crossVectors(fwd, cam.up).normalize();
+  if (right.lengthSq() < 1e-6) right.set(1, 0, 0);
+  const up = new THREE.Vector3().crossVectors(right, fwd).normalize();
+  const center = box.getCenter(new THREE.Vector3());
+  const corners: THREE.Vector3[] = [];
+  for (let i = 0; i < 8; i++) {
+    corners.push(new THREE.Vector3(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z));
+  }
+  // Centre on the projected extents (orthographic estimate), then solve the distance per corner.
+  let x0 = Infinity;
+  let x1 = -Infinity;
+  let y0 = Infinity;
+  let y1 = -Infinity;
+  for (const c of corners) {
+    const r = c.clone().sub(center);
+    x0 = Math.min(x0, r.dot(right));
+    x1 = Math.max(x1, r.dot(right));
+    y0 = Math.min(y0, r.dot(up));
+    y1 = Math.max(y1, r.dot(up));
+  }
+  const target = center.clone().addScaledVector(right, (x0 + x1) / 2).addScaledVector(up, (y0 + y1) / 2);
+  let dist = 40;
+  for (const c of corners) {
+    const rel = c.clone().sub(target);
+    const z = rel.dot(dir);
+    dist = Math.max(dist, z + Math.abs(rel.dot(right)) / (tanH * fill), z + Math.abs(rel.dot(up)) / (tanV * fill));
+  }
+  target.addScaledVector(up, -2 * tanV * dist * lift);
+  return { pos: target.clone().addScaledVector(dir, dist), target, dist };
 }
 
 type FrameKind = ViewPreset | "hero" | "exploded";
@@ -706,7 +809,7 @@ type FrameKind = ViewPreset | "hero" | "exploded";
 function framePose(kind: FrameKind, cam: THREE.PerspectiveCamera, predictExplode: number | null) {
   const box = stageBox() ?? fallbackBox();
   if (predictExplode !== null) box.max.z += stage.gap * maxRank() * (predictExplode - stage.explode);
-  if (kind === "exploded") return fitPose(box, EXPLODED_DIR, cam, LABEL_MODEL_WIDTH, 0.82);
+  if (kind === "exploded") return fitPose(box, EXPLODED_DIR, cam, LABEL_MODEL_WIDTH, 0.92, 0.04);
   const dir =
     kind === "top"
       ? new THREE.Vector3(0, -0.0001, 1)
@@ -715,7 +818,8 @@ function framePose(kind: FrameKind, cam: THREE.PerspectiveCamera, predictExplode
         : kind === "side"
           ? new THREE.Vector3(1, 0, 0.18)
           : HERO_DIR;
-  return fitPose(box, dir.clone().normalize(), cam, 1, kind === "hero" || kind === "iso" || kind === "scene" ? 1.22 : 1.05);
+  // Hero: the assembly spans about 60% of the tighter axis, as in the Etch explore tiles.
+  return fitPose(box, dir.clone().normalize(), cam, 1, kind === "hero" || kind === "iso" || kind === "scene" ? 0.6 : 0.8, 0.05);
 }
 
 let rankMax = LAYER_RANK.keycaps;
@@ -959,7 +1063,14 @@ export function labelRows(build: Build | null): LabelRowData[] {
   return [...rows.values()];
 }
 
-function SceneContents(props: { gizmoMode: "translate" | "rotate"; theme: Theme; palette: StudioPalette; boardOnly: boolean; post: boolean }) {
+function SceneContents(props: {
+  gizmoMode: "translate" | "rotate";
+  theme: Theme;
+  palette: StudioPalette;
+  boardOnly: boolean;
+  post: boolean;
+  onFit: (overhangMm: number) => void;
+}) {
   const { theme } = props;
   const build = useApp((s) => s.build);
   const placeDone = useApp((s) => s.view.placeDone);
@@ -1083,6 +1194,7 @@ function SceneContents(props: { gizmoMode: "translate" | "rotate"; theme: Theme;
       <CameraRig />
       <LabelProjector />
       <DemandDriver />
+      <FitCheck onResult={props.onFit} />
       {props.post && <StudioPost dark={false} />}
       {/* View cube, top left. Build space is Z up: +Y is the back face, -Y the front. */}
       <GizmoHelper alignment="top-left" margin={[64, 64]} renderPriority={2}>
@@ -1102,6 +1214,7 @@ export function Viewport3D() {
   const palette = useMemo(() => studioPalette(), []);
   const [gizmoMode, setGizmoMode] = useState<"translate" | "rotate">("translate");
   const [boardOnly, setBoardOnly] = useState(false);
+  const [misfit, setMisfit] = useState(0);
   // Narrow viewports get a compact toolbar so it stays one row and never covers the prompt bar.
   const vpRef = useRef<HTMLDivElement>(null);
   const [compact, setCompact] = useState(false);
@@ -1128,13 +1241,20 @@ export function Viewport3D() {
         }}
         gl={{ antialias: !post, preserveDrawingBuffer: true, powerPreference: "high-performance" }}
       >
-        <SceneContents gizmoMode={gizmoMode} theme={theme} palette={palette} boardOnly={boardOnly} post={post} />
+        <SceneContents gizmoMode={gizmoMode} theme={theme} palette={palette} boardOnly={boardOnly} post={post} onFit={setMisfit} />
         <OrbitControls makeDefault enableDamping dampingFactor={0.12} />
       </Canvas>
       {hasParts && <LabelOverlay rows={overlayRows} color="#1B1D1F" muted="#5D6166" line="#7C8086" accent="#2E7D46" />}
       {!hasParts && (
         <div className="vp-empty">
           {status === "running" || status === "awaiting_input" ? "Parts appear here as they are chosen." : status === "failed" ? "No parts were placed." : "Describe a device to start."}
+        </div>
+      )}
+      {hasParts && misfit > 0 && (
+        <div style={MISFIT_CHIP} role="status">
+          <span className="chip solid tone-warn" title="The case model does not contain the board in plan view. It is shown as generated and needs regenerating.">
+            Case does not fit the board: off by {misfit} mm
+          </span>
         </div>
       )}
       {hasParts && missingCount > 0 && (
@@ -1146,6 +1266,8 @@ export function Viewport3D() {
     </div>
   );
 }
+
+const MISFIT_CHIP: React.CSSProperties = { position: "absolute", top: 12, left: 0, right: 0, display: "flex", justifyContent: "center", pointerEvents: "none", zIndex: 4 };
 
 /** Centre without the translate trick so the bar can use the full viewport width instead of half of it. */
 const TOOLBAR_FIT: React.CSSProperties = {
@@ -1172,6 +1294,18 @@ function ViewportToolbar(props: {
   const preset = useApp((s) => s.preset);
   const moving = useApp((s) => s.moving);
   const hasScene = useApp((s) => !!s.build?.scene);
+  // Only offer toggles that change something in this build (a smartwatch has no keycaps).
+  const applies = useApp(
+    useShallow((s) => {
+      const b = s.build;
+      return {
+        case: !!b?.enclosures?.some((e) => e.kind !== "none"),
+        board: !!b && ((b.boards?.length ?? 0) > 0 || b.parts.some((p) => layerOf(p) === "pcb")),
+        keycaps: !!b?.parts.some((p) => isKeycapPart(p)),
+        labels: !!b?.parts.length,
+      };
+    }),
+  );
   const setPreset = (p: ViewPreset) => useApp.setState((s) => ({ preset: p, cameraNonce: s.cameraNonce + 1 }));
   const toggle = (k: keyof typeof toggles) => useApp.setState((s) => ({ toggles: { ...s.toggles, [k]: !s.toggles[k] } }));
   return (
@@ -1193,20 +1327,24 @@ function ViewportToolbar(props: {
       </button>
       <span className="vp-sep" />
       <div className="seg">
-        {(["case", "board", "keycaps", "labels"] as const).map((k) => (
+        {(["case", "board", "keycaps", "labels"] as const)
+          .filter((k) => applies[k])
+          .map((k) => (
           <button key={k} type="button" className={`seg-btn ${toggles[k] ? "active" : ""}`} aria-pressed={toggles[k]} onClick={() => toggle(k)}>
             {k}
           </button>
         ))}
-        <button
-          type="button"
-          className={`seg-btn ${props.boardOnly ? "active" : ""}`}
-          aria-pressed={props.boardOnly}
-          title="Show only the populated board"
-          onClick={() => props.setBoardOnly(!props.boardOnly)}
-        >
-          {props.compact ? "pcb only" : "board only"}
-        </button>
+        {applies.board && (
+          <button
+            type="button"
+            className={`seg-btn ${props.boardOnly ? "active" : ""}`}
+            aria-pressed={props.boardOnly}
+            title="Show only the populated board"
+            onClick={() => props.setBoardOnly(!props.boardOnly)}
+          >
+            {props.compact ? "pcb only" : "board only"}
+          </button>
+        )}
       </div>
       {moving && (
         <>
