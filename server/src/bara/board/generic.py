@@ -759,24 +759,24 @@ def _anchor_targets(
     return out
 
 
-def _through(it: Item) -> bool:
-    """A part with leads or locating pegs through the board reaches the other side."""
-    return it.fp is not None and any(p.kind in ("thru_hole", "np_thru_hole") for p in it.fp.pads)
-
-
 def _shadow(it: Item) -> Polygon | None:
-    """What a through-hole part takes from the opposite side: its lead pads, not its body (which
-    sits on its own side), so small parts can sit under a display, module or battery holder."""
+    """What a part takes from the opposite side: a through-hole part's lead pads, not its body
+    (which sits on its own side), so small parts can sit under a display, module or battery
+    holder; and any keep-out its footprint lays over both faces (an antenna clearance)."""
     if it.fp is None:
         return None
+    parts = []
     pads = [p for p in it.fp.pads if p.kind in ("thru_hole", "np_thru_hole")]
-    if not pads:
-        return None
-    leads = unary_union(
-        [box(p.x - p.w / 2, p.y - p.h / 2, p.x + p.w / 2, p.y + p.h / 2) for p in pads]
-    )
-    # pads closer than a part can pass between (a header row) read as one strip
-    return it.world(leads.buffer(1.5).buffer(-1.5))
+    if pads:
+        leads = unary_union(
+            [box(p.x - p.w / 2, p.y - p.h / 2, p.x + p.w / 2, p.y + p.h / 2) for p in pads]
+        )
+        # pads closer than a part can pass between (a header row) read as one strip
+        parts.append(it.world(leads.buffer(1.5).buffer(-1.5)))
+    keep = it.keepout_poly()
+    if keep is not None:
+        parts.append(keep)
+    return unary_union(parts) if parts else None
 
 
 def _fine_pitch(it: Item) -> bool:
@@ -829,7 +829,7 @@ def _attempt(
             it.x = it.y = 0.0
             base = it.footprint_poly()
             c0 = base.centroid
-            shade = _shadow(it) if _through(it) else None
+            shade = _shadow(it)
             for i in idx:
                 dx, dy = float(cand[i, 0] - c0.x), float(cand[i, 1] - c0.y)
                 poly = affinity.translate(base, dx, dy)

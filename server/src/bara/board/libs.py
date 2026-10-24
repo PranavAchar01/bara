@@ -96,6 +96,9 @@ class FootprintInfo:
     licence: str = ""
     cutout: tuple[float, float, float, float] | None = None  # bbox of footprint Edge.Cuts
     extra: dict = field(default_factory=dict)
+    # rule areas over both copper faces that no other footprint may enter (an RF module's
+    # antenna clearance), as polygons in the footprint frame
+    keepouts: list[list[tuple[float, float]]] = field(default_factory=list)
 
     @property
     def lib_id(self) -> str:
@@ -257,6 +260,18 @@ def load_footprint(lib: str, pretty: str, name: str) -> FootprintInfo:
         xforms[str(step[0])] = xforms.get(models[0], {})
         models = [str(step[0])]
     descr_node = _child(tree, "descr")
+    keepouts = []
+    for z in _children(tree, "zone"):
+        rule = _child(z, "keepout")
+        layers = set((_child(z, "layers") or [])[1:]) | {str((_child(z, "layer") or ["", ""])[1])}
+        # only an area over both faces matters to placement: the courtyard covers its own face
+        both = {"F.Cu", "B.Cu"} <= layers or bool(layers & {"*.Cu", "F&B.Cu"})
+        if rule is None or ["footprints", "not_allowed"] not in rule or not both:
+            continue
+        pts = _child(_child(z, "polygon") or [], "pts") or []
+        ring = [(xy[0], xy[1]) for xy in (_floats(n, 2) for n in _children(pts, "xy"))]
+        if len(ring) >= 3:
+            keepouts.append(ring)
     return FootprintInfo(
         lib=lib,
         lib_dir=lib_dir,
@@ -270,6 +285,7 @@ def load_footprint(lib: str, pretty: str, name: str) -> FootprintInfo:
         licence=str(meta["licence"]),
         cutout=_bbox(cuts) if _edges_close(cut_items) else None,
         extra={"model_xforms": xforms},
+        keepouts=keepouts,
     )
 
 
