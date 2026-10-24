@@ -31,15 +31,17 @@ export interface HoverBox {
   footprint: BoardFootprint | null;
 }
 
-/** One box per footprint: from the GLB when it is loaded, else from the record's courtyards. */
+/**
+ * One box per footprint: the GLB's when it is loaded, and the record's courtyard
+ * for any footprint the GLB has no node for (no 3D model in the library).
+ */
 export function footprintBoxes(board: Board, model: Pick<LoadedModel, "footprints"> | null): HoverBox[] {
   const byRef = new Map((board.footprints ?? []).map((f) => [f.ref, f]));
-  if (model?.footprints.length) {
-    return model.footprints.map((f) => ({ ref: f.ref, box: f.box, footprint: byRef.get(f.ref) ?? null }));
-  }
+  const out: HoverBox[] = (model?.footprints ?? []).map((f) => ({ ref: f.ref, box: f.box, footprint: byRef.get(f.ref) ?? null }));
+  const have = new Set(out.map((h) => h.ref));
   const top = board.thickness_mm ?? 1.6;
-  const out: HoverBox[] = [];
   for (const fp of board.footprints ?? []) {
+    if (have.has(fp.ref)) continue;
     const pts = courtyard(fp);
     if (!pts) continue;
     const box = new THREE.Box3();

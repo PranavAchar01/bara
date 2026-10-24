@@ -33,9 +33,17 @@ describe("board footprints", () => {
 
   it("prefers the GLB's footprint boxes and keeps the record's names", () => {
     const glb = { footprints: [{ ref: "SW3", box: new THREE.Box3(new THREE.Vector3(0, 0, 0), new THREE.Vector3(14, 14, 11)) }] };
-    const boxes = footprintBoxes(board([{ ref: "SW3", label: "Cherry MX", center_mm: [99, 99], size_mm: [1, 1] }]), glb);
-    expect(boxes).toHaveLength(1);
+    const boxes = footprintBoxes(
+      board([
+        { ref: "SW3", label: "Cherry MX", center_mm: [99, 99], size_mm: [1, 1] },
+        // no 3D model, so no GLB node: still hoverable from its courtyard
+        { ref: "J1", label: "JST PH", center_mm: [40, 0], size_mm: [9, 10] },
+      ]),
+      glb,
+    );
+    expect(boxes.map((b) => b.ref)).toEqual(["SW3", "J1"]);
     expect(boxes[0].box.max.z).toBe(11);
     expect(boxes[0].footprint?.label).toBe("Cherry MX");
+    expect(boxes[1].box.getCenter(new THREE.Vector3()).x).toBeCloseTo(40);
   });
 });

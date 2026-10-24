@@ -38,10 +38,19 @@ export interface FootprintBox {
 /** KiCad reference designators (SW3, U1, USB-UART1, LED3A); not OpenCASCADE labels. */
 const REFDES = /^[A-Z][A-Za-z0-9]*([_-][A-Za-z0-9]+)*\d+[A-Za-z]?$/;
 
-/** Nearest refdes-named node at or above `o`, the footprint a mesh belongs to. */
+/**
+ * The footprint a mesh belongs to: the outermost refdes-named node above it.
+ * Names nearer the mesh can look like refdes too (a switch model's STEP part
+ * SW_Cherry_MX_PCB_cp_36 inside footprint SW5), so the one nearest the root wins.
+ */
 function footprintOf(o: THREE.Object3D | null): string | null {
-  for (let n = o; n; n = n.parent) if (REFDES.test(n.name)) return n.name;
-  return null;
+  let ref: string | null = null;
+  for (let n = o; n; n = n.parent) {
+    // GLTFLoader makes repeated node names unique with a suffix: SW11, SW11_1.
+    const name = REFDES.test(n.name) ? n.name : n.name.replace(/_\d+$/, "");
+    if (REFDES.test(name)) ref = name;
+  }
+  return ref;
 }
 
 const cache = new Map<string, Promise<LoadedModel | null>>();

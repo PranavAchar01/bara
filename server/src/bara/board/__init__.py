@@ -455,14 +455,17 @@ def _nets(plan: BoardPlan, side_tag: str) -> list[dict]:
 
 def _glb_ref(path: Path, key: str) -> dict:
     data = path.read_bytes()
+    sha = hashlib.sha256(data).hexdigest()
     return {
         "asset_id": f"board_{key}",
         "kind": "glb",
         "role": "model",
-        "url": f"/assets/cache/boards/{path.name}",
+        # The file name is the routing cache key, which survives a change to how the GLB is
+        # made (compression, node names); the content hash keeps the URL immutable (SPEC 9).
+        "url": f"/assets/cache/boards/{path.name}?v={sha[:16]}",
         "content_type": "model/gltf-binary",
         "bytes": len(data),
-        "sha256": hashlib.sha256(data).hexdigest(),
+        "sha256": sha,
         "status": "ready",
         "origin": "generated",
     }
