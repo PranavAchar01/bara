@@ -19,7 +19,7 @@ export interface LogEntry {
 
 export type Overlay = "inspector" | "swap" | "resize" | "connect" | "addpart" | null;
 export type RightTab = "parts" | "connections" | "board" | "firmware" | "checks";
-export type ViewPreset = "iso" | "top" | "front" | "side" | "scene";
+export type ViewPreset = "iso" | "top" | "bottom" | "front" | "side" | "scene";
 
 export interface Toggles {
   case: boolean;
