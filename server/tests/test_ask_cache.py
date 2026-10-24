@@ -20,6 +20,7 @@ def test_a_cached_answer_needs_no_model(tmp_path: Path, monkeypatch: pytest.Monk
     path.write_text(json.dumps({"x": 3}))
     data, note = asyncio.run(ask.ask_json("sys", "q", SCHEMA, name="t", fast=True))
     assert data == {"x": 3} and note == "ok (cached)"
-    # the full model is a different question
+    # another model is a different question
+    monkeypatch.setenv("BARA_FORM_MODEL", "claude-opus-5-5")
     data, note = asyncio.run(ask.ask_json("sys", "q", SCHEMA, name="t"))
     assert data is None and note == "no ANTHROPIC_API_KEY"

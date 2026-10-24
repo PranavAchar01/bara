@@ -20,7 +20,7 @@ from bara.live.llm_json import _for_anthropic
 
 log = logging.getLogger(__name__)
 DEFAULT_MODEL = "claude-sonnet-5-5"
-FAST_MODEL = "claude-haiku-5-5"
+FAST_MODEL = "claude-sonnet-5-5"  # part picks need the same judgment as the reasoning stages
 # answers by question: the same question (prompt, schema, images, model) is answered once
 CACHE = Path(__file__).resolve().parents[3] / "data/cache/llm"
 
@@ -88,7 +88,8 @@ async def ask_json(
                     system=system,
                     messages=[{"role": "user", "content": content}],
                     output_config={
-                        "format": {"type": "json_schema", "schema": _for_anthropic(schema)}
+                        "effort": "high",
+                        "format": {"type": "json_schema", "schema": _for_anthropic(schema)},
                     },
                 ),
                 timeout=timeout_s,
