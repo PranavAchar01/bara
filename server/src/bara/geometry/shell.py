@@ -323,6 +323,7 @@ KIND_WORDS: list[tuple[str, str]] = [
     ("stick", r"stick|joy|analog|trackpoint"),
     ("dpad", r"d-?pad|directional|\bcross\b|arrow|navigation"),
     ("shoulder", r"shoulder|trigger|bumper|\blb\b|\brb\b|\blt\b|\brt\b"),
+    ("wheel", r"scroll|thumb ?wheel|roller"),
     ("knob", r"knob|dial|encoder|crown|wheel"),
     ("button", r"button|key|switch|press|click|action|face|start|select|menu|home|power|side"),
 ]
@@ -399,6 +400,10 @@ def sites_from_anchors(
 # ---------------------------------------------------------------- feature solids
 
 TOUCH_MIN_MM = 9.0
+# a scroll wheel stands on edge in a slot: typical mouse wheel size, typed in
+WHEEL_D_MM = 20.0
+WHEEL_W_MM = 7.0
+WHEEL_PROUD_MM = 4.0
 
 
 def _cyl(r: float, z0: float, z1: float, x: float, y: float, seg: int = 48) -> mf.Manifold:
@@ -491,6 +496,7 @@ class Features:
     glass: list[mf.Manifold] = field(default_factory=list)
     cutouts: list[dict[str, Any]] = field(default_factory=list)
     ports: list[dict[str, Any]] = field(default_factory=list)  # axis-facing ports, for checks
+    wheels: list[dict[str, Any]] = field(default_factory=list)  # wheel slots, for checks
     claimed: set[str] = field(default_factory=set)
     kinds: dict[str, int] = field(default_factory=dict)
 
@@ -549,7 +555,7 @@ def build_features(
     out = Features()
     zmax = body.profile.z_top + body.profile.crown + 2.0
     done_groups: set[int] = set()
-    knobs = [k for k in sites if k.kind in ("stick", "knob") and k.mount == "front"]
+    knobs = [k for k in sites if k.kind in ("stick", "knob", "wheel") and k.mount == "front"]
     for s in sites:
         if s.ref:
             out.claimed.add(s.ref)
@@ -577,6 +583,8 @@ def build_features(
             if s.group not in done_groups:
                 done_groups.add(s.group)
                 _dpad(out, [t for t in sites if t.group == s.group], body, seat, zmax, clear)
+        elif s.kind == "wheel":
+            _wheel(out, s, body, seat, zmax, clear)
         elif s.kind in ("stick", "knob"):
             _stick(out, s, body, seat, zmax, clear)
         else:
@@ -623,6 +631,29 @@ def _stick(out: Features, s: Site, body: Body, seat: float, zmax: float, clear: 
             (rc - 4.5, zc + 4.6), (0.0, zc + 3.7)]  # fmt: skip
     out.caps.append(_revolve(prof, s.x, s.y, 72))
     out.cutouts.append(_cut("stick", s.x, s.y, zc, 2 * r_h, "circle"))
+
+
+def _long_axis_deg(plan: Polygon) -> float:
+    """Direction of the plan's longer side: the way a hand slides along the product."""
+    pts = np.asarray(plan.minimum_rotated_rectangle.exterior.coords)[:3]
+    a, b = pts[1] - pts[0], pts[2] - pts[1]
+    v = a if np.hypot(*a) >= np.hypot(*b) else b
+    return math.degrees(math.atan2(v[1], v[0]))
+
+
+def _wheel(out: Features, s: Site, body: Body, seat: float, zmax: float, clear: float) -> None:
+    """A wheel on edge, rolling along the product's long axis, proud of the surface in a slot."""
+    r = WHEEL_D_MM / 2
+    roll = _long_axis_deg(body.plan)
+    zc = body.top_at(s.x, s.y)
+    chord = 2 * math.sqrt(r * r - (r - WHEEL_PROUD_MM) ** 2)
+    slot = _rrect(s.x, s.y, chord + 2 * clear, WHEEL_W_MM + 2 * clear, roll, 1.0)
+    out.cuts.append(_prism(slot, seat - 1.0, zmax + 4))
+    wheel = mf.Manifold.cylinder(WHEEL_W_MM, r, r, 72, True).rotate((90, 0, 0))
+    wheel = wheel.rotate((0, 0, roll)).translate((s.x, s.y, zc + WHEEL_PROUD_MM - r))
+    out.caps.append(wheel.trim_by_plane((0, 0, 1), seat + 0.3))
+    out.cutouts.append(_cut("wheel", s.x, s.y, zc, chord, "slot", WHEEL_W_MM))
+    out.wheels.append({"ref": s.ref, "x": s.x, "y": s.y})
 
 
 def _button(out: Features, s: Site, body: Body, seat: float, zmax: float, clear: float) -> None:

@@ -120,3 +120,12 @@ def test_a_desk_product_domes_over_a_flat_floor(reports: dict[str, EncloseReport
 
     assert top(8, 12) - top(27, 12) > 8  # the back of the hand rests on a dome
     assert abs(floor(14, 10) - floor(-24, 10)) < 0.5  # it slides on a flat floor
+
+
+def test_a_scroll_wheel_turns_in_a_slot(reports: dict[str, EncloseReport]) -> None:
+    assert shell.classify({"name": "scroll wheel"}) == "wheel"
+    assert shell.classify({"name": "volume dial"}) == "knob"
+    rep = reports["mouse"]
+    assert [w["ref"] for w in rep.openings["wheels"]] == ["E1"]
+    cuts = [c for c in rep.enclosure["cutouts"] if c["feature"] == "wheel"]
+    assert len(cuts) == 1 and cuts[0]["shape"] == "slot"
