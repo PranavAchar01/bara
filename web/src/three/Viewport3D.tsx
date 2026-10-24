@@ -904,10 +904,23 @@ function fitPose(box: THREE.Box3, dir: THREE.Vector3, cam: THREE.PerspectiveCame
 
 type FrameKind = ViewPreset | "hero" | "exploded";
 
+/** Diagonal (mm) of a full-size keyboard: a device this big gets the whole `fill`. */
+const FULL_SIZE_DIAG_MM = 330;
+
+/**
+ * How much of the view a device spans, by its real size: a handheld sits small in the frame and
+ * a keyboard larger, so the scene reads as an object on a desk, not a poster. Square root so a
+ * thumb-sized part still shows its features; never below 55% of `fill`.
+ */
+export function sizedFill(box: THREE.Box3, fill: number): number {
+  const diag = box.getSize(new THREE.Vector3()).length();
+  return fill * Math.min(1, Math.max(0.55, Math.sqrt(diag / FULL_SIZE_DIAG_MM)));
+}
+
 function framePose(kind: FrameKind, cam: THREE.PerspectiveCamera, predictExplode: number | null) {
   const box = stageBox() ?? fallbackBox();
   if (predictExplode !== null) box.max.z += stage.gap * maxRank() * (predictExplode - stage.explode);
-  if (kind === "exploded") return fitPose(box, EXPLODED_DIR, cam, LABEL_MODEL_WIDTH, 0.92, 0.04);
+  if (kind === "exploded") return fitPose(box, EXPLODED_DIR, cam, LABEL_MODEL_WIDTH, Math.max(0.7, sizedFill(box, 0.88)), 0.04);
   const dir =
     kind === "top"
       ? new THREE.Vector3(0, -0.0001, 1)
@@ -919,8 +932,8 @@ function framePose(kind: FrameKind, cam: THREE.PerspectiveCamera, predictExplode
         : kind === "side"
           ? new THREE.Vector3(1, 0, 0.18)
           : HERO_DIR;
-  // Hero: the assembly spans about 60% of the tighter axis, as in the Etch explore tiles.
-  return fitPose(box, dir.clone().normalize(), cam, 1, kind === "hero" || kind === "iso" || kind === "scene" ? 0.6 : 0.8, 0.05);
+  // Hero: a full-size device spans about half of the tighter axis; smaller ones less (sizedFill).
+  return fitPose(box, dir.clone().normalize(), cam, 1, sizedFill(box, kind === "hero" || kind === "iso" || kind === "scene" ? 0.5 : 0.7), 0.05);
 }
 
 let rankMax = LAYER_RANK.keycaps;
