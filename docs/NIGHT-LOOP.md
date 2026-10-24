@@ -48,3 +48,13 @@ Every row is fixed by changing one generic mechanism. No device-name branches, p
 - E1-E9 engine commits pushed (0c1261c..7956604): fit with both sides + rotation + declared-size redraw, relaxed resolver, optional slots never fail, BOM grouped by function, function-chain audit, DRC wide-rules re-route, off-board modules (E3), identity judge sees assembled parts. KEYBOARD_ONLY filter replaced by "a block must serve a function the brief implies".
 - Sculpted shell merged (5980fa7): geometry/shell.py builds the case from ProductForm silhouette, thickness and anchors (crowned top, fillets, stick wells, d-pad, buttons, screen window, port slots, hidden part pockets, ribs so nothing floats). Fixture renders in scratchpad/shell/ read as a gamepad and a phone.
 - Device-name grep of both diffs: clean. Server restarted on 5980fa7. Full 27-row suite restarting on 5980fa7; that run is the one reported.
+
+## Render quality bar (2026-10-24 ~00:30 PT, his words: "every single element of this fails so make sure they are all actually rendered to the quality i expect")
+Engine-level, applies to every build; a build that misses a row reports a failing render.* check instead of shipping.
+| # | Element | Bar | Check |
+|---|---|---|---|
+| E10 | Parts | every placed part renders its real 3D model (KiCad 3D library, LCSC/EasyEDA fetch, generated tier); zero placeholder boxes | render.placeholders = 0 |
+| E11 | Board | GLB shows mask, copper tracks and pads, vias, plated holes, silkscreen, board edge; matches `kicad-cli pcb render` of the same board | side-by-side diff per build |
+| E12 | Case | openings follow the feature shape (round wells, cross, round buttons, slots) with clearance, never square pocket holes; real caps (domed buttons, concave stick top with ring, cross d-pad, triggers/bumpers); screen glass under a bezel; split-line seam; satin plastic PBR | vision judge + geometry tests |
+| E13 | Exploded view | pieces separate along the assembly axis in order: bottom shell, bottom parts, board, top parts, top shell, caps/glass; case and board share one frame (fix the y-down mirror at the source) | explode tests + screenshots |
+| E14 | Presentation | studio light, soft contact shadow, AA, no z-fighting or black faces; comparable to the etch explore tiles (scratchpad ref/etch-explore.png) | contact sheet vs Etch + real photos |
