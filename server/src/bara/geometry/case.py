@@ -631,9 +631,9 @@ def enclose_report(
         z_bot = min(z_bot, pocket_bottom - H["floor_mm"], cup_bottom)
 
     # The product's own thickness (from its form) sets the body height; the board stays at the
-    # top, with the extra body below it.
+    # top, with the extra body below it; on a desk the floor stays put and the body domes above.
     body = _num(brief.get("body_thickness_mm"), 0.0)
-    if body > 0 and body > bezel_top - z_bot:
+    if body > 0 and body > bezel_top - z_bot and not desk_sensors:
         z_bot = bezel_top - body
     shaped = body > 0
 
@@ -675,6 +675,7 @@ def enclose_report(
             _num(brief.get("edge_thickness_mm"), 0.0),
             min(x1 - x0, y1 - y0),
             r_min,
+            desk=bool(desk_sensors),
         )
         sculpt = shell.build_body(plan, prof)
         z_port: dict[str, float] = {}

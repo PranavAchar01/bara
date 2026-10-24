@@ -209,9 +209,11 @@ def profile_for(
     edge: float,
     short: float,
     r_min: float,
+    desk: bool = False,
 ) -> Profile:
     """Thickness profile -> shape. `body` is the thickest the product gets, `edge` the thinnest
-    rim; the stack (board, parts, floor, bezel plate) is the floor on both."""
+    rim; the stack (board, parts, floor, bezel plate) is the floor on both. A product that rests
+    on a desk (it looks down through its floor) keeps a flat floor and domes over the board."""
     ref = max(body, 14.0)
     rt = min(0.2 * ref, 4.5, 0.8 * r_min)
     rb = min(0.3 * ref, 7.0, 0.9 * r_min)
@@ -219,8 +221,11 @@ def profile_for(
     plateau = z_top - z_bot
     spread = max(body - max(plateau, edge), 0.0)
     flat = min(0.04 * short, 2.0)
-    crown = min(max(0.35 * spread, 0.6 * flat), 6.0, 0.1 * short)
-    belly = max(spread - crown, flat)
+    if desk:
+        crown, belly = min(max(spread, 0.6 * flat), 0.5 * short), 0.0
+    else:
+        crown = min(max(0.35 * spread, 0.6 * flat), 6.0, 0.1 * short)
+        belly = max(spread - crown, flat)
     land = (z_top - rt) - (z_bot + rb)
     if land < 1.5:  # a thin product: keep a straight band at the parting line
         k = max(0.3, 1.0 - (1.5 - land) / max(rt + rb, 1e-6))

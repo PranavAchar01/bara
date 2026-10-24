@@ -12,7 +12,7 @@ from shapely.geometry import Polygon
 from bara.geometry import EncloseReport, enclose_report, shell
 from bara.geometry.shell_fixtures import FIXTURES, brief_for
 
-NAMES = ["gamepad", "phone", "puck", "watch", "flashlight"]
+NAMES = ["gamepad", "phone", "puck", "watch", "flashlight", "mouse"]
 
 
 @pytest.fixture(scope="module")
@@ -104,3 +104,19 @@ def test_a_tall_hidden_part_gets_a_pocket_not_a_hole(tmp_path, monkeypatch) -> N
     assert (rep.bezel ^ column).volume() > 0.16 * 1.0  # at least 1 mm of skin over the part
     assert len(rep.bezel.decompose()) == 1
     assert not [c["message"] for c in rep.checks if c["status"] != "pass"]
+
+
+def test_a_desk_product_domes_over_a_flat_floor(reports: dict[str, EncloseReport]) -> None:
+    from bara.geometry.validate import _first_hit
+
+    rep = reports["mouse"]
+    down, up = np.array([0, 0, -1.0]), np.array([0, 0, 1.0])
+
+    def top(x: float, y: float) -> float:
+        return 100.0 - _first_hit(rep.bezel, np.array([x, y, 100.0]), down, 200)
+
+    def floor(x: float, y: float) -> float:
+        return _first_hit(rep.tray, np.array([x, y, -100.0]), up, 200) - 100.0
+
+    assert top(8, 12) - top(27, 12) > 8  # the back of the hand rests on a dome
+    assert abs(floor(14, 10) - floor(-24, 10)) < 0.5  # it slides on a flat floor

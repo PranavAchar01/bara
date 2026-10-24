@@ -273,12 +273,42 @@ def flashlight() -> dict[str, Any]:
     }
 
 
+def mouse() -> dict[str, Any]:
+    sil = ellipse(33.0, 63.0, 40)
+    anchors = [
+        anchor("left click", "left mouse button", (-13, 38), slot="lmb"),
+        anchor("right click", "right mouse button", (13, 38), slot="rmb"),
+        anchor("scroll wheel", "scroll wheel encoder", (0, 36), slot="wheel"),
+        anchor("usb port", "usb-c charging port", (0, 62), mount="edge", normal=90, slot="usb"),
+    ]
+    parts = [
+        part("S1", "switch", -13, 38, (6, 6), 5.0, touch=True),
+        part("S2", "switch", 13, 38, (6, 6), 5.0, touch=True),
+        part("E1", "encoder", 0, 36, (12, 13), 11.0, touch=True),
+        part("U1", "mcu", 0, 10, (10, 10), 1.0),
+        part("J1", "usb", 0, 55, (9, 7.5), 3.3),
+        part("U2", "sensor", 0, 0, (11, 16), 5.0, side="bottom", touch=True),
+        part("BT1", "battery", 0, -30, (30, 20), 6.0, side="bottom"),
+    ]
+    return {
+        "name": "mouse",
+        "form": {
+            "device_class": "computer mouse",
+            "silhouette": sil,
+            "thickness_mm": 38.0,
+            "edge_thickness_mm": 18.0,
+            "anchors": anchors,
+        },
+        "board": parts,
+    }
+
+
 def ccw(pts: list[tuple[float, float]]) -> list[tuple[float, float]]:
     a = sum(x0 * y1 - x1 * y0 for (x0, y0), (x1, y1) in zip(pts, pts[1:] + pts[:1], strict=True))
     return pts if a > 0 else list(reversed(pts))
 
 
-_RAW = {f.__name__: f for f in (gamepad, phone, puck, watch, flashlight)}
+_RAW = {f.__name__: f for f in (gamepad, phone, puck, watch, flashlight, mouse)}
 
 
 def build(name: str) -> dict[str, Any]:
