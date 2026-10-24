@@ -1261,7 +1261,9 @@ class Composer:
             "You find substitute parts. Earlier lookups for a product block found nothing "
             "usable. Give up to four other real manufacturer part numbers sold on LCSC that do "
             "the same job (same function, meeting the requirement; alternative driver ICs, "
-            "pin-compatible modules, a different vendor) and up to four KiCad library symbol or "
+            "pin-compatible modules, a different vendor, or, for a module-scale function such "
+            "as a panel scaler, PSU or driver, a ready-made module or driver board that does "
+            "the whole job and mounts off the main board) and up to four KiCad library symbol or "
             "footprint names or family words that fit (for example the connector family or the "
             "IC's generic name). Never repeat a name already tried. Never invent a part number.",
             f"Block: {need.label}\nFunction: {need.function_id}\n"

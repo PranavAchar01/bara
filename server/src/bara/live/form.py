@@ -355,8 +355,31 @@ def _prompt(prompt: str, touches: list[Touch], refs: list[dict[str, Any]], note:
     )
 
 
+_SIZE = re.compile(
+    r"(\d+(?:\.\d+)?)\s*(?:x|×|by)\s*(\d+(?:\.\d+)?)(?:\s*(?:x|×|by)\s*\d+(?:\.\d+)?)?\s*(mm|cm)\b",
+    re.I,
+)
+
+
+def declared_size(prompt: str) -> tuple[float, float] | None:
+    """Width and height in mm when the request states them ("120 x 60 mm", "12 x 6 cm")."""
+    m = _SIZE.search(prompt)
+    if m is None:
+        return None
+    k = 10.0 if m.group(3).lower() == "cm" else 1.0
+    return float(m.group(1)) * k, float(m.group(2)) * k
+
+
 def fit_note(report: dict) -> str:
     """The numbers a form needs to be sized to hold the parts it was drawn for."""
+    declared = report.get("declared_mm")
+    if declared:
+        return (
+            f"The parts chosen do not fit your silhouette ({report['parts_mm2']} mm2 of "
+            f"footprints against {report['usable_mm2']} mm2 usable per side). The request states "
+            f"the product size as {declared[0]:g} x {declared[1]:g} mm: keep the silhouette at "
+            f"that size, and change only its shape or thickness if that helps."
+        )
     big = "; ".join(f"{p['part']} {p['mm'][0]} x {p['mm'][1]} mm" for p in report["largest"])
     return (
         f"The parts chosen for this product do not fit your silhouette. Footprints total "

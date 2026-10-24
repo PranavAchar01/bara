@@ -154,6 +154,16 @@ class _Stage:
         self.emit("stage.completed", payload)
 
 
+def _spans(product: form_mod.Form, size: tuple[float, float]) -> bool:
+    """True when the form already has the declared width and height (either way round)."""
+    xs = [p[0] for p in product.silhouette]
+    ys = [p[1] for p in product.silhouette]
+    w, h = max(xs) - min(xs), max(ys) - min(ys)
+    return any(abs(a - b) <= 0.1 * b for a, b in ((w, size[0]), (h, size[1]))) and any(
+        abs(a - b) <= 0.1 * b for a, b in ((w, size[1]), (h, size[0]))
+    )
+
+
 class LiveRunner:
     def __init__(self, engine: Engine, source: PartSource) -> None:
         self.engine = engine
@@ -599,6 +609,7 @@ class LiveRunner:
         """Render the hero view and ask whether it reads as the requested device. Returns the
         reviewer's critique when it does not (and this is not already the repair pass)."""
         product = getattr(run, "product_form", None)
+        touch_slots = list((getattr(run, "touch_slots", None)) or [])
         st = self._stage(run, "render", "Checking that it looks like the device")
         recs = [(rec, False) for rec in run.state["enclosures"]] + [
             (rec, True) for rec in run.state["boards"]
@@ -619,6 +630,21 @@ class LiveRunner:
                     plain = await asyncio.to_thread(hero.plain_copy, path, root / "cache" / "hero")
                     if plain is not None:
                         meshes += await asyncio.to_thread(hero.load_glb, plain, 1000.0, pose)
+        # the parts a person sees or touches, seated where the build puts them (never exploded)
+        for part in run.state["parts"]:
+            pl = part.get("placement") or {}
+            if pl.get("mode") == "layout" or part.get("side") not in ("none", None):
+                continue
+            pose = hero.pose_matrix(pl.get("position_mm") or [0, 0, 0], pl.get("rotation_deg"))
+            for a in part.get("assets", []):
+                if a.get("kind") != "glb" or not a.get("url"):
+                    continue
+                path = root / a["url"].removeprefix("/assets/")
+                if path.is_file() and part.get("slot_id") in set(touch_slots):
+                    plain = await asyncio.to_thread(hero.plain_copy, path, root / "cache" / "hero")
+                    if plain is not None:
+                        meshes += await asyncio.to_thread(hero.load_glb, plain, 1000.0, pose)
+                    break
         verdict: dict[str, Any] | None = None
         note = "no form" if product is None else "nothing to render"
         if product is not None and meshes:
@@ -706,11 +732,13 @@ class LiveRunner:
             "form": brief.get("form"),
             "touch_slots": [t.slot_id for t in self._touches(result)],
         }
+        run.touch_slots = gb["touch_slots"]  # type: ignore[attr-defined]
         product = await self.form_stage(run, result, st)
         if product is not None:
             gb["product_form"] = product.json()
             brief["body_thickness_mm"] = product.thickness_mm
             brief["edge_thickness_mm"] = product.edge_thickness_mm
+            brief["anchors"] = product.anchors
         board, err = await asyncio.to_thread(A.plan_board, gb, parts, run.build_id)
         for _ in range(
             self.FIT_REPAIRS
@@ -718,6 +746,11 @@ class LiveRunner:
             report = (gb.get("product_form") or {}).get("fit_report")
             if product is None or board is None or not report or report["ok"]:
                 break
+            declared = form_mod.declared_size(run.prompt)
+            if declared:  # the request fixes the size: the parts must fit it or the build fails
+                report = {**report, "declared_mm": list(declared)}
+                if _spans(product, declared):
+                    break
             redrawn = await self.form_stage(run, result, st, fit=report)
             if redrawn is None or redrawn.problems:
                 break
