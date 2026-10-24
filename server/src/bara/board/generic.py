@@ -765,9 +765,10 @@ def _attempt(
     targets: dict[int, tuple[float, float]],
     gaps: dict[int, float],
     flippable: set[int] | None = None,
-) -> bool:
+) -> Item | None:
     """Put each item at the free spot nearest its target, on its own side first and, for a
-    surface-mount part that has no spot there, on the other side; False when one cannot go."""
+    surface-mount part that has no spot there, on the other side; returns the first item that
+    cannot go, None when all fit."""
     prep = prepared.prep(region)
     x0, y0, x1, y1 = region.bounds
     step = max(1.0, math.sqrt(region.area / FORM_GRID_POINTS))
@@ -775,7 +776,7 @@ def _attempt(
     cand = np.column_stack([gx.ravel(), gy.ravel()])
     cand = cand[[prep.contains(Point(float(a), float(b))) for a, b in cand]]
     if not len(cand):
-        return False
+        return order[0] if order else None
     taken: dict[str, Polygon | None] = {"top": None, "bottom": None}
 
     def put(it: Item, side: str) -> bool:
@@ -822,8 +823,8 @@ def _attempt(
         if flippable and id(it) in flippable and not _through(it):
             if put(it, "bottom" if own == "top" else "top"):
                 continue
-        return False
-    return True
+        return it
+    return None
 
 
 CABLE_ROLES = ("usb_in", "jack", "usb_device", "usb_host")  # a plug enters from outside
@@ -898,9 +899,10 @@ def place_in_form(
     flippable = {
         id(it) for it in on_board if id(it) not in anchored and id(it) not in rim and it is not mcu
     }
-    ok = _attempt_with_follow(
+    stuck = _attempt_with_follow(
         order, region, targets, gaps, mcu, set(anchored) | set(rim), flippable
     )
+    ok = stuck is None
     areas = sorted(((_area(it), it) for it in on_board), key=lambda a: -a[0])
     widest = max(on_board, key=lambda it: max(_extent(it)), default=None)
     pf["fit_report"] = {
@@ -915,12 +917,15 @@ def place_in_form(
         ],
         "widest_mm": round(max(_extent(widest)), 1) if widest is not None else 0.0,
     }
-    if not ok:
+    if stuck is not None:
         r = pf["fit_report"]
         log.append(
             f"FORM_OVERFLOW: the parts do not fit the product silhouette on both board sides "
             f"({len(on_board)} footprints, {r['parts_mm2']} mm2 of footprints against "
-            f"{r['usable_mm2']} mm2 usable per side); the product is never scaled to fit"
+            f"{r['usable_mm2']} mm2 usable per side; first part with no free spot: "
+            f"{stuck.label or stuck.ref} {'x'.join(f'{v:.1f}' for v in _extent(stuck))} mm"
+            f"{' at its anchor' if id(stuck) in anchored or id(stuck) in rim else ''}); "
+            f"the product is never scaled to fit"
         )
         _attempt_loose(order, region)
         return region
@@ -943,7 +948,7 @@ def _attempt_with_follow(
     mcu: Item | None,
     anchored: set[int],
     flippable: set[int] | None = None,
-) -> bool:
+) -> Item | None:
     """Run _attempt with followers retargeted: a support part at its parent, any other
     unanchored part at the controller, both read when the part is placed (parents come first)."""
     by_id = {id(it): it for it in order}
