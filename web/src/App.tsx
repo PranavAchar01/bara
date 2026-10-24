@@ -17,6 +17,8 @@ import { Explainer } from "./bot/Explainer";
 import { CandidateFlyby } from "./bot/CandidateFlyby";
 import { SimView } from "./sim/SimView";
 import { useSim } from "./sim/simStore";
+import { CanvasTabs } from "./components/CanvasTabs";
+import { startCanvasPersist } from "./state/canvases";
 
 function useKeys() {
   useEffect(() => {
@@ -84,8 +86,37 @@ function RightOverlay() {
   return null;
 }
 
+/** A canvas with no build yet (or one still being fetched after a reload): just the prompt. */
+function EmptyCanvas() {
+  const restoring = useApp((s) => s.canvasRestoring.includes(s.activeCanvas));
+  return (
+    <main className="workspace">
+      <aside className="leftcol" aria-label="Layers">
+        <FileHeader />
+      </aside>
+      <section className="centre">
+        <CanvasTabs />
+        <div className="canvas-empty">
+          {restoring ? (
+            <p className="muted">Loading this canvas's build again…</p>
+          ) : (
+            <div className="canvas-empty-inner">
+              <h2>Describe a device for this canvas.</h2>
+              <PromptBar autoFocus />
+              <ExampleChips />
+            </div>
+          )}
+        </div>
+      </section>
+      <aside className="rightcol-wrap" aria-label="Details" />
+    </main>
+  );
+}
+
 function Workspace() {
   const overlay = useApp((s) => s.overlay);
+  const empty = useApp((s) => s.build === null);
+  if (empty) return <EmptyCanvas />;
   return (
     <main className="workspace">
       <aside className="leftcol" aria-label="Layers">
@@ -94,6 +125,7 @@ function Workspace() {
         <PartsList />
       </aside>
       <section className="centre">
+        <CanvasTabs />
         <Viewport3D />
         <div className="centre-top">
           <BuildProgress />
@@ -133,6 +165,7 @@ function Main() {
   useKeys();
   useEffect(() => bindVoiceKeys(), []);
   useEffect(() => startAutosave(), []);
+  useEffect(() => startCanvasPersist(), []);
   const screen = useApp((s) => s.screen);
   const simOpen = useSim((s) => s.open) && screen === "workspace";
   if (simOpen) return <SimView />;

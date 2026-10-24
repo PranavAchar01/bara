@@ -12,6 +12,8 @@ export interface LogEntry {
   dir: "in" | "out" | "drop";
   type: string;
   seq?: number;
+  /** Build the event belongs to: with canvas tabs, not always the one on screen. */
+  buildId?: string;
   msgId?: string;
   note?: string;
   unknown?: boolean;
@@ -37,6 +39,38 @@ export interface PendingStart {
   ts: string;
   at: number;
 }
+
+/** One canvas tab in the workspace. `name` is null until renamed: the tab then shows the build's prompt. */
+export interface CanvasMeta {
+  id: string;
+  name: string | null;
+}
+
+/** What each canvas keeps for itself; the active canvas's copy lives in the top-level fields (state/canvases.ts). */
+export type CanvasSnapshot = Pick<
+  AppState,
+  | "build"
+  | "view"
+  | "pendingStart"
+  | "clarifySending"
+  | "clarifyError"
+  | "selection"
+  | "inspectPartId"
+  | "moving"
+  | "focusKey"
+  | "openedFromLibrary"
+  | "hoverConnection"
+  | "explode"
+  | "preset"
+  | "toggles"
+  | "rightTab"
+  | "codeTab"
+  | "overlay"
+  | "colorTarget"
+  | "resizeTarget"
+  | "dismissedWarnings"
+  | "dragPose"
+>;
 
 export interface AppState {
   mode: Mode;
@@ -86,6 +120,13 @@ export interface AppState {
   hoverPart: string | null;
   /** A finished build is being re-performed (bot/replay.ts). */
   replaying: boolean;
+  /** Canvas tabs in order; there is always at least one. */
+  canvases: CanvasMeta[];
+  activeCanvas: string;
+  /** Saved state of every canvas but the active one, by canvas id. Background builds keep folding in here. */
+  canvasStash: Record<string, CanvasSnapshot>;
+  /** Canvas ids whose build is being fetched again after a reload. */
+  canvasRestoring: string[];
 }
 
 let logId = 0;
@@ -129,6 +170,10 @@ export const useApp = create<AppState>(() => ({
   agentOut: false,
   hoverPart: null,
   replaying: false,
+  canvases: [{ id: "c1", name: null }],
+  activeCanvas: "c1",
+  canvasStash: {},
+  canvasRestoring: [],
 }));
 
 export function pushLog(entry: Omit<LogEntry, "id" | "t">): void {

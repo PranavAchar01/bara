@@ -208,7 +208,8 @@ function Stage() {
     return useApp.subscribe((s) => {
       const last = s.log.at(-1)?.id ?? seen;
       if (last === seen) return;
-      const fresh = s.log.filter((e) => e.id > seen && e.dir === "in");
+      // Only the canvas on screen: background canvases keep building without the bot.
+      const fresh = s.log.filter((e) => e.id > seen && e.dir === "in" && (!e.buildId || e.buildId === s.build?.build_id));
       seen = last;
       if (!fresh.length) return;
       lastEvent.current = performance.now();
