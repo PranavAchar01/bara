@@ -3,7 +3,7 @@
 Keys stay on the server. ELEVENLABS_API_KEY wins when both are set; otherwise OPENAI_API_KEY
 uses OpenAI's speech and transcription. The voice and model can be changed without a code
 change: BARA_TTS_VOICE and BARA_TTS_MODEL. ElevenLabs defaults to Charlotte on eleven_v4,
-OpenAI to marin on gpt-4o-mini-tts (gpt-4o-transcribe listens).
+OpenAI to verse on gpt-4o-mini-tts (gpt-4o-transcribe listens).
 """
 
 from __future__ import annotations
@@ -25,11 +25,17 @@ MAX_STT_BYTES = 8 * 1024 * 1024
 
 
 OPENAI_API = "https://api.openai.com/v1"
-OPENAI_VOICE = "marin"
+OPENAI_VOICE = "verse"
 OPENAI_TTS_MODEL = "gpt-4o-mini-tts"
 OPENAI_STT_MODEL = "gpt-4o-transcribe"
-# gpt-4o-mini-tts takes delivery instructions; this keeps Bara warm and brief.
-OPENAI_STYLE = "Warm, friendly and conversational, like a helpful maker friend. Natural pace."
+# gpt-4o-mini-tts takes delivery instructions. Bara is a small, curious maker that is always
+# moving and says little, so it sounds like that: bright, a little playful, light on its feet.
+OPENAI_STYLE = (
+    "You are Bara, a small, curious hardware maker. Speak warmly with quiet delight, as if "
+    "thinking out loud while building something. Light and lively, never salesy or announcer-"
+    "like. Short phrases, a natural pause before a question, and a gentle lift when something "
+    "works."
+)
 
 
 def provider() -> str | None:
