@@ -148,3 +148,10 @@ Web: bara-merge agent merges Nithin's figma-design-in-code / agent-board-3d / fi
 - Cause: BlueMicro840 needs a LiPo (battery interface, chemistry lipo), but the AA holder's battery interface is also "requires", so `_mates` never compared them and the model picked AA.
 - Fix c64242b: filters_for adds a chemistry filter on a power.battery slot from every chosen part that requires a battery of a named chemistry. Test added; live_form 45 pass.
 - Mouse still running on 3323217; suite restart on c64242b after it finishes.
+
+### 08:45 (code d611c95)
+- Suite on 3323217 finished: MONITOR PASS; MOUSE fails only identity now (DRC and device.complete clear); MP3 fails device.complete (2.0" ST7789 TFT missing), identity, enclosure (M3), floating; MP4 fails identity.
+- Hero renders (data/assets/cache/hero/b_utXS7hpVFUUM_repaired.png, b_2cSGazugktCI_repaired.png): the case tops are cut open over parts nobody touches.
+- Root cause: every LCSC-fetched part (DW01A, LDO, ESD, antenna, switches, sensor) became an off-board "module" with a JST lead, because find_footprint did not resolve easyeda:<C> refs. Fix d611c95: libs resolves fetched/src/<C>/<C>.kicad_mod plus its STEP model and transform. All 213 fetched records load, and their pin maps fit the pads.
+- Suite restarted on d611c95 (server 42035, suite 42056).
+- Next: identity on mouse/mp4 after the re-run; the mouse rotary encoder shows as a 30 mm bare shaft (needs a wheel cap); identity message cut at 300 chars hides the mismatches.
