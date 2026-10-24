@@ -279,7 +279,9 @@ def _feature_from_placement(p: dict[str, Any]) -> Feature | None:
     size = p.get("size_mm") or [0, 0]
     role = p.get("role") or infer_role(p.get("lib_id"), p.get("ref"))
     if role not in {r for r, _ in ROLE_KEYWORDS} and role != "other":
-        role = infer_role(role, p.get("lib_id"))
+        # a board-side role (module, module_connector, connector) says where a part sits, not
+        # what it is: read the part itself, so a connector to a module is not a controller
+        role = infer_role(p.get("lib_id")) if p.get("lib_id") else infer_role(p.get("label"))
     w, d = _num(size[0], 0.0), _num(size[1] if len(size) > 1 else size[0], 0.0)
     if w <= 0 or d <= 0:
         return None
@@ -603,9 +605,9 @@ def enclose_report(
             face, _ = _port_exit(f.x, f.y, outer_cs)
             dx, dy = FACE_DIR[face]
             deg = math.degrees(math.atan2(dy, dx))
-            sites.append(
-                shell.Site("port", -1, f.x, f.y, "edge", deg, f.w, f.d, f.rot_deg, ref=f.ref)
-            )
+            site = shell.Site("port", -1, f.x, f.y, "edge", deg, f.w, f.d, f.rot_deg, ref=f.ref)
+            site.z_hi = f.z_range(t)[1]
+            sites.append(site)
         for st in sites:
             if st.kind == "port":
                 st.normal_deg = shell.snap_axis(st.normal_deg, 20.0)
@@ -728,6 +730,8 @@ def enclose_report(
                 .offset(-r, mf.JoinType.Round)
                 .offset(r, mf.JoinType.Round)
             )
+            # the soft corners must not clip the part: its own clearance box is cut too
+            holes_cs.append(_rect_cs(f.x, f.y, f.w + c, f.d + c, f.rot_deg))
         elif z_hi > seat - 0.01:
             # hidden, so it gets a blind pocket under the skin, not a hole a person sees; a part
             # taller than the shell still breaks through and the fit checks report it

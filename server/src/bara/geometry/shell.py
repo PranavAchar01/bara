@@ -547,6 +547,10 @@ def build_features(
     for s in sites:
         if s.ref:
             out.claimed.add(s.ref)
+        if s.w and s.d:  # a pocket the part's full footprint wide, hidden under the top surface;
+            # every claimed part gets it, whatever the site builds (port, back, shoulder)
+            pocket = _rrect(s.x, s.y, s.w + 2 * clear, s.d + 2 * clear, s.rot, 0.8)
+            out.cuts.append(_prism(pocket, seat - 1.0, max(s.z_hi, seat) + clear))
         if s.kind == "shoulder" and s.mount == "edge":
             if s.group not in done_groups:
                 done_groups.add(s.group)
@@ -557,9 +561,6 @@ def build_features(
             if s.kind == "port":
                 _port(out, s, body, wall_mm, port_w, port_h, z_port)
             continue
-        if s.w and s.d:  # a pocket the part's full footprint wide, hidden under the top surface
-            pocket = _rrect(s.x, s.y, s.w + 2 * clear, s.d + 2 * clear, s.rot, 0.8)
-            out.cuts.append(_prism(pocket, seat - 1.0, max(s.z_hi, seat) + clear))
         if s.mount == "edge":
             _edge_button(out, s, body, wall_mm, clear)
         elif s.kind == "screen":

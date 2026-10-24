@@ -226,3 +226,17 @@ def test_usb_slot_never_crosses_a_notch(tmp_path, monkeypatch):
     assert rep.enclosure["enclosure_id"] == "e_case_pcb_main"  # side "none": no half guessed
     failed = [c["message"] for c in rep.checks if c["status"] != "pass"]
     assert not failed, failed
+
+
+def test_a_board_side_role_reads_the_part_not_the_word_module():
+    from bara.geometry.case import _feature_from_placement
+
+    jst = {
+        "role": "module_connector",
+        "lib_id": "Connector_JST:JST_PH_B2B-PH-K_1x02_P2.00mm_Vertical",
+        "label": "JST PH 2-pin connector to USB bridge",
+        "size_mm": [6.9, 5.5],
+    }
+    mov = {"role": "module", "lib_id": "", "label": "V275LA20AP varistor", "size_mm": [17, 5.6]}
+    assert _feature_from_placement(jst).role == "other"
+    assert _feature_from_placement(mov).role == "other"
