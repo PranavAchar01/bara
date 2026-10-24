@@ -13,8 +13,6 @@ from pathlib import Path
 from shapely.geometry import Polygon
 from shapely.ops import unary_union
 
-from bara.geometry.glbopt import compress
-
 from .layout import EDGE_BAND, BoardPlan, Item
 from .libs import KICAD_PYTHON, LIBRARIES, SOURCES, resolve_model
 
@@ -33,8 +31,8 @@ JAVA = os.environ.get("BARA_JAVA") or (
 SCRIPT = Path(__file__).with_name("kicad_script.py")
 NICE = ["nice", "-n", "19"]
 # macOS background QoS (taskpolicy -b) slows Freerouting about 5x (measured 17 s vs 3 s per
-# pass) and the GLB export as much (96 s vs 19 s on a keyboard board), so nothing on the
-# build's critical path uses it; tool runs stay at nice 19.
+# pass), so it is kept for the GLB export only; routing runs at nice 19.
+BACKGROUND = NICE + (["taskpolicy", "-b"] if shutil.which("taskpolicy") else [])
 
 RULES = {
     "clearance_mm": 0.15,
@@ -292,8 +290,8 @@ def export_glb(
     if min(origin_kicad) < 0:
         raise ToolError(f"GLB origin {origin_kicad} is negative; raise KICAD_OFFSET")
     out.parent.mkdir(parents=True, exist_ok=True)
-    tmp = out.with_suffix(".raw.glb")
-    cmd = NICE + [
+    tmp = out.with_suffix(".tmp.glb")
+    cmd = BACKGROUND + [
         KICAD_CLI,
         "pcb",
         "export",
@@ -316,11 +314,7 @@ def export_glb(
     proc = _run(cmd, timeout, cwd=board.parent)
     if not tmp.exists():
         raise ToolError(f"glb export failed: {(proc.stdout + proc.stderr)[-1500:]}")
-    # Named footprint nodes stay separate so the viewer can pick and highlight them.
-    work = out.parent / f".work-{out.stem}"  # per board: concurrent builds never share it
-    compress(tmp, out, work, keep_named=True, simplify=False)
-    tmp.unlink(missing_ok=True)
-    shutil.rmtree(work, ignore_errors=True)
+    tmp.replace(out)
 
 
 def count_routing(board: Path) -> dict:

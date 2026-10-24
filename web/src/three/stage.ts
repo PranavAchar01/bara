@@ -21,8 +21,6 @@ export const stage = {
   moving: false,
   /** Bumped when the explode settles after moving (shadow re-bake, framing). */
   settleVersion: 0,
-  /** True while the camera eases to a new pose (on-demand rendering keeps drawing). */
-  animating: false,
   anchors: new Map<string, LabelAnchor[]>(),
 };
 

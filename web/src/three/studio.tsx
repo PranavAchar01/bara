@@ -21,12 +21,10 @@ export function studioPalette(dark: boolean): StudioPalette {
 }
 
 /** Renderer, environment and background. */
-export function StudioEnvironment(props: { palette: StudioPalette; post: boolean }) {
+export function StudioEnvironment(props: { palette: StudioPalette }) {
   const { gl, scene } = useThree();
-  const post = props.post;
   useEffect(() => {
-    // With the post pass on, its last effect tone maps; mapping here too would apply it twice.
-    gl.toneMapping = post ? THREE.NoToneMapping : THREE.NeutralToneMapping;
+    gl.toneMapping = THREE.NeutralToneMapping;
     gl.toneMappingExposure = 1.0;
     gl.outputColorSpace = THREE.SRGBColorSpace;
     gl.shadowMap.enabled = true;
@@ -44,7 +42,7 @@ export function StudioEnvironment(props: { palette: StudioPalette; post: boolean
       scene.environment = null;
       env.dispose();
     };
-  }, [gl, scene, post]);
+  }, [gl, scene]);
   useEffect(() => {
     scene.background = new THREE.Color(props.palette.background);
   }, [scene, props.palette.background]);

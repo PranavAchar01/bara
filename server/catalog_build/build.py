@@ -19,8 +19,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from bara.geometry.glbopt import compress
-
 from .kicad_lib import Footprint, Model, read_footprint
 from .manifest import ENTRIES, Entry, ModelSpec
 from .meshes import (
@@ -29,6 +27,7 @@ from .meshes import (
     export_glb,
     glb_bounds,
     glb_node_names,
+    shrink,
     translate_glb,
 )
 from .resolve import (
@@ -333,14 +332,8 @@ def _export_board(stem: str, board: Path, out: Path, half: str | None) -> dict[s
     centred = work / f"{stem}.raw.glb"
     translate_glb(raw, centred, (dx / 1000.0, 0.0, -dy / 1000.0))
     size = centred.stat().st_size
-    plain = compress(centred, out, work, keep_named=False, simplify=False)
-    return {
-        "ok": True,
-        "raw_bytes": size,
-        "bytes": out.stat().st_size,
-        "plain": plain,
-        "note": note,
-    }
+    shrink(centred, out, work)
+    return {"ok": True, "raw_bytes": size, "bytes": out.stat().st_size, "note": note}
 
 
 def _licence_union(lics: list[dict[str, Any]]) -> dict[str, Any]:
@@ -423,9 +416,8 @@ def mesh_record(
                 "bytes": out.stat().st_size,
                 "raw_bytes": result.get("raw_bytes"),
                 "sha256": sha256(out),
-                # Bounds and names from the uncompressed file: trimesh cannot read meshopt.
-                "bbox_mm": glb_bounds(result.get("plain") or out),
-                "nodes": glb_node_names(result.get("plain") or out),
+                "bbox_mm": glb_bounds(out),
+                "nodes": glb_node_names(out),
             }
         )
         if result.get("note"):

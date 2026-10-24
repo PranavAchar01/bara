@@ -3,10 +3,9 @@
 Each part is written as a one-footprint .kicad_pcb (footprint at the origin, only the
 selected model entries kept, model paths resolved to absolute files) and exported
 with `kicad-cli pcb export glb --no-board-body`, so KiCad itself applies each model's
-offset, rotation and scale exactly as it does on a real board. The GLB is then
-joined per material and meshopt-compressed (bara.geometry.glbopt). Output: metres,
-Y up (glTF), which the viewer maps to SPEC 3.2 build space with scale 1000 and +90 deg
-about X.
+offset, rotation and scale exactly as it does on a real board. The GLB is then welded
+and simplified with gltf-transform. Output: metres, Y up (glTF), which the viewer maps
+to SPEC 3.2 build space with scale 1000 and +90 deg about X.
 """
 
 from __future__ import annotations
@@ -14,17 +13,17 @@ from __future__ import annotations
 import copy
 import json
 import os
+import shutil
 import struct
 import subprocess
 from pathlib import Path
 from typing import Any
 
-from bara.geometry.glbopt import compress
-
 from .kicad_lib import Footprint, Model
 from .sexpr import Node, Quoted, children, dump
 
 KICAD_CLI = os.environ.get("KICAD_CLI", "/opt/homebrew/bin/kicad-cli")
+GLTF_TRANSFORM = ["npx", "-y", "@gltf-transform/cli@4.1.1"]
 
 PCB_HEADER = """(kicad_pcb
 \t(version 20241229)
@@ -49,6 +48,7 @@ PCB_HEADER = """(kicad_pcb
 """
 
 BOARD_THICKNESS_MM = 1.6  # matches (general (thickness 1.6)) in PCB_HEADER
+SIMPLIFY_ABOVE_BYTES = 250_000
 
 DROP_HEADS = {"version", "generator", "generator_version", "embedded_fonts", "embedded_files"}
 # Graphics are irrelevant to the 3D export and legacy (KiCad 5) arcs fail to parse inside a
@@ -150,20 +150,44 @@ def export_glb(
     if res.returncode != 0 or not raw.exists() or raw.stat().st_size < 200:
         return {"ok": False, "log": (res.stdout + res.stderr)[-800:]}
     out.parent.mkdir(parents=True, exist_ok=True)
-    plain = shrink(raw, out, work)
-    return {
-        "ok": True,
-        "raw_bytes": raw.stat().st_size,
-        "bytes": out.stat().st_size,
-        "plain": plain,
-        "log": "",
-    }
+    shrink(raw, out, work)
+    return {"ok": True, "raw_bytes": raw.stat().st_size, "bytes": out.stat().st_size, "log": ""}
 
 
-def shrink(raw: Path, out: Path, work: Path) -> Path:
-    """Join, simplify only very large meshes, meshopt-compress. Returns the uncompressed
-    joined file, which trimesh can read for bounds and node names."""
-    return compress(raw, out, work, keep_named=False, simplify=True)
+def shrink(raw: Path, out: Path, work: Path) -> bool:
+    """Copy small GLBs as is; simplify larger ones (no Draco/meshopt, so any glTF loader
+    reads them). Falls back to the raw file if gltf-transform fails."""
+    out.parent.mkdir(parents=True, exist_ok=True)
+    size = raw.stat().st_size
+    if size <= SIMPLIFY_ABOVE_BYTES:
+        shutil.copyfile(raw, out)
+        return True
+    ratio = 0.5 if size < 1_000_000 else 0.3 if size < 4_000_000 else 0.15
+    tmp = work / f"{out.stem}.opt.glb"
+    r = _run(
+        [
+            *GLTF_TRANSFORM,
+            "optimize",
+            str(raw),
+            str(tmp),
+            "--compress",
+            "false",
+            "--texture-compress",
+            "false",
+            "--instance",
+            "false",
+            "--simplify-ratio",
+            str(ratio),
+            "--simplify-error",
+            "0.002",
+        ],
+        timeout=600,
+    )
+    if r.returncode == 0 and tmp.exists() and 0 < tmp.stat().st_size < size:
+        shutil.copyfile(tmp, out)
+        return True
+    shutil.copyfile(raw, out)
+    return False
 
 
 def glb_bounds(path: Path) -> dict[str, list[float]] | None:
