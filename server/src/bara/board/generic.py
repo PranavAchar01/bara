@@ -32,6 +32,10 @@ from .libs import FootprintInfo, find_footprint, footprint_ref, symbol_pins
 
 PART_GAP = 1.2  # courtyard to courtyard between packed parts
 EDGE_COPPER_MM = 0.5  # widest board-edge clearance kicad.py rules ask (0.45 mm)
+# A fine-pitch part also keeps half the part gap from the edge: its edge-side pins have no
+# room between pads, so they escape outward and need the same channel as between parts.
+FINE_PITCH_MM = 0.65
+ESCAPE_MM = PART_GAP / 2
 PASSIVE_GAP = 0.6
 BOARD_MARGIN = 2.0
 CORNER_R = 2.0
@@ -763,6 +767,18 @@ def _shadow(it: Item) -> Polygon | None:
     return it.world(hull)
 
 
+def _fine_pitch(it: Item) -> bool:
+    """An IC whose pins sit closer than a track and its clearances can pass between."""
+    if it.fp is None or it.role in CABLE_ROLES:
+        return False
+    pts = np.array([(p.x, p.y) for p in it.fp.pads if p.kind == "smd"])
+    if len(pts) < 6:
+        return False
+    d = np.hypot(pts[:, None, 0] - pts[None, :, 0], pts[:, None, 1] - pts[None, :, 1])
+    np.fill_diagonal(d, np.inf)
+    return float(d.min()) < FINE_PITCH_MM
+
+
 def _attempt(
     order: list[Item],
     region: Polygon,
@@ -776,6 +792,7 @@ def _attempt(
     # a courtyard may not reach the outline: its pads need the copper-to-edge clearance
     region = region.buffer(-EDGE_COPPER_MM, join_style="mitre")
     prep = prepared.prep(region)
+    inner = prepared.prep(region.buffer(-ESCAPE_MM, join_style="mitre"))
     x0, y0, x1, y1 = region.bounds
     step = max(1.0, math.sqrt(region.area / FORM_GRID_POINTS))
     gx, gy = np.meshgrid(np.arange(x0, x1, step), np.arange(y0, y1, step))
@@ -793,6 +810,7 @@ def _attempt(
         other = "bottom" if side == "top" else "top"
         gap = gaps[id(it)]
         tx, ty = targets[id(it)]
+        fit = inner if _fine_pitch(it) else prep
         idx = np.argsort(np.hypot(cand[:, 0] - tx, cand[:, 1] - ty))[:FORM_TRIES]
         for turn in turns:
             it.rot = rot0 + turn
@@ -803,7 +821,7 @@ def _attempt(
             for i in idx:
                 dx, dy = float(cand[i, 0] - c0.x), float(cand[i, 1] - c0.y)
                 poly = affinity.translate(base, dx, dy)
-                if not prep.contains(poly):
+                if not fit.contains(poly):
                     continue
                 under = affinity.translate(shade, dx, dy) if shade is not None else None
                 if taken[side] is not None and taken[side].distance(poly) < gap:
@@ -834,6 +852,20 @@ def _attempt(
 
 
 CABLE_ROLES = ("usb_in", "jack", "usb_device", "usb_host")  # a plug enters from outside
+SCREEN_LONG_MM = 20.0  # a screen this long has a landscape or portrait sense; an LED does not
+
+
+def _screen_along(it: Item, region: Polygon) -> None:
+    """A screen lies with its long side along the product's long side: a footprint drawn
+    portrait goes landscape in a landscape body, the way a handheld or monitor is built."""
+    if it.role != "screen" or it.fp is None:
+        return
+    w, h = _extent(it)
+    x0, y0, x1, y1 = region.bounds
+    if max(w, h) < SCREEN_LONG_MM or abs(w - h) < 0.1 * max(w, h):
+        return
+    if (w > h) != (x1 - x0 > y1 - y0) and abs((x1 - x0) - (y1 - y0)) > 0.1 * max(x1 - x0, y1 - y0):
+        it.rot = (it.rot + 90.0) % 360.0
 
 
 def _face_the_rim(it: Item, region: Polygon, target: tuple[float, float]) -> tuple[float, float]:
@@ -870,6 +902,8 @@ def place_in_form(
     """
     scale = 1.0
     region = form_region(pf, scale)
+    for it in on_board:
+        _screen_along(it, region)
     anchored = _anchor_targets(pf, on_board, scale)
     centre = region.representative_point()
     hub = (centre.x, centre.y)

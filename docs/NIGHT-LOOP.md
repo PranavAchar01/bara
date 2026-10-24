@@ -142,3 +142,47 @@ Web: bara-merge agent merges Nithin's figma-design-in-code / agent-board-3d / fi
 - Mouse on c0684e6: board.drc no longer fails (the f853f67 flip fix cleared its 8 errors). Still FAIL: device.complete (2.4 GHz chip antenna, function component.other, so the nice!nano's built-in radio does not cover it; no LCSC match), 1 unconnected, mech.access.panel (bezel overhangs encoder M5, 2/8 rays), identity ("top mostly open or cut away, showing internal clutter").
 - Suite restarted on 16b24f2 (code = 3323217; server 98063, suite 98119).
 - Next gaps, in order: antenna covered by a radio module (block function mapping), mouse top shell closing over parts, routing leftover, scroll-wheel overhang. Vercel URL and bench not done (agents stopped).
+
+### 08:15 (code c64242b)
+- Suite on 3323217: MONITOR PASS with real HDMI/DP receptacles (Amphenol 10029449, 20455-030E-12), so the NONE pick works. CONTROLLER FAIL: form.fit FORM_OVERFLOW on a 2x AA holder (60x33 mm), board on the floor.
+- Cause: BlueMicro840 needs a LiPo (battery interface, chemistry lipo), but the AA holder's battery interface is also "requires", so `_mates` never compared them and the model picked AA.
+- Fix c64242b: filters_for adds a chemistry filter on a power.battery slot from every chosen part that requires a battery of a named chemistry. Test added; live_form 45 pass.
+- Mouse still running on 3323217; suite restart on c64242b after it finishes.
+
+### 08:45 (code d611c95)
+- Suite on 3323217 finished: MONITOR PASS; MOUSE fails only identity now (DRC and device.complete clear); MP3 fails device.complete (2.0" ST7789 TFT missing), identity, enclosure (M3), floating; MP4 fails identity.
+- Hero renders (data/assets/cache/hero/b_utXS7hpVFUUM_repaired.png, b_2cSGazugktCI_repaired.png): the case tops are cut open over parts nobody touches.
+- Root cause: every LCSC-fetched part (DW01A, LDO, ESD, antenna, switches, sensor) became an off-board "module" with a JST lead, because find_footprint did not resolve easyeda:<C> refs. Fix d611c95: libs resolves fetched/src/<C>/<C>.kicad_mod plus its STEP model and transform. All 213 fetched records load, and their pin maps fit the pads.
+- Suite restarted on d611c95 (server 42035, suite 42056).
+- Next: identity on mouse/mp4 after the re-run; the mouse rotary encoder shows as a 30 mm bare shaft (needs a wheel cap); identity message cut at 300 chars hides the mismatches.
+
+### 09:05 (code e3fee5c)
+- Controller on d611c95: case checks clear, board.drc 60 errors, all from fetched footprints now on the PCB: ESP32-S3-WROOM 0.25 mm thermal vias (drill, clearance) and EasyEDA rings at 0.0999 mm vs 0.1 minimum (SS49E, RKJXV stick and others). 2 track_width necks from the router.
+- Fix e3fee5c: kicad_script._fit_holes drops unnumbered PTH vias under the minimum hole and grows thin rings, for any footprint. A dropped pad freed by Python corrupts pcbnew's pad list, so removed pads are kept alive. Unrouted rebuild of that board: 0 DRC errors. Test added (5 pass).
+- Open: the controller BOM has both an ESP32-S3 module and a BlueMicro840. Suite restarted on e3fee5c (server 65980, suite 66012).
+
+### 09:35 (cd33090)
+- Suite on e3fee5c, controller: battery is now a LiPo (chemistry filter works) and DRC has 0 errors (hole fit works); only fail is board.routing.complete with 3 unconnected, all on U5 = LSM6DS3TR-C (LGA-14, 0.5 mm pitch) pins 6/7/8. All 4 router strategies left the same 3 open.
+- Cause: the placer's region allowed a courtyard 0.5 mm from the outline; U5's edge-side pads sat 0.67 mm from the edge keep-out band, so its pins had no way out (only pin 5 escaped, by a via). Parts get 1.2 mm between each other but no channel at the rim.
+- Fix cd33090 (generic, no device names): fine-pitch SMD parts (>= 6 pads, min pad spacing < 0.65 mm, not cable connectors) keep EDGE_COPPER_MM + PART_GAP/2 from the edge. Test tests/test_fine_pitch_edge.py; 47 related tests pass.
+- Server still runs e3fee5c; suite continues on mouse/mp3/mp4/monitor for the identity re-check. Controller re-check on the next run.
+
+### 09:55 (78230d2)
+- Suite on e3fee5c, 5 rows: controller only fails routing (fixed by cd33090), identity PASS; monitor regressed: device.complete (bicolor standby LED missing) + 1 DRC error; mouse fails identity (peanut blob, pockets); mp3 fails identity (two black screen windows over nothing); mp4 fails device.complete (charge LED) + identity (plain slab).
+- MP3 cause: keyword LCSC fetch took the first stocked hit for "2.0 in TFT", an FH12 FPC connector, tagged it display.tft; the case cut a screen window for it. LCSC does stock HS20HS072RX (2.0 in ST7789 LCD, 1499 pcs).
+- Fix 78230d2: best_stocked skips connector-category hits unless the block is interconnect; FH12-40S, FH12-14S, DF19G-30P rows retagged interconnect.connector (monitor may now flag its panel; check).
+- Restarted server 17852 + suite 17889 on 78230d2 (27 devices).
+- Next gaps: status LEDs missing on monitor/mp4 (catalog/LED filter), mouse shell identity, pockets breaking through the skin.
+
+### 10:00 iteration
+- 90dca15: a spec screen-type requirement (display_type eq tft) only filters screen slots; it was emptying the status-LED slot (8 to 0) on monitor and mp4.
+- 078c228: the top skin rises over the tallest hidden part (plate kept at 1.5 mm) instead of a blind pocket opening through it (the mouse's rectangular recesses).
+- 61dc051: a product with a desk-facing sensor keeps a flat floor and domes over the board (spread goes to crown, no belly). New `mouse` shell fixture; gamepad output byte-identical.
+- 98f210f: new site kind `wheel` (scroll / thumb wheel / roller): a 20 mm wheel on edge in a slot along the plan's long axis; the encoder-access check probes the slot for wheeled encoders.
+- Controller on 78230d2: identity PASS, fit PASS, routing fixed (cd33090).
+- Suite restarted on 98f210f: server 33627, suite 33676.
+
+### 10:05 iteration
+- Monitor DRC: the one error is a 0.18 mm Freerouting neck at 0.12 mm (GND, F.Cu) between two 0.2 mm segments, squeezing past pad 124 of the 0.4 mm-pitch DF19G panel connector. Widening it to the 0.15 minimum after SES import trades it for 2 clearance errors against that pad (0.1488 vs 0.15), so it was not committed. Open: needs a reroute or a placement nudge around fine-pitch cable connectors.
+- mp4 identity ("portrait screen, a third of the face") root cause: the EA eDIP TFT43 footprint is drawn portrait (71.5 x 107.3) and kept rotation 0, so the 125x75 form could not hold it and fit repair grew the body to 220x140. Fix f7fc877: a screen >= 20 mm long turns a quarter when its long side runs across the body's long side (test_screen_orientation.py, 59 placement/form tests pass).
+- Suite restarted on a7145a5 (has f7fc877): server 42785, suite 42836.

@@ -1019,3 +1019,63 @@ def test_a_pick_can_say_no_candidate_is_the_named_part(monkeypatch: Any) -> None
     ranked = [{"display_name": "Screw terminal 3-pin"}, {"display_name": "Screw terminal 2-pin"}]
     idx, method, *_ = asyncio.run(comp.pick(slot, ranked))
     assert (idx, method) == (0, "model_none")
+
+
+def test_a_battery_cell_matches_the_chemistry_the_controller_takes() -> None:
+    from bara.live import compose as cmp
+
+    comp = object.__new__(cmp.Composer)
+    comp.spec, comp.brief, comp.board_controllers = {}, {}, {}
+    ctrl = cmp.Slot("controller", "Controller", "compute.mcu", "critical", 1, [])
+    ctrl.chosen = {
+        "part_id": "mcu:x",
+        "interfaces": [{"type": "battery", "role": "requires", "params": {"chemistry": "lipo"}}],
+    }
+    bat = cmp.Slot("battery", "Battery", "power.battery", "critical", 1, [])
+    bat.need = object()  # resolver-backed slot: no size limits from the spec numbers
+    comp.slots = [ctrl, bat]
+    aa = {"part_id": "bat:aa", "facets": {"chemistry": "alkaline"}}
+    lipo = {"part_id": "bat:lipo", "facets": {"chemistry": "lipo"}}
+    tests = [f.test for f in comp.filters_for(bat, [aa, lipo]) if f.facet == "chemistry"]
+    assert tests and [all(t(p) for t in tests) for p in (aa, lipo)] == [False, True]
+
+
+def test_a_screen_type_requirement_leaves_indicator_leds_alone() -> None:
+    from bara.live import compose as cmp
+
+    comp = object.__new__(cmp.Composer)
+    comp.brief, comp.board_controllers = {}, {}
+    comp.spec = {
+        "hard_requirements": [
+            {"req_id": "r1", "facet": "display_type", "op": "eq", "value": "tft", "label": "Screen"}
+        ]
+    }
+    led = cmp.Slot("status", "Status LED", "display.indicator_led", "optional", 1, [])
+    screen = cmp.Slot("screen", "Screen", "display.tft", "critical", 1, [])
+    led.need = screen.need = object()
+    comp.slots = [led, screen]
+    ind = {"part_id": "led:x", "facets": {"display_type": "led"}}
+    oled = {"part_id": "oled:x", "facets": {"display_type": "oled"}}
+    tft = {"part_id": "tft:x", "facets": {"display_type": "tft"}}
+    assert not [f for f in comp.filters_for(led, [ind]) if f.facet == "display_type"]
+    tests = [f.test for f in comp.filters_for(screen, [oled, tft]) if f.facet == "display_type"]
+    assert tests and [all(t(p) for t in tests) for p in (oled, tft)] == [False, True]
+
+
+def test_the_power_source_requirement_leaves_a_speaker_alone() -> None:
+    from bara.live import compose as cmp
+
+    comp = object.__new__(cmp.Composer)
+    comp.brief, comp.board_controllers = {}, {}
+    comp.spec = {
+        "hard_requirements": [
+            {"req_id": "r1", "facet": "power_source", "op": "has", "value": "battery",
+             "label": "Battery"}
+        ]
+    }  # fmt: skip
+    spk = cmp.Slot("speaker", "Speaker", "audio.speaker", "optional", 1, [])
+    spk.need = object()
+    comp.slots = [spk]
+    module = {"part_id": "mod:x", "facets": {"power_source": ["usb"]}}
+    bare = {"part_id": "out:spk", "facets": {}}
+    assert not [f for f in comp.filters_for(spk, [module, bare]) if f.facet == "power_source"]

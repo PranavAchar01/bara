@@ -90,6 +90,7 @@ def search(keyword: str, limit: int = 10) -> list[dict[str, Any]]:
                 "brand": clean(r.get("brand"), 80),
                 "package": clean(r.get("package"), 80),
                 "description": clean(r.get("description"), 160),
+                "category": clean(r.get("category"), 80),
                 "stock": int(r.get("stock") or 0),
                 "datasheet": clean(r.get("datasheet"), 300),
             }
@@ -114,10 +115,16 @@ def best_match(keyword: str, rows: list[dict[str, Any]]) -> dict[str, Any] | Non
     return ranked[0] if ranked and score(ranked[0])[1] else None
 
 
-def best_stocked(rows: list[dict[str, Any]]) -> dict[str, Any] | None:
+def best_stocked(rows: list[dict[str, Any]], function: str = "") -> dict[str, Any] | None:
     """For a description rather than an MPN: the most relevant hit that is in stock, preferring a
-    real manufacturer over a house part (the search returns them in relevance order)."""
-    live = [r for r in rows if r["stock"] > 0]
+    real manufacturer over a house part (the search returns them in relevance order). Words for
+    a panel or a cell also find its mating connector; only an interconnect block may take one."""
+    connector_ok = function.split(".")[0] == "interconnect"
+    live = [
+        r
+        for r in rows
+        if r["stock"] > 0 and (connector_ok or "connector" not in r.get("category", "").lower())
+    ]
     live.sort(key=lambda r: "jlcpcb" in r["brand"].lower())
     return live[0] if live else None
 
@@ -393,7 +400,7 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         lcsc_id = hit["lcsc"]
     if args.keyword:
-        hit = best_stocked(search(args.keyword, 20))
+        hit = best_stocked(search(args.keyword, 20), args.function)
         if hit is None:
             sys.stderr.write(f"no stocked LCSC part for {args.keyword!r}\n")
             return 1

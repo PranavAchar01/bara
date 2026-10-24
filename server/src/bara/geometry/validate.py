@@ -481,12 +481,14 @@ def validate(report: EncloseReport) -> list[dict[str, Any]]:
                 **kw,
             )
         )
+    wheeled = {w["ref"] for w in report.openings.get("wheels", [])}
     for f in feats:
         if f.role != "encoder":
             continue
         s = time.perf_counter()
         _, z_hi = f.z_range(t)
-        r = max(f.w, f.d) / 2
+        # a wheel on the shaft turns in its own slot; only the slot over the shaft must be open
+        r = 0.0 if f.ref in wheeled else max(f.w, f.d) / 2
         blocked = sum(
             1
             for a in np.linspace(0, 2 * math.pi, 8, endpoint=False)

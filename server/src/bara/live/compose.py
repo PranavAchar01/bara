@@ -20,6 +20,7 @@ from typing import Any
 
 from bara.live import completeness as cp
 from bara.live.ask import ask_json
+from bara.live.brief import DISPLAY_TYPES
 from bara.live.catalog_source import (
     PartSource,
     card_for,
@@ -527,6 +528,13 @@ class Composer:
                 continue
             if facet not in present or facet in ("split", "key_count"):
                 continue
+            # how the device is powered filters the parts that power it, not a speaker module
+            if facet == "power_source" and not slot.function_id.startswith("power."):
+                continue
+            # the screen type names the device's screen; an indicator LED is no screen
+            screen = slot.function_id.removeprefix("display.")
+            if facet == "display_type" and screen not in DISPLAY_TYPES:
+                continue
             op_ = "eq" if op in ("has", "in") else op
             filters.append(
                 Filter(
@@ -590,6 +598,26 @@ class Composer:
                     from_slot_id=other.slot_id,
                 )
             )
+        # 2b. a part that takes a battery names its chemistry; the cell has to be that kind
+        if slot.function_id == "power.battery":
+            for other in self.slots:
+                iface = interface_of(other.chosen, "battery", "requires") if other.chosen else None
+                want = str((iface or {}).get("params", {}).get("chemistry") or "").lower()
+                if other is slot or not want:
+                    continue
+                filters.append(
+                    Filter(
+                        "chemistry",
+                        "eq",
+                        want,
+                        "compatibility",
+                        f"{want} cell ({other.label})"[:60],
+                        lambda p, w=want: (
+                            str((p.get("facets") or {}).get("chemistry", w)).lower() == w
+                        ),
+                        from_slot_id=other.slot_id,
+                    )
+                )
         # 3. logic level and I2C address room against parts on the same controller
         if slot.slot_id == "controller":
             for other in self.slots:
