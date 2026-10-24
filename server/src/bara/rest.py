@@ -171,6 +171,12 @@ def build_router(svc: Services) -> APIRouter:
     @api.get("/v1/parts/{part_id:path}")
     def part(part_id: str) -> JSONResponse:
         record = cat.part(part_id)
+        if record is None and svc.engine.live is not None:
+            # builds pick from the live source (catalog db, fetched, KiCad-generated tier)
+            try:
+                record = svc.engine.live.source.get_part(part_id)
+            except KeyError:
+                record = None
         if record is None:
             raise ApiError("E_UNKNOWN_PART", f"No part {part_id}.")
         return body({"part": record})

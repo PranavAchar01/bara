@@ -34,8 +34,28 @@ SIBLING_SIMILARITY = 0.8  # how alike a sibling footprint's name must be to lend
 
 _WORD = re.compile(r"[A-Za-z0-9]+")
 _BODY = re.compile(r"\d+(?:\.\d+)?x\d+(?:\.\d+)?(?:x\d+(?:\.\d+)?)?mm")
+_GRID = re.compile(r"(?<![\d.])(\d+x\d{2})(?![\d.]|mm)")  # pin rows x columns: 1x02, 2x20
 _STEM_BAD = re.compile(r"[^A-Za-z0-9._-]")
 _glb_lock = threading.Lock()
+
+
+_PKG = re.compile(r"^([A-Z]+)-(\d+)")
+_PKG_BODY = re.compile(r"(?<![A-Za-z])(\d+(?:\.\d+)?x\d+(?:\.\d+)?)mm")
+_PITCH = re.compile(r"_P(\d+(?:\.\d+)?)mm")
+# thin, very thin, ultra thin and heat-sink variants share the package's outline
+_THIN = re.compile(r"^[VWUXH](?=(?:QFN|DFN|SON|TSSOP|SSOP|SOP|LGA|BGA))")
+
+
+def package_sig(name: str) -> tuple[str, str, str, str] | None:
+    """(family, pins, body, pitch) of a package footprint name, ignoring the exposed pad:
+    "VQFN-16-1EP_3x3mm_P0.5mm_EP1.68x1.68mm" -> ("QFN", "16", "3x3", "0.5"). None when the
+    name is not a sized package."""
+    m = _PKG.match(name)
+    body = _PKG_BODY.search(name)
+    pitch = _PITCH.search(name)
+    if not m or not body or not pitch:
+        return None
+    return (_THIN.sub("", m.group(1)), m.group(2), body.group(1), pitch.group(1))
 
 
 def glb_stem(footprint_part_id: str) -> str:
@@ -104,7 +124,16 @@ class KicadIndex:
         return [self.get_part(pid) for pid in ids]
 
     def get_part(self, part_id: str) -> dict[str, Any]:
-        return part_from_record(self.record(part_id), self.footprint_record(part_id))
+        return part_from_record(self.record(part_id), self.model_record(part_id))
+
+    def model_record(self, part_id: str) -> dict[str, Any] | None:
+        """The footprint record whose 3D model draws this part: its own footprint's, else the
+        same-package sibling's (model_footprint). None when neither has a model."""
+        fp = self.footprint_record(part_id)
+        if fp is None or fp.get("model_path"):
+            return fp
+        lender = self.model_footprint(f"{fp['lib']}:{fp['name']}")
+        return self.record(lender) if lender is not None else None
 
     def footprint_record(self, part_id: str) -> dict[str, Any] | None:
         rec = self.record(part_id)
@@ -118,11 +147,9 @@ class KicadIndex:
         fp = self.footprint_record(part_id)
         if fp is None:
             return {"footprint": None, "models": []}
-        if not fp.get("model_path"):  # draw it with the same body's model from a sibling
-            lender = self.model_footprint(f"{fp['lib']}:{fp['name']}")
-            if lender is not None:
-                lent = self.record(lender)
-                fp = {**fp, "model_source": lent["model_source"], "model_path": lent["model_path"]}
+        lent = self.model_record(part_id)  # the same body's model from a sibling, if needed
+        if lent is not None:
+            fp = {**fp, "model_source": lent["model_source"], "model_path": lent["model_path"]}
         return {
             "footprint": {"path": str(_abs(fp["source"], fp["fp_path"]))},
             "models": (
@@ -134,38 +161,52 @@ class KicadIndex:
 
     def model_footprint(self, footprint: str) -> str | None:
         """The footprint part id whose 3D model draws footprint "Lib:Name": its own when it has
-        one, else the closest library sibling with the same body size (VQFN-16 3x3 borrows the
-        WQFN-16 3x3 body). None when nothing close enough has a model."""
+        one, else the closest library sibling with the same package (VQFN-16 3x3 borrows the
+        WQFN-16 3x3 body) or a near-identical name, whose courtyard is the same size. None when
+        nothing close enough has a model."""
         lib, _, name = footprint.partition(":")
         if not name:
             return None
         rows = self.rows(
-            "SELECT part_id, name, has_model FROM kicad_parts WHERE kind = 'footprint' AND lib = ?",
+            "SELECT part_id, name, has_model, source, row_json FROM kicad_parts"
+            " WHERE kind = 'footprint' AND lib = ?",
             (lib,),
         )
+        own = next((r for r in rows if r["name"] == name), None)
+        if own is not None and own["has_model"]:
+            return str(own["part_id"])
         body = set(_BODY.findall(name))
-        best, best_r = None, SIBLING_SIMILARITY
+        sig = package_sig(name)
+        ranked: list[tuple[int, float, Any]] = []
         for r in rows:
-            if not r["has_model"]:
+            if not r["has_model"] or r["name"] == name:
                 continue
-            if r["name"] == name:
-                return str(r["part_id"])
-            if body and not body <= set(_BODY.findall(r["name"])):
-                continue  # another body size is another part
             ratio = SequenceMatcher(None, r["name"], name).ratio()
-            if ratio > best_r:
-                best, best_r = str(r["part_id"]), ratio
-        return best
+            if sig is not None and package_sig(r["name"]) == sig:
+                # same family, pins, body and pitch: the same outside, whatever its pad
+                ranked.append((0, -ratio, r))
+            elif (
+                ratio > SIBLING_SIMILARITY
+                and (not body or body <= set(_BODY.findall(r["name"])))
+                and _GRID.findall(r["name"]) == _GRID.findall(name)
+            ):
+                ranked.append((1, -ratio, r))  # another body size or pin row is another part
+        ranked.sort(key=lambda t: t[:2])
+        for tier, _, r in ranked:
+            # a name alone is weak evidence: the outline must agree too
+            if tier == 0 or (own is not None and _same_size(own, r)):
+                return str(r["part_id"])
+        return None
 
     def glb_file(self, part_id: str) -> Path | None:
-        fp = self.footprint_record(part_id)
+        fp = self.model_record(part_id)
         return self.glb_dir / f"{glb_stem(fp['part_id'])}.glb" if fp else None
 
     def ensure_glb(self, part_id: str) -> Path | None:
         """The part's GLB, converting its footprint on first use. None when the footprint has
         no 3D model or the conversion fails."""
-        fp = self.footprint_record(part_id)
-        if fp is None or not fp.get("model_path"):
+        fp = self.model_record(part_id)
+        if fp is None:
             return None
         out = self.glb_dir / f"{glb_stem(fp['part_id'])}.glb"
         with _glb_lock:
@@ -184,6 +225,28 @@ def _abs(source: str, rel: str) -> Path:
     from catalog_build.sources import SOURCES
 
     return SOURCES[source].root / rel
+
+
+LEND_SIZE_TOLERANCE = 1.2  # per courtyard side: a sibling this close in size has the same body
+
+
+def _same_size(a: Any, b: Any) -> bool:
+    """Both footprints' courtyards agree within LEND_SIZE_TOLERANCE per side: a name match
+    alone let the 9.5 mm Bourns 3386P borrow the 8 mm 3339P."""
+    _ensure_path()
+    from catalog_build.kicad_lib import read_footprint
+
+    sides = []
+    for r in (a, b):
+        try:
+            yard = read_footprint(_abs(r["source"], json.loads(r["row_json"])["fp_path"])).courtyard
+        except (OSError, KeyError, ValueError):
+            return False
+        if not yard:
+            return False
+        sides.append(sorted(yard["max"][i] - yard["min"][i] for i in (0, 1)))
+    pairs = zip(*sides, strict=True)
+    return all(min(x, y) > 0 and max(x, y) / min(x, y) <= LEND_SIZE_TOLERANCE for x, y in pairs)
 
 
 def _convert(fp: dict[str, Any], out: Path) -> bool:

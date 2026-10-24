@@ -1,0 +1,56 @@
+{
+ "bat:holder_9v_mpd": {
+  "lcsc": "C5556545",
+  "mpn": "BA9VPC",
+  "path": "C5556545/C5556545.step",
+  "query": "BA9VPC"
+ },
+ "rf:esp_01": {
+  "lcsc": "C503581",
+  "mpn": "ESP-01",
+  "path": "C503581/C503581.step",
+  "query": "ESP-01"
+ },
+ "rf:ra_01_lora": {
+  "lcsc": "C90040",
+  "mpn": "Ra-01",
+  "path": "C90040/C90040.step",
+  "query": "Ra-01"
+ },
+ "sens:am2302": {
+  "lcsc": "C83988",
+  "mpn": "AM2302",
+  "path": "C83988/C83988.step",
+  "query": "AM2302"
+ },
+ "sens:apds9960": {
+  "lcsc": "C93222",
+  "mpn": "APDS-9960",
+  "path": "C93222/C93222.step",
+  "query": "APDS-9960"
+ },
+ "sens:icm20948": {
+  "lcsc": "C726001",
+  "mpn": "ICM-20948",
+  "path": "C726001/C726001.step",
+  "query": "ICM-20948"
+ },
+ "sens:mpu6050": {
+  "lcsc": "C24112",
+  "mpn": "MPU-6050",
+  "path": "C24112/C24112.step",
+  "query": "MPU-6050"
+ },
+ "sens:ms5837": {
+  "lcsc": "C3257869",
+  "mpn": "MS5837-02BA21",
+  "path": "C3257869/C3257869.step",
+  "query": "MS5837"
+ },
+ "sens:scd40": {
+  "lcsc": "C3037696",
+  "mpn": "SCD40-D-R1",
+  "path": "C3037696/C3037696.step",
+  "query": "SCD40"
+ }
+}

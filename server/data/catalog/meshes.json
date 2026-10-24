@@ -2,8 +2,8 @@
  "about": "Bara part meshes. Every GLB is converted with kicad-cli from an upstream KiCad footprint 3D model or an open-source STEP file; see SOURCES.md. glTF is metres, Y up; bbox_mm is in the SPEC 3.2 part frame (mm, Z up, z=0 at the PCB top for components, board bottom for whole boards).",
  "kicad_cli": "/opt/homebrew/bin/kicad-cli",
  "count": 243,
- "with_mesh": 190,
- "total_glb_bytes": 31888312,
+ "with_mesh": 205,
+ "total_glb_bytes": 32380252,
  "parts": [
   {
    "part_id": "sw:cherry_mx2a_brown",
@@ -3869,23 +3869,77 @@
     "source": "kicad",
     "commit": "10.0.7"
    },
-   "sources": [],
-   "unresolved_models": [
-    "${KICAD10_3DMODEL_DIR}/RF_Module.3dshapes/ESP-01.step"
+   "sources": [
+    {
+     "role": "model",
+     "file": "/Users/pranav/helloworld/bara/server/data/catalog/fetched/src/C503581/C503581.step",
+     "source_url": "https://www.lcsc.com/product-detail/C503581.html",
+     "source": "lcsc",
+     "commit": "fetched",
+     "licence": {
+      "spdx": "NOASSERTION",
+      "name": "LCSC/EasyEDA component library model",
+      "url": "https://easyeda.com/page/terms",
+      "commercial_ok": "unknown",
+      "copyleft": "unknown",
+      "attribution_required": "unknown",
+      "notes": "Fetched by part number from the LCSC/EasyEDA library (catalog_build.fetch_lcsc)."
+     },
+     "placement": "aligned_by_bbox"
+    }
    ],
-   "status": "missing",
-   "glb": null,
-   "url": null,
-   "bbox_mm": null,
-   "notes": [],
+   "status": "ok",
+   "glb": "server/data/assets/parts/esp_01.glb",
+   "url": "/assets/parts/esp_01.glb",
+   "bytes": 26052,
+   "raw_bytes": 299076,
+   "sha256": "58d5522ebcf936f8916eb5699b335a740cab4c5579b9ed5a509c95e77d6abb40",
+   "bbox_mm": {
+    "min": [
+     -3.5,
+     -4.04,
+     0.0
+    ],
+    "max": [
+     10.9,
+     20.66,
+     7.801
+    ]
+   },
+   "nodes": [
+    "=>[0:1:1:3]"
+   ],
+   "notes": [
+    "aligned by bbox: rotate [0.0, 0.0, 0.0] deg, offset [3.7, 8.31, 5.005] mm (computed from model bounds)"
+   ],
    "licence": {
-    "spdx": "CC-BY-SA-4.0",
-    "name": "CC-BY-SA 4.0 with the KiCad library exception",
+    "spdx": "CC-BY-SA-4.0 AND NOASSERTION",
+    "name": "CC-BY-SA 4.0 with the KiCad library exception; LCSC/EasyEDA component library model",
     "url": "https://www.kicad.org/libraries/license/",
-    "commercial_ok": "yes",
+    "commercial_ok": "unknown",
     "copyleft": "yes",
-    "attribution_required": "no",
-    "notes": "KiCad library exception: using the symbols, footprints and 3D models in a design does not make the design subject to the licence."
+    "attribution_required": "unknown",
+    "notes": "Combined: footprint and 3D model come from different sources.",
+    "parts": [
+     {
+      "spdx": "CC-BY-SA-4.0",
+      "name": "CC-BY-SA 4.0 with the KiCad library exception",
+      "url": "https://www.kicad.org/libraries/license/",
+      "commercial_ok": "yes",
+      "copyleft": "yes",
+      "attribution_required": "no",
+      "notes": "KiCad library exception: using the symbols, footprints and 3D models in a design does not make the design subject to the licence."
+     },
+     {
+      "spdx": "NOASSERTION",
+      "name": "LCSC/EasyEDA component library model",
+      "url": "https://easyeda.com/page/terms",
+      "commercial_ok": "unknown",
+      "copyleft": "unknown",
+      "attribution_required": "unknown",
+      "notes": "Fetched by part number from the LCSC/EasyEDA library (catalog_build.fetch_lcsc)."
+     }
+    ]
    }
   },
   {
@@ -3959,23 +4013,77 @@
     "source": "kicad",
     "commit": "10.0.7"
    },
-   "sources": [],
-   "unresolved_models": [
-    "${KICAD10_3DMODEL_DIR}/RF_Module.3dshapes/Ai-Thinker-Ra-01-LoRa.step"
+   "sources": [
+    {
+     "role": "model",
+     "file": "/Users/pranav/helloworld/bara/server/data/catalog/fetched/src/C90040/C90040.step",
+     "source_url": "https://www.lcsc.com/product-detail/C90040.html",
+     "source": "lcsc",
+     "commit": "fetched",
+     "licence": {
+      "spdx": "NOASSERTION",
+      "name": "LCSC/EasyEDA component library model",
+      "url": "https://easyeda.com/page/terms",
+      "commercial_ok": "unknown",
+      "copyleft": "unknown",
+      "attribution_required": "unknown",
+      "notes": "Fetched by part number from the LCSC/EasyEDA library (catalog_build.fetch_lcsc)."
+     },
+     "placement": "aligned_by_bbox"
+    }
    ],
-   "status": "missing",
-   "glb": null,
-   "url": null,
-   "bbox_mm": null,
-   "notes": [],
+   "status": "ok",
+   "glb": "server/data/assets/parts/ra_01_lora.glb",
+   "url": "/assets/parts/ra_01_lora.glb",
+   "bytes": 27604,
+   "raw_bytes": 317960,
+   "sha256": "d5c3bfb276fd52bb8cb878ca72cea2eed71a9624a919721c561b1732cd9cfba3",
+   "bbox_mm": {
+    "min": [
+     -8.01,
+     -8.5,
+     0.0
+    ],
+    "max": [
+     8.01,
+     8.5,
+     3.191
+    ]
+   },
+   "nodes": [
+    "=>[0:1:1:3]"
+   ],
+   "notes": [
+    "aligned by bbox: rotate [0.0, 0.0, 0.0] deg, offset [0.0, 0.0, 0.005] mm (computed from model bounds)"
+   ],
    "licence": {
-    "spdx": "CC-BY-SA-4.0",
-    "name": "CC-BY-SA 4.0 with the KiCad library exception",
+    "spdx": "CC-BY-SA-4.0 AND NOASSERTION",
+    "name": "CC-BY-SA 4.0 with the KiCad library exception; LCSC/EasyEDA component library model",
     "url": "https://www.kicad.org/libraries/license/",
-    "commercial_ok": "yes",
+    "commercial_ok": "unknown",
     "copyleft": "yes",
-    "attribution_required": "no",
-    "notes": "KiCad library exception: using the symbols, footprints and 3D models in a design does not make the design subject to the licence."
+    "attribution_required": "unknown",
+    "notes": "Combined: footprint and 3D model come from different sources.",
+    "parts": [
+     {
+      "spdx": "CC-BY-SA-4.0",
+      "name": "CC-BY-SA 4.0 with the KiCad library exception",
+      "url": "https://www.kicad.org/libraries/license/",
+      "commercial_ok": "yes",
+      "copyleft": "yes",
+      "attribution_required": "no",
+      "notes": "KiCad library exception: using the symbols, footprints and 3D models in a design does not make the design subject to the licence."
+     },
+     {
+      "spdx": "NOASSERTION",
+      "name": "LCSC/EasyEDA component library model",
+      "url": "https://easyeda.com/page/terms",
+      "commercial_ok": "unknown",
+      "copyleft": "unknown",
+      "attribution_required": "unknown",
+      "notes": "Fetched by part number from the LCSC/EasyEDA library (catalog_build.fetch_lcsc)."
+     }
+    ]
    }
   },
   {
@@ -5343,23 +5451,77 @@
     "source": "kicad",
     "commit": "10.0.7"
    },
-   "sources": [],
-   "unresolved_models": [
-    "${KICAD10_3DMODEL_DIR}/Sensor.3dshapes/ASAIR_AM2302_P2.54mm_Vertical.step"
+   "sources": [
+    {
+     "role": "model",
+     "file": "/Users/pranav/helloworld/bara/server/data/catalog/fetched/src/C83988/C83988.step",
+     "source_url": "https://www.lcsc.com/product-detail/C83988.html",
+     "source": "lcsc",
+     "commit": "fetched",
+     "licence": {
+      "spdx": "NOASSERTION",
+      "name": "LCSC/EasyEDA component library model",
+      "url": "https://easyeda.com/page/terms",
+      "commercial_ok": "unknown",
+      "copyleft": "unknown",
+      "attribution_required": "unknown",
+      "notes": "Fetched by part number from the LCSC/EasyEDA library (catalog_build.fetch_lcsc)."
+     },
+     "placement": "aligned_by_bbox"
+    }
    ],
-   "status": "missing",
-   "glb": null,
-   "url": null,
-   "bbox_mm": null,
-   "notes": [],
+   "status": "ok",
+   "glb": "server/data/assets/parts/am2302.glb",
+   "url": "/assets/parts/am2302.glb",
+   "bytes": 162348,
+   "raw_bytes": 1243012,
+   "sha256": "c0b38ff913a03e4c51d24d6c97ec7ff7792b2a57791c207dd697280e23bad635",
+   "bbox_mm": {
+    "min": [
+     -3.89,
+     -5.3,
+     0.0
+    ],
+    "max": [
+     11.51,
+     2.5,
+     29.738
+    ]
+   },
+   "nodes": [
+    "=>[0:1:1:3]"
+   ],
+   "notes": [
+    "aligned by bbox: rotate [0.0, 0.0, 0.0] deg, offset [3.81, -1.4, 14.543] mm (computed from model bounds)"
+   ],
    "licence": {
-    "spdx": "CC-BY-SA-4.0",
-    "name": "CC-BY-SA 4.0 with the KiCad library exception",
+    "spdx": "CC-BY-SA-4.0 AND NOASSERTION",
+    "name": "CC-BY-SA 4.0 with the KiCad library exception; LCSC/EasyEDA component library model",
     "url": "https://www.kicad.org/libraries/license/",
-    "commercial_ok": "yes",
+    "commercial_ok": "unknown",
     "copyleft": "yes",
-    "attribution_required": "no",
-    "notes": "KiCad library exception: using the symbols, footprints and 3D models in a design does not make the design subject to the licence."
+    "attribution_required": "unknown",
+    "notes": "Combined: footprint and 3D model come from different sources.",
+    "parts": [
+     {
+      "spdx": "CC-BY-SA-4.0",
+      "name": "CC-BY-SA 4.0 with the KiCad library exception",
+      "url": "https://www.kicad.org/libraries/license/",
+      "commercial_ok": "yes",
+      "copyleft": "yes",
+      "attribution_required": "no",
+      "notes": "KiCad library exception: using the symbols, footprints and 3D models in a design does not make the design subject to the licence."
+     },
+     {
+      "spdx": "NOASSERTION",
+      "name": "LCSC/EasyEDA component library model",
+      "url": "https://easyeda.com/page/terms",
+      "commercial_ok": "unknown",
+      "copyleft": "unknown",
+      "attribution_required": "unknown",
+      "notes": "Fetched by part number from the LCSC/EasyEDA library (catalog_build.fetch_lcsc)."
+     }
+    ]
    }
   },
   {
@@ -5484,23 +5646,77 @@
     "source": "kicad",
     "commit": "10.0.7"
    },
-   "sources": [],
-   "unresolved_models": [
-    "${KICAD10_3DMODEL_DIR}/Sensor.3dshapes/Sensirion_SCD4x-1EP_10.1x10.1mm_P1.25mm_EP4.8x4.8mm.step"
+   "sources": [
+    {
+     "role": "model",
+     "file": "/Users/pranav/helloworld/bara/server/data/catalog/fetched/src/C3037696/C3037696.step",
+     "source_url": "https://www.lcsc.com/product-detail/C3037696.html",
+     "source": "lcsc",
+     "commit": "fetched",
+     "licence": {
+      "spdx": "NOASSERTION",
+      "name": "LCSC/EasyEDA component library model",
+      "url": "https://easyeda.com/page/terms",
+      "commercial_ok": "unknown",
+      "copyleft": "unknown",
+      "attribution_required": "unknown",
+      "notes": "Fetched by part number from the LCSC/EasyEDA library (catalog_build.fetch_lcsc)."
+     },
+     "placement": "aligned_by_bbox"
+    }
    ],
-   "status": "missing",
-   "glb": null,
-   "url": null,
-   "bbox_mm": null,
-   "notes": [],
+   "status": "ok",
+   "glb": "server/data/assets/parts/scd40.glb",
+   "url": "/assets/parts/scd40.glb",
+   "bytes": 29400,
+   "raw_bytes": 311656,
+   "sha256": "f4c29ee64795acaf5d0df82f5b84a5788834478613b4b075020a658a29e3955a",
+   "bbox_mm": {
+    "min": [
+     -5.05,
+     -5.05,
+     0.0
+    ],
+    "max": [
+     5.05,
+     5.05,
+     6.32
+    ]
+   },
+   "nodes": [
+    "=>[0:1:1:3]"
+   ],
+   "notes": [
+    "aligned by bbox: rotate [0.0, 0.0, 0.0] deg, offset [0.0, 0.0, 0.025] mm (computed from model bounds)"
+   ],
    "licence": {
-    "spdx": "CC-BY-SA-4.0",
-    "name": "CC-BY-SA 4.0 with the KiCad library exception",
+    "spdx": "CC-BY-SA-4.0 AND NOASSERTION",
+    "name": "CC-BY-SA 4.0 with the KiCad library exception; LCSC/EasyEDA component library model",
     "url": "https://www.kicad.org/libraries/license/",
-    "commercial_ok": "yes",
+    "commercial_ok": "unknown",
     "copyleft": "yes",
-    "attribution_required": "no",
-    "notes": "KiCad library exception: using the symbols, footprints and 3D models in a design does not make the design subject to the licence."
+    "attribution_required": "unknown",
+    "notes": "Combined: footprint and 3D model come from different sources.",
+    "parts": [
+     {
+      "spdx": "CC-BY-SA-4.0",
+      "name": "CC-BY-SA 4.0 with the KiCad library exception",
+      "url": "https://www.kicad.org/libraries/license/",
+      "commercial_ok": "yes",
+      "copyleft": "yes",
+      "attribution_required": "no",
+      "notes": "KiCad library exception: using the symbols, footprints and 3D models in a design does not make the design subject to the licence."
+     },
+     {
+      "spdx": "NOASSERTION",
+      "name": "LCSC/EasyEDA component library model",
+      "url": "https://easyeda.com/page/terms",
+      "commercial_ok": "unknown",
+      "copyleft": "unknown",
+      "attribution_required": "unknown",
+      "notes": "Fetched by part number from the LCSC/EasyEDA library (catalog_build.fetch_lcsc)."
+     }
+    ]
    }
   },
   {
@@ -5574,23 +5790,78 @@
     "source": "kicad",
     "commit": "10.0.7"
    },
-   "sources": [],
-   "unresolved_models": [
-    "${KICAD10_3DMODEL_DIR}/Sensor.3dshapes/Avago_ADPS-9960.step"
+   "sources": [
+    {
+     "role": "model",
+     "file": "/Users/pranav/helloworld/bara/server/data/catalog/fetched/src/C93222/C93222.step",
+     "source_url": "https://www.lcsc.com/product-detail/C93222.html",
+     "source": "lcsc",
+     "commit": "fetched",
+     "licence": {
+      "spdx": "NOASSERTION",
+      "name": "LCSC/EasyEDA component library model",
+      "url": "https://easyeda.com/page/terms",
+      "commercial_ok": "unknown",
+      "copyleft": "unknown",
+      "attribution_required": "unknown",
+      "notes": "Fetched by part number from the LCSC/EasyEDA library (catalog_build.fetch_lcsc)."
+     },
+     "placement": "aligned_by_bbox"
+    }
    ],
-   "status": "missing",
-   "glb": null,
-   "url": null,
-   "bbox_mm": null,
-   "notes": [],
+   "status": "ok",
+   "glb": "server/data/assets/parts/apds9960.glb",
+   "url": "/assets/parts/apds9960.glb",
+   "bytes": 19760,
+   "raw_bytes": 227376,
+   "sha256": "27663700da520ac4aa9a033a53c6d6d38d63f7d58af772e7b804184bf4e26d66",
+   "bbox_mm": {
+    "min": [
+     -1.97,
+     -1.181,
+     0.0
+    ],
+    "max": [
+     1.97,
+     1.181,
+     1.35
+    ]
+   },
+   "nodes": [
+    "=>[0:1:1:3]"
+   ],
+   "notes": [
+    "rotated 90 deg about Z to match the footprint outline",
+    "aligned by bbox: rotate [0.0, 0.0, 90.0] deg, offset [-1.43, 0.001, 0.105] mm (computed from model bounds)"
+   ],
    "licence": {
-    "spdx": "CC-BY-SA-4.0",
-    "name": "CC-BY-SA 4.0 with the KiCad library exception",
+    "spdx": "CC-BY-SA-4.0 AND NOASSERTION",
+    "name": "CC-BY-SA 4.0 with the KiCad library exception; LCSC/EasyEDA component library model",
     "url": "https://www.kicad.org/libraries/license/",
-    "commercial_ok": "yes",
+    "commercial_ok": "unknown",
     "copyleft": "yes",
-    "attribution_required": "no",
-    "notes": "KiCad library exception: using the symbols, footprints and 3D models in a design does not make the design subject to the licence."
+    "attribution_required": "unknown",
+    "notes": "Combined: footprint and 3D model come from different sources.",
+    "parts": [
+     {
+      "spdx": "CC-BY-SA-4.0",
+      "name": "CC-BY-SA 4.0 with the KiCad library exception",
+      "url": "https://www.kicad.org/libraries/license/",
+      "commercial_ok": "yes",
+      "copyleft": "yes",
+      "attribution_required": "no",
+      "notes": "KiCad library exception: using the symbols, footprints and 3D models in a design does not make the design subject to the licence."
+     },
+     {
+      "spdx": "NOASSERTION",
+      "name": "LCSC/EasyEDA component library model",
+      "url": "https://easyeda.com/page/terms",
+      "commercial_ok": "unknown",
+      "copyleft": "unknown",
+      "attribution_required": "unknown",
+      "notes": "Fetched by part number from the LCSC/EasyEDA library (catalog_build.fetch_lcsc)."
+     }
+    ]
    }
   },
   {
@@ -5685,23 +5956,77 @@
     "source": "kicad",
     "commit": "10.0.7"
    },
-   "sources": [],
-   "unresolved_models": [
-    "${KICAD10_3DMODEL_DIR}/Package_DFN_QFN.3dshapes/QFN-24-1EP_4x4mm_P0.5mm_EP2.7x2.6mm.step"
+   "sources": [
+    {
+     "role": "model",
+     "file": "/Users/pranav/helloworld/bara/server/data/catalog/fetched/src/C24112/C24112.step",
+     "source_url": "https://www.lcsc.com/product-detail/C24112.html",
+     "source": "lcsc",
+     "commit": "fetched",
+     "licence": {
+      "spdx": "NOASSERTION",
+      "name": "LCSC/EasyEDA component library model",
+      "url": "https://easyeda.com/page/terms",
+      "commercial_ok": "unknown",
+      "copyleft": "unknown",
+      "attribution_required": "unknown",
+      "notes": "Fetched by part number from the LCSC/EasyEDA library (catalog_build.fetch_lcsc)."
+     },
+     "placement": "aligned_by_bbox"
+    }
    ],
-   "status": "missing",
-   "glb": null,
-   "url": null,
-   "bbox_mm": null,
-   "notes": [],
+   "status": "ok",
+   "glb": "server/data/assets/parts/mpu6050.glb",
+   "url": "/assets/parts/mpu6050.glb",
+   "bytes": 17468,
+   "raw_bytes": 249852,
+   "sha256": "84bbf294eddb2075d67a08e3e1931b1bf89f178fcde4f18ee137d4764dc051b7",
+   "bbox_mm": {
+    "min": [
+     -2.01,
+     -2.01,
+     0.0
+    ],
+    "max": [
+     2.01,
+     2.01,
+     0.92
+    ]
+   },
+   "nodes": [
+    "=>[0:1:1:3]"
+   ],
+   "notes": [
+    "aligned by bbox: rotate [0.0, 0.0, 0.0] deg, offset [0.0, 0.0, 0.005] mm (computed from model bounds)"
+   ],
    "licence": {
-    "spdx": "CC-BY-SA-4.0",
-    "name": "CC-BY-SA 4.0 with the KiCad library exception",
+    "spdx": "CC-BY-SA-4.0 AND NOASSERTION",
+    "name": "CC-BY-SA 4.0 with the KiCad library exception; LCSC/EasyEDA component library model",
     "url": "https://www.kicad.org/libraries/license/",
-    "commercial_ok": "yes",
+    "commercial_ok": "unknown",
     "copyleft": "yes",
-    "attribution_required": "no",
-    "notes": "KiCad library exception: using the symbols, footprints and 3D models in a design does not make the design subject to the licence."
+    "attribution_required": "unknown",
+    "notes": "Combined: footprint and 3D model come from different sources.",
+    "parts": [
+     {
+      "spdx": "CC-BY-SA-4.0",
+      "name": "CC-BY-SA 4.0 with the KiCad library exception",
+      "url": "https://www.kicad.org/libraries/license/",
+      "commercial_ok": "yes",
+      "copyleft": "yes",
+      "attribution_required": "no",
+      "notes": "KiCad library exception: using the symbols, footprints and 3D models in a design does not make the design subject to the licence."
+     },
+     {
+      "spdx": "NOASSERTION",
+      "name": "LCSC/EasyEDA component library model",
+      "url": "https://easyeda.com/page/terms",
+      "commercial_ok": "unknown",
+      "copyleft": "unknown",
+      "attribution_required": "unknown",
+      "notes": "Fetched by part number from the LCSC/EasyEDA library (catalog_build.fetch_lcsc)."
+     }
+    ]
    }
   },
   {
@@ -5715,23 +6040,77 @@
     "source": "kicad",
     "commit": "10.0.7"
    },
-   "sources": [],
-   "unresolved_models": [
-    "${KICAD10_3DMODEL_DIR}/Package_DFN_QFN.3dshapes/QFN-24_3x3mm_P0.4mm_EP1.7x1.54mm.step"
+   "sources": [
+    {
+     "role": "model",
+     "file": "/Users/pranav/helloworld/bara/server/data/catalog/fetched/src/C726001/C726001.step",
+     "source_url": "https://www.lcsc.com/product-detail/C726001.html",
+     "source": "lcsc",
+     "commit": "fetched",
+     "licence": {
+      "spdx": "NOASSERTION",
+      "name": "LCSC/EasyEDA component library model",
+      "url": "https://easyeda.com/page/terms",
+      "commercial_ok": "unknown",
+      "copyleft": "unknown",
+      "attribution_required": "unknown",
+      "notes": "Fetched by part number from the LCSC/EasyEDA library (catalog_build.fetch_lcsc)."
+     },
+     "placement": "aligned_by_bbox"
+    }
    ],
-   "status": "missing",
-   "glb": null,
-   "url": null,
-   "bbox_mm": null,
-   "notes": [],
+   "status": "ok",
+   "glb": "server/data/assets/parts/icm20948.glb",
+   "url": "/assets/parts/icm20948.glb",
+   "bytes": 49128,
+   "raw_bytes": 621676,
+   "sha256": "1c5176790083104909d3a5f8d3fc553eff4b98d43c70ab423b503bb8b524a80d",
+   "bbox_mm": {
+    "min": [
+     -1.5,
+     -1.5,
+     0.0
+    ],
+    "max": [
+     1.5,
+     1.5,
+     0.91
+    ]
+   },
+   "nodes": [
+    "=>[0:1:1:3]"
+   ],
+   "notes": [
+    "aligned by bbox: rotate [0.0, 0.0, 0.0] deg, offset [0.0, 0.0, 0.005] mm (computed from model bounds)"
+   ],
    "licence": {
-    "spdx": "CC-BY-SA-4.0",
-    "name": "CC-BY-SA 4.0 with the KiCad library exception",
+    "spdx": "CC-BY-SA-4.0 AND NOASSERTION",
+    "name": "CC-BY-SA 4.0 with the KiCad library exception; LCSC/EasyEDA component library model",
     "url": "https://www.kicad.org/libraries/license/",
-    "commercial_ok": "yes",
+    "commercial_ok": "unknown",
     "copyleft": "yes",
-    "attribution_required": "no",
-    "notes": "KiCad library exception: using the symbols, footprints and 3D models in a design does not make the design subject to the licence."
+    "attribution_required": "unknown",
+    "notes": "Combined: footprint and 3D model come from different sources.",
+    "parts": [
+     {
+      "spdx": "CC-BY-SA-4.0",
+      "name": "CC-BY-SA 4.0 with the KiCad library exception",
+      "url": "https://www.kicad.org/libraries/license/",
+      "commercial_ok": "yes",
+      "copyleft": "yes",
+      "attribution_required": "no",
+      "notes": "KiCad library exception: using the symbols, footprints and 3D models in a design does not make the design subject to the licence."
+     },
+     {
+      "spdx": "NOASSERTION",
+      "name": "LCSC/EasyEDA component library model",
+      "url": "https://easyeda.com/page/terms",
+      "commercial_ok": "unknown",
+      "copyleft": "unknown",
+      "attribution_required": "unknown",
+      "notes": "Fetched by part number from the LCSC/EasyEDA library (catalog_build.fetch_lcsc)."
+     }
+    ]
    }
   },
   {
@@ -6233,23 +6612,77 @@
     "source": "kicad",
     "commit": "10.0.7"
    },
-   "sources": [],
-   "unresolved_models": [
-    "${KICAD10_3DMODEL_DIR}/Sensor_Pressure.3dshapes/TE_MS5837-xxBA.step"
+   "sources": [
+    {
+     "role": "model",
+     "file": "/Users/pranav/helloworld/bara/server/data/catalog/fetched/src/C3257869/C3257869.step",
+     "source_url": "https://www.lcsc.com/product-detail/C3257869.html",
+     "source": "lcsc",
+     "commit": "fetched",
+     "licence": {
+      "spdx": "NOASSERTION",
+      "name": "LCSC/EasyEDA component library model",
+      "url": "https://easyeda.com/page/terms",
+      "commercial_ok": "unknown",
+      "copyleft": "unknown",
+      "attribution_required": "unknown",
+      "notes": "Fetched by part number from the LCSC/EasyEDA library (catalog_build.fetch_lcsc)."
+     },
+     "placement": "aligned_by_bbox"
+    }
    ],
-   "status": "missing",
-   "glb": null,
-   "url": null,
-   "bbox_mm": null,
-   "notes": [],
+   "status": "ok",
+   "glb": "server/data/assets/parts/ms5837.glb",
+   "url": "/assets/parts/ms5837.glb",
+   "bytes": 36504,
+   "raw_bytes": 309328,
+   "sha256": "eeddcd8f99cc675bf3de37e748ba6ea4b97cdac04b91cd171305bf26b3b22ad6",
+   "bbox_mm": {
+    "min": [
+     -1.65,
+     -1.65,
+     0.0
+    ],
+    "max": [
+     1.65,
+     1.65,
+     2.74
+    ]
+   },
+   "nodes": [
+    "=>[0:1:1:3]"
+   ],
+   "notes": [
+    "aligned by bbox: rotate [0.0, 0.0, 0.0] deg, offset [0.0, 0.0, 2.745] mm (computed from model bounds)"
+   ],
    "licence": {
-    "spdx": "CC-BY-SA-4.0",
-    "name": "CC-BY-SA 4.0 with the KiCad library exception",
+    "spdx": "CC-BY-SA-4.0 AND NOASSERTION",
+    "name": "CC-BY-SA 4.0 with the KiCad library exception; LCSC/EasyEDA component library model",
     "url": "https://www.kicad.org/libraries/license/",
-    "commercial_ok": "yes",
+    "commercial_ok": "unknown",
     "copyleft": "yes",
-    "attribution_required": "no",
-    "notes": "KiCad library exception: using the symbols, footprints and 3D models in a design does not make the design subject to the licence."
+    "attribution_required": "unknown",
+    "notes": "Combined: footprint and 3D model come from different sources.",
+    "parts": [
+     {
+      "spdx": "CC-BY-SA-4.0",
+      "name": "CC-BY-SA 4.0 with the KiCad library exception",
+      "url": "https://www.kicad.org/libraries/license/",
+      "commercial_ok": "yes",
+      "copyleft": "yes",
+      "attribution_required": "no",
+      "notes": "KiCad library exception: using the symbols, footprints and 3D models in a design does not make the design subject to the licence."
+     },
+     {
+      "spdx": "NOASSERTION",
+      "name": "LCSC/EasyEDA component library model",
+      "url": "https://easyeda.com/page/terms",
+      "commercial_ok": "unknown",
+      "copyleft": "unknown",
+      "attribution_required": "unknown",
+      "notes": "Fetched by part number from the LCSC/EasyEDA library (catalog_build.fetch_lcsc)."
+     }
+    ]
    }
   },
   {
@@ -8155,14 +8588,64 @@
     "source": "kicad",
     "commit": "10.0.7"
    },
-   "sources": [],
-   "unresolved_models": [
-    "${KICAD10_3DMODEL_DIR}/Battery.3dshapes/BatteryHolder_MPD_BC2003_1x2032.step"
+   "sources": [
+    {
+     "role": "model",
+     "file": "/Applications/KiCad/KiCad.app/Contents/SharedSupport/3dmodels/Battery.3dshapes/BatteryHolder_Multicomp_BC-2001_1x2032.step",
+     "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/blob/10.0.7/Battery.3dshapes/BatteryHolder_Multicomp_BC-2001_1x2032.step",
+     "source": "kicad3d",
+     "commit": "10.0.7",
+     "licence": {
+      "spdx": "CC-BY-SA-4.0",
+      "name": "CC-BY-SA 4.0 with the KiCad library exception",
+      "url": "https://www.kicad.org/libraries/license/",
+      "commercial_ok": "yes",
+      "copyleft": "yes",
+      "attribution_required": "no",
+      "notes": "KiCad library exception: using the symbols, footprints and 3D models in a design does not make the design subject to the licence."
+     },
+     "kicad_model": {
+      "path": "${KICAD10_3DMODEL_DIR}/Battery.3dshapes/BatteryHolder_Multicomp_BC-2001_1x2032.step",
+      "offset_mm": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "rotate_deg": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "scale": [
+       1.0,
+       1.0,
+       1.0
+      ],
+      "hidden": false
+     }
+    }
    ],
-   "status": "missing",
-   "glb": null,
-   "url": null,
-   "bbox_mm": null,
+   "status": "ok",
+   "glb": "server/data/assets/parts/holder_cr2032_mpd.glb",
+   "url": "/assets/parts/holder_cr2032_mpd.glb",
+   "bytes": 9616,
+   "raw_bytes": 80384,
+   "sha256": "ca843da8b52eb4925390cf887d3d00873302dc19cccada10d505a91ca179eb92",
+   "bbox_mm": {
+    "min": [
+     -15.25,
+     -10.5,
+     -0.0
+    ],
+    "max": [
+     15.25,
+     9.3,
+     3.85
+    ]
+   },
+   "nodes": [
+    "=>[0:1:1:3]"
+   ],
    "notes": [],
    "licence": {
     "spdx": "CC-BY-SA-4.0",
@@ -8377,23 +8860,77 @@
     "source": "kicad",
     "commit": "10.0.7"
    },
-   "sources": [],
-   "unresolved_models": [
-    "${KICAD10_3DMODEL_DIR}/Battery.3dshapes/BatteryHolder_MPD_BA9VPC_1xPP3.step"
+   "sources": [
+    {
+     "role": "model",
+     "file": "/Users/pranav/helloworld/bara/server/data/catalog/fetched/src/C5556545/C5556545.step",
+     "source_url": "https://www.lcsc.com/product-detail/C5556545.html",
+     "source": "lcsc",
+     "commit": "fetched",
+     "licence": {
+      "spdx": "NOASSERTION",
+      "name": "LCSC/EasyEDA component library model",
+      "url": "https://easyeda.com/page/terms",
+      "commercial_ok": "unknown",
+      "copyleft": "unknown",
+      "attribution_required": "unknown",
+      "notes": "Fetched by part number from the LCSC/EasyEDA library (catalog_build.fetch_lcsc)."
+     },
+     "placement": "aligned_by_bbox"
+    }
    ],
-   "status": "missing",
-   "glb": null,
-   "url": null,
-   "bbox_mm": null,
-   "notes": [],
+   "status": "ok",
+   "glb": "server/data/assets/parts/holder_9v_mpd.glb",
+   "url": "/assets/parts/holder_9v_mpd.glb",
+   "bytes": 30972,
+   "raw_bytes": 344264,
+   "sha256": "d1483b27d4248d6941332618fd750102121d423aa3c11750a6d42343312dcfa3",
+   "bbox_mm": {
+    "min": [
+     -1.955,
+     -22.169,
+     0.0
+    ],
+    "max": [
+     52.995,
+     9.2,
+     26.873
+    ]
+   },
+   "nodes": [
+    "=>[0:1:1:3]"
+   ],
+   "notes": [
+    "aligned by bbox: rotate [0.0, 0.0, 0.0] deg, offset [25.515, -15.037, 14.019] mm (computed from model bounds)"
+   ],
    "licence": {
-    "spdx": "CC-BY-SA-4.0",
-    "name": "CC-BY-SA 4.0 with the KiCad library exception",
+    "spdx": "CC-BY-SA-4.0 AND NOASSERTION",
+    "name": "CC-BY-SA 4.0 with the KiCad library exception; LCSC/EasyEDA component library model",
     "url": "https://www.kicad.org/libraries/license/",
-    "commercial_ok": "yes",
+    "commercial_ok": "unknown",
     "copyleft": "yes",
-    "attribution_required": "no",
-    "notes": "KiCad library exception: using the symbols, footprints and 3D models in a design does not make the design subject to the licence."
+    "attribution_required": "unknown",
+    "notes": "Combined: footprint and 3D model come from different sources.",
+    "parts": [
+     {
+      "spdx": "CC-BY-SA-4.0",
+      "name": "CC-BY-SA 4.0 with the KiCad library exception",
+      "url": "https://www.kicad.org/libraries/license/",
+      "commercial_ok": "yes",
+      "copyleft": "yes",
+      "attribution_required": "no",
+      "notes": "KiCad library exception: using the symbols, footprints and 3D models in a design does not make the design subject to the licence."
+     },
+     {
+      "spdx": "NOASSERTION",
+      "name": "LCSC/EasyEDA component library model",
+      "url": "https://easyeda.com/page/terms",
+      "commercial_ok": "unknown",
+      "copyleft": "unknown",
+      "attribution_required": "unknown",
+      "notes": "Fetched by part number from the LCSC/EasyEDA library (catalog_build.fetch_lcsc)."
+     }
+    ]
    }
   },
   {
@@ -8974,14 +9511,64 @@
     "source": "kicad",
     "commit": "10.0.7"
    },
-   "sources": [],
-   "unresolved_models": [
-    "${KICAD10_3DMODEL_DIR}/Package_DFN_QFN.3dshapes/VQFN-16-1EP_3x3mm_P0.5mm_EP1.68x1.68mm.step"
+   "sources": [
+    {
+     "role": "model",
+     "file": "/Applications/KiCad/KiCad.app/Contents/SharedSupport/3dmodels/Package_DFN_QFN.3dshapes/WQFN-16-1EP_3x3mm_P0.5mm_EP1.68x1.68mm.step",
+     "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/blob/10.0.7/Package_DFN_QFN.3dshapes/WQFN-16-1EP_3x3mm_P0.5mm_EP1.68x1.68mm.step",
+     "source": "kicad3d",
+     "commit": "10.0.7",
+     "licence": {
+      "spdx": "CC-BY-SA-4.0",
+      "name": "CC-BY-SA 4.0 with the KiCad library exception",
+      "url": "https://www.kicad.org/libraries/license/",
+      "commercial_ok": "yes",
+      "copyleft": "yes",
+      "attribution_required": "no",
+      "notes": "KiCad library exception: using the symbols, footprints and 3D models in a design does not make the design subject to the licence."
+     },
+     "kicad_model": {
+      "path": "${KICAD10_3DMODEL_DIR}/Package_DFN_QFN.3dshapes/WQFN-16-1EP_3x3mm_P0.5mm_EP1.68x1.68mm.step",
+      "offset_mm": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "rotate_deg": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "scale": [
+       1.0,
+       1.0,
+       1.0
+      ],
+      "hidden": false
+     }
+    }
    ],
-   "status": "missing",
-   "glb": null,
-   "url": null,
-   "bbox_mm": null,
+   "status": "ok",
+   "glb": "server/data/assets/parts/bq24075.glb",
+   "url": "/assets/parts/bq24075.glb",
+   "bytes": 7696,
+   "raw_bytes": 36968,
+   "sha256": "568b4552e720fa23d7f7fe8bc2bccb380b02e407457c063c74de47f89683d171",
+   "bbox_mm": {
+    "min": [
+     -1.5,
+     -1.5,
+     0.0
+    ],
+    "max": [
+     1.5,
+     1.5,
+     0.8
+    ]
+   },
+   "nodes": [
+    "=>[0:1:1:3]"
+   ],
    "notes": [],
    "licence": {
     "spdx": "CC-BY-SA-4.0",
@@ -9004,14 +9591,64 @@
     "source": "kicad",
     "commit": "10.0.7"
    },
-   "sources": [],
-   "unresolved_models": [
-    "${KICAD10_3DMODEL_DIR}/Package_DFN_QFN.3dshapes/DFN-8-1EP_2x2mm_P0.5mm_EP0.8x1.6mm.step"
+   "sources": [
+    {
+     "role": "model",
+     "file": "/Applications/KiCad/KiCad.app/Contents/SharedSupport/3dmodels/Package_DFN_QFN.3dshapes/DFN-8-1EP_2x2mm_P0.5mm_EP0.6x1.2mm.step",
+     "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/blob/10.0.7/Package_DFN_QFN.3dshapes/DFN-8-1EP_2x2mm_P0.5mm_EP0.6x1.2mm.step",
+     "source": "kicad3d",
+     "commit": "10.0.7",
+     "licence": {
+      "spdx": "CC-BY-SA-4.0",
+      "name": "CC-BY-SA 4.0 with the KiCad library exception",
+      "url": "https://www.kicad.org/libraries/license/",
+      "commercial_ok": "yes",
+      "copyleft": "yes",
+      "attribution_required": "no",
+      "notes": "KiCad library exception: using the symbols, footprints and 3D models in a design does not make the design subject to the licence."
+     },
+     "kicad_model": {
+      "path": "${KICAD10_3DMODEL_DIR}/Package_DFN_QFN.3dshapes/DFN-8-1EP_2x2mm_P0.5mm_EP0.6x1.2mm.step",
+      "offset_mm": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "rotate_deg": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "scale": [
+       1.0,
+       1.0,
+       1.0
+      ],
+      "hidden": false
+     }
+    }
    ],
-   "status": "missing",
-   "glb": null,
-   "url": null,
-   "bbox_mm": null,
+   "status": "ok",
+   "glb": "server/data/assets/parts/max17048.glb",
+   "url": "/assets/parts/max17048.glb",
+   "bytes": 8912,
+   "raw_bytes": 48724,
+   "sha256": "1e0324f730fc233ba08e1887f8a1d909eb36496c8d7da74599127caf023dd40a",
+   "bbox_mm": {
+    "min": [
+     -1.0,
+     -0.99,
+     0.0
+    ],
+    "max": [
+     1.0,
+     0.99,
+     0.92
+    ]
+   },
+   "nodes": [
+    "=>[0:1:1:3]"
+   ],
    "notes": [],
    "licence": {
     "spdx": "CC-BY-SA-4.0",
@@ -9904,14 +10541,64 @@
     "source": "kicad",
     "commit": "10.0.7"
    },
-   "sources": [],
-   "unresolved_models": [
-    "${KICAD10_3DMODEL_DIR}/Package_SO.3dshapes/TSSOP-16-1EP_4.4x5mm_Pitch0.65mm_EP3.4x5mm.step"
+   "sources": [
+    {
+     "role": "model",
+     "file": "/Applications/KiCad/KiCad.app/Contents/SharedSupport/3dmodels/Package_SO.3dshapes/TSSOP-16-1EP_4.4x5mm_P0.65mm.step",
+     "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/blob/10.0.7/Package_SO.3dshapes/TSSOP-16-1EP_4.4x5mm_P0.65mm.step",
+     "source": "kicad3d",
+     "commit": "10.0.7",
+     "licence": {
+      "spdx": "CC-BY-SA-4.0",
+      "name": "CC-BY-SA 4.0 with the KiCad library exception",
+      "url": "https://www.kicad.org/libraries/license/",
+      "commercial_ok": "yes",
+      "copyleft": "yes",
+      "attribution_required": "no",
+      "notes": "KiCad library exception: using the symbols, footprints and 3D models in a design does not make the design subject to the licence."
+     },
+     "kicad_model": {
+      "path": "${KICAD10_3DMODEL_DIR}/Package_SO.3dshapes/TSSOP-16-1EP_4.4x5mm_P0.65mm.step",
+      "offset_mm": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "rotate_deg": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "scale": [
+       1.0,
+       1.0,
+       1.0
+      ],
+      "hidden": false
+     }
+    }
    ],
-   "status": "missing",
-   "glb": null,
-   "url": null,
-   "bbox_mm": null,
+   "status": "ok",
+   "glb": "server/data/assets/parts/drv8833.glb",
+   "url": "/assets/parts/drv8833.glb",
+   "bytes": 20008,
+   "raw_bytes": 192028,
+   "sha256": "00c6a064ad1567cc3cf70f8388d2e922451b5e28caf430651ca1a3269ee40007",
+   "bbox_mm": {
+    "min": [
+     -3.2,
+     -2.5,
+     -0.0
+    ],
+    "max": [
+     3.2,
+     2.5,
+     1.1
+    ]
+   },
+   "nodes": [
+    "=>[0:1:1:3]"
+   ],
    "notes": [],
    "licence": {
     "spdx": "CC-BY-SA-4.0",
@@ -11404,14 +12091,64 @@
     "source": "kicad",
     "commit": "10.0.7"
    },
-   "sources": [],
-   "unresolved_models": [
-    "${KICAD10_3DMODEL_DIR}/Connector_USB.3dshapes/USB_Micro-B_Molex-105017-0001.step"
+   "sources": [
+    {
+     "role": "model",
+     "file": "/Applications/KiCad/KiCad.app/Contents/SharedSupport/3dmodels/Connector_USB.3dshapes/USB_Micro-B_Molex_47346-0001.step",
+     "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/blob/10.0.7/Connector_USB.3dshapes/USB_Micro-B_Molex_47346-0001.step",
+     "source": "kicad3d",
+     "commit": "10.0.7",
+     "licence": {
+      "spdx": "CC-BY-SA-4.0",
+      "name": "CC-BY-SA 4.0 with the KiCad library exception",
+      "url": "https://www.kicad.org/libraries/license/",
+      "commercial_ok": "yes",
+      "copyleft": "yes",
+      "attribution_required": "no",
+      "notes": "KiCad library exception: using the symbols, footprints and 3D models in a design does not make the design subject to the licence."
+     },
+     "kicad_model": {
+      "path": "${KICAD10_3DMODEL_DIR}/Connector_USB.3dshapes/USB_Micro-B_Molex_47346-0001.step",
+      "offset_mm": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "rotate_deg": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "scale": [
+       1.0,
+       1.0,
+       1.0
+      ],
+      "hidden": false
+     }
+    }
    ],
-   "status": "missing",
-   "glb": null,
-   "url": null,
-   "bbox_mm": null,
+   "status": "ok",
+   "glb": "server/data/assets/parts/usb_micro_b_molex.glb",
+   "url": "/assets/parts/usb_micro_b_molex.glb",
+   "bytes": 38028,
+   "raw_bytes": 384264,
+   "sha256": "cbb0ce926343ea259f060815b6904dd1376135e5296183b7fda91e3b4ce4a4a5",
+   "bbox_mm": {
+    "min": [
+     -3.989,
+     -3.77,
+     -0.24
+    ],
+    "max": [
+     3.989,
+     1.648,
+     2.697
+    ]
+   },
+   "nodes": [
+    "=>[0:1:1:3]"
+   ],
    "notes": [],
    "licence": {
     "spdx": "CC-BY-SA-4.0",
@@ -11595,14 +12332,64 @@
     "source": "kicad",
     "commit": "10.0.7"
    },
-   "sources": [],
-   "unresolved_models": [
-    "${KICAD10_3DMODEL_DIR}/Connector_BarrelJack.3dshapes/BarrelJack_CUI_PJ-102AH_Horizontal.step"
+   "sources": [
+    {
+     "role": "model",
+     "file": "/Applications/KiCad/KiCad.app/Contents/SharedSupport/3dmodels/Connector_BarrelJack.3dshapes/BarrelJack_CUI_PJ-063AH_Horizontal.step",
+     "source_url": "https://gitlab.com/kicad/libraries/kicad-packages3D/-/blob/10.0.7/Connector_BarrelJack.3dshapes/BarrelJack_CUI_PJ-063AH_Horizontal.step",
+     "source": "kicad3d",
+     "commit": "10.0.7",
+     "licence": {
+      "spdx": "CC-BY-SA-4.0",
+      "name": "CC-BY-SA 4.0 with the KiCad library exception",
+      "url": "https://www.kicad.org/libraries/license/",
+      "commercial_ok": "yes",
+      "copyleft": "yes",
+      "attribution_required": "no",
+      "notes": "KiCad library exception: using the symbols, footprints and 3D models in a design does not make the design subject to the licence."
+     },
+     "kicad_model": {
+      "path": "${KICAD10_3DMODEL_DIR}/Connector_BarrelJack.3dshapes/BarrelJack_CUI_PJ-063AH_Horizontal.step",
+      "offset_mm": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "rotate_deg": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "scale": [
+       1.0,
+       1.0,
+       1.0
+      ],
+      "hidden": false
+     }
+    }
    ],
-   "status": "missing",
-   "glb": null,
-   "url": null,
-   "bbox_mm": null,
+   "status": "ok",
+   "glb": "server/data/assets/parts/barrel_jack_cui_pj102ah.glb",
+   "url": "/assets/parts/barrel_jack_cui_pj102ah.glb",
+   "bytes": 8444,
+   "raw_bytes": 64020,
+   "sha256": "f773259c0587bc9e3ddec0048a794a8377dfaf74dd9cc9fc5719563a605cb5ca",
+   "bbox_mm": {
+    "min": [
+     -5.0,
+     -12.0,
+     -3.0
+    ],
+    "max": [
+     5.0,
+     1.0,
+     9.0
+    ]
+   },
+   "nodes": [
+    "=>[0:1:1:3]"
+   ],
    "notes": [],
    "licence": {
     "spdx": "CC-BY-SA-4.0",
