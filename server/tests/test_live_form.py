@@ -950,3 +950,24 @@ def test_two_catch_all_blocks_on_one_part_are_one_part() -> None:
     assert comp.twin_slot(lens, {"part_id": "lcsc:pmw3360"}) is sensor
     # the same switch under two clicks is two switches
     assert comp.twin_slot(middle, {"part_id": "lcsc:d2fc"}) is None
+
+
+def test_a_required_block_nothing_meets_takes_the_closest_real_part(monkeypatch: Any) -> None:
+    from bara.live import compose as cmp
+
+    async def none_meet(system: str, user: str, schema: Any, **kw: Any) -> Any:
+        return {"meets": []}, ""
+
+    monkeypatch.setattr(cmp, "ask_json", none_meet)
+    comp = object.__new__(cmp.Composer)
+    comp.resolver = type("R", (), {"rejected": set(), "notes": {}})()  # type: ignore[assignment]
+    comp.extra, comp.near_miss, comp.warning_n = {}, {}, 0
+    need = cp.Need("sensor", "sense.distance", "Mouse sensor", requirement="26000 DPI")
+    slot = cmp.Slot("sensor", "Mouse sensor", "sense.distance", "critical", 1, [], need=need)
+    pmw = {"part_id": "lcsc:pmw3360", "display_name": "PMW3360DM-T2QU"}
+    assert asyncio.run(comp.vet(slot, [pmw])) == []
+    assert "lcsc:pmw3360" in comp.resolver.rejected
+    seen: list[Any] = []
+    comp.take_closest(slot, lambda *a, **k: seen.append(a))
+    assert comp.extra["sensor"] == [pmw] and "lcsc:pmw3360" not in comp.resolver.rejected
+    assert "falls short" in seen[0][1]["warning"]["message"]

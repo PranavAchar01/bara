@@ -399,6 +399,7 @@ class Composer:
         )
         self.fetched: list[dict[str, Any]] = []  # rows added during this build
         self.extra: dict[str, list[dict[str, Any]]] = {}  # slot id -> parts found for it
+        self.near_miss: dict[str, list[dict[str, Any]]] = {}  # slot id -> parts vet turned down
         self.slots = derive_slots(spec, brief, plan, self.comp)
         self.result = ComposeResult(slots=self.slots)
         self.decision_n = 0
@@ -1038,6 +1039,8 @@ class Composer:
                 await self.vet(slot, self.base(slot))
             if slot.need is not None and not self.base(slot):
                 await self.resolve_missing(slot, emit)
+            if slot.need is not None and slot.criticality != "optional" and not self.base(slot):
+                self.take_closest(slot, emit)
             cands, ranked, applied = self.narrow(slot)
             emit("slot.updated", {"slot": slot.json()}, stage="compose")
             top = ranked[:MAX_SURVIVORS]
@@ -1244,6 +1247,7 @@ class Composer:
         for i, p in enumerate(shown):
             if i not in keep:
                 self.resolver.rejected.add(p["part_id"])
+                self.near_miss.setdefault(slot.slot_id, []).append(p)
         out = [p for i, p in enumerate(shown) if i in keep] + parts[12:]
         if not out:
             self.resolver.notes[slot.slot_id] = (
@@ -1252,6 +1256,33 @@ class Composer:
                 + ")"
             )
         return out
+
+    def take_closest(self, slot: Slot, emit: Emit) -> None:
+        """A required block nothing meets takes the first part its spec check turned down: a
+        real part that falls short of one number beats a device missing the function."""
+        near = self.near_miss.get(slot.slot_id, [])
+        if not near or slot.need is None:
+            return
+        part = near[0]
+        self.resolver.rejected.discard(part["part_id"])
+        self.extra.setdefault(slot.slot_id, []).append(part)
+        emit(
+            "warning",
+            {
+                "warning": {
+                    "warning_id": self.next_warning(),
+                    "code": "other",
+                    "severity": "warning",
+                    "message": (
+                        f"{slot.label}: no part found meets '{slot.need.requirement}'; "
+                        f"{part.get('display_name')} is the closest and falls short of it."
+                    )[:300],
+                    "subjects": [{"slot_id": slot.slot_id}],
+                    "stage": "compose",
+                }
+            },
+            stage="compose",
+        )
 
     RELAX_ROUNDS = 2
 
