@@ -114,7 +114,22 @@ def _models_for(it: Item) -> list[dict]:
         if path is not None:
             # keep the footprint author's model offset/rotation/scale (KiCad applies them)
             out.append({"path": str(path), **xforms.get(ref, {})})
+    if not out:
+        out = _sibling_model(it.fp.lib, it.fp.name)
     return out
+
+
+def _sibling_model(lib: str, name: str) -> list[dict]:
+    """A stock footprint the library ships without a 3D model is drawn with the model of
+    its closest sibling of the same body size, so the routed board shows the part."""
+    from bara.kicad_generated import KicadIndex
+
+    index = KicadIndex.open()
+    lender = index.model_footprint(f"{lib}:{name}") if index is not None else None
+    if lender is None:
+        return []
+    models = index.kicad(lender)["models"]
+    return [{"path": m["path"]} for m in models if Path(m["path"]).exists()]
 
 
 def _poly_coords(poly: Polygon, ox: float, oy: float) -> list[list[float]]:

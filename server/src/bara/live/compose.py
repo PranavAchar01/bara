@@ -18,6 +18,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from typing import Any
 
+from bara.kicad_generated import GLB_URL, SERVER, KicadIndex, glb_stem
 from bara.live import completeness as cp
 from bara.live.ask import ask_json
 from bara.live.brief import DISPLAY_TYPES
@@ -48,6 +49,7 @@ log = logging.getLogger(__name__)
 Emit = Callable[..., dict[str, Any]]
 
 MAX_SURVIVORS = 8
+ASSETS_DIR = SERVER / "data" / "assets"
 HALF_GAP_MM = 40.0  # inner-edge gap between split halves in the first placement guess
 
 # function id -> (slot id, label, instance prefix, feature kind for side assignment)
@@ -87,6 +89,28 @@ COMPAT_PARAMS = ("family", "stem", "form_factor", "chemistry")
 DRIVER_CATEGORY = re.compile(
     r"lcsc\.com/product-detail/[^/_]*(Driver|Controller|Interface|Bridge)", re.I
 )
+
+
+def _model_from_footprint(part: dict[str, Any], assets: list[dict[str, Any]]) -> None:
+    """A catalog model that was never made (no file on disk) is replaced by the 3D model of
+    the part's own KiCad footprint, converted on first request, so the part is drawn as
+    itself instead of as a box."""
+    fp = str(part.get("footprint") or "")
+    if ":" not in fp:
+        return
+    for a in assets:
+        url = str(a.get("url") or "")
+        if a.get("kind") != "glb" or not url.startswith("/assets/") or "/kicad_gen/" in url:
+            continue
+        if a.get("status") != "missing" and (ASSETS_DIR / url.removeprefix("/assets/")).is_file():
+            continue
+        index = KicadIndex.open()
+        lender = index.model_footprint(fp) if index is not None else None
+        if lender is None:
+            return
+        a["url"] = f"{GLB_URL}/{glb_stem(lender)}.glb"
+        a["origin"] = "generated"
+        a["status"] = "pending"
 
 
 @dataclass
@@ -952,6 +976,7 @@ class Composer:
                 a["origin"] = "catalog"
             if a.get("status") not in ("ready", "pending", "missing", "unknown"):
                 a["status"] = "pending"
+        _model_from_footprint(part, assets)
         card = card_for(part)
         if not str(card.get("display_name") or "").strip():
             card["display_name"] = str(part.get("mpn") or part.get("part_id") or slot.label)[:120]

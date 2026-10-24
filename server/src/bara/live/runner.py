@@ -249,6 +249,16 @@ class _Stage:
         self.emit("stage.completed", payload)
 
 
+def _footprint_size(part: dict[str, Any]) -> tuple[float, float] | None:
+    """Width and depth in mm of a part's body, from its mechanical bounding box."""
+    bb = (part.get("mechanical") or {}).get("bbox_mm") or {}
+    lo, hi = bb.get("min"), bb.get("max")
+    if not lo or not hi:
+        return None
+    w, d = abs(hi[0] - lo[0]), abs(hi[1] - lo[1])
+    return (round(w, 1), round(d, 1)) if w > 0 and d > 0 else None
+
+
 def _spans(product: form_mod.Form, size: tuple[float, float]) -> bool:
     """True when the form already has the declared width and height (either way round)."""
     xs = [p[0] for p in product.silhouette]
@@ -690,7 +700,14 @@ class LiveRunner:
             if (slot.need is not None and slot.need.touch) or (slot.need is None and plain):
                 groups = slot.need.groups if slot.need is not None else ()
                 out.append(
-                    form_mod.Touch(slot.slot_id, slot.label, fid, max(1, slot.quantity), groups)
+                    form_mod.Touch(
+                        slot.slot_id,
+                        slot.label,
+                        fid,
+                        max(1, slot.quantity),
+                        groups,
+                        _footprint_size(slot.chosen),
+                    )
                 )
         return out
 

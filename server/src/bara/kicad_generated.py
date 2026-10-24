@@ -21,6 +21,7 @@ import sqlite3
 import sys
 import tempfile
 import threading
+from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 
@@ -29,8 +30,10 @@ DEFAULT_PATH = SERVER / "data" / "catalog" / "kicad_index.sqlite"
 GLB_DIR = SERVER / "data" / "assets" / "parts" / "kicad_gen"
 GLB_URL = "/assets/parts/kicad_gen"
 TIER = "kicad_generated"
+SIBLING_SIMILARITY = 0.8  # how alike a sibling footprint's name must be to lend its model
 
 _WORD = re.compile(r"[A-Za-z0-9]+")
+_BODY = re.compile(r"\d+(?:\.\d+)?x\d+(?:\.\d+)?(?:x\d+(?:\.\d+)?)?mm")
 _STEM_BAD = re.compile(r"[^A-Za-z0-9._-]")
 _glb_lock = threading.Lock()
 
@@ -115,6 +118,11 @@ class KicadIndex:
         fp = self.footprint_record(part_id)
         if fp is None:
             return {"footprint": None, "models": []}
+        if not fp.get("model_path"):  # draw it with the same body's model from a sibling
+            lender = self.model_footprint(f"{fp['lib']}:{fp['name']}")
+            if lender is not None:
+                lent = self.record(lender)
+                fp = {**fp, "model_source": lent["model_source"], "model_path": lent["model_path"]}
         return {
             "footprint": {"path": str(_abs(fp["source"], fp["fp_path"]))},
             "models": (
@@ -123,6 +131,31 @@ class KicadIndex:
                 else []
             ),
         }
+
+    def model_footprint(self, footprint: str) -> str | None:
+        """The footprint part id whose 3D model draws footprint "Lib:Name": its own when it has
+        one, else the closest library sibling with the same body size (VQFN-16 3x3 borrows the
+        WQFN-16 3x3 body). None when nothing close enough has a model."""
+        lib, _, name = footprint.partition(":")
+        if not name:
+            return None
+        rows = self.rows(
+            "SELECT part_id, name, has_model FROM kicad_parts WHERE kind = 'footprint' AND lib = ?",
+            (lib,),
+        )
+        body = set(_BODY.findall(name))
+        best, best_r = None, SIBLING_SIMILARITY
+        for r in rows:
+            if not r["has_model"]:
+                continue
+            if r["name"] == name:
+                return str(r["part_id"])
+            if body and not body <= set(_BODY.findall(r["name"])):
+                continue  # another body size is another part
+            ratio = SequenceMatcher(None, r["name"], name).ratio()
+            if ratio > best_r:
+                best, best_r = str(r["part_id"]), ratio
+        return best
 
     def glb_file(self, part_id: str) -> Path | None:
         fp = self.footprint_record(part_id)
