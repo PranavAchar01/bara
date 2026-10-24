@@ -11,20 +11,26 @@ set -euo pipefail
 
 repo="$(cd "$(dirname "$0")/.." && pwd)"
 port="${BARA_PORT:-8797}"
-gh_repo="${BARA_GH_REPO:-PranavAchar01/bara}"
 pointer=web/api/engine.ts
 acct=pranav
 
 publish() {
-  # Rewrite the ENGINE_URL line through the GitHub API, so no local checkout is touched.
-  local url="$1" meta sha body
-  meta="$(gh api "repos/$gh_repo/contents/$pointer?ref=main")"
-  sha="$(jq -r .sha <<<"$meta")"
-  body="$(jq -r .content <<<"$meta" | base64 -D |
-    sed -E "s#^const ENGINE_URL: string = \".*\";#const ENGINE_URL: string = \"$url\";#")"
-  gh api -X PUT "repos/$gh_repo/contents/$pointer" -f message="engine: $url" \
-    -f content="$(printf '%s\n' "$body" | base64)" -f sha="$sha" -f branch=main >/dev/null
-  echo "Published $url; the site picks it up after its redeploy (about a minute)."
+  # Deploy main with ENGINE_URL rewritten, as the logged-in Vercel CLI user. A commit to main
+  # would trigger git deploys that Vercel blocks (the API commit's author is not on the team)
+  # while each still counts against the 100 deploys a day of the free plan.
+  local url="$1" tree
+  tree="$(mktemp -d)"
+  git -C "$repo" fetch -q origin main
+  git -C "$repo" archive origin/main | tar -x -C "$tree"
+  cp -R "$repo/.vercel" "$tree/.vercel"
+  sed -i '' -E "s#^const ENGINE_URL: string = \".*\";#const ENGINE_URL: string = \"$url\";#" \
+    "$tree/$pointer"
+  (cd "$tree" && vercel deploy --prod --yes >/dev/null 2>"$log_dir/vercel.log") || {
+    echo "The site deploy failed (see $log_dir/vercel.log); open" \
+      "https://bara-ivory-five.vercel.app/?server=$url meanwhile." >&2
+    return 1
+  }
+  echo "Published $url and deployed the site."
 }
 
 log_dir="${TMPDIR:-/tmp}/engine-public"
