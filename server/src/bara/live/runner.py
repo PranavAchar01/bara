@@ -449,7 +449,10 @@ class LiveRunner:
         controllers = A.board_controllers() if plan is not None else {}
         blocks = getattr(run, "live_blocks", None)
         if plan is None and blocks is None:
-            blocks, note = await blocks_mod.derive(run.prompt, self.catalog.function_ids())
+            for _ in range(2):  # the diagram sets every part and quantity; one retry on failure
+                blocks, note = await blocks_mod.derive(run.prompt, self.catalog.function_ids())
+                if blocks is not None:
+                    break
             if blocks is None:
                 msg = f"No function block diagram ({note}); only the general invariants apply."
                 self._warn(run, "compose", "w_blocks", "other", "warning", msg)

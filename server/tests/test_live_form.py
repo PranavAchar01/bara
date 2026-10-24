@@ -648,3 +648,73 @@ def test_identity_redraw_below_the_fit_floor_keeps_the_fitting_form(monkeypatch:
     monkeypatch.setattr(rn.form_mod, "derive", fake_big)
     got2 = asyncio.run(rn.LiveRunner.form_stage(fake, run, result, st))  # type: ignore[arg-type]
     assert got2 is bigger
+
+
+# ---------------------------------------------------------------- block diagram survival
+def test_a_cap_without_a_key_switch_is_dropped_and_counts_reach_the_slots() -> None:
+    from bara.live.compose import derive_slots
+
+    spec: dict[str, Any] = {
+        "functions": [
+            {"function_id": "mech.keycap", "required": True, "count": 1, "source": "implicit"},
+            {"function_id": "input.button", "required": True, "count": 1, "source": "explicit"},
+        ]
+    }
+    blocks = {
+        "device_class": "gadget",
+        "mains_input": False,
+        "portable": False,
+        "avg_current_ma": 10,
+        "shell_g": 5,
+        "blocks": [
+            block("input.button", "Face buttons", 4),
+            block("input.button", "Shoulder buttons", 9),
+            block("input.joystick", "Thumbstick", 2),
+            block("mech.keycap", "Cap", 1, category="mechanical"),
+        ],
+    }
+    comp = cp.apply(spec, {}, None, blocks)
+    assert "mech.keycap" not in {f["function_id"] for f in spec["functions"]}
+    assert all(n.function_id != "mech.keycap" for n in comp.needs.values())
+    slots = derive_slots(spec, {}, None, comp)
+    qty = {s.function_id: sum(i.quantity for i in s.instances) for s in slots}
+    assert qty["input.button"] == 13
+    assert qty["input.joystick"] == 2
+    assert "mech.keycap" not in qty
+
+
+def test_ask_json_asks_again_when_the_answer_was_cut_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    import types
+
+    from bara.live import ask
+
+    budgets: list[int] = []
+
+    class Messages:
+        async def create(self, **kw: Any) -> Any:
+            budgets.append(kw["max_tokens"])
+            cut = len(budgets) == 1
+            text = '{"a": "unterminated' if cut else '{"a": "done"}'
+            return types.SimpleNamespace(
+                stop_reason="max_tokens" if cut else "end_turn",
+                content=[types.SimpleNamespace(type="text", text=text)],
+            )
+
+    class Client:
+        def __init__(self, **_: Any) -> None:
+            self.messages = Messages()
+
+        async def close(self) -> None:
+            return None
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
+    monkeypatch.setattr("anthropic.AsyncAnthropic", Client)
+    schema = {
+        "type": "object",
+        "required": ["a"],
+        "properties": {"a": {"type": "string"}},
+        "additionalProperties": False,
+    }
+    data, note = asyncio.run(ask.ask_json("s", "p", schema, name="t", max_tokens=100))
+    assert data == {"a": "done"}, note
+    assert budgets == [100, 200]
