@@ -1,8 +1,9 @@
-"""Bara's voice: ElevenLabs text to speech (streamed) and speech to text (Scribe).
+"""Bara's voice: text to speech (streamed) and speech to text, from ElevenLabs or OpenAI.
 
-The key stays on the server (ELEVENLABS_API_KEY). The voice and model can be changed without a
-code change: BARA_TTS_VOICE (default Charlotte, warm and conversational) and BARA_TTS_MODEL
-(default eleven_v4, the most natural delivery; eleven_flash_v2_5 answers faster).
+Keys stay on the server. ELEVENLABS_API_KEY wins when both are set; otherwise OPENAI_API_KEY
+uses OpenAI's speech and transcription. The voice and model can be changed without a code
+change: BARA_TTS_VOICE and BARA_TTS_MODEL. ElevenLabs defaults to Charlotte on eleven_v4,
+OpenAI to marin on gpt-4o-mini-tts (gpt-4o-transcribe listens).
 """
 
 from __future__ import annotations
@@ -23,16 +24,37 @@ MAX_TTS_CHARS = 800
 MAX_STT_BYTES = 8 * 1024 * 1024
 
 
+OPENAI_API = "https://api.openai.com/v1"
+OPENAI_VOICE = "marin"
+OPENAI_TTS_MODEL = "gpt-4o-mini-tts"
+OPENAI_STT_MODEL = "gpt-4o-transcribe"
+# gpt-4o-mini-tts takes delivery instructions; this keeps Bara warm and brief.
+OPENAI_STYLE = "Warm, friendly and conversational, like a helpful maker friend. Natural pace."
+
+
+def provider() -> str | None:
+    """Which service speaks: ElevenLabs when its key is set, else OpenAI, else none."""
+    if os.environ.get("ELEVENLABS_API_KEY"):
+        return "elevenlabs"
+    if os.environ.get("OPENAI_API_KEY"):
+        return "openai"
+    return None
+
+
 def key() -> str | None:
-    return os.environ.get("ELEVENLABS_API_KEY") or None
+    p = provider()
+    return os.environ.get("ELEVENLABS_API_KEY" if p == "elevenlabs" else "OPENAI_API_KEY") or None
 
 
 def settings() -> dict[str, str | bool]:
+    p = provider()
+    openai = p == "openai"
     return {
-        "tts": key() is not None,
-        "stt": key() is not None,
-        "voice": os.environ.get("BARA_TTS_VOICE", DEFAULT_VOICE),
-        "model": os.environ.get("BARA_TTS_MODEL", DEFAULT_MODEL),
+        "tts": p is not None,
+        "stt": p is not None,
+        "provider": p or "none",
+        "voice": os.environ.get("BARA_TTS_VOICE", OPENAI_VOICE if openai else DEFAULT_VOICE),
+        "model": os.environ.get("BARA_TTS_MODEL", OPENAI_TTS_MODEL if openai else DEFAULT_MODEL),
     }
 
 
@@ -51,22 +73,36 @@ async def open_speech(text: str) -> tuple[httpx.AsyncClient, httpx.Response]:
     """Starts a streamed synthesis. The caller iterates the response and closes both."""
     k = key()
     if not k:
-        raise RuntimeError("no ELEVENLABS_API_KEY")
+        raise RuntimeError("no ELEVENLABS_API_KEY or OPENAI_API_KEY")
     s = settings()
     client = httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=10.0))
-    req = client.build_request(
-        "POST",
-        f"{API}/text-to-speech/{s['voice']}/stream",
-        params={"output_format": "mp3_44100_128"},
-        json=tts_body(text, str(s["model"])),
-        headers={"xi-api-key": k, "accept": "audio/mpeg"},
-    )
+    if s["provider"] == "openai":
+        req = client.build_request(
+            "POST",
+            f"{OPENAI_API}/audio/speech",
+            json={
+                "model": s["model"],
+                "voice": s["voice"],
+                "input": text[:MAX_TTS_CHARS],
+                "instructions": OPENAI_STYLE,
+                "response_format": "mp3",
+            },
+            headers={"authorization": f"Bearer {k}", "accept": "audio/mpeg"},
+        )
+    else:
+        req = client.build_request(
+            "POST",
+            f"{API}/text-to-speech/{s['voice']}/stream",
+            params={"output_format": "mp3_44100_128"},
+            json=tts_body(text, str(s["model"])),
+            headers={"xi-api-key": k, "accept": "audio/mpeg"},
+        )
     resp = await client.send(req, stream=True)
     if resp.status_code != 200:
         detail = (await resp.aread())[:200]
         await resp.aclose()
         await client.aclose()
-        raise RuntimeError(f"elevenlabs tts {resp.status_code}: {detail!r}")
+        raise RuntimeError(f"{s['provider']} tts {resp.status_code}: {detail!r}")
     return client, resp
 
 
@@ -83,7 +119,7 @@ async def transcribe(audio: bytes, content_type: str, keyterms: list[str] | None
     """Text of a short spoken clip. Part names from the build help it spell them right."""
     k = key()
     if not k:
-        raise RuntimeError("no ELEVENLABS_API_KEY")
+        raise RuntimeError("no ELEVENLABS_API_KEY or OPENAI_API_KEY")
     ext = (
         "webm"
         if "webm" in content_type
@@ -91,8 +127,26 @@ async def transcribe(audio: bytes, content_type: str, keyterms: list[str] | None
         if "ogg" in content_type
         else "mp4"
         if "mp4" in content_type
+        else "mp3"
+        if "mpeg" in content_type or "mp3" in content_type
         else "wav"
     )
+    upload = {"file": (f"speech.{ext}", audio, content_type or "application/octet-stream")}
+    if provider() == "openai":
+        form: dict = {"model": OPENAI_STT_MODEL}
+        if keyterms:
+            # A prompt with the build's part names helps it spell them right.
+            form["prompt"] = "Parts: " + ", ".join(t[:50] for t in keyterms[:50])
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                f"{OPENAI_API}/audio/transcriptions",
+                data=form,
+                files=upload,
+                headers={"authorization": f"Bearer {k}"},
+            )
+        if resp.status_code != 200:
+            raise RuntimeError(f"openai stt {resp.status_code}: {resp.text[:200]}")
+        return str(resp.json().get("text") or "").strip()
     data: dict = {"model_id": STT_MODEL, "tag_audio_events": "false"}
     if keyterms:
         data["keyterms"] = [t[:50] for t in keyterms[:50]]
@@ -100,7 +154,7 @@ async def transcribe(audio: bytes, content_type: str, keyterms: list[str] | None
         resp = await client.post(
             f"{API}/speech-to-text",
             data=data,
-            files={"file": (f"speech.{ext}", audio, content_type or "application/octet-stream")},
+            files=upload,
             headers={"xi-api-key": k},
         )
     if resp.status_code != 200:
