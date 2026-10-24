@@ -12,8 +12,8 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-sans);
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: 14px;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
 button,
@@ -104,9 +104,10 @@ mark {
   background: none;
   padding: 0;
   cursor: pointer;
-  font-weight: 600;
-  font-size: 15px;
-  letter-spacing: 0.01em;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 21px;
+  letter-spacing: -0.01em;
 }
 .topbar-build {
   display: flex;
@@ -129,10 +130,11 @@ mark {
   flex: none;
 }
 .status-pill {
+  font-family: var(--font-mono);
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 400;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: var(--track-label);
   padding: 2px 8px;
   border-radius: 999px;
   background: var(--info-soft);
@@ -354,14 +356,18 @@ mark {
   margin-bottom: 12vh;
 }
 .home h1 {
-  font-size: 28px;
-  line-height: 1.25;
-  margin-bottom: 10px;
-  letter-spacing: -0.01em;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 56px;
+  line-height: 0.95;
+  margin-bottom: 18px;
+  letter-spacing: var(--track-display);
 }
 .home p {
-  margin: 0 0 24px;
+  margin: 0 0 28px;
   font-size: 15px;
+  letter-spacing: var(--track-body);
+  color: var(--text-2);
 }
 .home .home-meta {
   margin-top: 24px;
@@ -471,11 +477,12 @@ mark {
   padding: 9px 12px 0;
 }
 .panel-h h2 {
-  font-size: 11px;
-  font-weight: 600;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 400;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--muted);
+  letter-spacing: var(--track-label);
+  color: var(--text-2);
 }
 .panel-meta {
   margin-left: auto;
@@ -680,7 +687,7 @@ button.chip {
   background: var(--accent);
 }
 .stage.over .stage-bar span {
-  background: var(--warn);
+  background: var(--warn-fill);
 }
 .stage-msg {
   grid-column: 2 / 5;

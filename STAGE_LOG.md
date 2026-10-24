@@ -87,6 +87,22 @@ All four must be shared to "Anyone" before submitting.
 
 **Not done yet:** the real React app against the WebSocket contract. Plan: generate components from the Design frames with the Figma agent's design context, then wire them to the mock fixtures.
 
+## Design into the real app (log, newest last)
+
+Branch `figma-design-in-code`, pushed after each step so the backend work can continue alongside.
+
+### 21:09 · Tokens and fonts
+
+**Tools:** Figma agent `get_variable_defs` on the Build running frame, then hand-mapped into `web/src/styles/tokens.css`.
+
+**What moved:** every colour (paper, ink, accent `#0a6cff`, status, part greys), the Float shadow, radius 8, panel widths 248 and 300, and the three typefaces (Averia Serif Libre, Atkinson Hyperlegible Next and Mono) in `index.html`. The Figma names sit next to the app's older names (`--bg`, `--text`…), so all 1,700 lines of existing CSS restyled without edits.
+
+**Small CSS edits:** body 14 px / 1.5, Averia for the brand and the Home headline (−3% tracking, 0.95 leading), mono uppercase labels with 8% tracking for panel headings and status pills, amber fill for over-budget stage bars.
+
+**Friction:** the Figma warn colour `#e0a030` fails AA as text on white, so text uses a darker `#b7791f` and only bars use the Figma value. Dark mode no longer follows the OS; the plan says light only for the demo.
+
+**Minutes:** about 12. **Rating:** 5/5; the variable names carried straight over.
+
 ## Before and after
 
 | Change | Before | After |
