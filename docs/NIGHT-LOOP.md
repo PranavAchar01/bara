@@ -202,3 +202,10 @@ Web: bara-merge agent merges Nithin's figma-design-in-code / agent-board-3d / fi
 - 9e25e3f: a cached row whose MPN names a stock KiCad symbol is served as that library part in the fetched role (44 of 233; reels of one chip merge roles; LCSC row still readable by id). `scripts/provenance_audit.py` lists any remaining overlap (48 MPN hits before the fix).
 - Standing check from now on: every iteration logs LCSC vs stock count per device (monitor prints it per row).
 - Next gap: parts with no stock symbol but generic stock equivalents (tactile switches TS-1187A/TS-1088 -> SW_Push + Button_Switch_SMD, LEDs LTST-C19x -> LED_0603/bicolor, FH12/DF19 FPC -> Connector_FFC-FPC), and footprint-only matches (MSK12C02, MAX17048 TDFN).
+
+### 11:05 two-hour push (his "you have 2 hrs i want the entire engine to work", deadline 12:46)
+- 3-shard suite on a999081: controller PASS 183 s (lcsc 4, stock 3 of 12); mouse FAIL identity only (lcsc 9, stock 0 of 14); mp3 FAIL device.complete + board.drc + identity (lcsc 6, stock 3 of 14).
+- Mouse: the optical sensor anchor ("cursor navigation") classified as a d-pad, so the top got a cross cut; the DPI status LED read as a button ("select") and got an 18.5 mm hole. c13b07a: shell kinds `inner` (sensor, IMU, antenna, chip: pocket only) and `light` (LED: 3.2 mm light pipe), matched before d-pad and button words; touch/fingerprint sensors stay touch.
+- mp3: the "ST7735S 1.77 TFT module" need missed every name search and the 46 catalog display.tft parts were never offered. e336394: resolve_missing's last resort is the catalog by function, spec-checked (a near miss is still taken by take_closest).
+- mp3 board.drc 12: stock KiCad ESP32-WROOM-32E thermal vias are 0.2 mm and numbered 39 (the exposed pad), so the unnumbered-via rule missed them. 46fdab0 drops sub-minimum vias numbered as an SMD pad. Hits every ESP32-WROOM board.
+- Suite restarted on 46fdab0, 4 shards, 26 devices (controller kept as passed): suite pid 7282, monitor bv0ht02hp.
