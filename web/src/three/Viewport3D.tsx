@@ -30,6 +30,11 @@ import { DemandDriver, StudioPost, postEnabled } from "./post";
 import { BoardPlaceholder, BoardStatus, FootprintHover, footprintBoxes } from "./board";
 import { AgentTargetProbe, partWorldBox, registerPart } from "./agentTargets";
 import { agentPose, easeOut } from "./agentCam";
+import { caps } from "../sim/press";
+import { pressKeyOf, type SimInput } from "../sim/inputMap";
+import { canSimulate, enterSimulation, exitSimulation, useSim } from "../sim/simStore";
+import { SimOverlay } from "../sim/SimOverlay";
+import { inputHandlers, SimCaps, SimDriver, SimScreens } from "./sim3d";
 
 const DEG = Math.PI / 180;
 
@@ -193,9 +198,13 @@ function InstancedGroups(props: {
   matrices: THREE.Matrix4[];
   onClick?: (e: ThreeEvent<MouseEvent>) => void;
   onHover?: (on: boolean) => void;
+  /** Simulation: the press key of each element and the inputs they stand for. */
+  sim?: { keys: string[]; inputs: Map<string, SimInput> };
 }) {
   const refs = useRef<(THREE.InstancedMesh | null)[]>([]);
+  const capSeen = useRef(-1);
   useLayoutEffect(() => {
+    capSeen.current = -1;
     for (const ref of refs.current) {
       if (!ref) continue;
       props.matrices.forEach((m, i) => ref.setMatrixAt(i, m));
@@ -203,7 +212,25 @@ function InstancedGroups(props: {
       ref.computeBoundingBox();
       ref.computeBoundingSphere();
     }
-  }, [props.matrices, props.groups]);
+  }, [props.matrices, props.groups, props.sim]);
+  // A pressed key or button sinks along its own up axis.
+  const lift = useMemo(() => new THREE.Matrix4(), []);
+  const pressed = useMemo(() => new THREE.Matrix4(), []);
+  useFrame(() => {
+    const sim = props.sim;
+    if (!sim || capSeen.current === caps.version) return;
+    capSeen.current = caps.version;
+    props.matrices.forEach((m, j) => {
+      const depth = caps.depth.get(sim.keys[j]) ?? 0;
+      const mat = depth > 0 ? pressed.copy(m).multiply(lift.makeTranslation(0, 0, -depth)) : m;
+      for (const ref of refs.current) ref?.setMatrixAt(j, mat);
+    });
+    for (const ref of refs.current) if (ref) ref.instanceMatrix.needsUpdate = true;
+  });
+  const simHandlers = useMemo(() => {
+    const sim = props.sim;
+    return sim ? inputHandlers((e) => (e.instanceId === undefined ? null : (sim.inputs.get(sim.keys[e.instanceId]) ?? null))) : null;
+  }, [props.sim]);
   const n = props.matrices.length;
   return (
     <>
@@ -216,7 +243,12 @@ function InstancedGroups(props: {
           args={[g.geometry, g.material, n]}
           castShadow
           onClick={props.onClick}
+          {...simHandlers}
           onPointerOver={(e) => {
+            if (simHandlers) {
+              simHandlers.onPointerOver(e);
+              return;
+            }
             if (!props.onClick) return;
             e.stopPropagation();
             document.body.style.cursor = "pointer";
@@ -224,7 +256,8 @@ function InstancedGroups(props: {
           }}
           onPointerOut={() => {
             document.body.style.cursor = "";
-            props.onHover?.(false);
+            if (simHandlers) simHandlers.onPointerOut();
+            else props.onHover?.(false);
           }}
         />
       ))}
@@ -323,6 +356,13 @@ function PartNode(props: PartNodeProps) {
     select(part.instance_id);
     focusPart(partLabel(part).key);
   };
+  const simActive = useSim((s) => s.active);
+  const simInputs = useSim((s) => s.byPressKey);
+  const pressKeys = useMemo(() => poses.map((p, j) => pressKeyOf(part, p.index, j)), [poses, part]);
+  const sim = useMemo(
+    () => (simActive && pressKeys.some((k) => simInputs.has(k)) ? { keys: pressKeys, inputs: simInputs } : undefined),
+    [simActive, simInputs, pressKeys],
+  );
   const midZ = loaded ? (loaded.bbox.min.z + loaded.bbox.max.z) / 2 : (box.min[2] + box.max[2]) / 2;
   const topZ = loaded ? loaded.bbox.max.z : box.max[2];
   const centroid = useMemo(() => {
@@ -375,7 +415,7 @@ function PartNode(props: PartNodeProps) {
       onPointerOver={missing ? () => setHover(true) : undefined}
       onPointerOut={missing ? () => setHover(false) : undefined}
     >
-      {!props.covered && <InstancedGroups groups={provisionalGroups} matrices={matrices} onClick={onClick} onHover={onHover} />}
+      {!props.covered && <InstancedGroups groups={provisionalGroups} matrices={matrices} onClick={simActive ? undefined : onClick} onHover={onHover} sim={sim} />}
       {!props.covered &&
         placeholderEdges &&
         matrices.map((m, i) => (
@@ -572,6 +612,7 @@ function EnclosureNode(props: { enc: Enclosure; theme: Theme; selected: boolean;
   if (enc.kind === "none" || !pieces.length) return null;
   const edge = props.failing ? theme.fail : props.selected ? theme.accent : null;
   const onClick = (e: ThreeEvent<MouseEvent>) => {
+    if (useSim.getState().active) return;
     e.stopPropagation();
     useApp.setState({ resizeTarget: { enclosure_id: enc.enclosure_id }, overlay: "resize", selection: null });
   };
@@ -909,7 +950,7 @@ function fitPose(box: THREE.Box3, dir: THREE.Vector3, cam: THREE.PerspectiveCame
   return { pos: target.clone().addScaledVector(dir, dist), target, dist };
 }
 
-type FrameKind = ViewPreset | "hero" | "exploded";
+type FrameKind = ViewPreset | "hero" | "exploded" | "sim";
 
 /** Diagonal (mm) of a full-size keyboard: a device this big gets the whole `fill`. */
 const FULL_SIZE_DIAG_MM = 330;
@@ -928,6 +969,13 @@ function framePose(kind: FrameKind, cam: THREE.PerspectiveCamera, predictExplode
   const box = stageBox() ?? fallbackBox();
   if (predictExplode !== null) box.max.z += stage.gap * maxRank() * (predictExplode - stage.explode);
   if (kind === "exploded") return fitPose(box, EXPLODED_DIR, cam, LABEL_MODEL_WIDTH, Math.max(0.7, sizedFill(box, 0.88)), 0.04);
+  if (kind === "sim") {
+    // The operating view: straight at the control face, the device filling most of the viewport.
+    // A typing device leaves room above for the terminal; a handheld, a narrow strip.
+    const { view, map } = useSim.getState();
+    const typing = map?.mode === "typing";
+    return fitPose(box, new THREE.Vector3(...view.dir).normalize(), cam, 1, typing ? 0.58 : 0.8, typing ? -0.1 : 0.05);
+  }
   const row = kind === "hero" || kind === "iso" || kind === "scene" ? rowDir() : null;
   if (row) return fitPose(box, row, cam, 1, sizedFill(box, 0.78), 0.05);
   const dir =
@@ -1011,9 +1059,14 @@ function CameraRig() {
   const framedFor = useRef<string | null>(null);
   const shift = useRef(0);
   const mode = useRef<"hero" | "exploded">("hero");
-  const start = (kind: FrameKind, predict: number | null = null) => {
+  const simActive = useSim((s) => s.active);
+  const savedCam = useRef<{ pos: THREE.Vector3; target: THREE.Vector3 } | null>(null);
+  const start = (asked: FrameKind, predict: number | null = null) => {
     const ctl = controls as unknown as OrbitLike | null;
-    const to = framePose(kind, cam, predict);
+    // while simulating, every refit (models loading, content changing) keeps the operating view
+    const sim = useSim.getState().active;
+    const kind = sim ? "sim" : asked;
+    const to = framePose(kind, cam, sim ? 0 : predict);
     cam.near = Math.max(0.5, to.dist * 0.02);
     cam.far = to.dist * 20;
     cam.updateProjectionMatrix();
@@ -1029,6 +1082,18 @@ function CameraRig() {
     ctl.addEventListener("start", on);
     return () => ctl.removeEventListener("start", on);
   }, [controls]);
+  useEffect(() => {
+    const ctl = controls as unknown as OrbitLike | null;
+    if (simActive) {
+      savedCam.current = { pos: cam.position.clone(), target: ctl?.target.clone() ?? new THREE.Vector3() };
+      start("sim");
+    } else if (savedCam.current) {
+      const back = savedCam.current;
+      savedCam.current = null;
+      anim.current = { fromP: cam.position.clone(), fromT: ctl?.target.clone() ?? new THREE.Vector3(), toP: back.pos, toT: back.target, t: 0 };
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [simActive]);
   useEffect(() => {
     if (sceneCam && !userMoved.current && stage.explode < 0.05) start(heroOrPreset());
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1304,6 +1369,8 @@ export function labelRows(build: Build | null): LabelRowData[] {
   }
   return [...rows.values()];
 }
+
+const NO_COVER = new Set<string>();
 
 // ---------------------------------------------------------------- companion devices
 
@@ -1583,6 +1650,7 @@ function SceneContents(props: {
   });
   const showCase = toggles.case && !boardOnly;
   const showBoard = toggles.board || boardOnly;
+  const simOn = useSim((s) => s.active);
   const revision = `${build?.build_id ?? ""}:${build?.revision ?? 0}:${parts.length}:${showCase}:${showBoard}:${toggles.keycaps}:${covered.size}`;
   return (
     <>
@@ -1590,6 +1658,7 @@ function SceneContents(props: {
       {preset !== "bottom" && <StudioFloor palette={props.palette} revision={revision} grid />}
       <ExplodeDriver />
       <FocusDriver />
+      <SimDriver />
       <group ref={rootRef}>
         {visible.map((p) => (
           <PartNode
@@ -1630,6 +1699,8 @@ function SceneContents(props: {
             ))}
       </group>
       <CompanionRow />
+      <SimCaps covered={showBoard ? covered : NO_COVER} />
+      <SimScreens />
       <MoveGizmo mode={props.gizmoMode} />
       <CameraRig />
       <AgentCam />
@@ -1639,9 +1710,11 @@ function SceneContents(props: {
       <FitCheck onResult={props.onFit} />
       {props.post && <StudioPost dark={false} />}
       {/* View cube, top left. Build space is Z up: +Y is the back face, -Y the front. */}
-      <GizmoHelper alignment="top-left" margin={[64, 64]} renderPriority={2}>
-        <GizmoViewcube faces={["Right", "Left", "Back", "Front", "Top", "Bottom"]} color="#F4F5F7" textColor="#5B6470" strokeColor="#B9C0C8" hoverColor="#CFE3F7" opacity={1} />
-      </GizmoHelper>
+      {!simOn && (
+        <GizmoHelper alignment="top-left" margin={[64, 64]} renderPriority={2}>
+          <GizmoViewcube faces={["Right", "Left", "Back", "Front", "Top", "Bottom"]} color="#F4F5F7" textColor="#5B6470" strokeColor="#B9C0C8" hoverColor="#CFE3F7" opacity={1} />
+        </GizmoHelper>
+      )}
     </>
   );
 }
@@ -1658,6 +1731,10 @@ export function Viewport3D() {
   const [gizmoMode, setGizmoMode] = useState<"translate" | "rotate">("translate");
   const [boardOnly, setBoardOnly] = useState(false);
   const [misfit, setMisfit] = useState(0);
+  const simOn = useSim((s) => s.active);
+  useEffect(() => {
+    if (simOn) setBoardOnly(false);
+  }, [simOn]);
   // a part pulled out into focus has left its case on purpose: the fit check does not apply
   const focusOn = useApp((s) => s.focusKey !== null);
   // Narrow viewports get a compact toolbar so it stays one row and never covers the prompt bar.
@@ -1694,7 +1771,7 @@ export function Viewport3D() {
         gl={{ antialias: !post, preserveDrawingBuffer: true, powerPreference: "high-performance" }}
       >
         <SceneContents gizmoMode={gizmoMode} theme={theme} palette={palette} boardOnly={boardOnly} post={post} onFit={setMisfit} />
-        <OrbitControls makeDefault enableDamping dampingFactor={0.12} />
+        <OrbitControls makeDefault enableDamping dampingFactor={0.12} enabled={!simOn} />
       </Canvas>
       {hasParts && <LabelOverlay rows={overlayRows} color="#1B1D1F" muted="#5D6166" line="#7C8086" accent="#2E7D46" />}
       {!hasParts && (
@@ -1702,18 +1779,19 @@ export function Viewport3D() {
           {status === "running" || status === "awaiting_input" ? "Parts appear here as they are chosen." : status === "failed" ? "No parts were placed." : "Describe a device to start."}
         </div>
       )}
-      {hasParts && misfit > 0 && !focusOn && (
+      {hasParts && misfit > 0 && !focusOn && !simOn && (
         <div style={MISFIT_CHIP} role="status">
           <span className="chip solid tone-warn" title="The case model does not contain the board in plan view. It is shown as generated and needs regenerating.">
             Case does not fit the board: off by {misfit} mm
           </span>
         </div>
       )}
-      {hasParts && missingCount > 0 && (
+      {hasParts && missingCount > 0 && !simOn && (
         <div className="vp-note small" title="These parts have no 3D model on the server, so they are drawn as boxes sized from the catalog.">
           {missingCount} of the parts drawn as boxes (no model)
         </div>
       )}
+      <SimOverlay />
       <ViewportToolbar gizmoMode={gizmoMode} setGizmoMode={setGizmoMode} boardOnly={boardOnly} setBoardOnly={setBoardOnly} compact={compact} />
     </div>
   );
@@ -1746,6 +1824,8 @@ function ViewportToolbar(props: {
   const preset = useApp((s) => s.preset);
   const moving = useApp((s) => s.moving);
   const hasScene = useApp((s) => !!s.build?.scene);
+  const simOn = useSim((s) => s.active);
+  const simReady = useApp((s) => canSimulate(s.build));
   // Only offer toggles that change something in this build (a smartwatch has no keycaps).
   const applies = useApp(
     useShallow((s) => {
@@ -1760,6 +1840,17 @@ function ViewportToolbar(props: {
   );
   const setPreset = (p: ViewPreset) => setView(p);
   const toggle = (k: keyof typeof toggles) => useApp.setState((s) => ({ toggles: { ...s.toggles, [k]: !s.toggles[k] } }));
+  if (simOn) {
+    return (
+      <div className="vp-toolbar" role="toolbar" aria-label="Simulation" style={props.compact ? { ...TOOLBAR_FIT, gap: 4, padding: "4px 6px" } : TOOLBAR_FIT}>
+        <button type="button" className="seg-btn active" aria-pressed onClick={exitSimulation} title="Leave simulation (Esc)">
+          simulate
+        </button>
+        <span className="vp-sep" />
+        <span className="small sim-hint">Click the device or use your keyboard. Esc leaves.</span>
+      </div>
+    );
+  }
   return (
     <div className="vp-toolbar" role="toolbar" aria-label="View" style={props.compact ? { ...TOOLBAR_FIT, gap: 4, padding: "4px 6px" } : TOOLBAR_FIT}>
       <label className="vp-explode">
@@ -1801,6 +1892,14 @@ function ViewportToolbar(props: {
           </button>
         )}
       </div>
+      {simReady && (
+        <>
+          <span className="vp-sep" />
+          <button type="button" className="seg-btn" aria-pressed={false} onClick={enterSimulation} title="Run the device: press its keys and buttons, see what it does">
+            simulate
+          </button>
+        </>
+      )}
       {moving && (
         <>
           <span className="vp-sep" />

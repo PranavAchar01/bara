@@ -1,8 +1,9 @@
-// Home (Figma: Landing C2, "the product, with Bara at work"). The prompt is step 1; under it a
+// Home (Figma: Landing C2, "the product, with Bara at work"). Bara itself roams the page (LandingAgent). Under the prompt a
 // recording of a real build plays in a product window, then four stills show what Bara does on
 // the canvas, then the user's own builds.
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "../state/store";
+import { LandingAgent } from "./LandingAgent";
 import { ExampleChips, PromptBar } from "./PromptBar";
 
 const VIDEO = { mp4: "/landing/bara-demo.mp4", webm: "/landing/bara-demo.webm", poster: "/landing/bara-demo.jpg" };
@@ -53,15 +54,14 @@ export function LandingHero() {
   const health = useApp((s) => s.health);
   return (
     <>
+      <LandingAgent />
       <section className="ld-head">
         <div className="ld-copy">
           <h1>Describe a device. Watch Bara build it from real parts.</h1>
           <p>It picks open parts, routes the board, shapes the case and writes the firmware, out on the canvas where you can see every move.</p>
+          <div className="ld-home" aria-hidden />
         </div>
         <div className="ld-ask">
-          <span className="ld-one" aria-hidden>
-            1
-          </span>
           <div className="ld-field">
             <PromptBar autoFocus />
             <div className="ld-foot">
