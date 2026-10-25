@@ -1833,3 +1833,93 @@ label.check {
   border-color: var(--accent);
   background: var(--accent-soft);
 }
+
+/* Case material (C21): finish chips, tint, clarity and frost. */
+.case-finish {
+  display: grid;
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.case-finish-h {
+  margin: 4px 0 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.finish-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+.finish-chip {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  padding: 7px 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 120ms ease, transform 160ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.finish-chip:hover {
+  border-color: var(--line-strong);
+}
+.finish-chip:active {
+  transform: scale(0.96);
+}
+.finish-chip.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+.finish-dot {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 12%) inset, 0 1px 2px rgb(0 0 0 / 10%);
+}
+.finish-name {
+  font-size: 12px;
+  font-weight: 500;
+}
+.finish-makes {
+  font-size: 10px;
+  line-height: 1.2;
+  color: var(--muted);
+  text-align: center;
+}
+.tint-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.tint-row .swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+}
+.tint-custom input[type="color"] {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px dashed var(--line-strong);
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+}
+.finish-hint {
+  min-width: 56px;
+  text-align: right;
+  color: var(--muted);
+}
+@media (prefers-reduced-motion: reduce) {
+  .finish-chip {
+    transition: none;
+  }
+}

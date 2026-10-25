@@ -155,3 +155,11 @@ def test_asset_path_ignores_version_suffix(build):
     assert plain is not None
     assert asset_path("/assets/cache/boards/test.kicad_pcb?v=0123456789abcdef") == plain
     assert asset_path("/assets/cache/boards/../../../etc/passwd?v=1") is None
+
+
+def test_bom_names_the_case_finish():
+    from bara.geometry.exports import case_material_note
+
+    enc = {"color": {"hex": "#7FB5E6", "finish": {"preset": "frosted"}}}
+    assert case_material_note(enc) == ", frosted: translucent PETG, #7FB5E6"
+    assert case_material_note({"color": {"hex": "#202326"}}) == ""
