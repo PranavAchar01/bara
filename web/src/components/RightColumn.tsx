@@ -139,6 +139,7 @@ export function PartsList() {
     return out;
   }, [build?.parts, build?.slots]);
   const count = build?.parts.reduce((a, p) => a + p.quantity, 0) ?? 0;
+  if (groups.length === 0 && build?.status !== "running") return null;
   return (
     <Panel
       title="Layers"
@@ -213,6 +214,7 @@ const CHECK_GROUPS: { id: "fail" | "unknown" | "pass"; label: string }[] = [
 /** C17 ChecksPanel. */
 export function ChecksPanel() {
   const checks = useApp((s) => s.build?.checks ?? []);
+  const running = useApp((s) => s.build?.status === "running");
   const vocab = useApp((s) => s.vocab);
   const grouped = useMemo(() => {
     const g: Record<string, CheckResult[]> = { fail: [], unknown: [], pass: [] };
@@ -220,7 +222,7 @@ export function ChecksPanel() {
     for (const k of Object.keys(g)) g[k].sort((a, b) => severityRank(b.severity) - severityRank(a.severity));
     return g;
   }, [checks]);
-  if (!checks.length) return <Panel title="Checks"><Empty>Checks run after placement.</Empty></Panel>;
+  if (!checks.length) return running ? <Panel title="Checks"><Empty>Checks run after placement.</Empty></Panel> : null;
   const row = (c: CheckResult) => {
     const inst = checkInstances(c);
     return (
@@ -277,6 +279,7 @@ export function ConnectionView() {
   const done = build?.status === "done";
   const order = ["electrical", "wireless", "mechanical", "unknown"];
   const sorted = [...conns].sort((a, b) => order.indexOf(known(a.kind, ["electrical", "wireless", "mechanical"] as const)) - order.indexOf(known(b.kind, ["electrical", "wireless", "mechanical"] as const)));
+  if (sorted.length === 0 && build?.status !== "running") return null;
   return (
     <Panel
       title="Wiring"
@@ -349,9 +352,10 @@ export function ConnectionView() {
 export function BoardView() {
   const build = useApp((s) => s.build);
   const boards = build?.boards ?? [];
+  const running = build?.status === "running";
   const [active, setActive] = useState<string | null>(null);
   const board = boards.find((b) => b.board_id === active) ?? boards[0];
-  if (!board) return <Panel title="Board"><Empty>The board appears after enclosure.</Empty></Panel>;
+  if (!board) return running ? <Panel title="Board"><Empty>The board appears after enclosure.</Empty></Panel> : null;
   const routing = known(board.routing?.status, ["routed", "partial", "unrouted", "skipped"] as const);
   return (
     <Panel
@@ -517,9 +521,10 @@ export function FirmwareView() {
   const [path, setPath] = useState<string | null>(null);
   const file = fw?.files.find((f) => f.path === path) ?? fw?.files[0];
   if (!fw) {
+    if (!progress && !running) return null;
     return (
       <Panel title="Firmware">
-        {progress ? <CompileProgress /> : <Empty>{running ? "Firmware is generated after the board." : "No firmware in this build."}</Empty>}
+        {progress ? <CompileProgress /> : <Empty>Firmware is generated after the board.</Empty>}
       </Panel>
     );
   }
