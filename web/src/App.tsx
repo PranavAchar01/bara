@@ -40,7 +40,8 @@ function useKeys() {
         return;
       }
       if (e.metaKey || e.ctrlKey || e.altKey) return;
-      if (e.key === "l" || e.key === "L") useApp.setState((s) => ({ logOpen: !s.logOpen }));
+      // while simulating, letters belong to the device: L types an l instead of opening the log
+      if ((e.key === "l" || e.key === "L") && !useSimPanel.getState().open) useApp.setState((s) => ({ logOpen: !s.logOpen }));
       // Esc steps back one level: a drawer, then a part pulled out, then the selection, then the details panel
       if (e.key === "Escape")
         useApp.setState((s) =>

@@ -43,10 +43,21 @@ DRIVERS: dict[str, dict[str, str]] = {
     "pmw3360": {"zmk": "inorichi/zmk-pmw3360-driver", "qmk": "qmk pointing_device pmw3360"},
 }
 
-BASE_KEYS = (
-    "Q W E R T Y U I O P A S D F G H J K L SEMI Z X C V B N M COMMA DOT FSLH "
-    "N1 N2 N3 N4 N5 N6 N7 N8 N9 N0 MINUS EQUAL LBKT RBKT BSLH SQT GRAVE"
-).split()
+# The ANSI rows, left to right, so a key gets the legend of its place on a real keyboard.
+ANSI_ROWS = [
+    "ESC N1 N2 N3 N4 N5 N6 N7 N8 N9 N0 MINUS EQUAL BSPC".split(),
+    "TAB Q W E R T Y U I O P LBKT RBKT BSLH".split(),
+    "CAPS A S D F G H J K L SEMI SQT RET".split(),
+    "LSHFT Z X C V B N M COMMA DOT FSLH RSHFT".split(),
+    "LCTRL LGUI LALT SPACE RALT RGUI K_APP RCTRL".split(),
+]
+# A split board's bottom row has no space bar (the thumbs carry it).
+SPLIT_BOTTOM = "LCTRL LGUI LALT GRAVE LBKT DEL RBKT LEFT DOWN UP RIGHT RCTRL".split()
+# Which ANSI rows a board of n rows uses: the letter rows first, then numbers, then modifiers.
+ROWS_FOR = {1: [1], 2: [1, 2], 3: [1, 2, 3], 4: [0, 1, 2, 3], 5: [0, 1, 2, 3, 4]}
+SPARE_KEYS = "GRAVE DEL HOME END PG_UP PG_DN UP LEFT DOWN RIGHT INS".split() + [
+    f"F{n}" for n in range(1, 13)
+]
 SPI_NETS = ("SCLK", "MOSI", "MISO", "NCS", "MOTION")
 THUMBS = ["LGUI", "SPACE", "LSHFT", "RET", "BSPC", "LALT", "LCTRL", "TAB"]
 
@@ -106,20 +117,46 @@ def _zmk_gpio(pin: str) -> str:
     return f"<&gpio{m.group(1)} {int(m.group(2))} (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>"
 
 
+def _row_codes(row: int, rows: int, split: bool) -> list[str]:
+    pick = ROWS_FOR.get(rows, list(range(5)) + [1] * (rows - 5))
+    i = pick[row] if row < len(pick) else 1
+    return SPLIT_BOTTOM if split and i == 4 else ANSI_ROWS[i]
+
+
+def _key_code(key: dict[str, Any], half: Any, split: bool) -> str | None:
+    """The ANSI legend for a main key from its (row, column) place, or None past the row's end.
+    A split half takes its columns outward from the T|Y gap; column 0 is always the outer one."""
+    r, c = key["pos"]
+    codes = _row_codes(r, half.rows, split)
+    if split:
+        inner = half.cols - 1 - c  # 0 at the gap
+        at = 5 - inner if half.side == "left" else 6 + inner
+    elif half.cols >= len(codes):
+        at = c
+    else:
+        at = c + min(1, len(codes) - half.cols)  # a narrow grid starts at Q, not Tab
+    return codes[at] if 0 <= at < len(codes) else None
+
+
 def _keymap_rows(plan: KeyboardPlan) -> list[str]:
-    rows: list[str] = []
-    n = 0
-    t = 0
+    split = len(plan.halves) > 1
+    codes: list[list[str | None]] = []
+    used: set[str] = set()
     for half in plan.halves:
-        line = []
-        for key in half.keys:
+        line = [None if k.get("thumb") else _key_code(k, half, split) for k in half.keys]
+        used |= {c for c in line if c}
+        codes.append(line)
+    spare = iter([k for k in SPARE_KEYS if k not in used] * 4)
+    rows: list[str] = []
+    t = 0
+    for half, line in zip(plan.halves, codes, strict=True):
+        out = []
+        for key, code in zip(half.keys, line, strict=True):
             if key.get("thumb"):
-                line.append(f"&kp {THUMBS[t % len(THUMBS)]}")
+                code = THUMBS[t % len(THUMBS)]
                 t += 1
-            else:
-                line.append(f"&kp {BASE_KEYS[n % len(BASE_KEYS)]}")
-                n += 1
-        rows.append("  ".join(line))
+            out.append(f"&kp {code or next(spare)}")
+        rows.append("  ".join(out))
     return rows
 
 

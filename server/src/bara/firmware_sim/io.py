@@ -45,6 +45,12 @@ HID_USAGE: dict[str, int] = {
     "FSLH": 0x38,
     "CAPS": 0x39,
     **{f"F{n}": 0x3A + n - 1 for n in range(1, 13)},
+    "INS": 0x49,
+    "HOME": 0x4A,
+    "PG_UP": 0x4B,
+    "DEL": 0x4C,
+    "END": 0x4D,
+    "PG_DN": 0x4E,
     "RIGHT": 0x4F,
     "LEFT": 0x50,
     "DOWN": 0x51,
@@ -58,6 +64,7 @@ HID_USAGE: dict[str, int] = {
     "RSHFT": 0xE5,
     "RALT": 0xE6,
     "RGUI": 0xE7,
+    "K_APP": 0x65,
 }
 _KEY_WORDS = {
     "RET": "Enter",
