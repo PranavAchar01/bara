@@ -12,6 +12,7 @@ import { focusKeyOf } from "../three/Viewport3D";
 import { speak } from "../voice/voice";
 import { loadOptions } from "./AskBot";
 import { parseAsk, resolveAsk } from "./ask";
+import { relation } from "./relation";
 
 /** Words that point at what is already on the canvas ("make it blue", "the keycaps"). */
 const REFERS = /\b(it|its|this|that|these|those|the|my)\b/;
@@ -118,22 +119,27 @@ export async function act(raw: string): Promise<void> {
     return;
   }
 
-  // a second device, or a part to add, as the engine reads the line
-  const r = await getRest().request<{ kind: string; thing: string | null; prompt: string }>("POST", "/v1/intent", {
+  // a second device, or a part to add: the engine's model reads the line against the open device; with no
+  // model answering (no key), the shape of the sentence decides ("a mouse next to it", "add a knob to it")
+  const r = await getRest().request<{ kind: string; thing: string | null; prompt: string; note?: string }>("POST", "/v1/intent", {
     prompt: text,
     has_build: true,
     build_prompt: build.prompt,
     part_names: build.parts.map((p) => p.label ?? p.card.display_name),
   });
-  if (r.ok && r.body.kind === "companion") {
+  const answered = r.ok && !(r.body.kind === "new" && r.body.note);
+  const read = answered ? { kind: r.body.kind, thing: r.body.thing, prompt: r.body.prompt } : relation(text);
+  if (read?.kind === "companion") {
     addCompanionCanvas();
-    startBuild(r.body.prompt);
-    say(`Starting a ${r.body.thing ?? "device"} next to this one.`);
+    startBuild(read.prompt);
+    say(`Starting ${read.thing ? `a ${read.thing}` : "it"} next to this one.`);
     return;
   }
-  if (r.ok && r.body.kind === "modify" && r.body.thing) {
-    if (await addPart(r.body.thing)) return;
-    say(`A ${r.body.thing} isn't among the parts I can add yet.`);
+  // the model says "modify" without naming the part; the sentence usually does ("add a knob to it")
+  const thing = read?.kind === "modify" ? (read.thing ?? relation(text)?.thing ?? null) : null;
+  if (thing) {
+    if (await addPart(thing)) return;
+    say(`A ${thing} isn't among the parts I can add yet.`);
     return;
   }
   if (intent.kind === "question") {
