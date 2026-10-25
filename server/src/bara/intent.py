@@ -22,8 +22,10 @@ _LINK = (
 _REF = r"(?:the|this|my|it|that|our)"
 _RELATION = re.compile(
     rf"^(?:{_VERB}\s+(?:me\s+)?)?(?:an?\s+|another\s+|matching\s+|some\s+)*"
-    rf"(?P<thing>[a-z0-9-]+(?:\s+[a-z0-9-]+){{0,3}}?)\s+{_LINK}\s+{_REF}\b"
+    rf"(?P<thing>[a-z0-9-]+(?:\s+[a-z0-9-]+){{0,3}}?)\s+(?P<link>{_LINK})\s+{_REF}\b"
 )
+# Links that put the thing beside the build, never inside it: "a trackball to go with it" is its own device.
+_BESIDE = {"to go with", "that goes with", "that pairs with", "paired with", "next to", "beside", "alongside"}
 
 
 def part_words(catalog: Catalog, function_words: dict[str, Any]) -> set[str]:
@@ -48,6 +50,6 @@ def classify(prompt: str, has_build: bool, parts: set[str]) -> dict[str, Any]:
     thing = m.group("thing").strip()
     head = thing.split()[-1]
     singular = head[:-1] if head.endswith("s") and len(head) > 3 else head
-    if head in parts or singular in parts:
+    if (head in parts or singular in parts) and m.group("link") not in _BESIDE:
         return {"kind": "modify", "thing": thing, "prompt": prompt.strip()}
     return {"kind": "companion", "thing": thing, "prompt": f"a {thing}"}

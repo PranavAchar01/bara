@@ -20,6 +20,11 @@ def test_a_part_of_a_build_is_a_change() -> None:
         assert intent.classify(p, True, PARTS)["kind"] == "modify", p
 
 
+def test_a_part_named_beside_the_build_is_still_its_own_device() -> None:
+    for p in ("build a screen to go with it", "a battery pack next to the keyboard", "a speaker beside it"):
+        assert intent.classify(p, True, PARTS)["kind"] == "companion", p
+
+
 def test_plain_prompts_and_empty_canvases_start_over() -> None:
     assert intent.classify("a gameboy", True, PARTS)["kind"] == "new"
     assert intent.classify("add a mouse to the keyboard", False, PARTS)["kind"] == "new"

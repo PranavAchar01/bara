@@ -157,16 +157,10 @@ export function EditStatus() {
     }, 6000);
     return () => clearTimeout(h);
   }, [edit?.phase, edit?.msg_id]);
-  if (!edit) return null;
+  // a change that went through is said by Bara (SaysLine) and seen on the model; only waiting and refusals show here
+  if (!edit || edit.phase === "applied") return null;
   const close = () => useApp.setState((s) => ({ view: { ...s.view, edit: null } }));
-  const text =
-    edit.phase === "pending"
-      ? "Sending edit"
-      : edit.phase === "applying"
-        ? "Applying edit"
-        : edit.phase === "applied"
-          ? "Edit applied"
-          : "Edit rejected";
+  const text = edit.phase === "pending" ? "Sending edit" : edit.phase === "applying" ? "Applying edit" : "Edit rejected";
   return (
     <div className={`edit-status ph-${edit.phase}`} role="status" aria-live="polite">
       <div className="edit-head">

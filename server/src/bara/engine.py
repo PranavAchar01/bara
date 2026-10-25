@@ -149,7 +149,79 @@ class Engine:
 
     # ---- registry ----------------------------------------------------------
     def get(self, build_id: str) -> BuildRun | None:
-        return self.builds.get(build_id)
+        """A build by id: one running here, or one from the library brought back to life, so a build
+        reopened after a restart can still be edited."""
+        return self.builds.get(build_id) or self._revive(build_id)
+
+    def _stored_events(self, build_id: str) -> tuple[dict[str, Any], list[dict[str, Any]]] | None:
+        try:
+            entry = self.library.get(build_id)
+        except ValueError:
+            return None
+        if entry is None:
+            return None
+        events = [e for e in entry.get("events", []) if isinstance(e, dict) and "seq" in e]
+        return entry, events
+
+    @staticmethod
+    def _replay_state(build_id: str, entry: dict[str, Any], events: list[dict[str, Any]]) -> dict[str, Any]:
+        build: dict[str, Any] = new_build(build_id, str(entry.get("prompt") or ""), str(entry.get("created_at") or now_ts()))
+        for e in events:
+            build = apply_event(build, e) or build
+        return build
+
+    def _revive(self, build_id: str) -> BuildRun | None:
+        stored = self._stored_events(build_id)
+        if stored is None:
+            return None
+        entry, events = stored
+        if not events:
+            return None
+        run = BuildRun(
+            build_id=build_id,
+            prompt=str(entry.get("prompt") or ""),
+            options={},
+            keep=self.settings.event_log_keep,
+            state=self._replay_state(build_id, entry, events),
+            recorder=self.library,
+            device=str(entry.get("device") or ""),
+        )
+        run.seq = max(int(e["seq"]) for e in events)
+        run.log = events[-run.keep :]
+        done = run.state.get("status") == "done"
+        run.terminal = "build.done" if done else "build.failed"
+        run.replay_finished = True
+        run.edit_counter = len({e["payload"].get("edit_id") for e in events if e.get("type") in ("edit.applied", "edit.rejected")})
+        self.builds[build_id] = run
+        return run
+
+    def restore(self, run: BuildRun, revision: int) -> int:
+        """Put the build back the way it was at `revision`, as a new revision (undo, redo and history).
+
+        The stored events up to that revision are replayed; a later restore is itself a snapshot, so
+        going back and forth stays exact. Returns the new revision."""
+        if run.terminal != "build.done":
+            raise ValueError("Restoring opens once the build is done.")
+        stored = self._stored_events(run.build_id)
+        if stored is None:
+            raise ValueError("This build has no stored history.")
+        entry, events = stored
+        if revision < 0 or revision >= int(run.state.get("revision", 0)):
+            raise ValueError(f"No revision {revision} to go back to.")
+        upto = [e for e in events if e.get("revision") is None or int(e["revision"]) <= revision]
+        content = self._replay_state(run.build_id, entry, upto)
+        new_revision = int(run.state.get("revision", 0)) + 1
+        content["revision"] = new_revision
+        content["status"] = "done"
+        content["last_seq"] = run.seq + 1
+        # emit() does not adopt a snapshot's build, so the run takes it first
+        run.state = content
+        run.emit(
+            "build.snapshot",
+            {"build": copy.deepcopy(content), "reason": "restore", "restored_from": revision},
+            revision=new_revision,
+        )
+        return new_revision
 
     def start(self, prompt: str, options: dict[str, Any] | None) -> BuildRun:
         build_id = new_build_id()

@@ -118,6 +118,11 @@ await page.mouse.down();
 await glide(canvas.x + 140, canvas.y + 10, 1800);
 await page.mouse.up();
 await page.waitForTimeout(600);
+// the view options are folded into one button until wanted
+const viewBtn = await center(".vp-view-btn");
+await glide(viewBtn.x, viewBtn.y, 700);
+await page.mouse.click(viewBtn.x, viewBtn.y);
+await page.waitForTimeout(400);
 const slider = await center('input[aria-label="Explode"]');
 const left = slider.b.x + 4;
 const right = slider.b.x + slider.b.width - 4;

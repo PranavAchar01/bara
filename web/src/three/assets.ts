@@ -6,7 +6,7 @@
 // footprint), so the viewer can lift a board's components with their parts.
 // Failures resolve to null so the caller draws the bbox placeholder; one bad
 // asset never blocks the scene.
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import * as THREE from "three";
 import { GLTFLoader, type GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
@@ -468,6 +468,23 @@ export function modelsVersion(): number {
   return loadedVersion;
 }
 
+/** How many models are being fetched right now, for the canvas's loading sign. */
+let loading = 0;
+const loadingListeners = new Set<() => void>();
+function bumpLoading(by: number): void {
+  loading = Math.max(0, loading + by);
+  for (const l of loadingListeners) l();
+}
+export function useModelsLoading(): boolean {
+  return useSyncExternalStore(
+    (fn) => {
+      loadingListeners.add(fn);
+      return () => loadingListeners.delete(fn);
+    },
+    () => loading > 0,
+  );
+}
+
 export function useModel(url: string | null, board = false): ModelState {
   const [state, setState] = useState<ModelState>(url ? { status: "loading" } : { status: "none" });
   useEffect(() => {
@@ -476,8 +493,15 @@ export function useModel(url: string | null, board = false): ModelState {
       return;
     }
     let live = true;
+    let counted = true;
+    bumpLoading(1);
+    const settle = () => {
+      if (counted) bumpLoading(-1);
+      counted = false;
+    };
     setState({ status: "loading" });
     void loadModel(url, board).then((m) => {
+      settle();
       if (!live) return;
       setState(m ? { status: "ready", model: m } : { status: "failed" });
       loadedVersion++;
@@ -485,6 +509,7 @@ export function useModel(url: string | null, board = false): ModelState {
     });
     return () => {
       live = false;
+      settle();
     };
   }, [url, board]);
   return state;

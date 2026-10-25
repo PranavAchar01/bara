@@ -269,6 +269,23 @@ def build_router(svc: Services) -> APIRouter:
             raise ApiError("E_NOT_FOUND", f"No stored build {build_id}.")
         return body({"deleted": build_id})
 
+    @api.post("/v1/builds/{build_id}/restore")
+    async def restore(build_id: str, request: Request) -> JSONResponse:
+        """Undo, redo and history: the build as it was at an earlier revision, as a new revision."""
+        run = run_or_404(build_id)
+        try:
+            data = await request.json()
+        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+            raise ApiError("E_BAD_MESSAGE", "Body is not JSON.") from exc
+        target = data.get("revision")
+        if not isinstance(target, int):
+            raise ApiError("E_BAD_MESSAGE", "Send revision, a whole number.")
+        try:
+            revision = svc.engine.restore(run, target)
+        except ValueError as exc:
+            raise ApiError("E_BAD_MESSAGE", str(exc)) from exc
+        return body({"revision": revision})
+
     @api.get("/v1/builds/{build_id}")
     def get_build(build_id: str) -> JSONResponse:
         return body({"build": run_or_404(build_id).state})

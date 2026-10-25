@@ -1,5 +1,5 @@
-/* The agent on stage (AgentStage.tsx): the bot, its cursor and the selection
-   box it draws, over the whole workspace. Above panels and menus, below modal
+/* The agent on stage (AgentStage.tsx): the bot and the ripple of a pick, over the
+   whole workspace (no cursor: the bot and the lit part are the only things to follow). Above panels and menus, below modal
    scrims (60), the event log (70) and toasts (80). Never takes a click. */
 .agent-stage {
   position: fixed;
@@ -45,57 +45,6 @@
   filter: drop-shadow(0 3px 6px rgb(0 0 0 / 18%));
 }
 
-/* Cursor: a notched accent arrowhead the bot steers, leaning into its travel. Tip at the element origin. */
-.as-cursor {
-  --as-cur: var(--as-c);
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 20px;
-  height: 20px;
-  transform-origin: 0 0;
-  will-change: transform;
-  opacity: 0;
-  transition: opacity 180ms ease;
-}
-.as-cursor[data-on="1"] {
-  opacity: 1;
-}
-.as-cursor[data-bad="1"] {
-  --as-cur: var(--fail);
-}
-.as-cursor svg {
-  display: block;
-  overflow: visible;
-  margin: -3px 0 0 -3px;
-  filter: drop-shadow(0 3px 6px color-mix(in srgb, var(--as-cur) 45%, transparent)) drop-shadow(0 1px 1px rgb(0 0 0 / 25%));
-}
-.as-cur-rim {
-  fill: var(--surface);
-  stroke: var(--surface);
-  stroke-width: 4.2;
-  stroke-linejoin: round;
-}
-.as-cur-body {
-  fill: url(#as-cur-g);
-  stroke: url(#as-cur-g);
-  stroke-width: 1.4;
-  stroke-linejoin: round;
-}
-.as-cur-lit {
-  stop-color: color-mix(in srgb, var(--as-cur) 70%, white);
-}
-.as-cur-deep {
-  stop-color: var(--as-cur);
-}
-/* a short highlight along the top edge, so it reads as a lit object, not a flat glyph */
-.as-cur-shine {
-  fill: none;
-  stroke: rgb(255 255 255 / 55%);
-  stroke-width: 1.1;
-  stroke-linecap: round;
-}
-
 .as-ripple {
   position: absolute;
   left: 0;
@@ -130,7 +79,6 @@
   .as-ripple.on::after {
     animation: none;
   }
-  .as-cursor,
   .as-bot {
     transition: none;
   }

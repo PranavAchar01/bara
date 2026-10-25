@@ -181,18 +181,39 @@ export function StudioFloor(props: { palette: StudioPalette; revision: string; g
     });
     return () => cancelAnimationFrame(id);
   }, [version, props.revision]);
+  // Back from a part in focus, the floor waits for a fresh shadow of the reassembled build before it
+  // shows again: the old one could have been baked from the shelf and lingered for a second.
+  const floorRef = useRef<THREE.Group>(null);
+  const hidden = useRef(false);
+  const showIn = useRef(0);
+  const invalidate = useThree((s) => s.invalidate);
   useFrame(() => {
+    const g = floorRef.current;
     if (stage.focusK > 0) {
       if (settleSeen.current !== stage.settleVersion) stale.current = true;
       settleSeen.current = stage.settleVersion;
+      hidden.current = true;
+      showIn.current = 0;
+      if (g) g.visible = false;
+      // the canvas draws on demand: keep frames coming until this loop has seen focus end and re-baked
+      invalidate();
       return;
     }
+    if (hidden.current && showIn.current === 0) stale.current = true;
     if (settleSeen.current !== stage.settleVersion || stale.current) {
       settleSeen.current = stage.settleVersion;
       stale.current = false;
       setFooting(measure());
       setVersion((v) => v + 1);
+      // the remounted shadow bakes on its first frame; show the floor the frame after that
+      if (hidden.current) showIn.current = 3;
     }
+    if (hidden.current && showIn.current > 0) {
+      showIn.current -= 1;
+      if (showIn.current === 0) hidden.current = false;
+      invalidate();
+    }
+    if (g) g.visible = !hidden.current && !useApp.getState().focusKey;
   });
   const z = (footing?.floorZ ?? 0) - 0.05;
   const size = footing?.size ?? new THREE.Vector3(200, 200, 30);
@@ -204,10 +225,10 @@ export function StudioFloor(props: { palette: StudioPalette; revision: string; g
   );
   useEffect(() => () => tex?.dispose(), [tex]);
   const span = Math.max(size.x, size.y, 120);
-  // A part in focus floats free of the build; the floor and its shadow belong to the build.
-  const focused = useApp((s) => s.focusKey !== null);
+  // A part in focus floats free of the build; the floor and its shadow belong to the build (the frame
+  // loop above shows and hides it).
   return (
-    <group visible={!focused}>
+    <group ref={floorRef}>
       {tex && (
         <mesh position={[g.x0 + g.w / 2, g.y0 + g.h / 2, z - 0.15]} raycast={() => null} renderOrder={-2}>
           <planeGeometry args={[g.w + 2 * g.band, g.h + 2 * g.band]} />
