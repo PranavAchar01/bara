@@ -205,7 +205,7 @@ Source: `common.schema.json`.
 | `BBox` | object |  | Axis aligned box in mm. |
 | `HexColor` | string | pattern `^#[0-9a-fA-F]{6}$` |  |
 | `Material` | enum | `plastic`, `metal`, `pcb`, `rubber`, `glass`, `fabric`, `wood`, `unknown` |  |
-| `Color` | object |  | hex, material, node, and an optional finish: `finish.preset` (matte, satin, gloss, silk, frosted, clear, smoke, metal, unknown), `finish.clarity` (0 to 1, how much light a see-through finish passes) and `finish.frost` (0 polished to 1 frosted). Cases use the finish for printable and cut materials, including see-through ones. |
+| `Color` | object |  |  |
 | `StageId` | enum | `classify`, `reuse`, `compose`, `place`, `enclose`, `board`, `firmware`, `render`, `edit`, `unknown` |  |
 | `Tier` | enum | `exact`, `substitute`, `compose`, `unknown` | exact: an open design satisfies every hard requirement and there are no soft ones. substitute: hard requirements met, soft ones applied as whitelisted transforms. compose: built from parts. |
 | `Severity` | enum | `info`, `warning`, `error`, `critical`, `unknown` |  |
