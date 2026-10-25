@@ -520,55 +520,22 @@
   letter-spacing: var(--track-label);
 }
 
-/* Whole-build progress (time left) and the done confirmation, top of the canvas. */
-.build-progress,
-.build-done {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: calc(var(--radius) + 2px);
-  box-shadow: var(--shadow-pop);
-  padding: 8px 12px;
-  min-width: min(360px, calc(100vw - 32px));
-}
-.bp-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: 12px;
-  margin-bottom: 6px;
+/* Whole-build progress: a thin bar at the top of the canvas, nothing else. */
+.build-progress {
+  width: min(240px, calc(100vw - 32px));
 }
 .bp-track {
-  height: 6px;
-  border-radius: 3px;
+  height: 3px;
+  border-radius: 2px;
   background: var(--paper-3);
   overflow: hidden;
 }
 .bp-track > span {
   display: block;
   height: 100%;
-  border-radius: 3px;
+  border-radius: 2px;
   background: var(--ink);
   transition: width 0.8s ease;
-}
-.build-done {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  border-color: var(--ok);
-}
-.bd-check {
-  display: inline-grid;
-  place-items: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 9px;
-  background: var(--ok);
-  color: var(--surface);
-  font-size: 11px;
-}
-.build-done .btn {
-  margin-left: auto;
 }
 
 /* Focus card (Figma 17): Bara asks what to do with the part pulled out of the build. */
