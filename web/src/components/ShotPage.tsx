@@ -1,16 +1,19 @@
 // A product shot of one saved build (?shot=<build_id>): the device alone on a transparent canvas, filling
-// the window. scripts/render-shots.mjs opens this for every build in the library and keeps the picture.
-// window.__shot says when it is worth taking: the build has loaded and no model has landed for a while.
+// the window. Once it is fully drawn (no model has landed for a while) it crops itself and leaves the WebP
+// in window.__shotData, with window.__shot = "shot". library/shots.ts (a hidden frame, when a build finishes)
+// and scripts/render-shots.mjs (older builds) take it from there.
 import { useEffect, useMemo, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { openLibraryBuild } from "../net/client";
 import { useApp } from "../state/store";
 import { DeviceScene } from "../three/Viewport3D";
 import { onModelsChanged } from "../three/assets";
+import { cropShot } from "../library/shots";
 
 declare global {
   interface Window {
-    __shot?: "loading" | "ready" | "failed";
+    __shot?: "loading" | "shot" | "failed";
+    __shotData?: string | null;
   }
 }
 
@@ -35,11 +38,16 @@ export function ShotPage(props: { buildId: string }) {
   }, [props.buildId]);
   useEffect(() => {
     if (!loaded) return;
-    let t = window.setTimeout(() => (window.__shot = "ready"), SETTLE_MS);
+    const take = () => {
+      const canvas = document.querySelector<HTMLCanvasElement>(".shot-stage canvas");
+      window.__shotData = canvas ? cropShot(canvas) : null;
+      window.__shot = window.__shotData ? "shot" : "failed";
+    };
+    let t = window.setTimeout(take, SETTLE_MS);
     const off = onModelsChanged(() => {
       window.__shot = "loading";
       window.clearTimeout(t);
-      t = window.setTimeout(() => (window.__shot = "ready"), SETTLE_MS);
+      t = window.setTimeout(take, SETTLE_MS);
     });
     return () => {
       off();

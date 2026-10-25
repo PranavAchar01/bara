@@ -98,3 +98,22 @@ def test_list_carries_product_shot_once_rendered(client) -> None:
     shot.write_bytes(b"RIFF0000WEBP")
     url = client.get("/v1/library").json()["builds"][0]["shot_url"]
     assert url.startswith("/assets/cache/shots/b_cccc3333.webp?v=")
+
+
+def test_shot_upload_is_listed_and_deleted_with_the_build(client) -> None:
+    lib = client.app.state.services.engine.library
+    _finish(_run("b_dddd4444", lib, "2026-10-04T00:00:00Z"))
+    webp = b"RIFF" + (100).to_bytes(4, "little") + b"WEBPVP8 " + b"\0" * 96
+    r = client.put("/v1/library/b_dddd4444/shot", content=webp, headers={"content-type": "image/webp"})
+    assert r.status_code == 200
+    assert r.json()["shot_url"].startswith("/assets/cache/shots/b_dddd4444.webp?v=")
+    assert client.get("/v1/library").json()["builds"][0]["shot_url"] == r.json()["shot_url"]
+    client.delete("/v1/library/b_dddd4444")
+    assert not (lib.assets_dir / "cache" / "shots" / "b_dddd4444.webp").exists()
+
+
+def test_shot_upload_rejects_non_webp_and_unknown_builds(client) -> None:
+    lib = client.app.state.services.engine.library
+    _finish(_run("b_eeee5555", lib, "2026-10-05T00:00:00Z"))
+    assert client.put("/v1/library/b_eeee5555/shot", content=b"<svg/>").status_code == 400
+    assert client.put("/v1/library/b_ffff6666/shot", content=b"RIFF0000WEBP").status_code == 404
