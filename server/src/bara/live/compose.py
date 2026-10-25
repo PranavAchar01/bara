@@ -153,17 +153,32 @@ def _model_from_footprint(part: dict[str, Any], assets: list[dict[str, Any]]) ->
     fp = str(part.get("footprint") or "")
     if ":" not in fp:
         return
-    for a in assets:
+    models = [a for a in assets if a.get("kind") == "glb" and a.get("role", "model") == "model"]
+    for a in models:
         url = str(a.get("url") or "")
-        if a.get("kind") != "glb" or not url.startswith("/assets/") or "/kicad_gen/" in url:
+        if not url.startswith("/assets/") or "/kicad_gen/" in url:
+            if a.get("status") != "missing":
+                return  # remote, or converted on first request
             continue
         if a.get("status") != "missing" and (ASSETS_DIR / url.removeprefix("/assets/")).is_file():
-            continue
-        index = KicadIndex.open()
-        lender = index.model_footprint(fp) if index is not None else None
-        if lender is None:
             return
-        a["url"] = f"{GLB_URL}/{glb_stem(lender)}.glb"
+    index = KicadIndex.open()
+    lender = index.model_footprint(fp) if index is not None else None
+    if lender is None:
+        return
+    url = f"{GLB_URL}/{glb_stem(lender)}.glb"
+    if not models:  # a part that never had a model is drawn from its footprint's own
+        models = [
+            {
+                "asset_id": f"a_{glb_stem(lender)}_glb",
+                "kind": "glb",
+                "role": "model",
+                "content_type": "model/gltf-binary",
+            }
+        ]
+        assets.append(models[0])
+    for a in models:
+        a["url"] = url
         a["origin"] = "generated"
         a["status"] = "pending"
 
