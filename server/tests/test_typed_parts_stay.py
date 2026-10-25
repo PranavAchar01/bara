@@ -62,3 +62,39 @@ def test_a_named_sensor_the_diagram_missed_stays() -> None:
     }
     cp.apply(spec, {}, None, {"device_class": "gadget", "blocks": [block("sense.soil", "Soil")]})
     assert any(f["function_id"] == "sense.camera" for f in spec["functions"])
+
+
+def test_stick_on_feet_are_not_a_part_slot() -> None:
+    spec: dict[str, Any] = {"prompt": "a mouse with PTFE skates", "functions": []}
+    blocks = {
+        "device_class": "mouse",
+        "blocks": [block("mech.foot", "PTFE mouse skates", search_terms=["PTFE skate"])],
+    }
+    out = cp.apply(spec, {}, None, blocks)
+    assert not [n for n in out.needs.values() if n.function_id == "mech.foot"]
+    assert out.dropped[0]["reason"] == "stick-on pads added after assembly"
+
+
+def test_the_part_number_in_a_block_name_is_searched_first(tmp_path: Any) -> None:
+    from bara.live.fetch import Overlay, Resolver
+
+    class Source:
+        name = "stub"
+
+        def query(self, *a: Any, **k: Any) -> list[dict[str, Any]]:
+            return []
+
+        def get_part(self, part_id: str) -> dict[str, Any]:
+            raise KeyError(part_id)
+
+    calls: list[str] = []
+    need = cp.Need(
+        "s", "other", "PAW3212 optical motion sensor", terms=("PMW3360DM-T2QU", "PAW3212")
+    )
+    r = Resolver(
+        Overlay(Source()),
+        cli=lambda t, f, s: (calls.append(t), (1, "no"))[1],
+        fetched_path=tmp_path / "f.jsonl",
+    )
+    assert r.fetch(need) is None
+    assert calls[:2] == ["paw3212", "PMW3360DM-T2QU"]  # the typed number once, then the rest

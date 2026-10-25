@@ -386,11 +386,12 @@ KIND_WORDS: list[tuple[str, str]] = [
         r"micro-?sd|\bsd\b|\btf\b|memory card|card slot",
     ),
     # a sensor that looks or listens out of the product (a parking sensor's ultrasonic eyes, a
-    # PIR dome, a range finder): round windows show it, it is what the product is known by
+    # PIR dome, a range finder, an IR proximity or light sensor): round windows show it
     (
         "eye",
         r"ultrasonic|sonar|transducer|\bpir\b|motion sensor|lidar|time.of.flight|\btof\b|"
-        r"rangefinder|range finder|distance sensor",
+        r"rangefinder|range finder|distance sensor|proximity|gesture|ambient light|"
+        r"light sensor|colou?r sensor",
     ),  # fmt: skip
     # parts with no control surface: pocketed under the shell, nothing cut through it
     ("inner", r"sensor|\bimu\b|gyro|accelerometer|magnetometer|antenna|\bchip\b"),

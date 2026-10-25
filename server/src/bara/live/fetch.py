@@ -36,6 +36,18 @@ MISS_TTL_S = 600.0
 SUFFIX_MAX = 4  # package + reel letters a vendor appends to a KiCad symbol name (TRG1, DSGR)
 UV_ARGS = ("--with", "easyeda2kicad", "--with", "trimesh", "--with", "numpy")
 
+
+def typed_mpns(prompt: str) -> set[str]:
+    """Part numbers the person typed: words with letters and digits, five characters or more
+    ("PAW3212", "DS3231"), lowercased with punctuation dropped. Sizes ("6x6") are too short."""
+    words = re.findall(r"[A-Za-z0-9][A-Za-z0-9-]{3,}", prompt)
+    return {
+        w.lower().replace("-", "")
+        for w in words
+        if re.search(r"[a-z]", w, re.I) and re.search(r"\d", w) and len(w.replace("-", "")) >= 5
+    }
+
+
 # (term, function) -> (monotonic time of the last miss, why it missed)
 _MISSES: dict[tuple[str, str], tuple[float, str]] = {}
 
@@ -374,7 +386,10 @@ class Resolver:
             self.notes[need.key] = "made by the case"
             return None
         reasons: list[str] = []
-        terms = list(need.terms)
+        # a part number in the block's own name ("PAW3212 optical sensor") is searched first: a
+        # search term the brief added for a similar chip would otherwise be bought in its place
+        named = sorted(typed_mpns(need.label))
+        terms = named + [t for t in need.terms if re.sub(r"[^a-z0-9]", "", t.lower()) not in named]
         # no MPN worked (or none was named): search by what the block is, in words
         words = re.sub(r"[^\w/.+-]+", " ", f"{need.label} {need.requirement}").strip()
         terms.append("keyword:" + re.sub(r"\s+", " ", words)[:60])

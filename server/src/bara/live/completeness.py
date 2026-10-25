@@ -285,6 +285,10 @@ def apply(
                 # the controller module carries the radio; a bare mount has no part
                 out.dropped.append(_dropped(block, "carried by the controller module or case"))
                 continue
+            if fid == "mech.foot":
+                # feet and skates are stick-on pads under the finished case: no library models them
+                out.dropped.append(_dropped(block, "stick-on pads added after assembly"))
+                continue
             if fid in PLAIN:
                 add(fid, f"block {block.get('label')}", max(1, int(block.get("count") or 1)))
                 continue

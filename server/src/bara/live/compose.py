@@ -43,6 +43,7 @@ from bara.live.fetch import (
     Resolver,
     as_overlay,
     stock_primitive,
+    typed_mpns,
 )
 from bara.live.layout import PITCH_MM, KeyboardPlan, feature_sides, pin_need, stab_size
 from bara.live.llm_json import call_json
@@ -87,6 +88,7 @@ NO_SLOT = {
     "input.key_matrix",
     "mech.plate",
     "mech.foam",
+    "mech.foot",  # stick-on pads under the finished case
 }
 PERIPHERAL_KIND = {
     "encoder": "knob",
@@ -161,17 +163,6 @@ def _function_names(part: dict[str, Any], facet: str, op: str, value: Any) -> bo
         f.get("primary") and f.get("function_id") == f"{kind}.{value}"
         for f in part.get("functions") or []
     )
-
-
-def typed_mpns(prompt: str) -> set[str]:
-    """Part numbers the person typed: words with letters and digits, five characters or more
-    ("PAW3212", "DS3231"), lowercased with punctuation dropped. Sizes ("6x6") are too short."""
-    words = re.findall(r"[A-Za-z0-9][A-Za-z0-9-]{3,}", prompt)
-    return {
-        w.lower().replace("-", "")
-        for w in words
-        if re.search(r"[a-z]", w, re.I) and re.search(r"\d", w) and len(w.replace("-", "")) >= 5
-    }
 
 
 def names_typed_mpn(part: dict[str, Any], typed: set[str]) -> bool:
@@ -1695,6 +1686,10 @@ class Composer:
         if not near or slot.need is None:
             return
         part = near[0]
+        typed = typed_mpns(str(self.spec.get("prompt") or ""))
+        label = re.sub(r"[^a-z0-9]", "", slot.need.label.lower())
+        if any(t in label for t in typed) and not names_typed_mpn(part, typed):
+            return  # a part the person named by number: another chip is a different device
         if slot.function_id.startswith("display."):
             want_in = self.comp.numbers.get("screen_in") or cp.parse_numbers(
                 f"{slot.need.label} {slot.need.requirement}"

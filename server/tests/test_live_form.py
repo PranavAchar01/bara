@@ -391,8 +391,11 @@ def test_a_part_number_fetched_under_another_function_serves_the_block_that_name
     need = cp.Need("s", "sense.motion", "Motion sensor", terms=("PMW3360DM-T2QU",))
     part = Resolver(Overlay(Source()), cli=cli, fetched_path=path).fetch(need)
     assert part is not None and part["functions"][0]["function_id"] == "sense.motion"
+    # a part number in the block's own name is a part it asked for, too
+    named = cp.Need("n", "sense.motion", "PMW3360DM motion sensor", terms=())
+    assert Resolver(Overlay(Source()), cli=cli, fetched_path=path).fetch(named) is not None
     # a description search never borrows a row filed under another function
-    vague = cp.Need("v", "sense.motion", "pmw3360dm t2qu", terms=())
+    vague = cp.Need("v", "sense.motion", "pixart motion sensor", terms=())
     calls: list[str] = []
     r = Resolver(
         Overlay(Source()), cli=lambda t, f, s: (calls.append(t), (1, "no"))[1], fetched_path=path

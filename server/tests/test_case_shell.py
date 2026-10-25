@@ -199,6 +199,8 @@ def test_an_ultrasonic_pair_looks_out_of_two_round_windows_and_a_pot_gets_a_knob
     from bara.geometry.shell import Site, build_features
 
     assert shell.classify({"name": "ultrasonic distance sensor"}) == "eye"
+    assert shell.classify({"name": "Proximity sensor"}) == "eye"  # IR looks out through a window
+    assert shell.classify({"name": "IMU"}) == "inner"
     assert shell.classify({"name": "Fan speed potentiometer"}) == "knob"
     assert shell.classify({"name": "volume up button"}) == "button"
     body, seat = _box_body()
