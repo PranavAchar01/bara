@@ -511,3 +511,231 @@
 .centre-bottom > .says-line {
   width: auto;
 }
+
+/* ---- design pass: one ink, one paper, calm springs ---- */
+
+/* the pill is a keycap like the hero button: a lit top edge and a dark lip */
+.selection-bar {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.14),
+    inset 0 -2px 0 rgb(0 0 0 / 0.35),
+    0 1px 0 rgb(0 0 0 / 0.2),
+    0 14px 30px -14px rgb(0 0 0 / 0.5);
+}
+.sb-back,
+.sb-act {
+  transition:
+    background 160ms ease,
+    scale 160ms cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+.sb-back:active,
+.sb-act:active:not(:disabled) {
+  scale: 0.9;
+}
+.sb-act.danger,
+.sb-act.danger:hover:not(:disabled) {
+  background: var(--fail);
+  color: var(--paper);
+}
+.sb-act.danger {
+  animation: sb-arm 240ms cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+@keyframes sb-arm {
+  from {
+    scale: 0.7;
+  }
+}
+.sb-count {
+  font-family: var(--font-mono);
+  letter-spacing: var(--track-label);
+}
+
+/* popovers grow out of the pill, from the corner they hang on */
+.sb-pop {
+  width: max-content;
+  max-width: min(320px, calc(100vw - 32px));
+  border-radius: 16px;
+  transform-origin: 100% 100%;
+  animation: pop-in 220ms cubic-bezier(0.34, 1.4, 0.64, 1) both;
+}
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    scale: 0.94;
+    translate: 0 6px;
+  }
+}
+/* the colour picker brings its own card; inside the pill's popover it is just the content */
+.sb-pop > .color-picker {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+.sb-pop .swatches {
+  flex-wrap: wrap;
+}
+.sb-menu {
+  gap: 2px;
+}
+.sb-menu button {
+  color: var(--ink);
+  transition: background 140ms ease;
+}
+.sb-menu button svg {
+  color: var(--text-2);
+  transition: color 140ms ease;
+}
+.sb-menu button:hover svg {
+  color: var(--ink);
+}
+
+/* the strip's tools press like keys; the versions list drops from its button */
+.wt-btn {
+  transition:
+    background 160ms ease,
+    color 160ms ease,
+    scale 160ms cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+.wt-btn:active:not(:disabled) {
+  scale: 0.9;
+}
+.wt-btn.on {
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.14);
+}
+.wt-btn.on:hover:not(:disabled) {
+  background: var(--ink);
+  color: var(--paper);
+}
+.wt-versions {
+  border-radius: 16px;
+  transform-origin: 100% 0;
+  animation: drop-in 220ms cubic-bezier(0.34, 1.4, 0.64, 1) both;
+}
+@keyframes drop-in {
+  from {
+    opacity: 0;
+    scale: 0.96;
+    translate: 0 -6px;
+  }
+}
+.wt-versions button {
+  transition: background 140ms ease;
+}
+.wt-versions .now {
+  font-family: var(--font-display);
+  font-size: 15px;
+}
+.wt-now {
+  font-family: var(--font-mono);
+}
+
+/* the side cards' close is a round key, like everything else that closes */
+.float-close {
+  border-radius: 999px;
+  transition:
+    background 160ms ease,
+    color 160ms ease,
+    scale 160ms cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+.float-close:active {
+  scale: 0.9;
+}
+
+/* Bara's line pops like the pill, and blinks once as it speaks */
+.says-line {
+  color: var(--ink);
+  line-height: 1.35;
+  animation: sb-in 260ms cubic-bezier(0.34, 1.4, 0.64, 1) both;
+}
+.says-eyes i {
+  animation: bara-blink 1.2s 1 120ms;
+}
+
+/* the edit's status: a paper card as wide as what it says, a mono label, no red frame */
+.canvas-first .edit-status {
+  align-self: center;
+  width: auto;
+  min-width: min(320px, 100%);
+  max-width: min(560px, 100%);
+  padding: 8px 8px 8px 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--paper);
+  box-shadow: var(--shadow);
+  animation: float-up 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.canvas-first .edit-status.ph-pending,
+.canvas-first .edit-status.ph-applying {
+  border-radius: 999px;
+}
+.canvas-first .edit-status.ph-rejected {
+  border-color: var(--line);
+  padding: 10px 10px 12px 16px;
+}
+@keyframes float-up {
+  from {
+    opacity: 0;
+    translate: 0 8px;
+  }
+}
+.canvas-first .edit-head {
+  gap: 10px;
+  min-width: 0;
+}
+.canvas-first .edit-head strong {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.canvas-first .edit-status.ph-rejected strong {
+  color: var(--fail);
+}
+.canvas-first .edit-head .muted {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-display);
+  font-size: 15px;
+  color: var(--ink);
+}
+.canvas-first .edit-head .spinner {
+  color: var(--accent);
+}
+.canvas-first .edit-head .btn {
+  flex: none;
+  border-radius: 999px;
+}
+.canvas-first .edit-error {
+  font-size: 14px;
+  color: var(--text-2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sb-pop,
+  .says-line,
+  .wt-versions,
+  .sb-act.danger,
+  .says-eyes i,
+  .canvas-first .edit-status {
+    animation: none;
+  }
+  .sb-back,
+  .sb-act,
+  .wt-btn,
+  .float-close {
+    transition: none;
+  }
+  .sb-back:active,
+  .sb-act:active:not(:disabled),
+  .wt-btn:active:not(:disabled),
+  .float-close:active {
+    scale: none;
+  }
+}

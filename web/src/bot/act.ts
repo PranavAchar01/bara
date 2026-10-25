@@ -89,8 +89,9 @@ export async function act(raw: string): Promise<void> {
   if (!text) return;
   const s = useApp.getState();
   const build = s.build;
-  // nothing finished on screen (an empty canvas, a build still running): it is a build to start
-  if (!build || build.status !== "done" || s.mode.mock) {
+  // nothing finished on screen (an empty canvas, a build still running): it is a build to start. The demo
+  // (engine offline) edits too: it plays back the recorded edit closest to what was asked.
+  if (!build || build.status !== "done") {
     if (build && (build.status === "running" || build.status === "awaiting_input")) newDevice(text);
     else startBuild(text);
     return;

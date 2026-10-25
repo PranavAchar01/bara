@@ -1314,7 +1314,8 @@ function CameraRig() {
   const partsCount = useApp((s) => s.build?.parts.length ?? 0);
   const explodeTarget = useApp((s) => s.explode);
   const sceneDevices = useApp((s) => s.companions.join(","));
-  const content = useApp((s) => `${s.build?.parts.length ?? 0}:${s.build?.enclosures?.length ?? 0}:${s.build?.boards?.length ?? 0}:${s.build?.revision ?? 0}`);
+  // what is on stage, not its revision: a recolour, an undo or a redo leaves the camera where it is
+  const content = useApp((s) => `${s.build?.parts.length ?? 0}:${s.build?.enclosures?.length ?? 0}:${s.build?.boards?.length ?? 0}`);
   const anim = useRef<{ fromP: THREE.Vector3; fromT: THREE.Vector3; toP: THREE.Vector3; toT: THREE.Vector3; t: number } | null>(null);
   const userMoved = useRef(false);
   const framedFor = useRef<string | null>(null);
