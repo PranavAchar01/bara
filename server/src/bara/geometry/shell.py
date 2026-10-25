@@ -381,6 +381,13 @@ def _shaped(
 KIND_WORDS: list[tuple[str, str]] = [
     ("screen", r"screen|display|lcd|oled|e-?ink|epaper|tft|panel"),
     ("port", r"usb|connector|charg|jack|socket|plug|cable|hdmi|ethernet|\bport"),
+    # a sensor that looks or listens out of the product (a parking sensor's ultrasonic eyes, a
+    # PIR dome, a range finder): round windows show it, it is what the product is known by
+    (
+        "eye",
+        r"ultrasonic|sonar|transducer|\bpir\b|motion sensor|lidar|time.of.flight|\btof\b|"
+        r"rangefinder|range finder|distance sensor",
+    ),  # fmt: skip
     # parts with no control surface: pocketed under the shell, nothing cut through it
     ("inner", r"sensor|\bimu\b|gyro|accelerometer|magnetometer|antenna|\bchip\b"),
     ("light", r"\bleds?\b|indicator|status light|light ?pipe|\blights?\b|lamp|beam|glow"),
@@ -389,7 +396,7 @@ KIND_WORDS: list[tuple[str, str]] = [
     ("dpad", r"d-?pad|directional|\bcross\b|arrow|navigation"),
     ("shoulder", r"shoulder|trigger|bumper|\blb\b|\brb\b|\blt\b|\brt\b"),
     ("wheel", r"scroll|thumb ?wheel|roller"),
-    ("knob", r"knob|dial|encoder|crown|wheel"),
+    ("knob", r"knob|dial|encoder|crown|wheel|potentiometer|\bpots?\b|rotary"),
     ("button", r"button|key|switch|press|click|action|face|start|select|menu|home|power|side"),
 ]
 
@@ -484,8 +491,10 @@ def sites_from_anchors(
             if s.mount == "edge":
                 best = max(best, 12.0)  # the anchor rides the rim, its switch sits inboard
             for f in feats:
-                if f.ref in claimed or f.role in ("battery", "sensor", "trackball"):
+                if f.ref in claimed or f.role in ("battery", "trackball"):
                     continue
+                if f.role == "sensor" and kind != "eye":
+                    continue  # only a sensor that looks out gets a window over it
                 if (kind == "port") != (f.role in ("usb", "mcu")):
                     continue
                 if (kind == "screen") != (f.role == "screen"):
@@ -611,7 +620,10 @@ class Features:
     # a bumper bar over them, or a press through the stick or wheel above
     reached: set[str] = field(default_factory=set)
     lenses: list[mf.Manifold] = field(default_factory=list)  # translucent windows over lights
-    lens_tint: str = ""
+    lens_tint: str = ""  # the first colour any lens names
+    # each lens's own colour, by index into lenses ("" when its words name none): a bike light's
+    # amber turn signals stay amber beside its red tail lamp
+    lens_tints: list[str] = field(default_factory=list)
 
 
 def shoulder_lobes(sites: list[Site], plan: Polygon) -> list[Polygon]:
@@ -689,6 +701,10 @@ def build_features(
             out.reached.add(s.ref)
             continue  # pressed through the wheel or stick above it (a mouse's middle click)
         if s.kind == "inner":
+            continue
+        if s.kind == "eye":
+            _eyes(out, s, body, wall_mm, seat, zmax, clear)
+            out.kinds[s.kind] = out.kinds.get(s.kind, 0) + 1
             continue
         if s.kind == "port" or s.mount == "back":
             if s.kind == "port":
@@ -842,8 +858,11 @@ def _knob(out: Features, s: Site, body: Body, seat: float, zmax: float, clear: f
 
 
 def _lens_tint(out: Features, group: list[Site]) -> None:
+    """Record the colour of the lens just added (the one its lights name)."""
+    tint = next((s.tint for s in group if s.tint), "")
+    out.lens_tints.append(tint)
     if not out.lens_tint:
-        out.lens_tint = next((s.tint for s in group if s.tint), "") or LENS_SMOKE
+        out.lens_tint = tint or LENS_SMOKE
 
 
 def _lens(
@@ -976,6 +995,68 @@ def _grille(out: Features, s: Site, body: Body, seat: float, zmax: float) -> Non
                       math.degrees(math.atan2(uy, ux)), GRILLE_SLOT_MM / 2 - 0.05)  # fmt: skip
         out.cuts.append(_prism(slot, seat - 1.0, zmax + 4))
     out.cutouts.append(_cut("grille", s.x, s.y, zc, n * GRILLE_PITCH_MM, "slot", length))
+
+
+EYE_D_MM = 16.0  # a ranging transducer's can when no part says otherwise
+TWIN_ASPECT = 1.8  # a module this much longer than wide carries two eyes (send and receive)
+
+
+def _eye_spots(s: Site) -> tuple[list[float], float]:
+    """Where a looking sensor's windows sit, as offsets along its long side, and their
+    diameter: two cans on a long module (an ultrasonic pair), one otherwise."""
+    if not (s.w and s.d):
+        return [0.0], EYE_D_MM
+    long, short = max(s.w, s.d), min(s.w, s.d)
+    if long >= TWIN_ASPECT * short:
+        return [-0.29 * long, 0.29 * long], min(0.8 * short, 0.4 * long)
+    return [0.0], 0.75 * short
+
+
+def _eyes(
+    out: Features, s: Site, body: Body, wall_mm: float, seat: float, zmax: float, clear: float
+) -> None:
+    """Round windows a sensor looks out of: through the top over the part, or through the rim
+    when it faces an edge, each framed by a ring so the eyes read from outside."""
+    spots, dia = _eye_spots(s)
+    r = dia / 2 + clear
+    if s.mount == "edge":
+        ang = math.radians(s.normal_deg)
+        nx, ny = math.cos(ang), math.sin(ang)
+        tx, ty = -ny, nx
+        lo, hi = body.land()
+        zc = 0.5 * (lo + hi)
+        r = min(r, 0.45 * (hi - lo))
+        for off in spots:
+            x, y = s.x + tx * off, s.y + ty * off
+            hit = _exit_distance(body.plan, x, y, nx, ny)
+            if hit is None:
+                continue
+            can = mf.Manifold.cylinder(wall_mm + 4.0, r, r, 48).rotate((0, 90, 0))
+            back = hit - wall_mm - 2.0
+            out.wall_cuts.append(
+                can.rotate((0, 0, s.normal_deg)).translate((x + nx * back, y + ny * back, zc))
+            )
+            out.cutouts.append(
+                {
+                    "cutout_id": f"cut_eye_{len(out.cutouts)}",
+                    "feature": "sensor_window",
+                    "face": _face(s.normal_deg),
+                    "shape": "circle",
+                    "center_mm": [round(x + nx * hit, 3), round(y + ny * hit, 3), round(zc, 3)],
+                    "size_mm": [round(2 * r, 3), round(2 * r, 3)],
+                }
+            )
+    else:
+        a = math.radians(s.rot + (90.0 if s.d > s.w else 0.0))
+        for off in spots:
+            x, y = s.x + math.cos(a) * off, s.y + math.sin(a) * off
+            zc = body.top_at(x, y)
+            out.cuts.append(_cyl(r, seat - 1.0, zmax + 4, x, y))
+            ring = _cyl(r + 1.4, zc - 1.6, zc + 0.6, x, y) - _cyl(r - 0.2, zc - 2.0, zc + 1.0, x, y)
+            out.adds.append(ring)
+            out.cutouts.append(_cut("sensor_window", x, y, zc, 2 * r, "circle"))
+    if s.ref:
+        out.reached.add(s.ref)
 
 
 def _light(out: Features, s: Site, body: Body, seat: float, zmax: float) -> None:

@@ -251,3 +251,25 @@ def test_name_alike_sibling_must_match_the_outline(
     assert idx.model_footprint("Pkg_Test:Trim_3386P_Vertical") == (
         "kicadgen:kicad:fp:Pkg_Test:Trim_3386W_Vertical"
     )
+
+
+def test_chip_without_a_model_borrows_another_librarys_same_size_chip(lib: Path) -> None:
+    for libname, name, model in (
+        ("Fuse", "Fuse_1812_4532Metric", False),
+        ("Resistor_SMD", "R_1812_4532Metric", True),
+        ("Resistor_SMD", "R_1206_3216Metric", True),
+    ):
+        pretty = lib / "footprints" / f"{libname}.pretty"
+        pretty.mkdir(parents=True, exist_ok=True)
+        text = MOD.replace("SOIC-4", name).replace("Pkg_Test.3dshapes", f"{libname}.3dshapes")
+        (pretty / f"{name}.kicad_mod").write_text(text)
+        if model:
+            shapes = lib / "3dmodels" / f"{libname}.3dshapes"
+            shapes.mkdir(parents=True, exist_ok=True)
+            (shapes / f"{name}.step").write_text("ISO-10303-21;")
+    ki.write_index(*ki.build_rows(("kicad",)))
+    idx = kicad_generated.KicadIndex(ki.INDEX_SQLITE, glb_dir=lib / "glb")
+    assert idx.model_footprint("Fuse:Fuse_1812_4532Metric") == (
+        "kicadgen:kicad:fp:Resistor_SMD:R_1812_4532Metric"
+    )
+    assert idx.model_footprint("Fuse:Fuse_2010_5025Metric") is None  # no chip of that size

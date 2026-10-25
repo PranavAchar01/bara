@@ -312,8 +312,11 @@ def _repair_necks(board) -> int:
         layer, net = t.GetLayer(), t.GetNetCode()
         # copies: GetStart() returns a live reference that SetStart() would move too
         a, b = pcbnew.VECTOR2I(t.GetStart()), pcbnew.VECTOR2I(t.GetEnd())
-        if any(p.GetNetCode() == net and (p.HitTest(a) or p.HitTest(b)) for p in board.GetPads()):
-            continue  # a pin entry: sliding it would leave the pad
+        mine = [p for p in board.GetPads() if p.GetNetCode() == net]
+        # a pin entry keeps its end on the pad and swings only the free end (a fine-pitch pin's
+        # neck is where Freerouting narrows most); one between two pads only widens in place
+        pin_a = any(p.HitTest(a) for p in mine)
+        pin_b = any(p.HitTest(b) for p in mine)
         joined = []
         for u in tracks:
             if u is not t and u.GetNetCode() == net and u.GetLayer() == layer:
@@ -325,10 +328,12 @@ def _repair_necks(board) -> int:
         others = _foreign(board, net, layer)
         width = t.GetWidth()
 
-        for k in [0] + [s * i for i in range(1, 17) for s in (1, -1)]:
+        steps = [0] if pin_a and pin_b else [0] + [s * i for i in range(1, 17) for s in (1, -1)]
+        for k in steps:
             off = _mm(0.005 * k)
             dx, dy = int(round(nx * off)), int(round(ny * off))
-            pa, pb = pcbnew.VECTOR2I(a.x + dx, a.y + dy), pcbnew.VECTOR2I(b.x + dx, b.y + dy)
+            pa = a if pin_a else pcbnew.VECTOR2I(a.x + dx, a.y + dy)
+            pb = b if pin_b else pcbnew.VECTOR2I(b.x + dx, b.y + dy)
             _put(t, joined, pa, pb, mn)
             moved = [t.GetEffectiveShape(layer)]
             moved += [u.GetEffectiveShape(layer) for u, _, _ in joined]

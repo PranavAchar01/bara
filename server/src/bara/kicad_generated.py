@@ -35,6 +35,10 @@ SIBLING_SIMILARITY = 0.8  # how alike a sibling footprint's name must be to lend
 _WORD = re.compile(r"[A-Za-z0-9]+")
 _BODY = re.compile(r"\d+(?:\.\d+)?x\d+(?:\.\d+)?(?:x\d+(?:\.\d+)?)?mm")
 _GRID = re.compile(r"(?<![\d.])(\d+x\d{2})(?![\d.]|mm)")  # pin rows x columns: 1x02, 2x20
+# a two-terminal chip body by its EIA/metric size, Fuse_1812_4532Metric: every library's chip
+# of that size is the same block, so a fuse or ferrite without a model borrows a resistor's
+_CHIP = re.compile(r"^[A-Za-z]+_(\d{4}_\d{4}Metric)$")
+CHIP_LENDERS = (("Resistor_SMD", "R"), ("Capacitor_SMD", "C"), ("Inductor_SMD", "L"))
 _STEM_BAD = re.compile(r"[^A-Za-z0-9._-]")
 _glb_lock = threading.Lock()
 
@@ -196,6 +200,24 @@ class KicadIndex:
             # a name alone is weak evidence: the outline must agree too
             if tier == 0 or (own is not None and _same_size(own, r)):
                 return str(r["part_id"])
+        return self._chip_lender(lib, name)
+
+    def _chip_lender(self, lib: str, name: str) -> str | None:
+        """Another library's chip of the same size, for a chip footprint whose own library
+        has no model of that size."""
+        m = _CHIP.match(name)
+        if m is None:
+            return None
+        for other, prefix in CHIP_LENDERS:
+            if other == lib:
+                continue
+            rows = self.rows(
+                "SELECT part_id FROM kicad_parts WHERE kind = 'footprint' AND lib = ?"
+                " AND name = ? AND has_model",
+                (other, f"{prefix}_{m.group(1)}"),
+            )
+            if rows:
+                return str(rows[0]["part_id"])
         return None
 
     def glb_file(self, part_id: str) -> Path | None:
