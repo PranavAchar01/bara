@@ -563,7 +563,7 @@ def _footprints(placements: list[dict]) -> list[dict]:
             "label": p.get("label"),
             "role": p.get("role"),
             "lib_id": p.get("lib_id") or None,
-            "instance_id": p.get("for_instance_id") or p.get("instance_id"),
+            "instance_id": p.get("instance_id"),
             "center_mm": [round(p["x_mm"], 3), round(p["y_mm"], 3)],
             "size_mm": [round(v, 3) for v in (p.get("size_mm") or [1, 1])[:2]],
             "rot_deg": p.get("rot_deg", 0.0),

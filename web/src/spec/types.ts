@@ -307,21 +307,7 @@ export interface Layout {
 }
 
 export type ObjStatus = Open<"ok" | "warning" | "failed" | "unknown">;
-/** Finishing pass: the colour and surface the engine chose for a part, case or board. */
-export interface Finish {
-  role: Open<"case" | "control" | "display" | "pcb" | "metal" | "connector" | "other">;
-  color: string;
-  opacity?: number;
-  roughness?: number;
-  metalness?: number;
-  transmission?: number;
-  ior?: number;
-  emissive?: string | null;
-  emissive_intensity?: number;
-}
-
 export interface BuildPart {
-  finish?: Finish | null;
   instance_id: string;
   part_id: string;
   slot_id?: string | null;

@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { courtyard, footprintBoxes, matchComponents } from "./boardgeom";
-import type { LoadedModel } from "./assets";
+import { courtyard, footprintBoxes } from "./boardgeom";
 import type { Board } from "../spec/types";
 
 const board = (footprints: Board["footprints"]): Board => ({
@@ -46,29 +45,5 @@ describe("board footprints", () => {
     expect(boxes[0].box.max.z).toBe(11);
     expect(boxes[0].footprint?.label).toBe("Cherry MX");
     expect(boxes[1].box.getCenter(new THREE.Vector3()).x).toBeCloseTo(40);
-  });
-});
-
-describe("board components", () => {
-  const comp = (name: string, min: number[], max: number[]) => ({ name, bbox: new THREE.Box3(new THREE.Vector3(...min), new THREE.Vector3(...max)) });
-
-  it("matches a display bigger than a quarter of the board by its reference", () => {
-    // a handheld: 80 x 130 board, a 70 x 55 TFT on it (37% of the board) and one switch
-    const loaded = {
-      bbox: new THREE.Box3(new THREE.Vector3(0, -130, 0), new THREE.Vector3(80, 0, 6)),
-      components: [comp("", [0, -130, 0], [80, 0, 1.6]), comp("U3", [5, -60, 1.6], [75, -5, 6]), comp("SW1", [10, -100, 1.6], [16, -94, 5])],
-    } as unknown as LoadedModel;
-    const b = board([
-      { ref: "U3", instance_id: "u_display", center_mm: [40, -32] },
-      { ref: "SW1", instance_id: "u_btn", center_mm: [13, -97] },
-    ]);
-    const cands = [
-      { instanceId: "u_display", layer: "pcb" as const, points: [new THREE.Vector3(40, -32, 8)] },
-      { instanceId: "u_btn", layer: "pcb" as const, points: [new THREE.Vector3(13, -97, 1.6)] },
-    ];
-    const { owner, substrate } = matchComponents(loaded, b, cands);
-    expect(owner.get(1)?.instanceId).toBe("u_display"); // drawn once, by the board
-    expect(owner.get(2)?.instanceId).toBe("u_btn");
-    expect(substrate).toBe(0);
   });
 });
