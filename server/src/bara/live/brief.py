@@ -484,8 +484,7 @@ def spec_from_brief(
         soft.append(_req("switch_family", "eq", brief["switch_family"], "default", "Switches"))
     if brief.get("switch_type"):
         hard.append(
-            # the catalog names a switch's feel "actuation" (manifest facets)
-            _req("actuation", "eq", brief["switch_type"], "explicit", brief["switch_type"])
+            _req("switch_type", "eq", brief["switch_type"], "explicit", brief["switch_type"])
         )
     for req in clarified:
         hard.append(dict(req))

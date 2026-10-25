@@ -3,7 +3,7 @@
 Keys stay on the server. ELEVENLABS_API_KEY wins when both are set; otherwise OPENAI_API_KEY
 uses OpenAI's speech and transcription. The voice and model can be changed without a code
 change: BARA_TTS_VOICE and BARA_TTS_MODEL. ElevenLabs defaults to Charlotte on eleven_v4,
-OpenAI to marin on gpt-4o-mini-tts (gpt-4o-transcribe listens).
+OpenAI to cedar on gpt-4o-mini-tts (gpt-4o-transcribe listens).
 """
 
 from __future__ import annotations
@@ -25,8 +25,8 @@ MAX_STT_BYTES = 8 * 1024 * 1024
 
 
 OPENAI_API = "https://api.openai.com/v1"
-# marin (Nithin, 2026-10-24: a feminine voice for the agent); cedar was the 10-17 pick by ear
-OPENAI_VOICE = "marin"
+# cedar: picked by ear against ash, onyx, echo, verse and ballad (2026-10-17)
+OPENAI_VOICE = "cedar"
 OPENAI_TTS_MODEL = "gpt-4o-mini-tts-2025-12-15"
 OPENAI_STT_MODEL = "gpt-4o-transcribe"
 # gpt-4o-mini-tts takes delivery instructions. Bara is a small, curious maker that is always

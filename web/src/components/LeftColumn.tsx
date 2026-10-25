@@ -33,13 +33,9 @@ export function StepPlayer() {
   const done = useApp((s) => s.build?.status === "done");
   const active = STAGE_IDS.find((id) => stages[id]?.status === "active" || stages[id]?.status === "needs_input");
   const failed = STAGE_IDS.find((id) => stages[id]?.status === "failed");
-  const label = failed
-    ? `${vlabel(vocab, "stages", failed)} failed`
-    : active
-      ? vlabel(vocab, "stages", active)
-      : done
-        ? "Done"
-        : "";
+  const label = failed ? `${vlabel(vocab, "stages", failed)} failed` : active ? vlabel(vocab, "stages", active) : "";
+  // A finished build needs no progress row; the model is there to look at.
+  if (done && !failed) return null;
   return (
     <div className="step-player" aria-label="Build progress">
       <span className="step-dots">
@@ -220,16 +216,17 @@ export function SpecCard() {
     );
   }
   return (
-    <Panel title="Spec" meta={<ClassifierMeta spec={spec} />}>
+    <Panel
+      title="Spec"
+      meta={
+        <span className="muted small" title={`${spec.taxonomy_path.join(" / ")} · ${classifierMeta(spec)}`}>
+          {vlabel(vocab, "device_classes", spec.device_class)}
+        </span>
+      }
+    >
       <p className="spec-prompt">
         <Highlighted text={spec.prompt || prompt} span={hover} />
       </p>
-      <div className="kv">
-        <span>Device</span>
-        <span>{vlabel(vocab, "device_classes", spec.device_class)}</span>
-        <span>Path</span>
-        <span className="muted">{spec.taxonomy_path.join(" / ")}</span>
-      </div>
       <div className="chips">
         {spec.hard_requirements.map((r) => (
           <Chip key={r.req_id} tone="accent" variant="solid" title={`${r.req_id} hard, ${r.source ?? ""}`} onMouseEnter={() => setHover(r.text_span ?? null)} onMouseLeave={() => setHover(null)}>
@@ -266,14 +263,9 @@ export function SpecCard() {
   );
 }
 
-function ClassifierMeta(props: { spec: Spec }) {
-  const c = props.spec.classifier;
-  return (
-    <span className="mono small">
-      {c.stage} {Math.round(c.confidence * 100)}%{c.provider ? ` ${c.provider}` : ""}
-      {c.fallback ? " fallback" : ""}
-    </span>
-  );
+function classifierMeta(spec: Spec): string {
+  const c = spec.classifier;
+  return `${c.stage} ${Math.round(c.confidence * 100)}%${c.provider ? ` ${c.provider}` : ""}${c.fallback ? " fallback" : ""}`;
 }
 
 function Highlighted(props: { text: string; span: number[] | null }) {
@@ -333,23 +325,29 @@ export function ReuseCard() {
           )}
         </div>
       )}
-      {reuse?.reason && <p className="reason">{reuse.reason}</p>}
-      {(reuse?.considered ?? []).length > 0 && (
-        <ul className="considered">
-          {reuse?.considered.map((c) => (
-            <li key={c.design_id} className={c.design_id === reuse.design_id ? "chosen" : ""}>
-              <span>{c.name}</span>
-              <span className="mono muted small">{c.score !== null && c.score !== undefined ? c.score.toFixed(2) : ""}</span>
-              <span className="chips">
-                {(c.unmet ?? []).map((u) => (
-                  <Chip key={u} tone="warn" title="Unmet requirement">
-                    {reqs.get(u) ? reqLabel(reqs.get(u) as Requirement) : u}
-                  </Chip>
-                ))}
-              </span>
-            </li>
-          ))}
-        </ul>
+      {/* The reasoning and the runners-up are there for whoever asks, folded away by default */}
+      {(reuse?.reason || (reuse?.considered ?? []).length > 0) && (
+        <details className="fold">
+          <summary className="muted small">Why this design{(reuse?.considered ?? []).length > 1 ? ` · ${reuse?.considered.length} considered` : ""}</summary>
+          {reuse?.reason && <p className="reason">{reuse.reason}</p>}
+          {(reuse?.considered ?? []).length > 0 && (
+            <ul className="considered">
+              {reuse?.considered.map((c) => (
+                <li key={c.design_id} className={c.design_id === reuse.design_id ? "chosen" : ""}>
+                  <span>{c.name}</span>
+                  <span className="mono muted small">{c.score !== null && c.score !== undefined ? c.score.toFixed(2) : ""}</span>
+                  <span className="chips">
+                    {(c.unmet ?? []).map((u) => (
+                      <Chip key={u} tone="warn" title="Unmet requirement">
+                        {reqs.get(u) ? reqLabel(reqs.get(u) as Requirement) : u}
+                      </Chip>
+                    ))}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </details>
       )}
     </Panel>
   );
