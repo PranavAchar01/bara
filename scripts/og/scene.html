@@ -1,0 +1,171 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link href="https://fonts.googleapis.com/css2?family=Averia+Serif+Libre&display=swap" rel="stylesheet" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #fff;
+      }
+      svg {
+        display: block;
+      }
+      .title {
+        font-family: "Averia Serif Libre", Georgia, serif;
+        font-size: 92px;
+        letter-spacing: -0.02em;
+        fill: #161616;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- The link preview for tangible.parts: the name on top, Bara's oval and eyes below, signals running out
+         along board traces. Everything is a function of t (seconds), so it loops cleanly every LOOP seconds;
+         scripts/render-og.mjs steps render(t) frame by frame. -->
+    <svg id="s" width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg">
+      <g id="traces"></g>
+      <text class="title" id="title" x="600" y="148" text-anchor="middle">Tangible Parts</text>
+      <g id="bot">
+        <g id="body">
+          <rect x="-44" y="-31" width="88" height="62" rx="31" fill="#161616" />
+          <g id="eyes"></g>
+        </g>
+      </g>
+    </svg>
+    <script>
+      const LOOP = 6;
+      // ?w=&h= sizes the frame (the og card is 1200x630; Devpost wants 3:2); the scene stays centred
+      const q = new URLSearchParams(location.search);
+      const W = +(q.get("w") || 1200), H = +(q.get("h") || 630);
+      const svgEl = document.getElementById("s");
+      svgEl.setAttribute("width", W);
+      svgEl.setAttribute("height", H);
+      svgEl.setAttribute("viewBox", `0 0 ${W} ${H}`);
+      const OY = (H - 630) / 2;
+      const NS = "http://www.w3.org/2000/svg";
+      const CX = W / 2, CY = 412 + OY, SCALE = 3.5;
+      document.getElementById("title").setAttribute("x", CX);
+      document.getElementById("title").setAttribute("y", 148 + OY);
+      const el = (tag, attrs, parent) => {
+        const e = document.createElementNS(NS, tag);
+        for (const k in attrs) e.setAttribute(k, attrs[k]);
+        parent.appendChild(e);
+        return e;
+      };
+
+      // ---- traces: lanes fan out from behind the oval to both sides ----
+      const traces = document.getElementById("traces");
+      const lanes = [];
+      const side = (dir) => {
+        [-60, -30, 0, 30, 60].forEach((dy, i) => {
+          const y0 = CY + dy;
+          const y1 = CY + dy * 2.7;
+          const x1 = CX + dir * (190 + Math.abs(2 - i) * 22);
+          const x2 = x1 + dir * Math.abs(y1 - y0);
+          const via = i % 2 === 0;
+          const x3 = via ? CX + dir * (430 + (i === 2 ? 70 : 0)) : CX + dir * (W / 2 + 40);
+          lanes.push({ d: `M${CX},${y0} H${x1} L${x2},${y1} H${x3}`, via: via ? [x3, y1] : null, k: 1, seed: (i * 0.37 + (dir > 0 ? 0.5 : 0)) % 1 });
+        });
+      };
+      side(-1);
+      side(1);
+      for (const l of lanes) {
+        el("path", { d: l.d, fill: "none", stroke: "#e6e6e3", "stroke-width": 4, "stroke-linejoin": "round", "stroke-linecap": "round" }, traces);
+        l.pulse = el("path", { d: l.d, fill: "none", stroke: "#161616", "stroke-width": 4, "stroke-linecap": "round" }, traces);
+        l.len = l.pulse.getTotalLength();
+        if (l.via) {
+          el("circle", { cx: l.via[0], cy: l.via[1], r: 11, fill: "#fff", stroke: "#d6d6d3", "stroke-width": 4 }, traces);
+          l.dot = el("circle", { cx: l.via[0], cy: l.via[1], r: 4.5, fill: "#161616" }, traces);
+        }
+      }
+
+      // ---- the eyes: rounded rects, with an ink cheek that pushes up into ^ ^ when happy ----
+      const eyes = document.getElementById("eyes");
+      const E = [-1, 1].map((s) => {
+        const g = el("g", {}, eyes);
+        return { s, g, white: el("rect", { fill: "#fff" }, g), cheek: el("ellipse", { fill: "#161616" }, g), lid: el("rect", { fill: "#161616" }, g) };
+      });
+
+      // keyframed pose; each key holds until the next, eased in and out
+      const BASE = { gx: 0, gy: 0, blink: 0, happy: 0, by: 0, sx: 1, sy: 1, tilt: 0, lid: 0 };
+      const KEYS = [
+        [0.0, {}],
+        [0.7, {}],
+        [1.05, { gx: -7, gy: 1.5, tilt: -3 }],
+        [1.65, { gx: -7, gy: 1.5, tilt: -3 }],
+        [1.9, { gx: 6, gy: 0.5, tilt: 3 }],
+        [2.5, { gx: 6, gy: 0.5, tilt: 3, lid: 0.25 }],
+        [2.75, { gy: -1 }],
+        [2.95, { gy: -1, sx: 1.07, sy: 0.9, by: 3 }],
+        [3.2, { happy: 1, sx: 0.95, sy: 1.07, by: -16 }],
+        [3.45, { happy: 1, by: -4, sx: 1.02, sy: 0.98 }],
+        [3.65, { happy: 1, sx: 1.05, sy: 0.93, by: 2 }],
+        [3.9, { happy: 1, tilt: -4 }],
+        [4.4, { happy: 1, tilt: 4 }],
+        [4.8, { happy: 0.2 }],
+        [5.1, {}],
+        [6.0, {}],
+      ].map(([t, p]) => [t, { ...BASE, ...p }]);
+      const BLINKS = [1.75, 5.35];
+      const ease = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+      function pose(t) {
+        let i = 0;
+        while (i < KEYS.length - 2 && KEYS[i + 1][0] <= t) i++;
+        const [ta, a] = KEYS[i];
+        const [tb, b] = KEYS[i + 1];
+        const k = ease(Math.min(1, Math.max(0, (t - ta) / (tb - ta))));
+        const p = {};
+        for (const key in a) p[key] = a[key] + (b[key] - a[key]) * k;
+        // breathing, and quick blinks
+        p.sy *= 1 + 0.012 * Math.sin((t / LOOP) * Math.PI * 4);
+        for (const bt of BLINKS) {
+          const d = Math.abs(t - bt);
+          if (d < 0.09) p.blink = Math.max(p.blink, 1 - d / 0.09);
+        }
+        return p;
+      }
+
+      function render(t) {
+        t = ((t % LOOP) + LOOP) % LOOP;
+        // signals: one short dash per lane running outward, landing on its via
+        for (const l of lanes) {
+          const ph = (t / LOOP * 2 * l.k + l.seed) % 1;
+          const dash = 46;
+          const head = ph * (l.len + dash);
+          l.pulse.setAttribute("stroke-dasharray", `${dash} ${l.len + dash * 2}`);
+          l.pulse.setAttribute("stroke-dashoffset", String(dash - head));
+          if (l.dot) {
+            const near = Math.max(0, 1 - Math.abs(head - l.len) / 60);
+            l.dot.setAttribute("r", (4.5 + near * 3.5).toFixed(2));
+            l.dot.setAttribute("opacity", (0.25 + near * 0.75).toFixed(2));
+          }
+        }
+        const p = pose(t);
+        document.getElementById("bot").setAttribute("transform", `translate(${CX} ${CY + p.by}) scale(${SCALE})`);
+        document.getElementById("body").setAttribute("transform", `rotate(${p.tilt}) scale(${p.sx} ${p.sy})`);
+        for (const e of E) {
+          const w = 13, h = 19 * (1 - 0.88 * p.blink);
+          const x = e.s * 12.5 + p.gx, y = p.gy;
+          e.g.setAttribute("transform", `translate(${x} ${y})`);
+          for (const [k, v] of Object.entries({ x: -w / 2, y: -h / 2, width: w, height: h, rx: Math.min(w, h) / 2 })) e.white.setAttribute(k, v.toFixed(2));
+          // happy: a cheek rises from below and leaves an upturned arc
+          e.cheek.setAttribute("cx", 0);
+          e.cheek.setAttribute("cy", (h / 2 + 9 - p.happy * 13.5).toFixed(2));
+          e.cheek.setAttribute("rx", (w * 0.75).toFixed(2));
+          e.cheek.setAttribute("ry", "9");
+          // a sly half-lid from above
+          e.lid.setAttribute("x", (-w / 2 - 1).toFixed(2));
+          e.lid.setAttribute("y", (-h / 2 - 1).toFixed(2));
+          e.lid.setAttribute("width", (w + 2).toFixed(2));
+          e.lid.setAttribute("height", Math.max(0, p.lid * h + 1).toFixed(2));
+          e.lid.setAttribute("opacity", p.lid > 0.01 ? 1 : 0);
+        }
+      }
+      window.render = render;
+      window.LOOP = LOOP;
+      render(0);
+    </script>
+  </body>
+</html>
