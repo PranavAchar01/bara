@@ -16,6 +16,7 @@ import os
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
+from pathlib import Path
 from typing import Any
 
 from bara.board.generic import gpio_pins
@@ -52,7 +53,8 @@ Emit = Callable[..., dict[str, Any]]
 MAX_SURVIVORS = 8
 # function ids that name no electrical job: the block is housing material, made by the case
 NON_ELECTRICAL = frozenset({"other", "mech.enclosure"})
-ASSETS_DIR = SERVER / "data" / "assets"
+# the served asset tree, wherever BARA_DATA_DIR puts it (as Settings.assets_dir reads it)
+ASSETS_DIR = Path(os.environ.get("BARA_DATA_DIR", SERVER / "data")) / "assets"
 HALF_GAP_MM = 40.0  # inner-edge gap between split halves in the first placement guess
 
 # function id -> (slot id, label, instance prefix, feature kind for side assignment)
