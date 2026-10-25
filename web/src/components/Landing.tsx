@@ -1,11 +1,11 @@
 // Home (Figma: Landing C2, "the product, with Bara at work"). The first screen is one plate: a recording of a real
-// build (scripts/record-demo.mjs) plays behind, and Bara sits in front with its speech bubble as the prompt
-// (HeroAgent). Then four stills show what Bara does on the canvas, then the user's own builds.
+// build (scripts/record-demo.mjs) plays behind, and Bara's Build button sits in front; pressing it turns the
+// page over to Bara, who asks what to make (HeroAgent). Then four stills show what Bara does on the canvas, then the user's own builds.
 import { useEffect, useRef, useState } from "react";
-import { HeroAgent } from "./HeroAgent";
+import { AgentIntro, HeroCta, type IntroOpen } from "./HeroAgent";
 
 // Bump V when scripts/record-demo.mjs writes a new take, so no browser plays cached bytes of the old one.
-const V = "2";
+const V = "3";
 const VIDEO = { mp4: `/landing/bara-demo.mp4?v=${V}`, webm: `/landing/bara-demo.webm?v=${V}`, poster: `/landing/bara-demo.jpg?v=${V}` };
 const FALLBACK_POSTER = "/landing/hero-poster.jpg";
 
@@ -51,8 +51,9 @@ function DemoVideo() {
   );
 }
 
-/** The first screen: one plate, the recording playing behind, and Bara in front to talk to. */
+/** The first screen: one plate, the recording playing behind, and Bara's Build button in front. */
 export function LandingHero() {
+  const [intro, setIntro] = useState<IntroOpen | null>(null);
   return (
     <section className="ld-hero">
       <div className="ld-plate">
@@ -61,9 +62,10 @@ export function LandingHero() {
         </figure>
         <div className="ld-stage">
           <h1>Describe a device. Watch Bara build it from real parts.</h1>
-          <HeroAgent />
+          <HeroCta onOpen={setIntro} hidden={intro !== null} />
         </div>
       </div>
+      {intro && <AgentIntro open={intro} onClose={() => setIntro(null)} />}
     </section>
   );
 }
