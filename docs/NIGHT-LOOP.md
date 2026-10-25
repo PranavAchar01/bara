@@ -288,9 +288,3 @@ Web: bara-merge agent merges Nithin's figma-design-in-code / agent-board-3d / fi
   (3) mech.*/interconnect.* needs cost no controller pin (thumbstick caps took GPIO) (48094ac).
   Controller b_4JVtdvFkFZVY DONE, no DRC errors. Open: VZ30C motor and LiPo 401230 have no
   library 3D model (KiCad ships none); MCU free-pin count reads "unknown" for SuperMini.
-
-### 2026-10-24 ~19:45 PT
-- bara-ui done (65ddb5d): Build-only home over a replay of 3 real builds, /library with Build pop-up, /build/:id, toasts, cursor-only agent, shopping list. Verified: tsc clean, 225 tests, build ok.
-- 67f5204: Vercel SPA rewrites for /build, /library, /drafts.
-- Engine restarted on the current tree, so the bom export (2c8cf38) is live and the shopping list loads.
-- Still open: calculator still comes out as a keyboard (bara-general in flight); bara-engine, bara-sim, bara-look not reported. Held-out eval waits until those land, so it grades the merged engine.

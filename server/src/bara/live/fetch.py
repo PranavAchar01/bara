@@ -358,11 +358,6 @@ class Resolver:
         # no MPN worked (or none was named): search by what the block is, in words
         words = re.sub(r"[^\w/.+-]+", " ", f"{need.label} {need.requirement}").strip()
         terms.append("keyword:" + re.sub(r"\s+", " ", words)[:60])
-        # the part search matches words literally: the block's own name alone finds listings
-        # a long description misses
-        short = re.sub(r"\s+", " ", re.sub(r"[^\w/.+-]+", " ", need.label)).strip()[:40]
-        if short and "keyword:" + short not in terms:
-            terms.append("keyword:" + short)
         for term in terms:
             cached = self._cached(term, need)
             if cached is not None:

@@ -120,7 +120,7 @@ def plan_board(
 
 
 async def route_board(
-    planned: dict[str, Any], on_progress: Progress, heartbeat_s: float = 2.0, effort: int = 0
+    planned: dict[str, Any], on_progress: Progress, heartbeat_s: float = 2.0
 ) -> tuple[dict[str, Any] | None, str | None]:
     """Phase 2: pcbnew + Freerouting + DRC + GLB in a worker thread. (result, error)."""
     board, why = board_module()
@@ -133,9 +133,7 @@ async def route_board(
         loop.call_soon_threadsafe(queue.put_nowait, (str(message), fraction))
 
     started = time.monotonic()
-    task = asyncio.ensure_future(
-        asyncio.to_thread(board.route_board, planned, progress=progress, effort=effort)
-    )
+    task = asyncio.ensure_future(asyncio.to_thread(board.route_board, planned, progress=progress))
     last = "Building the KiCad board"
     while not task.done():
         try:

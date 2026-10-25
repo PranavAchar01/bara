@@ -23,7 +23,7 @@ from bara.live import hero
 from bara.live.fetch import Overlay, Resolver
 
 PILL = [(-60, -20), (-40, -30), (40, -30), (60, -20), (60, 20), (40, 30), (-40, 30), (-60, 20)]
-REFERENCE = {"kinds": ["x"], "width_mm": 120.0, "height_mm": 60.0, "thickness_mm": 20.0}
+REFERENCE = {"products": ["x"], "width_mm": 120.0, "height_mm": 60.0, "thickness_mm": 20.0}
 
 
 def make_form(**kw: Any) -> fm.Form:

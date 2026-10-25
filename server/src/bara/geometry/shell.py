@@ -399,13 +399,8 @@ def sites_from_anchors(
                     continue
                 if (kind == "port") != (f.role in ("usb", "mcu")):
                     continue
-                if (kind == "screen") != (f.role == "screen"):
-                    continue  # a window opens over a panel, a button over a button
-                # a panel's own centre can sit well off the anchor while the anchor is still over
-                # its glass: anywhere within half its diagonal claims it
-                reach = max(best, 0.5 * math.hypot(f.w, f.d)) if kind == "screen" else best
                 dist = math.hypot(f.x - s.x, f.y - s.y)
-                if dist < reach:
+                if dist < best:
                     best, near = dist, f
             if near is not None:
                 claimed.add(near.ref)

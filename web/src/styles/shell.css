@@ -1143,677 +1143,401 @@
   flex: none;
 }
 
-/* Landing: one screen and one Build button over a small mock of the app replaying real builds
-   from scratch (BuildScene). Never scrolls on a desktop screen. */
+/* Landing (Figma: Landing C2). The first screen is one plate: a recorded build plays behind, Bara talks in front. */
 .home.landing {
   display: block;
   position: relative;
+  overflow-x: clip;
   padding: 0;
-  overflow: hidden;
 }
-.ld {
-  position: relative;
-  height: 100%;
-  display: grid;
-  place-items: center;
-  padding: 24px 32px 28px;
-}
-.ld-window {
-  margin: 0;
-  width: min(1240px, 100%);
-  height: 100%;
-  max-height: 780px;
-  min-height: 0;
-}
-.ld-cta {
-  position: absolute;
-  left: 50%;
-  bottom: 64px;
-  transform: translateX(-50%);
-  z-index: 10;
-}
-.ld-build.btn.primary {
-  font-size: 18px;
-  padding: 14px 52px;
-  height: auto;
-  border-radius: 999px;
-  box-shadow: 0 10px 30px rgb(20 20 20 / 18%);
-}
-
-/* the mock app: top bar with tabs, sidebar with the prompt and stages, canvas, notifications */
-.mk {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: var(--surface);
-  box-shadow: var(--shadow);
-  overflow: hidden;
-  user-select: none;
-}
-.mk-top {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  height: 42px;
-  padding: 0 14px;
-  border-bottom: 1px solid var(--line);
-  font-size: 12px;
-  color: var(--text-2);
-}
-.mk-brand {
-  font-family: var(--font-display);
-  font-size: 18px;
-  color: var(--text);
-}
-.mk-tabs {
-  display: flex;
-  gap: 4px;
-  min-width: 0;
-  overflow: hidden;
-}
-.mk-tab {
-  padding: 4px 10px;
-  border-radius: 6px;
-  white-space: nowrap;
-  border: 1px solid transparent;
-}
-.mk-tab.on {
-  background: var(--surface-2);
-  border-color: var(--line);
-  color: var(--text);
-}
-.mk-conn {
+.landing > section,
+.landing > figure,
+.landing > .library {
+  width: min(1328px, calc(100% - 32px));
   margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+  margin-right: auto;
 }
-.mk-led {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--ok);
+.ld-hero {
+  height: calc(100svh - 48px);
+  min-height: 520px;
+  padding: clamp(10px, 2vh, 20px) 0;
 }
-.mk-btn {
-  padding: 4px 10px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  color: var(--text);
-}
-.mk-body {
+/* After tryclean.ai's hero plate, in Bara's paper: rounded, the recording as its backdrop. */
+.ld-plate {
   position: relative;
-  flex: 1;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
-}
-.mk-side {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 16px;
-  border-right: 1px solid var(--line);
-  min-width: 0;
-}
-.mk-msg {
-  display: block;
-  min-height: 42px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  background: var(--surface-2);
-  font-size: 13px;
-  line-height: 1.35;
-  color: var(--text);
-}
-.mk-stages {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  font-size: 12.5px;
-  color: var(--muted);
-}
-.mk-stages li {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-}
-.mk-stages li.on {
-  color: var(--text);
-  font-weight: 600;
-}
-.mk-stages li.done {
-  color: var(--text-2);
-}
-.mk-tick {
-  flex: none;
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-  border: 1.5px solid var(--line-strong);
-}
-.mk-stages li.on .mk-tick {
-  border-color: var(--ink);
-  border-right-color: transparent;
-  animation: mk-spin 0.9s linear infinite;
-}
-.mk-stages li.done .mk-tick {
-  border-color: var(--ok);
-  background: var(--ok);
-}
-@keyframes mk-spin {
-  to { transform: rotate(360deg); }
-}
-.mk-count {
-  margin-top: auto;
-  font-size: 11px;
-  color: var(--muted);
-}
-.mk-canvas {
-  position: relative;
-  min-width: 0;
-  min-height: 0;
+  height: 100%;
+  border-radius: 24px;
   overflow: hidden;
-  background-color: var(--viewport-bg);
-  background-image: radial-gradient(var(--grid-line) 1px, transparent 1px);
-  background-size: 22px 22px;
-}
-.mk-canvas .bs-svg {
-  position: absolute;
-  left: 28px;
-  right: 28px;
-  top: 28px;
-  bottom: 120px;
-  width: calc(100% - 56px);
-  height: calc(100% - 148px);
-}
-.mk-toasts {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 6px;
-  z-index: 3;
-}
-.mk-toast {
-  padding: 7px 12px;
   border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--surface);
-  box-shadow: var(--shadow);
-  font-size: 12px;
-  color: var(--text);
-  animation: mk-in 0.24s ease-out;
-  transition: opacity 0.3s, transform 0.3s;
+  background: var(--paper-2);
 }
-.mk-toast.leaving {
-  opacity: 0;
-  transform: translateX(12px);
-}
-@keyframes mk-in {
-  from { opacity: 0; transform: translateX(16px); }
-}
-.bs-caret {
-  display: inline-block;
-  width: 1.5px;
-  height: 1em;
-  margin-left: 1px;
-  vertical-align: -0.15em;
-  background: var(--ink);
-  animation: bs-blink 1s steps(2, start) infinite;
-}
-@keyframes bs-blink {
-  to { visibility: hidden; }
-}
-
-/* Bara working the mock: an arrow cursor that moves and clicks, the bot floating behind it */
-.bs-agent {
+.ld-bg {
   position: absolute;
   inset: 0;
+  margin: 0;
+  /* a recording, not a control: nothing in it can be clicked, selected or dragged */
   pointer-events: none;
-  z-index: 4;
-  transition: opacity 0.3s;
+  user-select: none;
 }
-.bs-agent.is-hidden {
-  opacity: 0;
-}
-.bs-bot,
-.bs-cursor,
-.bs-ripple {
-  position: absolute;
-  left: 0;
-  top: 0;
-  will-change: transform;
-}
-.bs-bot-lean {
-  transform-origin: 50% 80%;
-}
-.bs-cursor {
-  transform-origin: 0 0;
-}
-.bs-cursor svg {
-  display: block;
-  margin: -1px 0 0 -1px;
-  filter: drop-shadow(0 1px 1.5px rgb(0 0 0 / 25%));
-}
-.bs-cursor path {
-  fill: var(--ink);
-  stroke: var(--paper);
-  stroke-width: 1.2;
-  stroke-linejoin: round;
-}
-.bs-ripple::after {
-  content: "";
-  position: absolute;
-  left: -14px;
-  top: -14px;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: 2px solid var(--ink);
-  opacity: 0;
-}
-.bs-ripple.on::after {
-  animation: bs-ripple 0.5s ease-out;
-}
-@keyframes bs-ripple {
-  from { opacity: 0.45; transform: scale(0.3); }
-  to { opacity: 0; transform: scale(1.4); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .mk-toast,
-  .bs-caret,
-  .bs-ripple.on::after,
-  .mk-stages li.on .mk-tick {
-    animation: none;
-  }
-}
-
-/* Library page: finished builds under its own Build button, then this browser's drafts */
-.home.libmain {
-  display: block;
-  overflow: auto;
-  padding: 0 32px;
-}
-.libpage {
-  width: min(1180px, 100%);
-  margin: 0 auto;
-  padding: 40px 0 64px;
-}
-.libpage-head {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 24px;
-  margin-bottom: 28px;
-}
-.libpage-head h1 {
-  margin: 0;
-  font-size: 46px;
-}
-.home .libpage-head p {
-  margin: 8px 0 0;
-}
-.libpage-build.btn.primary {
-  flex: none;
-  font-size: 16px;
-  padding: 12px 36px;
-  height: auto;
-  border-radius: 999px;
-}
-.gal-grid {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 18px;
-}
-.gal-card {
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--surface);
-  overflow: hidden;
-  transition: box-shadow 0.15s, transform 0.15s;
-}
-.gal-card:not(.is-loading):hover {
-  box-shadow: var(--shadow);
-  transform: translateY(-2px);
-}
-.gal-card.opening {
-  opacity: 0.6;
-}
-.gal-open {
-  display: block;
-  width: 100%;
-  padding: 0;
-  border: 0;
-  background: none;
-  text-align: left;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-}
-.gal-open:focus-visible {
-  outline: 2px solid var(--ink);
-  outline-offset: -2px;
-}
-.gal-thumb {
-  display: block;
-  aspect-ratio: 16 / 10;
-  background: var(--surface-2);
-}
-.gal-thumb img,
-.gal-still {
+.demo-media {
   display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: 62% 50%;
 }
-.gal-still {
-  padding: 12px;
+/* paper rises from the left so the words and the bot sit on calm ground, the build plays on the right */
+.ld-plate::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    var(--paper) 0%,
+    color-mix(in srgb, var(--paper) 94%, transparent) 30%,
+    color-mix(in srgb, var(--paper) 60%, transparent) 46%,
+    transparent 64%
+  );
 }
-.gal-meta {
+.ld-stage {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  bottom: 0;
+  left: clamp(24px, 4vw, 64px);
+  width: clamp(320px, 44%, 580px);
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 12px 14px 14px;
+  justify-content: center;
+  gap: clamp(20px, 4vh, 40px);
 }
-.gal-title {
-  font-size: 15px;
-  font-weight: 600;
-}
-.gal-sub {
-  font-size: 12px;
-  color: var(--muted);
-}
-.gal-card.is-loading {
-  aspect-ratio: 16 / 12.6;
-  background: linear-gradient(90deg, var(--surface-2), var(--sunken), var(--surface-2));
-  background-size: 200% 100%;
-  animation: gal-shimmer 1.4s linear infinite;
-}
-@keyframes gal-shimmer {
-  to { background-position: -200% 0; }
-}
-.libpage .library {
-  width: 100%;
-  margin-top: 48px;
-}
-.home .libpage .lib-empty,
-.home .libpage .lib-note {
-  margin: 12px 0 0;
-}
-.libpage .lib-head h2 {
+.ld-stage h1 {
   font-family: var(--font-display);
   font-weight: 400;
-  font-size: 28px;
-  margin: 2px 0 0;
+  font-size: clamp(34px, min(3.5vw, 5.6vh), 56px);
+  line-height: 0.98;
+  letter-spacing: var(--track-display);
+  text-wrap: balance;
 }
 
-/* Build pop-up: one big prompt, a few examples, Build */
-.bd-scrim {
-  position: fixed;
-  inset: 0;
-  z-index: 120;
+/* Bara and its speech bubble, which is the prompt (HeroAgent). */
+.hero-agent {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.hero-bot {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  border-radius: 50%;
+  cursor: pointer;
+  line-height: 0;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.hero-bot:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -10px;
+}
+/* a ring in the page colour keeps the oval readable over the recording in dark mode */
+.hero-bot .bb-oval {
+  stroke: var(--surface);
+  stroke-width: 3;
+}
+.hero-bot-float {
+  display: block;
+  animation: ld-float 5.2s ease-in-out infinite;
+}
+@keyframes ld-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+.hero-bubble {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 6px 6px 18px;
+  border: 1.5px solid var(--ink);
+  border-radius: 24px;
+  background: var(--surface);
+  box-shadow: 0 14px 34px -18px rgb(0 0 0 / 0.4);
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+/* the tail, pointing back at the bot */
+.hero-bubble::before {
+  content: "";
+  position: absolute;
+  left: -8px;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  background: var(--surface);
+  border-left: 1.5px solid var(--ink);
+  border-bottom: 1.5px solid var(--ink);
+  transform: translateY(-50%) rotate(45deg);
+  transition: border-color 160ms ease;
+}
+.hero-bubble:focus-within {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent), 0 14px 34px -18px rgb(0 0 0 / 0.4);
+}
+.hero-bubble input {
+  flex: 1;
+  min-width: 0;
+  height: 42px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 19px;
+  letter-spacing: -0.015em;
+  outline: none;
+}
+.hero-bubble input::placeholder {
+  color: var(--text-2);
+  opacity: 0.75;
+}
+.hero-bubble input:disabled {
+  opacity: 1;
+  -webkit-text-fill-color: var(--ink);
+}
+.hero-send {
+  flex: none;
   display: grid;
   place-items: center;
-  padding: 16px;
-  background: rgb(20 20 20 / 28%);
-  backdrop-filter: blur(3px);
-  animation: bd-fade 0.16s ease-out;
+  width: 42px;
+  height: 42px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--paper);
+  cursor: pointer;
+  transition: opacity 160ms ease, transform 160ms ease;
 }
-.bd-card {
-  position: relative;
-  width: min(680px, 100%);
-  padding: 32px 32px 22px;
-  border-radius: 18px;
-  background: var(--surface);
-  box-shadow: 0 24px 64px rgb(0 0 0 / 18%);
-  animation: bd-pop 0.2s ease-out;
+.hero-send:hover:not(:disabled) {
+  transform: translateX(2px);
 }
-.bd-close {
-  position: absolute;
-  top: 14px;
-  right: 14px;
+.hero-send:disabled {
+  opacity: 0.3;
+  cursor: default;
 }
-.bd-card h2 {
-  margin: 0 0 6px;
+.st-listening .hero-bubble,
+.st-listening .hero-bubble::before {
+  border-color: var(--accent);
+}
+.hero-mic {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--fail);
+  animation: hero-pulse 1s ease-in-out infinite;
+}
+@keyframes hero-pulse {
+  50% { opacity: 0.3; transform: scale(0.8); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-bot-float,
+  .hero-mic { animation: none; }
+}
+.ld-steps {
+  margin-top: 64px;
+  border-top: 1.5px solid var(--ink);
+  padding-top: 16px;
+}
+.ld-sh {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.ld-sh h2,
+.landing .lib-head h2 {
   font-family: var(--font-display);
   font-weight: 400;
-  font-size: 34px;
+  font-size: clamp(32px, 3vw, 44px);
   letter-spacing: var(--track-display);
 }
-.bd-sub {
-  margin: 0 0 20px;
+.ld-steps ol {
+  list-style: none;
+  margin: 20px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
+}
+.ld-still {
+  position: relative;
+  background: #ececec;
+  overflow: hidden;
+}
+.ld-still img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.ld-sel {
+  position: absolute;
+  border: 1.5px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+  border-radius: 1px;
+}
+.ld-sel .h {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: var(--paper);
+  border: 1.5px solid var(--accent);
+}
+.ld-sel .tl { left: -4.75px; top: -4.75px; }
+.ld-sel .tr { right: -4.75px; top: -4.75px; }
+.ld-sel .bl { left: -4.75px; bottom: -4.75px; }
+.ld-sel .br { right: -4.75px; bottom: -4.75px; }
+.ld-chip {
+  position: absolute;
+  left: -1.5px;
+  bottom: calc(100% + 5px);
+  padding: 2px 7px;
+  border-radius: 3px;
+  background: var(--accent);
+  color: #fff;
+  font: 600 11px var(--font-sans);
+  white-space: nowrap;
+}
+.ld-chip.below {
+  bottom: auto;
+  top: calc(100% + 5px);
+}
+.ld-scan {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 46%;
+  height: 1.5px;
+  background: var(--accent);
+}
+.ld-cursor {
+  position: absolute;
+}
+.ld-trace {
+  position: absolute;
+  inset: 6px;
+  width: calc(100% - 12px);
+  height: calc(100% - 12px);
+}
+.ld-trace path {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  stroke-dasharray: 6 4;
+  vector-effect: non-scaling-stroke;
+}
+.ld-code {
+  position: absolute;
+  left: calc(100% + 8px);
+  top: 4px;
+  padding: 5px 8px;
+  border-radius: 4px;
+  background: var(--ink);
+  color: #fff;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.ld-code i {
+  display: inline-block;
+  width: 6px;
+  height: 12px;
+  margin-left: 2px;
+  vertical-align: -2px;
+  background: var(--accent);
+}
+.ld-st {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 12px;
+}
+.ld-n {
+  font: 800 34px/0.8 var(--font-sans);
+  letter-spacing: -0.05em;
+}
+.ld-st b {
+  font-size: 17px;
+  font-weight: 600;
+}
+.ld-steps li p {
+  margin: 4px 0 0;
   font-size: 14px;
   color: var(--text-2);
 }
-.bd-field .prompt-input {
-  font-size: 17px;
-  min-height: 56px;
+.landing .library {
+  margin-top: 64px;
+  border-top: 1.5px solid var(--ink);
+  padding-top: 16px;
 }
-.bd-examples {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin-top: 16px;
-}
-.bd-k {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: var(--track-label);
-  color: var(--muted);
-}
-.bd-foot {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 18px;
-  margin: 22px 0 0;
-  font-size: 12px;
-  color: var(--muted);
-}
-.bd-foot kbd {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  padding: 1px 5px;
-  border: 1px solid var(--line);
-  border-bottom-width: 2px;
-  border-radius: 4px;
-  color: var(--text-2);
-}
-@keyframes bd-fade {
-  from { opacity: 0; }
-}
-@keyframes bd-pop {
-  from { opacity: 0; transform: translateY(8px) scale(0.98); }
-}
-
-/* Build notes as toasts: slide in at the top right, stack three, close on their own */
-.note-stack {
-  position: fixed;
-  top: 60px;
-  right: 16px;
-  z-index: 90;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: min(360px, calc(100% - 32px));
-}
-.note-toast {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas: "code x" "msg x";
-  gap: 2px 8px;
-  padding: 10px 8px 10px 12px;
-  border: 1px solid var(--line);
-  border-left: 3px solid var(--tone, var(--neutral));
-  border-radius: 10px;
-  background: var(--surface);
-  box-shadow: var(--shadow);
-  animation: note-in 0.22s ease-out;
-}
-.note-toast.leaving {
-  animation: note-out 0.22s ease-in forwards;
-}
-.note-code {
-  grid-area: code;
-  color: var(--tone, var(--text-2));
-}
-.note-msg {
-  grid-area: msg;
-  font-size: 13px;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.note-toast > .btn {
-  grid-area: x;
-  align-self: start;
-}
-@keyframes note-in {
-  from { opacity: 0; transform: translateX(24px); }
-}
-@keyframes note-out {
-  to { opacity: 0; transform: translateX(24px); }
-}
-.eventlog-notes {
-  border-bottom: 1px solid var(--line);
-  padding: 8px 12px;
-  font-size: 12px;
-}
-.eventlog-notes summary {
-  cursor: pointer;
-  color: var(--text-2);
-}
-.eventlog-notes ul {
-  margin: 8px 0 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.eventlog-notes li {
-  border-left: 2px solid var(--tone, var(--neutral));
-  padding-left: 8px;
-}
-
-/* a canvas whose build was just asked for: the prompt and Bara thinking, until the engine answers */
-.canvas-starting {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  text-align: center;
-}
-.canvas-starting h2 {
-  font-family: var(--font-display);
-  font-weight: 400;
-  font-size: 28px;
-  margin: 6px 0 0;
-}
-
-/* Bara on the canvas is a cursor all the way through: no selection boxes, scan bands or blue
-   traces, just the arrow moving and clicking (bot/AgentStage draws them; hidden here). */
-.app .agent-stage .as-box,
-.app .agent-stage .as-scan,
-.app .agent-stage .as-trace {
-  display: none;
-}
-.app .agent-stage .as-cursor path {
-  fill: var(--ink);
-  stroke: var(--paper);
-}
-.app .agent-stage .as-ripple::after {
-  border-color: var(--ink);
-}
-.vp-board-status::before {
-  display: none;
-}
-
-@media (max-width: 900px) {
-  .mk-body {
-    grid-template-columns: minmax(0, 1fr);
+/* Narrow: the words and Bara first, the recording below them as a picture of its own. */
+@media (max-width: 760px) {
+  .ld-hero {
+    height: auto;
+    min-height: 0;
   }
-  .mk-side {
+  .ld-plate {
+    height: auto;
+    display: flex;
+    flex-direction: column;
+  }
+  .ld-plate::after {
     display: none;
   }
-  .mk-tabs .mk-tab:not(.on) {
-    display: none;
+  .ld-stage {
+    position: static;
+    width: auto;
+    padding: 28px 20px 22px;
+    gap: 22px;
   }
-  .ld {
-    padding: 16px;
+  .ld-bg {
+    order: 2;
+    position: relative;
+    inset: auto;
+    aspect-ratio: 16 / 10;
+    border-top: 1px solid var(--line);
   }
-  .home.libmain {
-    padding: 0 16px;
-  }
-  .libpage-head {
+  /* the bubble gets the full width under the bot, its tail pointing up at it */
+  .hero-agent {
     flex-direction: column;
     align-items: flex-start;
+    gap: 12px;
+  }
+  .hero-bubble {
+    width: 100%;
+  }
+  .hero-bubble::before {
+    left: 40px;
+    top: -8px;
+    transform: rotate(135deg);
+  }
+  .hero-bubble input {
+    font-size: 17px;
+  }
+  .demo-media {
+    object-position: 50% 50%;
   }
 }
-
-/* Shopping list (Build page, beside Export) */
-.bd-card.sl-card {
-  width: min(1040px, 100%);
-  max-height: calc(100vh - 48px);
-  display: flex;
-  flex-direction: column;
+@media (max-width: 980px) {
+  .ld-steps ol {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
-.sl-scroll {
-  min-height: 0;
-  overflow: auto;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-}
-.sl-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-.sl-table th,
-.sl-table td {
-  padding: 8px 10px;
-  text-align: left;
-  border-bottom: 1px solid var(--line);
-  vertical-align: top;
-}
-.sl-table th {
-  position: sticky;
-  top: 0;
-  background: var(--surface-2);
-  font-weight: 600;
-  font-size: 12px;
-  color: var(--text-2);
-}
-.sl-table .num {
-  text-align: right;
-  white-space: nowrap;
-}
-.sl-table tfoot td {
-  font-weight: 600;
-  border-bottom: 0;
-}
-.sl-links {
-  white-space: nowrap;
-}
-.sl-links a {
-  margin-right: 10px;
-  color: var(--text);
-}
-.sl-foot {
-  justify-content: flex-end;
-}
-.sl-foot a.btn {
-  text-decoration: none;
+@media (max-width: 560px) {
+  .ld-steps ol {
+    grid-template-columns: 1fr;
+  }
 }

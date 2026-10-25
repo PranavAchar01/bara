@@ -50,8 +50,6 @@ log = logging.getLogger(__name__)
 Emit = Callable[..., dict[str, Any]]
 
 MAX_SURVIVORS = 8
-# function ids that name no electrical job: the block is housing material, made by the case
-NON_ELECTRICAL = frozenset({"other", "mech.enclosure"})
 ASSETS_DIR = SERVER / "data" / "assets"
 HALF_GAP_MM = 40.0  # inner-edge gap between split halves in the first placement guess
 
@@ -583,17 +581,7 @@ class Composer:
 
     def filters_for(self, slot: Slot, cands: list[dict[str, Any]]) -> list[Filter]:
         filters: list[Filter] = []
-        # a device requirement describes the parts whose own function this slot is: a speaker
-        # slot offered an audio MCU (a speaker only as a side function) takes no radio filter
-        own = [
-            p
-            for p in cands
-            if any(
-                f.get("primary") and f.get("function_id") == slot.function_id
-                for f in p.get("functions") or []
-            )
-        ] or cands
-        present = {k for p in own for k in (p.get("facets") or {})}
+        present = {k for p in cands for k in (p.get("facets") or {})}
         # 1. requirements from the spec, where the slot's parts carry that facet
         for req in self.spec.get("hard_requirements", []) + self.spec.get("soft_requirements", []):
             facet, op, value = req["facet"], req["op"], req["value"]
@@ -615,8 +603,6 @@ class Composer:
                 )
                 continue
             if facet == "power_source" and value == "battery" and slot.slot_id == "controller":
-                if any(s.function_id == "power.charger" for s in self.slots if s is not slot):
-                    continue  # the design charges its own cell: a bare module runs off its rail
                 filters.append(
                     Filter(
                         facet,
@@ -842,10 +828,6 @@ class Composer:
                 s += 0.15 - min(0.15, (gpio - need) * 0.01)  # smallest controller that fits
             if self.board_controller_for(part):
                 s += 0.05
-        # a footprint the matched open reference design used for this function
-        ref = getattr(self, "reference_fps", None) or {}
-        if str(part.get("footprint") or "") in ref.get(slot.function_id, ()):
-            s += 0.25
         st = self.brief.get("switch_type")
         if slot.slot_id == "switches" and st and st in name:
             s += 0.2
@@ -1209,9 +1191,9 @@ class Composer:
                 stage="compose",
             )
             idx, method, reason, model, notes = await self.pick(slot, ranked)
-            if method == "model_none" or (method == "none" and slot.need is not None):
-                # nothing in the catalog is the named part, or none passes the filters: look
-                # further (KiCad, LCSC) before settling for the closest catalog part
+            if method == "model_none":
+                # nothing in the catalog is the named part: look further (KiCad, LCSC) before
+                # settling for the closest catalog part
                 had = len(self.extra.get(slot.slot_id, []))
                 await self.resolve_missing(slot, emit)
                 new = self.extra.get(slot.slot_id, [])[had:]
@@ -1238,14 +1220,8 @@ class Composer:
                     },
                     stage="compose",
                 )
-            if (
-                idx is None
-                and slot.need is not None
-                and (slot.need.mechanical or slot.function_id in NON_ELECTRICAL)
-            ):
-                # caps, levers and wells the case geometry grows from the form's anchors; a
-                # block with no electrical function (a lens, a window, a gasket) is the
-                # case's own material, not something an electronics library sells
+            if idx is None and slot.need is not None and slot.need.mechanical:
+                # caps, levers and wells the case geometry grows from the form's anchors
                 slot.state, slot.covered_by = "none", "case"
                 reason = f"{slot.label}: made by the case, not a catalog part."
             elif idx is None:
@@ -1588,57 +1564,6 @@ class Composer:
                 + "."
             )
         return f"{name}: highest score" + (" after " + ", ".join(bits) if bits else "") + "."
-
-    def resize(
-        self, instance_id: str, fits: Callable[[dict[str, Any]], bool], why: str, emit: Emit
-    ) -> dict[str, Any] | None:
-        """Re-pick the slot that owns instance_id with its best-ranked candidate that fits (a
-        part too big for the product swapped for a smaller one serving the same function);
-        returns the new part, None when no other candidate fits."""
-        slot = next(
-            (s for s in self.slots if any(i.instance_id == instance_id for i in s.instances)),
-            None,
-        )
-        if slot is None or slot.chosen is None:
-            return None
-        old = slot.chosen
-        _, ranked, _ = self.narrow(slot)
-        part = next((p for p in ranked if p["part_id"] != old["part_id"] and fits(p)), None)
-        if part is None:
-            return None
-        slot.chosen = part
-        self.result.chosen_parts[slot.slot_id] = part
-        reason = f"{card_for(old)['display_name']} does not fit: {why}"
-        emit(
-            "decision.made",
-            {
-                "decision": {
-                    "decision_id": self.next_decision(),
-                    "slot_id": slot.slot_id,
-                    "step": slot.order,
-                    "method": "solver",
-                    "chosen_part_id": part["part_id"],
-                    "chosen_short_id": None,
-                    "survivors": len(ranked),
-                    "reason": reason[:240],
-                    "model": None,
-                    "propagated": self.propagated(slot),
-                }
-            },
-            stage="compose",
-        )
-        built = {
-            inst.instance_id: self.build_part(slot, inst, self.sized_part(slot, inst, part))
-            for inst in slot.instances
-        }
-        self.result.parts = [built.get(p["instance_id"], p) for p in self.result.parts]
-        for bp in built.values():
-            emit("part.updated", {"part": bp}, stage="compose")
-        emit("slot.updated", {"slot": slot.json()}, stage="compose")
-        for conn in self.connections_for(slot, list(built.values())):
-            emit("connection.added", {"connection": conn}, stage="compose")
-        self.result.log.append(f"{slot.slot_id}: {part['part_id']} (resized: {why})")
-        return part
 
     def covering_slot(self, slot: Slot) -> Slot | None:
         """An already decided slot whose part also provides this slot's function.
