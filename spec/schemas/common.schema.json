@@ -110,42 +110,6 @@
             "null"
           ],
           "description": "GLB node name the color applies to. null means every recolorable node of the instance."
-        },
-        "finish": {
-          "type": "object",
-          "description": "How the surface is made, beyond its colour. Cases use it for printable and cut finishes, including see-through ones.",
-          "required": [
-            "preset"
-          ],
-          "properties": {
-            "preset": {
-              "type": "string",
-              "enum": [
-                "matte",
-                "satin",
-                "gloss",
-                "silk",
-                "frosted",
-                "clear",
-                "smoke",
-                "metal",
-                "unknown"
-              ],
-              "description": "matte (PLA), satin (default), gloss (moulded), silk (silk PLA), frosted (translucent PETG), clear (acrylic or resin), smoke (tinted acrylic), metal (anodised aluminium)."
-            },
-            "clarity": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 1,
-              "description": "See-through finishes: how much light passes, 0 opaque to 1 fully clear."
-            },
-            "frost": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 1,
-              "description": "Surface roughness, 0 polished to 1 fully frosted."
-            }
-          }
         }
       }
     },

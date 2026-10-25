@@ -23,21 +23,8 @@ export function typeInto(term: Terminal, code: string, shift: boolean): void {
   term.text = (term.text + (ch === "\t" ? "  " : ch)).slice(-TERMINAL_MAX);
 }
 
-/** What the engine's emulated device shows on its display, mirrored here so the 3D model's screen draws it. */
-export interface RemoteScreen {
-  powered: boolean;
-  /** Reset with the boot button held: the chip is a USB drive, the firmware is not running. */
-  bootloader: boolean;
-  /** The framebuffer the firmware drew (2 bits per pixel, base64), when it draws pixels. */
-  fb: { w: number; h: number; b64: string } | null;
-  /** The firmware's text rows, when it does not draw pixels. */
-  rows: string[];
-}
-
 export interface Runtime {
   mode: SimMode;
-  /** Set while the engine runs the firmware: the screen draws this instead of a local game. */
-  remote: RemoteScreen | null;
   terminal: Terminal;
   game: SnakeGame;
   /** Newest last. */
@@ -57,7 +44,7 @@ export function gridFor(aspect: number): { cols: number; rows: number } {
 
 export function createRuntime(map: InputMap, aspect = 4 / 3, rng: () => number = Math.random): Runtime {
   const { cols, rows } = gridFor(aspect);
-  return { mode: map.mode, remote: null, terminal: { text: "" }, game: newSnake(cols, rows, rng), events: [], held: new Set(), version: 0 };
+  return { mode: map.mode, terminal: { text: "" }, game: newSnake(cols, rows, rng), events: [], held: new Set(), version: 0 };
 }
 
 function shifted(rt: Runtime, inputs: SimInput[]): boolean {
