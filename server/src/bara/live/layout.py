@@ -51,6 +51,8 @@ CONSTANTS: dict[str, dict[str, Any]] = {
             "motor_dc": 2,
             "button": 1,
             "rgb_led": 1,
+            "seg_driver_2wire": 2,  # TM1637 CLK, DIO
+            "seg_driver_3wire": 3,  # MAX7219 DIN, CLK, LOAD
         },
         "source": "protocol pin counts; encoder A/B, e-paper DC/RST/BUSY, PMW33xx MOTION",
     },
@@ -392,6 +394,8 @@ def pin_need(
                 "analog_sensor": cost["analog"],
                 "button": cost["button"],
                 "led": cost["rgb_led"],
+                "seg_driver_2wire": cost["seg_driver_2wire"],
+                "seg_driver_3wire": cost["seg_driver_3wire"],
             }.get(kind, 0)
             if kind in ("trackball", "screen_epaper"):
                 buses.add("spi")

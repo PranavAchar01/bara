@@ -62,6 +62,25 @@ def package_sig(name: str) -> tuple[str, str, str, str] | None:
     return (_THIN.sub("", m.group(1)), m.group(2), body.group(1), pitch.group(1))
 
 
+# EasyEDA/LCSC package names: SOIC-16_L10.3-W7.5-P1.27-LS10.3-BL is a 16-pin gull-wing, 10.3 mm
+# long, 7.5 mm wide, 1.27 mm pitch (body size, as KiCad names it: SOIC-16W_7.5x10.3mm_P1.27mm)
+_EASYEDA_PKG = re.compile(r"^([A-Z]+)-(\d+)_L(\d+(?:\.\d+)?)-W(\d+(?:\.\d+)?)-P(\d+(?:\.\d+)?)")
+_FAMILY_ALIAS = {"SOP": "SOIC", "SO": "SOIC"}  # the same gull-wing outline under another name
+
+
+def _alias_sig(sig: tuple[str, str, str, str] | None) -> tuple[str, str, str, str] | None:
+    return None if sig is None else (_FAMILY_ALIAS.get(sig[0], sig[0]), *sig[1:])
+
+
+def easyeda_package_sig(package: str) -> tuple[str, str, str, str] | None:
+    """package_sig of an EasyEDA package name, or None when it is not a sized package."""
+    m = _EASYEDA_PKG.match(package or "")
+    if not m:
+        return None
+    family = _THIN.sub("", m.group(1))
+    return (_FAMILY_ALIAS.get(family, family), m.group(2), f"{m.group(4)}x{m.group(3)}", m.group(5))
+
+
 def glb_stem(footprint_part_id: str) -> str:
     return _STEM_BAD.sub("_", footprint_part_id.removeprefix("kicadgen:"))
 
@@ -201,6 +220,27 @@ class KicadIndex:
             if tier == 0 or (own is not None and _same_size(own, r)):
                 return str(r["part_id"])
         return self._chip_lender(lib, name)
+
+    def package_lender(self, package: str) -> str | None:
+        """The KiCad footprint part id whose 3D model draws an LCSC part of this package, found
+        by family, pin count, body and pitch alone: an EasyEDA footprint names no KiCad one, so
+        model_footprint cannot reach it. None when no library footprint has the same outline."""
+        sig = easyeda_package_sig(package)
+        if sig is None:
+            return None
+        family = sig[0]
+        names = {family, *(k for k, v in _FAMILY_ALIAS.items() if v == family)}
+        for fam in sorted(names):
+            rows = self.rows(
+                "SELECT part_id, name, lib FROM kicad_parts WHERE kind = 'footprint'"
+                " AND has_model AND name LIKE ?",
+                (f"{fam}-{sig[1]}%",),
+            )
+            same = [r for r in rows if _alias_sig(package_sig(r["name"])) == sig]
+            same.sort(key=lambda r: (not str(r["lib"]).startswith("Package_"), len(r["name"])))
+            if same:
+                return str(same[0]["part_id"])
+        return None
 
     def _chip_lender(self, lib: str, name: str) -> str | None:
         """Another library's chip of the same size, for a chip footprint whose own library

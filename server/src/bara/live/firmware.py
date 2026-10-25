@@ -458,7 +458,13 @@ def make_firmware(
         ):
             # the first display keeps the plain key ZMK looks for; any more get their slot id
             name = "display" if "display" not in peripherals else f"display:{s.slot_id}"
-            peripherals[name] = s.chosen
+            # a bare multiplexed display is run through its driver chip: that chip is what
+            # the firmware framework has a platform for
+            driver = next(
+                (d.chosen for d in slots if getattr(d, "drives", None) == s.slot_id and d.chosen),
+                None,
+            )
+            peripherals[name] = driver or s.chosen
         elif s.slot_id in ("encoder", "trackball"):
             peripherals[s.slot_id] = s.chosen
         elif s.function_id.startswith("sense."):

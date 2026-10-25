@@ -26,6 +26,8 @@ from shapely import affinity, prepared
 from shapely.geometry import Point, Polygon, box
 from shapely.ops import unary_union
 
+from bara.live import seven_seg
+
 from . import registry as R
 from .layout import BoardPlan, Item, _assign_gpio, _search
 from .libs import FootprintInfo, find_footprint, footprint_ref, library_symbol, symbol_pins
@@ -43,6 +45,7 @@ CORNER_R = 2.0
 REG_CAP = "1 uF 0805"
 DECOUPLE_CAP = "100 nF 0805"
 PULLUP = "4.7 k 0805"
+ISET_RES = "9.53 k 0805"  # MAX7219 segment current set, 40 mA at a 2 V LED (datasheet table)
 SET_RES = "2 k 0805"  # charge-current set resistor (TP4056 PROG 1.2 k, MCP73831 2 k, BQ2407x ~1 k)
 RES_FP = "kicad/Resistor_SMD:R_0805_2012Metric"
 # The SMD PH footprint in the registry has no STEP in the installed KiCad 3D library, so the
@@ -75,6 +78,8 @@ GPIO_NAME = re.compile(r"^(P\d\.\d+|P[A-H]\d+|GPIO\d+|IO\d+|GP\d+|D\d+|A\d+|[B-H
 # a charger's current, limit and timer pins take a resistor to ground, never a controller pin
 SET_PINS = {"ILIM", "ISET", "ISET1", "ISET2", "PROG", "RPROG", "IPROG", "TMR", "ITERM"}
 POWER_ROLES = ("charger", "regulator")
+# nets between two peripherals (or a part and its resistor): no controller pin belongs to them
+INTERNAL_NETS = ("MX_", "SET_", "ISET_", "SEGBUS_")
 SKIP_NAME = re.compile(r"^(NC|DNC|N/?C|~|EP|SHIELD|MP|PAD)\d*$")
 
 
@@ -103,6 +108,8 @@ def _role(record: dict[str, Any]) -> str:
     primary = primary or (fns[0] if fns else "")
     if primary == "compute.mcu":
         return "mcu"
+    if primary == seven_seg.FUNCTION_ID and seven_seg.is_driver_chip(record):
+        return "led_driver"  # the chip behind a bare multiplexed display, not a panel
     if primary.startswith("display.") and primary != "display.indicator_led":
         return "screen"  # an indicator LED is a light, not a panel the case frames
     if primary == "power.battery":
@@ -268,6 +275,7 @@ def plan_device_board(
 
     mcu = next((it for it in items if it.role == "mcu"), None)
     _pads_from_pins(items, log)
+    _wire_segment_displays(items, log)
     items += _support_parts(items, log)
     _matrix_inputs(items, mcu, log)
 
@@ -326,10 +334,7 @@ def plan_device_board(
                 for it in items
                 if it is not mcu
                 for v in it.pads.values()
-                if v
-                and power_net(v) is None
-                and v != "RST_MCU"
-                and not v.startswith(("MX_", "SET_"))
+                if v and power_net(v) is None and v != "RST_MCU" and not v.startswith(INTERNAL_NETS)
             }
         )
         gpio = [num for num, name in mcu.meta["pins"].items() if GPIO_NAME.match(_clean(name))]
@@ -338,7 +343,11 @@ def plan_device_board(
             log.append(f"{len(signals)} signals but {len(gpio)} free GPIO; extra left unwired")
             keep = set(signals[: len(gpio)])
             for it in items:
-                it.pads = {k: v for k, v in it.pads.items() if power_net(v) or v in keep}
+                it.pads = {
+                    k: v
+                    for k, v in it.pads.items()
+                    if power_net(v) or v in keep or v.startswith(INTERNAL_NETS)
+                }
             signals = sorted(keep)
         mcu.pads.update(_assign_gpio(mcu, gpio, signals, items))
         log.append(f"pin budget: {len(signals)} GPIO needed, {mcu.label} has {len(gpio)} free")
@@ -401,6 +410,50 @@ def _pads_from_pins(items: list[Item], log: list[str]) -> None:
         log.append(f"{i2c_modules} I2C breakout(s) bring their own pull-ups")
     for it in items:
         it.meta["i2c_pullups_onboard"] = i2c_modules > 0
+
+
+def _wire_segment_displays(items: list[Item], log: list[str]) -> None:
+    """Join a bare multiplexed display to its driver chip, net by net.
+
+    Segment a..g and the point go to the driver's segment outputs, each digit common to the
+    driver's matching grid. The driver's own serial lines (clock, data, load) stay signals
+    for the controller; grids and segments the display has no pin for are left open."""
+    drivers = [it for it in items if it.role == "led_driver" and it.fp is not None]
+    displays = [
+        it
+        for it in items
+        if it.role == "screen"
+        and it.fp is not None
+        and any(seven_seg.digit_index(n) for n in (it.meta.get("pins") or {}).values())
+    ]
+    for k, (drv, disp) in enumerate(zip(drivers, displays, strict=False)):
+        tag = f"_{k + 1}" if k else ""
+        by_net: dict[str, dict[str, str]] = {"disp": {}, "drv": {}}
+        for who, it in (("disp", disp), ("drv", drv)):
+            for num, name in (it.meta.get("pins") or {}).items():
+                seg, dig = seven_seg.segment_index(name), seven_seg.digit_index(name)
+                if seg is not None:
+                    by_net[who][num] = f"SEGBUS_{seg}{tag}"
+                elif dig is not None:
+                    by_net[who][num] = f"SEGBUS_D{dig}{tag}"
+        shared = set(by_net["disp"].values()) & set(by_net["drv"].values())
+        for who, it in (("disp", disp), ("drv", drv)):
+            for num, net in by_net[who].items():
+                if net in shared:
+                    it.pads[num] = net
+                else:
+                    it.pads.pop(num, None)
+        for num, name in (drv.meta.get("pins") or {}).items():
+            clean = _clean(name)
+            if clean in ("CLK", "SCK", "SCLK", "DIO", "DIN", "LOAD", "CS", "STB"):
+                drv.pads[num] = f"{clean}_{drv.ref}"  # its own lines, not a shared SPI bus
+            elif clean in ("V+", "VCC", "VDD"):
+                drv.pads[num] = "VBUS" if clean == "V+" else "3V3"
+            elif clean == "ISET":
+                drv.pads[num] = f"ISET_{drv.ref}"
+        log.append(
+            f"{disp.ref} wired to {drv.ref} ({drv.label}): {len(shared)} segment and digit nets"
+        )
 
 
 def _drop_single_pad_nets(items: list[Item]) -> None:
@@ -507,6 +560,8 @@ def _support_parts(items: list[Item], log: list[str]) -> list[Item]:
                 out.append(passive("C", "3V3", "GND", DECOUPLE_CAP, it))
         for v in sorted(v for v in nets if v.startswith("SET_")):
             out.append(passive("R", v, "GND", SET_RES, it))
+        for v in sorted(v for v in nets if v.startswith("ISET_")):
+            out.append(passive("R", v, "VBUS", ISET_RES, it))
     all_nets = {v for it in items for v in it.pads.values()}
     if {"SDA", "SCL"} <= all_nets and not any(it.meta.get("i2c_pullups_onboard") for it in items):
         host = next((it for it in items if "SDA" in it.pads.values()), items[0])

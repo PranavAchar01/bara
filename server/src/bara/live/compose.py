@@ -178,6 +178,7 @@ def _model_from_footprint(part: dict[str, Any], assets: list[dict[str, Any]]) ->
     fp = str(part.get("footprint") or "")
     if ":" not in fp:
         return
+    package = str((part.get("facets") or {}).get("package") or "")
     models = [a for a in assets if a.get("kind") == "glb" and a.get("role", "model") == "model"]
     for a in models:
         url = str(a.get("url") or "")
@@ -189,6 +190,10 @@ def _model_from_footprint(part: dict[str, Any], assets: list[dict[str, Any]]) ->
             return
     index = KicadIndex.open()
     lender = index.model_footprint(fp) if index is not None else None
+    if lender is None and index is not None and fp.startswith("easyeda:"):
+        # an EasyEDA footprint names no KiCad one; its package (SOIC-16, 7.5 x 10.3 mm,
+        # 1.27 mm pitch) still finds the library footprint with the same outline
+        lender = index.package_lender(package)
     if lender is None:
         return
     url = f"{GLB_URL}/{glb_stem(lender)}.glb"
@@ -264,6 +269,7 @@ class Slot:
     covered_by: str | None = None  # slot_id whose chosen part also provides this function
     need: Need | None = None  # set when the completeness invariant added this slot
     unresolved: str | None = None  # why a required slot has no part
+    drives: str | None = None  # a segment driver: slot_id of the bare display it multiplexes
 
     @property
     def quantity(self) -> int:
@@ -644,6 +650,8 @@ class Composer:
                 continue  # feet, mounts and power parts cost no controller pins
             if slot.function_id in PER_KEY or _is_hotswap(slot.chosen):
                 continue  # matrix diodes and sockets ride on the key matrix's own pins
+            if any(o.drives == slot.slot_id for o in self.slots):
+                continue  # a bare display behind its driver chip: the chip's wires are the cost
             for inst in slot.instances:
                 if inst.side != side and side != "none":
                     continue
@@ -1467,6 +1475,8 @@ class Composer:
                 for conn in self.connections_for(slot, new_parts):
                     emit("connection.added", {"connection": conn}, stage="compose")
                 self.result.log.append(f"{slot.slot_id}: {part['part_id']} ({method})")
+                if self.add_segment_driver(slot, emit):
+                    n_slots += 1
                 lic = card_for(part)
                 if lic["commercial_ok"] != "yes":
                     emit(
@@ -1498,6 +1508,67 @@ class Composer:
             progress(f"{step} of {n_slots} slots decided", step / max(1, n_slots))
         self.cover_generic(emit)
         return self.result
+
+    def add_segment_driver(self, slot: Slot, emit: Emit) -> bool:
+        """A bare multiplexed display (eight segment lines and a common per digit, no driver
+        chip) cannot hang off a few controller pins, and no firmware framework has a platform
+        for raw multiplexing. The display gets a driver slot right behind it: a TM1637 for
+        common-anode glass, a MAX7219 for common-cathode, found like any other named part."""
+        part = slot.chosen
+        if (
+            part is None
+            or slot.function_id != seven_seg.FUNCTION_ID
+            or not seven_seg.needs_driver(part)
+            or any(o.drives == slot.slot_id for o in self.slots)
+        ):
+            return False
+        # the device's own block diagram may already name the driver chip: that slot is it
+        named = next(
+            (
+                o
+                for o in self.slots
+                if o is not slot
+                and o.drives is None
+                and o.function_id == "component.ic"
+                and seven_seg.names_driver_chip(o.need, o.chosen)
+            ),
+            None,
+        )
+        if named is not None:
+            named.drives = slot.slot_id
+            return False
+        chip = seven_seg.driver_for(part)
+        need = Need(
+            key=f"{slot.slot_id}_driver"[:40],
+            function_id="component.ic",
+            label=chip.label,
+            count=max(1, slot.quantity),
+            names=chip.names,
+            terms=chip.terms,
+            pin_kind=chip.pin_kind,
+            prefix="segdrv",
+            why=f"{part.get('display_name')} has no driver of its own",
+        )
+        taken = {i.instance_id for o in self.slots for i in o.instances}
+        inst_id = "u_segdrv"
+        while inst_id in taken:
+            inst_id += "2"
+        driver = Slot(
+            slot_id=need.key,
+            label=chip.label,
+            function_id=need.function_id,
+            criticality="critical",
+            order=0,
+            instances=[Instance(inst_id, "none", need.count)],
+            need=need,
+            drives=slot.slot_id,
+        )
+        self.slots.insert(self.slots.index(slot) + 1, driver)
+        for i, o in enumerate(self.slots):
+            o.order = i
+        emit("slot.updated", {"slot": driver.json()}, stage="compose")
+        self.result.log.append(f"{driver.slot_id}: added, {part['part_id']} has no driver")
+        return True
 
     def cover_generic(self, emit: Emit) -> None:
         """A generic slot the brief implied (a display) that found nothing is the same block as a
