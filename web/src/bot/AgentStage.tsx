@@ -43,9 +43,10 @@ const AFTER_BUILD = new Set(["edit.applied", "edit.rejected"]);
 const SPEECH_GAP_MS = 3000;
 const ALWAYS_SPEAK = new Set(["build.done", "build.failed", "clarify.request"]);
 
-const FLOAT: SpringCfg = { stiffness: 85, damping: 14 }; // the bot: floaty, trails the cursor
-const STEER: SpringCfg = { stiffness: 200, damping: 23 }; // the cursor: gets there first
-const FRAME: SpringCfg = { stiffness: 240, damping: 26 }; // the selection box
+// Slow, nearly critically damped glides: the bot drifts between major steps instead of darting.
+const FLOAT: SpringCfg = { stiffness: 32, damping: 11 }; // the bot: floaty, trails the cursor
+const STEER: SpringCfg = { stiffness: 70, damping: 16 }; // the cursor: gets there first
+const FRAME: SpringCfg = { stiffness: 90, damping: 19 }; // the selection box
 
 type Phase = "home" | "out" | "returning";
 
@@ -207,7 +208,15 @@ function Stage() {
   useEffect(() => {
     let seen = useApp.getState().log.at(-1)?.id ?? 0;
     let lastSpoke = 0;
+    // once() beats (case, board, firmware) play one time per build, however often their events repeat.
+    let onceBuild: string | null = null;
+    const played = new Set<string>();
+    const fresh1 = (b: Beat) => !b.id.startsWith("once:") || (!played.has(b.id) && !!played.add(b.id));
     return useApp.subscribe((s) => {
+      if ((s.build?.build_id ?? null) !== onceBuild) {
+        onceBuild = s.build?.build_id ?? null;
+        played.clear();
+      }
       const last = s.log.at(-1)?.id ?? seen;
       if (last === seen) return;
       // Only the canvas on screen: background canvases keep building without the bot.
@@ -229,7 +238,7 @@ function Stage() {
         // (late firmware progress) are let go.
         const after = AFTER_BUILD.has(e.type);
         if (phaseRef.current !== "out" && !running && !after) continue;
-        const beats = beatsFor(e, useApp.getState().build);
+        const beats = beatsFor(e, useApp.getState().build).filter(fresh1);
         if (!beats.length) continue;
         if (after && !running) wantOut.current = true;
         push(beats);
