@@ -9,7 +9,7 @@ import { AddPartPicker, ConnectDialog, PartInspector, ResizePanel, SwapDrawer } 
 import { FocusCard, FocusExit } from "./components/FocusCard";
 import { bindVoiceKeys } from "./voice/voice";
 import { Library } from "./components/Library";
-import { AgentSteps, LandingHero } from "./components/Landing";
+import { LandingHero } from "./components/Landing";
 import { startAutosave } from "./library/autosave";
 import { Viewport3D } from "./three/Viewport3D";
 import { BotLab } from "./bot/BotLab";
@@ -55,7 +55,13 @@ function Home() {
   return (
     <main className="home landing">
       <LandingHero />
-      <AgentSteps />
+    </main>
+  );
+}
+
+function Drafts() {
+  return (
+    <main className="home landing drafts">
       <Library />
     </main>
   );
@@ -159,10 +165,10 @@ function Main() {
   if (simOpen) return <SimView />;
   return (
     <div className="app">
-      {screen === "home" && <TopBar />}
+      {screen !== "workspace" && <TopBar />}
       <EngineNotice />
       <ConnectionBanner />
-      {screen === "home" ? <Home /> : <Workspace />}
+      {screen === "home" ? <Home /> : screen === "drafts" ? <Drafts /> : <Workspace />}
       <EventLog />
       <Toast />
     </div>
