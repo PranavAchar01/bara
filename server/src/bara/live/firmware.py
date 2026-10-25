@@ -312,6 +312,79 @@ def _zmk(
     return files
 
 
+# ESPHome sensor entries per driver key, as each component's docs show them.
+ESPHOME_SENSORS = {
+    "bme280": [
+        "  - platform: bme280_i2c",
+        "    address: 0x76",
+        "    temperature: {name: Temperature}",
+        "    humidity: {name: Humidity}",
+        "    pressure: {name: Pressure}",
+    ],
+    "sht31": [
+        "  - platform: sht3xd",
+        "    address: 0x44",
+        "    temperature: {name: Temperature}",
+        "    humidity: {name: Humidity}",
+    ],
+    "tmp117": ["  - platform: tmp117", "    address: 0x48", "    name: Temperature"],
+    "veml7700": ["  - platform: veml7700", "    address: 0x10", "    ambient_light: {name: Light}"],
+}
+ESPHOME_DISPLAYS = {
+    "ssd1306": ["  - platform: ssd1306_i2c", "    model: SSD1306 128x32", "    address: 0x3C"],
+    "sh1106": ["  - platform: ssd1306_i2c", "    model: SH1106 128x64", "    address: 0x3C"],
+    "tm1637": [
+        "  - platform: tm1637",
+        "    clk_pin: GPIO4",
+        "    dio_pin: GPIO5",
+        '    lambda: it.strftime("%H%M", id(clock).now());',
+    ],
+    "max7219": [
+        "  - platform: max7219",
+        "    cs_pin: GPIO5",
+        "    num_chips: 1",
+        '    lambda: it.strftime("%H%M", id(clock).now());',
+    ],
+}
+# Arduino (include, declaration, setup line) per driver key.
+ARDUINO_PARTS = {
+    "bme280": ("Adafruit_BME280.h", "Adafruit_BME280 bme;", "bme.begin(0x76);"),
+    "sht31": ("Adafruit_SHT31.h", "Adafruit_SHT31 sht31;", "sht31.begin(0x44);"),
+    "tmp117": ("Adafruit_TMP117.h", "Adafruit_TMP117 tmp117;", "tmp117.begin();"),
+    "veml7700": ("Adafruit_VEML7700.h", "Adafruit_VEML7700 veml;", "veml.begin();"),
+    "ssd1306": (
+        "Adafruit_SSD1306.h",
+        "Adafruit_SSD1306 display(128, 32, &Wire);",
+        "display.begin(SSD1306_SWITCHCAPVCC, 0x3C);",
+    ),
+    "sh1106": (
+        "U8g2lib.h",
+        "U8G2_SH1106_128X64_NONAME_F_HW_I2C display(U8G2_R0);",
+        "display.begin();",
+    ),
+    "tm1637": ("TM1637Display.h", "TM1637Display display(4, 5);", "display.setBrightness(7);"),
+    "max7219": (
+        "LedControl.h",
+        "LedControl display(11, 13, 10, 1);",
+        "display.shutdown(0, false);",
+    ),
+}
+
+
+def driver_key(part: dict[str, Any]) -> str | None:
+    blob = (str(part.get("part_id")) + " " + str(part.get("display_name"))).lower()
+    return next((k for k in DRIVERS if k in blob), None)
+
+
+def _keys(peripherals: dict[str, dict[str, Any]], kind: str) -> list[tuple[str | None, str]]:
+    """(driver key, display name) for every peripheral of one kind (sensor, display)."""
+    return [
+        (driver_key(part), str(part.get("display_name") or name))
+        for name, part in peripherals.items()
+        if name.split(":")[0] == kind
+    ]
+
+
 def _esphome(brief: dict[str, Any], peripherals: dict[str, dict[str, Any]]) -> list[dict]:
     lines = [
         "esphome:",
@@ -323,22 +396,21 @@ def _esphome(brief: dict[str, Any], peripherals: dict[str, dict[str, Any]]) -> l
         "  sda: GPIO6",
         "  scl: GPIO7",
     ]
-    if "sensor" in peripherals:
-        lines += [
-            "sensor:",
-            "  - platform: bme280_i2c",
-            "    address: 0x76",
-            "    temperature: {name: Temperature}",
-            "    humidity: {name: Humidity}",
-            "    pressure: {name: Pressure}",
-        ]
-    if "display" in peripherals:
-        lines += [
-            "display:",
-            "  - platform: ssd1306_i2c",
-            "    model: SSD1306 128x32",
-            "    address: 0x3C",
-        ]
+    sensors = _keys(peripherals, "sensor")
+    if sensors:
+        lines.append("sensor:")
+        for key, name in sensors:
+            lines += ESPHOME_SENSORS.get(key or "", [f"  # no ESPHome config known for {name}"])
+    displays = _keys(peripherals, "display")
+    segment_keys = {key for key, _ in displays} & {"tm1637", "max7219"}
+    if "max7219" in segment_keys:
+        lines += ["spi:", "  clk_pin: GPIO8", "  mosi_pin: GPIO10"]
+    if segment_keys:
+        lines += ["time:", "  - platform: sntp", "    id: clock"]
+    if displays:
+        lines.append("display:")
+        for key, name in displays:
+            lines += ESPHOME_DISPLAYS.get(key or "", [f"  # no ESPHome config known for {name}"])
     if "encoder" in peripherals:
         lines += ["  - platform: rotary_encoder", "    pin_a: GPIO2", "    pin_b: GPIO3"]
     return [{"path": "bara.yaml", "language": "yaml", "content": "\n".join(lines) + "\n"}]
@@ -346,18 +418,17 @@ def _esphome(brief: dict[str, Any], peripherals: dict[str, dict[str, Any]]) -> l
 
 def _arduino(brief: dict[str, Any], peripherals: dict[str, dict[str, Any]]) -> list[dict]:
     inc = ["#include <Arduino.h>", "#include <Wire.h>"]
+    decl = []
     setup = ["  Wire.begin();"]
-    if "display" in peripherals:
-        inc.append("#include <Adafruit_SSD1306.h>")
-        setup.append("  display.begin(SSD1306_SWITCHCAPVCC, 0x3C);")
-    if "sensor" in peripherals:
-        inc.append("#include <Adafruit_BME280.h>")
-        setup.append("  bme.begin(0x76);")
-    body = "\n".join(inc) + "\n\n"
-    if "display" in peripherals:
-        body += "Adafruit_SSD1306 display(128, 32, &Wire);\n"
-    if "sensor" in peripherals:
-        body += "Adafruit_BME280 bme;\n"
+    for key, name in _keys(peripherals, "display") + _keys(peripherals, "sensor"):
+        if key not in ARDUINO_PARTS:
+            setup.append(f"  // no Arduino driver known for {name}")
+            continue
+        header, line, begin = ARDUINO_PARTS[key]
+        inc.append(f"#include <{header}>")
+        decl.append(line)
+        setup.append(f"  {begin}")
+    body = "\n".join(inc) + "\n\n" + "".join(d + "\n" for d in decl)
     body += "\nvoid setup() {\n" + "\n".join(setup) + "\n}\n\nvoid loop() {\n  delay(1000);\n}\n"
     return [{"path": "src/main.cpp", "language": "cpp", "content": body}]
 
@@ -387,7 +458,7 @@ def make_firmware(
         elif s.slot_id in ("encoder", "trackball"):
             peripherals[s.slot_id] = s.chosen
         elif s.function_id.startswith("sense."):
-            peripherals["sensor"] = s.chosen
+            peripherals[f"sensor:{s.slot_id}"] = s.chosen
     for f in brief.get("features", []):
         if plan is not None and f["kind"] == "knob":
             peripherals.setdefault("encoder", {"part_id": "kicad:ec11", "display_name": "EC11"})
@@ -439,8 +510,7 @@ def make_firmware(
     drivers = []
     checks = []
     for kind, part in peripherals.items():
-        blob = (str(part.get("part_id")) + " " + str(part.get("display_name"))).lower()
-        key = next((k for k in DRIVERS if k in blob), None)
+        key = driver_key(part)
         if kind == "encoder" and key is None:
             key = "ec11"
         if kind == "trackball" and key is None:
