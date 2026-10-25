@@ -4,7 +4,7 @@
 #include "bara_hal.h"
 #include "bara_config.h"
 
-enum { IN_BUTTON = 0, IN_KEY = 1, IN_SWITCH = 2, IN_ENC = 3, IN_AXIS = 4, IN_MKEY = 5 };
+enum { IN_BUTTON = 0, IN_KEY = 1, IN_SWITCH = 2, IN_ENC = 3, IN_AXIS = 4, IN_MKEY = 5, IN_SENSOR = 6 };
 
 typedef struct {
   const char *label;
@@ -12,7 +12,9 @@ typedef struct {
   u8 pin;  /* button/switch/key pin, matrix column, encoder A */
   u8 pin2; /* matrix row, encoder B */
   u8 hid;  /* keyboard usage, 0 = none */
-  u8 adc;  /* ADC channel for an axis */
+  u8 adc;  /* ADC channel for an axis or sensor */
+  const char *unit; /* sensor unit */
+  i32 lo10, hi10;   /* sensor range, tenths of a unit */
 } bara_input_t;
 
 #include "bara_inputs.h"
@@ -36,6 +38,10 @@ static int held;
 static u32 last_axis;
 static u32 last_clock;
 static u32 uptime_s;
+static i32 sensorv[N_INPUTS]; /* last reported reading, tenths of a unit */
+static u8 sensor_init[N_INPUTS];
+static u8 alert;
+static u32 last_sense;
 
 /* ---- text out, no printf --------------------------------------------------------------- */
 static void puts_(const char *s) {
@@ -240,6 +246,52 @@ static void axis(int i, u32 now) {
   }
 }
 
+static void put_tenths(int v, char *out) {
+  int n = 0;
+  if (v < 0) {
+    out[n++] = '-';
+    v = -v;
+  }
+  char t[12];
+  utoa_((u32)(v / 10), t);
+  for (int i = 0; t[i]; i++) out[n++] = t[i];
+  out[n++] = '.';
+  out[n++] = (char)('0' + v % 10);
+  out[n] = 0;
+}
+
+/* A sensor is read through the ADC; the reading is converted to its physical unit, reported on the
+ * serial console and the screen, and a reading in the outer tenth of its range raises the alert. */
+static void sensor(int i, u32 now) {
+  const bara_input_t *in = &BARA_INPUTS[i];
+  int k = 0;
+  for (int j = 0; j < i; j++)
+    if (BARA_INPUTS[j].kind == IN_SENSOR) k++;
+  int raw = (int)hal_adc(in->adc);
+  int v10 = in->lo10 + (int)(((long)(in->hi10 - in->lo10) * raw) / 4095);
+  int span = in->hi10 - in->lo10;
+  int d = v10 - sensorv[i];
+  int step = span / 100 > 1 ? span / 100 : 1;
+  if (!sensor_init[i] || d >= step || d <= -step) {
+    sensor_init[i] = 1;
+    sensorv[i] = v10;
+    char n[16];
+    put_tenths(v10, n);
+    stamp(now);
+    puts_("sense   ");
+    puts_(in->label);
+    hal_putc(' ');
+    puts_(n);
+    hal_putc(' ');
+    puts_(in->unit);
+    hal_putc('\n');
+    if (k + 1 < SCREEN_ROWS) line_set3(k + 1, n, in->unit, "");
+  }
+  int pct = (int)(((long)(v10 - in->lo10) * 100) / (span ? span : 1));
+  if (pct <= 10 || pct >= 90) alert |= (u8)(1u << (k & 7));
+  else alert &= (u8)~(1u << (k & 7));
+}
+
 static void matrix_scan(u32 now) {
 #if MATRIX_ROWS > 0
   static const u8 rows[MATRIX_ROWS] = MATRIX_ROW_PINS;
@@ -259,7 +311,7 @@ static void matrix_scan(u32 now) {
 void app_init(void) {
   for (int i = 0; i < N_INPUTS; i++) {
     const bara_input_t *in = &BARA_INPUTS[i];
-    if (in->kind == IN_AXIS) continue;
+    if (in->kind == IN_AXIS || in->kind == IN_SENSOR) continue;
     hal_input_pullup(in->pin);
     if (in->kind == IN_ENC) hal_input_pullup(in->pin2);
   }
@@ -275,6 +327,7 @@ void app_init(void) {
     hal_write(LED_PIN, LED_ACTIVE_LOW);
   }
   if (TONE_PIN != PIN_NONE) hal_output(TONE_PIN);
+  if (MOTOR_PIN != PIN_NONE) hal_output(MOTOR_PIN);
   for (int r = 0; r < SCREEN_ROWS; r++) line_set(r, "", "");
   line_set(0, BARA_NAME, "");
   line_set(1, "Ready", "");
@@ -296,13 +349,15 @@ void app_tick(u32 now) {
     if (in->kind == IN_BUTTON || in->kind == IN_KEY || in->kind == IN_SWITCH) debounce(i, !hal_read(in->pin), now);
     else if (in->kind == IN_ENC) encoder(i, now);
     else if (in->kind == IN_AXIS && now - last_axis >= 8) axis(i, now);
+    else if (in->kind == IN_SENSOR && now - last_sense >= 100) sensor(i, now);
   }
+  if (now - last_sense >= 100) last_sense = now;
   if (now - last_axis >= 8) last_axis = now;
   matrix_scan(now);
   game_tick(now);
   if (LED_PIN != PIN_NONE) {
     int on;
-    if (LED_ON_PRESS && held > 0) on = 1;
+    if ((LED_ON_PRESS && held > 0) || alert) on = 1;
     else {
       if (now - last_blink >= BLINK_MS) {
         last_blink = now;
@@ -313,15 +368,16 @@ void app_tick(u32 now) {
     hal_write(LED_PIN, LED_ACTIVE_LOW ? !on : on);
   }
   if (TONE_PIN != PIN_NONE) {
-    if ((int)(tone_until - now) > 0) tone_level = (u8)!tone_level; /* 500 Hz square at a 1 ms tick */
+    if ((int)(tone_until - now) > 0 || (alert && (now / 250) % 2 == 0)) tone_level = (u8)!tone_level; /* 500 Hz square at a 1 ms tick */
     else tone_level = 0;
     hal_write(TONE_PIN, tone_level);
   }
+  if (MOTOR_PIN != PIN_NONE) hal_write(MOTOR_PIN, held > 0 || alert ? 1 : 0);
   if (now - last_clock >= 1000) {
     last_clock = now;
     char n[11];
     utoa_(++uptime_s, n);
-    if (SCREEN_ROWS > 3 && !N_AXES) line_set3(3, "Up ", n, " s");
+    if (SCREEN_ROWS > 3 && !N_AXES && !N_SENSORS) line_set3(3, "Up ", n, " s");
   }
 }
 

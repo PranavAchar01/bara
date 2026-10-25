@@ -20,7 +20,7 @@ from .codegen import FwConfig
 from .io import controller_part
 from .session import SimBuild, SimStore
 
-INPUT_ACTIONS = {"press", "release", "tap", "turn", "axis", "power", "reset"}
+INPUT_ACTIONS = {"press", "release", "tap", "turn", "axis", "sensor", "power", "reset"}
 
 
 def mcu_part(state: dict[str, Any]) -> dict[str, Any] | None:
@@ -159,6 +159,8 @@ def sim_routes(api: APIRouter, svc: Any) -> None:
                         s.reboot(bootloader=bool(data.get("value")))
                     elif action == "turn":
                         s.turn(iid, int(data.get("value") or 1))
+                    elif action == "sensor":
+                        s.set_sensor(iid, float(data.get("value") or 0.0))
                     elif action == "axis":
                         s.set_axis(iid, float(data.get("value") or 0.0))
                     elif action == "tap":

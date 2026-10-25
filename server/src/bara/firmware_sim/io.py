@@ -123,6 +123,25 @@ SCREEN_TEXT = {  # (rows, cols) of 6x8 px text cells the firmware keeps for a pa
 DEFAULT_KEY_CODES = [f"N{d}" for d in (1, 2, 3, 4, 5, 6, 7, 8, 9, 0)] + list(_LETTERS)
 
 
+# What a sensing part measures: quantity, unit, physical range and the resting value. Plain
+# standardized names; the simulator lets the person set the physical value inside this range.
+SENSOR_QUANTITIES: dict[str, tuple[str, str, float, float, float]] = {
+    "sense.soil_moisture": ("Soil volumetric water content", "%", 0, 60, 35),
+    "sense.temperature": ("Ambient temperature", "\u00b0C", -20, 80, 22),
+    "sense.humidity": ("Relative humidity", "%", 0, 100, 45),
+    "sense.light": ("Illuminance", "lx", 0, 2000, 300),
+    "sense.sound": ("Sound pressure level", "dB SPL", 30, 120, 45),
+    "sense.pressure": ("Barometric pressure", "hPa", 300, 1100, 1013),
+    "sense.co2": ("CO2 concentration", "ppm", 400, 5000, 420),
+    "sense.gas": ("Volatile organic compounds", "ppb", 0, 1000, 50),
+    "sense.imu": ("Inclination", "\u00b0", -90, 90, 0),
+    "sense.proximity": ("Proximity distance", "mm", 0, 200, 200),
+    "sense.magnetic": ("Magnetic flux density", "mT", -5, 5, 0),
+    "sense.weight": ("Applied mass", "g", 0, 5000, 0),
+    "power.fuel_gauge": ("Battery state of charge", "%", 0, 100, 100),
+}
+
+
 def _fn(part: dict[str, Any]) -> str:
     return str((part.get("card") or {}).get("primary_function") or "")
 
@@ -224,6 +243,8 @@ def device_kind(parts: list[dict[str, Any]]) -> str:
         return "keyboard"
     if any(f in ("input.button", "input.joystick") for f in fns):
         return "gamepad"
+    if any(f in SENSOR_QUANTITIES and f != "power.fuel_gauge" for f in fns):
+        return "sensor"
     return "gadget"
 
 
@@ -386,7 +407,34 @@ def plan_io(
                     "instance_id": iid,
                 }
             )
-        elif f in ("input.trackball", "input.touch", "output.haptic", "output.motor_dc"):
+        elif f in SENSOR_QUANTITIES:
+            q, unit, lo, hi, dflt = SENSOR_QUANTITIES[f]
+            for i in range(_quantity(p)):
+                n = f" {i + 1}" if _quantity(p) > 1 else ""
+                inputs.append(
+                    {
+                        "id": f"{iid}#{i}",
+                        "label": f"{q}{n}",
+                        "kind": "sensor",
+                        "quantity": q,
+                        "unit": unit,
+                        "min": lo,
+                        "max": hi,
+                        "default": dflt,
+                        "instance_id": iid,
+                        "index": i,
+                    }
+                )
+        elif f in ("output.haptic", "output.motor_dc"):
+            outputs.append(
+                {
+                    "id": f"motor:{iid}",
+                    "label": "Vibration motor" if "haptic" in f else "DC motor",
+                    "kind": "motor",
+                    "instance_id": iid,
+                }
+            )
+        elif f in ("input.trackball", "input.touch"):
             unsimulated.append(
                 {"instance_id": iid, "label": _name(p), "why": "no peripheral model for it yet"}
             )
@@ -483,7 +531,7 @@ def assign_pins(
     matrix: dict[str, Any] | None = None
     # axes first: they can only use ADC pins
     for i in others:
-        if i["kind"] == "axis":
+        if i["kind"] in ("axis", "sensor"):
             i["pin"] = take(adc_free, i["label"])
             i["adc"] = board.adc.get(i["pin"] or "")
     if keys and (need_direct > len(free) or any(s.startswith("ROW") for s in from_netlist)):
@@ -523,7 +571,7 @@ def assign_pins(
         if o["kind"] == "led":
             o["pin"] = board.led_pin if o["id"] == "led:onboard" else take(digital_free, o["label"])
             o["active_low"] = board.led_active_low if o["id"] == "led:onboard" else False
-        elif o["kind"] == "tone":
+        elif o["kind"] in ("tone", "motor"):
             o["pin"] = take(digital_free, o["label"])
         elif o["kind"] == "display":
             o["pins"] = {
