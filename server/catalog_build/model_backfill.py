@@ -21,12 +21,14 @@ from typing import Any
 
 from . import fetch_lcsc
 from .build import LCSC_MODELS_JSON, plan_entry
-from .kicad_lib import read_footprint
+from .kicad_lib import Footprint, read_footprint
 from .manifest import ENTRIES, Entry
 
 # how far the LCSC footprint's courtyard may differ from the catalog's, per side: a chip
 # (SH1106) is not the module it drives (a 1.3 in OLED board)
 SIZE_TOLERANCE = 1.5
+# how far a fetched pad may sit from the catalog footprint's pad of the same number, mm
+PAD_TOLERANCE = 0.1
 # EasyEDA blocks an address after a short burst of component requests; pace them
 FETCH_GAP_S = 20.0
 
@@ -66,12 +68,32 @@ def _sides(courtyard: dict[str, list[float]] | None) -> list[float] | None:
     return sorted(courtyard["max"][i] - courtyard["min"][i] for i in (0, 1))
 
 
+def same_pads(a: Footprint, b: Footprint) -> bool:
+    """Every numbered pad of one sits on the same pad of the other within PAD_TOLERANCE mm:
+    the same land pattern seats the same body, however each library draws its courtyard
+    (EasyEDA traces the body, KiCad adds a margin)."""
+    pa = {p.number: p.at[:2] for p in a.pads if p.number}
+    pb = {p.number: p.at[:2] for p in b.pads if p.number}
+    return (
+        bool(pa)
+        and pa.keys() == pb.keys()
+        and all(
+            abs(pa[n][0] - pb[n][0]) <= PAD_TOLERANCE and abs(pa[n][1] - pb[n][1]) <= PAD_TOLERANCE
+            for n in pa
+        )
+    )
+
+
 def same_size(e: Entry, lcsc_id: str) -> bool:
-    """The fetched footprint's courtyard is the catalog footprint's within SIZE_TOLERANCE."""
+    """The fetched footprint has the catalog footprint's land pattern, or its courtyard is
+    the catalog footprint's within SIZE_TOLERANCE."""
     fp = plan_entry(e).fp
     ours = _sides(fp.courtyard if fp else None)
     mod = fetch_lcsc.FETCHED_DIR / "src" / lcsc_id / f"{lcsc_id}.kicad_mod"
-    theirs = _sides(read_footprint(mod).courtyard) if mod.is_file() else None
+    fetched = read_footprint(mod) if mod.is_file() else None
+    if fp is not None and fetched is not None and same_pads(fp, fetched):
+        return True
+    theirs = _sides(fetched.courtyard if fetched else None)
     if ours is None or theirs is None:
         return False
     return all(

@@ -1,8 +1,7 @@
 // What a spoken turn means once it is heard: the ums, stutters and repeats taken out, and how long a
 // pause has to last before Bara takes it as the end of the turn. Pure, so it is easy to test.
 
-// "mm" alone is millimetres here, so only a long "mmm" or "mhm" counts as a filler
-const FILLER = "(?:u+h+m*|u+m+|e+r+m+|e+r+|a+h+|h+m+|m{3,}|m+h+m+)";
+const FILLER = "(?:u+h+m*|u+m+|e+r+m+|e+r+|a+h+|h+m+|m+h*m+|mhm)";
 const FILLERS = new RegExp(`(^|[\\s,])${FILLER}(?=[\\s,.!?]|$),?`, "gi");
 const FILLER_WORD = new RegExp(`^${FILLER}$`, "i");
 /** Words that say more is coming: a pause after one of these is a breath, not the end. */
@@ -60,15 +59,4 @@ export function pickOption(spoken: string, options: { option_id: string; label: 
     if (at >= 0) return options[at].option_id;
   }
   return null;
-}
-
-/** What speech-to-text tends to make up from a cough, a click or near-silence. */
-// ("okay", "yes" and the like are left alone: they are real answers to Bara's questions)
-const PHANTOMS = /^(thank you|thanks|thanks for watching|thank you for watching|thank you so much for watching|you|bye|bye bye|the end|subtitles by .*|\.+)$/i;
-
-/** A transcript that is most likely invented from noise: one of the phantom phrases, from barely any
- *  speech. A real "thank you" said at length still goes through. */
-export function isNoise(text: string, loudMs: number): boolean {
-  const t = text.trim().replace(/[.!?,]+$/g, "").trim();
-  return !t || (PHANTOMS.test(t) && loudMs < 900);
 }
