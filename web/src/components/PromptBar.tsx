@@ -54,6 +54,8 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean }) {
   const caption = useVoice((s) => s.caption);
   const replies = useVoice((s) => s.replies);
   const voiceError = useVoice((s) => s.error);
+  const voiceMode = useVoice((s) => s.mode);
+  const sendHint = voiceMode === "hold" ? "let go to send" : "pause to send";
   const focusOpen = focusKey !== null;
   const sayN = useRef(0);
   const say = useMemo(() => (caption ? { text: caption, n: ++sayN.current } : null), [caption]);
@@ -84,13 +86,13 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean }) {
         onPointerDown={(e) => {
           e.preventDefault();
           if (!props.docked) {
-            void startListening();
+            void startListening("hold");
             return;
           }
           window.clearTimeout(hold.current);
           hold.current = window.setTimeout(() => {
             hold.current = 0;
-            void startListening();
+            void startListening("hold");
           }, HOLD_MS);
         }}
         onPointerUp={() => {
@@ -138,8 +140,8 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean }) {
         placeholder={
           listening
             ? focusOpen
-              ? "Listening… ask about this part"
-              : "Listening… describe the device"
+              ? `Listening… ask about this part, ${sendHint}`
+              : `Listening… describe the device, ${sendHint}`
             : transcribing
               ? "Writing down what you said…"
               : voiceError
@@ -149,8 +151,8 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean }) {
                   : focusOpen
                     ? `Ask about ${focusName ? `the ${focusName}` : "this part"}, or hold Space to talk`
                     : props.docked
-                    ? "Describe another device, or hold Space to talk"
-                    : "Describe the device you want, or hold Space to talk"
+                    ? "Describe another device, or hold Space to talk (tap it for hands-free)"
+                    : "Describe the device you want, or hold Space to talk (tap it for hands-free)"
         }
         aria-label="Prompt"
         onChange={(e) => {

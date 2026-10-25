@@ -149,10 +149,12 @@ async def transcribe(audio: bytes, content_type: str, keyterms: list[str] | None
     )
     upload = {"file": (f"speech.{ext}", audio, content_type or "application/octet-stream")}
     if provider() == "openai":
-        form: dict = {"model": OPENAI_STT_MODEL}
+        # A clean, fluent example steers it away from writing down ums and false starts, and the
+        # build's part names help it spell them right.
+        hint = "Build me a split keyboard with an OLED."
         if keyterms:
-            # A prompt with the build's part names helps it spell them right.
-            form["prompt"] = "Parts: " + ", ".join(t[:50] for t in keyterms[:50])
+            hint += " Parts: " + ", ".join(t[:50] for t in keyterms[:50])
+        form: dict = {"model": OPENAI_STT_MODEL, "prompt": hint}
         resp = await _shared().post(
             f"{OPENAI_API}/audio/transcriptions",
             data=form,

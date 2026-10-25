@@ -7,7 +7,7 @@ import { applyEdit, getRest } from "../net/client";
 import { partLabel } from "../three/explode";
 import { labelRows } from "../three/Viewport3D";
 import { BaraBot } from "../bot/BaraBot";
-import { speak } from "../voice/voice";
+import { listenForFollowUp, speak } from "../voice/voice";
 import { stage } from "../three/stage";
 import type { Build, BuildPart } from "../spec/types";
 
@@ -78,7 +78,8 @@ export function FocusCard() {
     const answer = reply?.answer ?? localAnswer(build, parts);
     setTurns((t) => t.map((x, i) => (i === t.length - 1 ? { ...x, a: answer, from: reply ? "model" : "build" } : x)));
     setFollowUps(reply?.follow_ups?.length ? reply.follow_ups : null);
-    speak(answer);
+    // asked hands-free: once the answer has been said, listen for the next question
+    speak(answer, false, listenForFollowUp);
   };
 
   const change = () => {
