@@ -539,6 +539,22 @@ def _hidden(f: Feature) -> bool:
     return True  # a touched part with no opening role still needs the skin over it
 
 
+def shape_features(brief: dict[str, Any], y_down: bool) -> list[dict[str, Any]]:
+    """The form's features in the board frame: KiCad's y-down frame mirrors y and angles."""
+    sy = -1.0 if y_down else 1.0
+    out = []
+    for f in brief.get("shape_features") or []:
+        g = dict(f)
+        g["outline"] = [[float(x), sy * float(y)] for x, y in f.get("outline") or []]
+        cx, cy = f.get("centre") or (0.0, 0.0)
+        g["centre"] = [float(cx), sy * float(cy)]
+        g["axis_deg"] = sy * float(f.get("axis_deg") or 0.0)
+        g["hole_mm"] = float(f.get("hole_mm") or 0.0)
+        g["thickness_mm"] = float(f.get("thickness_mm") or 0.0)
+        out.append(g)
+    return out
+
+
 def enclose_report(
     board: dict[str, Any], parts_with_poses: list[dict[str, Any]], brief: dict[str, Any]
 ) -> EncloseReport:
@@ -634,8 +650,14 @@ def enclose_report(
     # The product's own thickness (from its form) sets the body height; the board stays at the
     # top, with the extra body below it; on a desk the floor stays put and the body domes above.
     body = _num(brief.get("body_thickness_mm"), 0.0)
-    if body > 0 and body > bezel_top - z_bot and not desk_sensors:
-        z_bot = bezel_top - body
+    thin_end = next(
+        (_num(f.get("thickness_mm"), 0.0) for f in brief.get("shape_features") or []
+         if f.get("kind") == "wedge"),
+        None,
+    )  # fmt: skip
+    form_depth = body if thin_end is None else min(body, thin_end)  # a wedge's thin edge
+    if form_depth > 0 and form_depth > bezel_top - z_bot and not desk_sensors:
+        z_bot = bezel_top - form_depth
     shaped = body > 0
 
     t_geo = time.perf_counter()
@@ -659,27 +681,53 @@ def enclose_report(
             site = shell.Site("port", -1, f.x, f.y, "edge", deg, f.w, f.d, f.rot_deg, ref=f.ref)
             site.z_hi = f.z_range(t)[1]
             sites.append(site)
+        panels = [f for f in feats if f.role == "screen" and f.side == "top"]
+        if panels:  # a window is opened over a real panel, never at a loose anchor beside it
+            sites = [s_ for s_ in sites if s_.kind != "screen" or s_.ref]
+        for f in panels:  # a panel no anchor claimed still gets its window, over the panel
+            if f.ref not in claimed_refs:
+                site = shell.Site("screen", -1, f.x, f.y, "front", 0.0, f.w, f.d, f.rot_deg)
+                site.ref, site.z_hi = f.ref, f.z_range(t)[1]
+                sites.append(site)
         for st in sites:
             if st.kind == "port":
                 st.normal_deg = shell.snap_axis(st.normal_deg, 20.0)
         for lobe in shell.shoulder_lobes(sites, raw):
             raw = _largest_polygon(raw.union(lobe))
+        form_feats = shape_features(brief, y_down)
+        body_shape = shell.Shape()
+        core = raw
+        for f in form_feats:
+            if f["kind"] == "appendage" and len(f["outline"]) >= 3:
+                ap = Polygon(f["outline"]).buffer(0)
+                reach = ap.difference(core.buffer(1.0))
+                if ap.is_empty or reach.is_empty:
+                    continue
+                raw = _largest_polygon(raw.union(ap.buffer(0.5)))
+                # past its own outline too, so the blend never lifts the tip the plan rounds off
+                thin = reach.buffer(4.0).difference(core.buffer(1.0))
+                body_shape.thin.append((thin, float(f["thickness_mm"])))
         x0, y0, x1, y1 = raw.bounds
         r_min = shell.plan_min_radius(x1 - x0, y1 - y0)
         required = Polygon(outline).buffer(H["tray_clearance_mm"] + 1.5, join_style="round")
         plan = shell.smooth_plan(raw, r_min, required)
         outer_cs = mf.CrossSection([_ccw(np.asarray(plan.exterior.coords)[:-1]).tolist()])
+        wedge = next((f for f in form_feats if f["kind"] == "wedge"), None)
         prof = shell.profile_for(
             z_bot,
             seat,
             bezel_top,
-            body,
+            form_depth,
             _num(brief.get("edge_thickness_mm"), 0.0),
             min(x1 - x0, y1 - y0),
             r_min,
             desk=bool(desk_sensors),
         )
-        sculpt = shell.build_body(plan, prof)
+        if wedge is not None:  # the underside deepens from the thin edge to the form's thickness
+            thin = prof.z_top + prof.crown - (prof.z_floor - prof.belly)
+            rise = min(max(body - thin, 0.0), 0.6 * min(x1 - x0, y1 - y0))
+            body_shape.wedge = (float(wedge["axis_deg"]), rise)
+        sculpt = shell.build_body(plan, prof, shape=body_shape)
         z_port: dict[str, float] = {}
         for f in port_parts:
             z_lo_, z_hi_ = f.z_range(t)
@@ -694,6 +742,13 @@ def enclose_report(
             H["usb_opening_h_mm"],
             z_port,
         )
+        shell.surface_features(site_feats, form_feats, sculpt, seat)
+        for f in form_feats:  # a hanging hole through an appendage
+            if f["kind"] == "appendage" and f["hole_mm"] > 0:
+                c = f["centre"]
+                site_feats.wall_cuts.append(
+                    shell._cyl(f["hole_mm"] / 2, z_bot - 5.0, bezel_top + 40.0, c[0], c[1])
+                )
         crown = prof.crown
 
     # ---- tray
@@ -747,7 +802,9 @@ def enclose_report(
     pockets: list[tuple[mf.CrossSection, float]] = []
     openings: dict[str, Any] = {"keys": 0, "encoders": [], "screens": [], "usb": []}
     openings["wheels"] = site_feats.wheels
+    openings["reached"] = sorted(r for r in site_feats.reached if r)
     keycaps = [f for f in feats if f.role == "keycap"]
+    hidden = shell.Features()
     for f in feats:
         z_lo, z_hi = f.z_range(t)
         if f.side == "bottom" or f.role in OWN_HOLE_ROLES:
@@ -795,13 +852,19 @@ def enclose_report(
         elif z_hi > seat - 0.01:
             # hidden, so it gets a blind pocket under the skin, not a hole a person sees
             c = 2 * H["part_opening_clearance_mm"]
-            pockets.append((_rect_cs(f.x, f.y, f.w + c, f.d + c, f.rot_deg), z_hi + c / 2))
+            if sculpt is not None:  # never through the sculpted top: a closed boss if too tall
+                clear = H["part_opening_clearance_mm"]
+                shell.hide_part(hidden, f.x, f.y, f.w, f.d, f.rot_deg, z_hi, sculpt, seat, clear)
+            else:
+                pockets.append((_rect_cs(f.x, f.y, f.w + c, f.d + c, f.rot_deg), z_hi + c / 2))
     for g in ball_geo:
         holes_cs.append(_circle_cs(g["x"], g["y"], g["r"] + H["ball_ring_clearance_mm"]))
     if sculpt is not None:
         bezel = sculpt.solid.trim_by_plane((0, 0, 1), seat)
         if site_feats.adds:
             bezel = bezel + _union(site_feats.adds)
+        if hidden.adds:  # bosses before any opening, so no window or hole is filled back in
+            bezel = bezel + _union(hidden.adds)
         zhole = float(sculpt.solid.bounding_box()[5]) + 1.0
         if site_feats.cuts:
             bezel = bezel - _union(site_feats.cuts)
@@ -821,6 +884,8 @@ def enclose_report(
 
     for cs, z_top in pockets:
         bezel = bezel - _prism(cs, seat - 1, z_top)
+    if hidden.cuts:
+        bezel = bezel - _union(hidden.cuts)
 
     # ---- USB openings through the wall (tray and bezel)
     cutouts: list[dict[str, Any]] = []
@@ -925,6 +990,7 @@ def enclose_report(
     bezel_w = bezel.transform(m34)
     caps_w = [c.transform(m34) for c in site_feats.caps]
     glass_w = [c.transform(m34) for c in site_feats.glass]
+    lens_w = [c.transform(m34) for c in site_feats.lenses]
     if tent > 0:
         up = xform[:3, :3] @ np.array([0, 0, 1.0])
         p0 = xform[:3, :3] @ np.array([0, 0, z_bot]) + xform[:3, 3]
@@ -939,6 +1005,7 @@ def enclose_report(
     bezel_w = bezel_w.translate((0, 0, lift))
     caps_w = [c.translate((0, 0, lift)) for c in caps_w]
     glass_w = [c.translate((0, 0, lift)) for c in glass_w]
+    lens_w = [c.translate((0, 0, lift)) for c in lens_w]
     xform[2, 3] += lift
     t_geo_ms = (time.perf_counter() - t_geo) * 1000
 
@@ -955,11 +1022,12 @@ def enclose_report(
             "tent": tent,
             "side": side,
             "hand": HAND_SET,
-            "v": 4,  # 4: anchors read in the record's own frame, speaker grilles
+            "v": 5,  # 5: knobs, lens windows, pockets kept under the skin
             "frame": board.get("frame"),
             "anchors": brief.get("anchors"),
             "body": body,
             "edge": brief.get("edge_thickness_mm"),
+            "shape": brief.get("shape_features"),  # form features change the body
         }
     )[:24]
     ident = np.eye(4)
@@ -973,6 +1041,9 @@ def enclose_report(
         )
     if glass_w:
         parts_mesh.append(mesh_part(f"{eid}_glass", _union(glass_w), ident, GLASS_HEX, 0.12))
+    if lens_w:
+        lens_hex = site_feats.lens_tint or shell.LENS_SMOKE
+        parts_mesh.append(mesh_part(f"{eid}_lens", _union(lens_w), ident, lens_hex, 0.1))
     out_dir = enclosure_dir()
     out_dir.mkdir(parents=True, exist_ok=True)
     assets = []
@@ -1001,6 +1072,7 @@ def enclose_report(
         }
         if kind == "glb":
             ref["nodes"] = [p.name for p in parts_mesh]
+            ref["node_colors"] = {p.name: p.color_hex for p in parts_mesh}
         assets.append(ref)
     io_ms = (time.perf_counter() - t_io) * 1000
 

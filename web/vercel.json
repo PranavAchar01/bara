@@ -2,5 +2,11 @@
   "framework": "vite",
   "installCommand": "pnpm install",
   "buildCommand": "VITE_ENGINE_DISCOVERY=1 pnpm build",
-  "outputDirectory": "dist"
+  "outputDirectory": "dist",
+  "rewrites": [
+    { "source": "/build", "destination": "/index.html" },
+    { "source": "/build/(.*)", "destination": "/index.html" },
+    { "source": "/library", "destination": "/index.html" },
+    { "source": "/drafts", "destination": "/index.html" }
+  ]
 }

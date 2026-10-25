@@ -50,6 +50,8 @@ log = logging.getLogger(__name__)
 Emit = Callable[..., dict[str, Any]]
 
 MAX_SURVIVORS = 8
+# function ids that name no electrical job: the block is housing material, made by the case
+NON_ELECTRICAL = frozenset({"other", "mech.enclosure"})
 ASSETS_DIR = SERVER / "data" / "assets"
 HALF_GAP_MM = 40.0  # inner-edge gap between split halves in the first placement guess
 
@@ -124,6 +126,18 @@ def wrong_size(part: dict[str, Any], want_in: float | None) -> bool:
     return bool(want_in and have_in and abs(have_in - want_in) / want_in > SCREEN_TOLERANCE)
 
 
+def _function_names(part: dict[str, Any], facet: str, op: str, value: Any) -> bool:
+    """A part with no value for a typed facet whose own primary function names it: a
+    seven-segment digit from the KiCad library is display_type seven_segment by what it is."""
+    if op != "eq" or (part.get("facets") or {}).get(facet) is not None:
+        return False
+    kind = facet.removesuffix("_type")
+    return any(
+        f.get("primary") and f.get("function_id") == f"{kind}.{value}"
+        for f in part.get("functions") or []
+    )
+
+
 def is_chip(part: dict[str, Any]) -> bool:
     """A part whose datasheet category or package says it is an IC, whatever it was tagged."""
     package = str((part.get("facets") or {}).get("package") or "")
@@ -152,6 +166,36 @@ def _model_from_footprint(part: dict[str, Any], assets: list[dict[str, Any]]) ->
         a["url"] = f"{GLB_URL}/{glb_stem(lender)}.glb"
         a["origin"] = "generated"
         a["status"] = "pending"
+
+
+CELL_FUNCTIONS = ("power.battery", "power.coin_cell")
+LI_ION = {"lipo", "liion", "li-ion", "li_ion", "lithium_ion", "li-po", "lithium_polymer"}
+
+
+def _chemistry_of(part: dict[str, Any]) -> str:
+    """The cell chemistry a part holds, charges or runs from ("" when it says nothing); the
+    lithium-ion family is one kind (a pouch cell and an 18650 take the same charger)."""
+    iface = interface_of(part, "battery", "requires") or {}
+    chem = (iface.get("params") or {}).get("chemistry") or (part.get("facets") or {}).get(
+        "chemistry"
+    )
+    chem = str(chem or "").strip().lower()
+    return "li_ion" if chem in LI_ION else chem
+
+
+def _holds_cell(part: dict[str, Any]) -> bool:
+    """A cell or cell holder (its primary function is a battery), not a part that runs from one."""
+    return any(
+        f.get("primary") and f.get("function_id") in CELL_FUNCTIONS
+        for f in part.get("functions") or []
+    )
+
+
+def _chemistry_fits(part: dict[str, Any], want: str) -> bool:
+    """A part of the wanted chemistry, or a plain connector that wires the cell off the board;
+    a holder whose chemistry is unknown is not assumed to fit."""
+    chem = _chemistry_of(part)
+    return chem == want if chem else not _holds_cell(part)
 
 
 @dataclass
@@ -581,7 +625,17 @@ class Composer:
 
     def filters_for(self, slot: Slot, cands: list[dict[str, Any]]) -> list[Filter]:
         filters: list[Filter] = []
-        present = {k for p in cands for k in (p.get("facets") or {})}
+        # a device requirement describes the parts whose own function this slot is: a speaker
+        # slot offered an audio MCU (a speaker only as a side function) takes no radio filter
+        own = [
+            p
+            for p in cands
+            if any(
+                f.get("primary") and f.get("function_id") == slot.function_id
+                for f in p.get("functions") or []
+            )
+        ] or cands
+        present = {k for p in own for k in (p.get("facets") or {})}
         # 1. requirements from the spec, where the slot's parts carry that facet
         for req in self.spec.get("hard_requirements", []) + self.spec.get("soft_requirements", []):
             facet, op, value = req["facet"], req["op"], req["value"]
@@ -603,6 +657,8 @@ class Composer:
                 )
                 continue
             if facet == "power_source" and value == "battery" and slot.slot_id == "controller":
+                if any(s.function_id == "power.charger" for s in self.slots if s is not slot):
+                    continue  # the design charges its own cell: a bare module runs off its rail
                 filters.append(
                     Filter(
                         facet,
@@ -635,9 +691,26 @@ class Composer:
                     value,
                     "requirement",
                     req.get("label") or f"{facet} {value}",
-                    lambda p, f=facet, o=op_, v=value: facet_match(p, f, o, v),
+                    lambda p, f=facet, o=op_, v=value: (
+                        facet_match(p, f, o, v) or _function_names(p, f, o, v)
+                    ),
                     req_id=req["req_id"],
                     relaxable=soft,
+                )
+            )
+        # 1a. a screen slot takes glass: a driver chip or ribbon connector tagged with the
+        # display's function is what the panel plugs into, not the panel
+        if slot.function_id.startswith("display.") and slot.function_id not in (
+            "display.indicator_led",
+        ):
+            filters.append(
+                Filter(
+                    "kind",
+                    "eq",
+                    "panel",
+                    "requirement",
+                    "A panel, not its driver chip",
+                    lambda p: not (is_chip(p) or not_a_panel(p)),
                 )
             )
         # 1b. spec numbers: battery size from the mass target and battery life
@@ -690,12 +763,17 @@ class Composer:
                     from_slot_id=other.slot_id,
                 )
             )
-        # 2b. a part that takes a battery names its chemistry; the cell has to be that kind
-        if slot.function_id == "power.battery":
+        # 2b. a part that charges or runs from the main cell names its chemistry; the cell
+        # has to be that kind (and the other way round for the charger). Another cell holder
+        # (a backup coin cell) holds its own cell and says nothing about this one.
+        if slot.function_id in ("power.battery", "power.charger"):
             for other in self.slots:
-                iface = interface_of(other.chosen, "battery", "requires") if other.chosen else None
-                want = str((iface or {}).get("params", {}).get("chemistry") or "").lower()
+                want = _chemistry_of(other.chosen) if other.chosen else ""
                 if other is slot or not want:
+                    continue
+                if slot.function_id == "power.battery" and _holds_cell(other.chosen):
+                    continue
+                if slot.function_id == "power.charger" and other.function_id != "power.battery":
                     continue
                 filters.append(
                     Filter(
@@ -704,10 +782,9 @@ class Composer:
                         want,
                         "compatibility",
                         f"{want} cell ({other.label})"[:60],
-                        lambda p, w=want: (
-                            str((p.get("facets") or {}).get("chemistry", w)).lower() == w
-                        ),
+                        lambda p, w=want: _chemistry_fits(p, w),
                         from_slot_id=other.slot_id,
+                        relaxable=True,
                     )
                 )
         # 3. logic level and I2C address room against parts on the same controller
@@ -828,6 +905,10 @@ class Composer:
                 s += 0.15 - min(0.15, (gpio - need) * 0.01)  # smallest controller that fits
             if self.board_controller_for(part):
                 s += 0.05
+        # a footprint the matched open reference design used for this function
+        ref = getattr(self, "reference_fps", None) or {}
+        if str(part.get("footprint") or "") in ref.get(slot.function_id, ()):
+            s += 0.25
         st = self.brief.get("switch_type")
         if slot.slot_id == "switches" and st and st in name:
             s += 0.2
@@ -1191,10 +1272,11 @@ class Composer:
                 stage="compose",
             )
             idx, method, reason, model, notes = await self.pick(slot, ranked)
-            if method == "model_none":
-                # nothing in the catalog is the named part: look further (KiCad, LCSC) before
-                # settling for the closest catalog part
+            if method == "model_none" or (method == "none" and slot.need is not None):
+                # nothing in the catalog is the named part, or none passes the filters: look
+                # further (KiCad, LCSC) before settling for the closest catalog part
                 had = len(self.extra.get(slot.slot_id, []))
+                before = ranked[idx]["part_id"] if idx is not None and idx < len(ranked) else None
                 await self.resolve_missing(slot, emit)
                 new = self.extra.get(slot.slot_id, [])[had:]
                 cands, ranked, applied = self.narrow(slot)
@@ -1204,6 +1286,8 @@ class Composer:
                 )
                 if hit is not None:
                     idx, reason = hit, f"No catalog part is a {slot.label.lower()}; looked further."
+                else:  # the list was narrowed again: the earlier index points into the old one
+                    idx = next((i for i, p in enumerate(ranked) if p["part_id"] == before), None)
                 method = "model_pick"
             if notes and method != "model_pick" and self.use_model:
                 emit(
@@ -1220,8 +1304,14 @@ class Composer:
                     },
                     stage="compose",
                 )
-            if idx is None and slot.need is not None and slot.need.mechanical:
-                # caps, levers and wells the case geometry grows from the form's anchors
+            if (
+                idx is None
+                and slot.need is not None
+                and (slot.need.mechanical or slot.function_id in NON_ELECTRICAL)
+            ):
+                # caps, levers and wells the case geometry grows from the form's anchors; a
+                # block with no electrical function (a lens, a window, a gasket) is the
+                # case's own material, not something an electronics library sells
                 slot.state, slot.covered_by = "none", "case"
                 reason = f"{slot.label}: made by the case, not a catalog part."
             elif idx is None:
@@ -1350,7 +1440,34 @@ class Composer:
                         stage="compose",
                     )
             progress(f"{step} of {n_slots} slots decided", step / max(1, n_slots))
+        self.cover_generic(emit)
         return self.result
+
+    def cover_generic(self, emit: Emit) -> None:
+        """A generic slot the brief implied (a display) that found nothing is the same block as a
+        named slot of that function decided after it (the 1.3 in segment display the device
+        concept asked for): one part, not a missing one."""
+        for slot in self.slots:
+            if slot.need is not None or slot.chosen is not None or slot.covered_by:
+                continue
+            if slot.criticality == "optional":
+                continue
+            other = next(
+                (
+                    o
+                    for o in self.slots
+                    if o is not slot
+                    and o.chosen is not None
+                    and not o.covered_by
+                    and (
+                        o.function_id == slot.function_id
+                        or slot.function_id in part_functions(o.chosen)
+                    )
+                ),
+                None,
+            )
+            if other is not None:
+                self.mark_covered(slot, other, self.slots.index(slot) + 1, emit)
 
     async def vet(self, slot: Slot, parts: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Parts that meet the block's key numbers (size, connector standard, rating). The ones
@@ -1364,6 +1481,8 @@ class Composer:
             chips = [p for p in parts if is_chip(p) or not_a_panel(p) or wrong_size(p, want_in)]
             for p in chips:  # a driver chip, ribbon connector or other-size glass is not it
                 self.resolver.rejected.add(p["part_id"])
+                if not (is_chip(p) or not_a_panel(p)):  # real glass of another size: close
+                    self.near_miss.setdefault(slot.slot_id, []).append(p)
             parts = [p for p in parts if p not in chips]
         need = slot.need
         if need is None or not need.requirement or not parts:
@@ -1528,10 +1647,16 @@ class Composer:
                 for p in self.source.query(function=slot.function_id, limit=500)
                 if p["part_id"] not in self.resolver.rejected
             ]
-            kept = await self.vet(slot, pool)
-            if not kept:
+            part = None
+            for i in range(0, min(len(pool), 48), 12):  # only parts the spec check saw
+                batch = pool[i : i + 12]
+                kept = [p for p in await self.vet(slot, batch) if p in batch]
+                if kept:
+                    part = kept[0]
+                    break
+            if part is None:
                 return
-            part, via = kept[0], "the catalog, by function"
+            via = "the catalog, by function"
         self.extra.setdefault(slot.slot_id, []).append(part)
         emit(
             "warning",
@@ -1564,6 +1689,57 @@ class Composer:
                 + "."
             )
         return f"{name}: highest score" + (" after " + ", ".join(bits) if bits else "") + "."
+
+    def resize(
+        self, instance_id: str, fits: Callable[[dict[str, Any]], bool], why: str, emit: Emit
+    ) -> dict[str, Any] | None:
+        """Re-pick the slot that owns instance_id with its best-ranked candidate that fits (a
+        part too big for the product swapped for a smaller one serving the same function);
+        returns the new part, None when no other candidate fits."""
+        slot = next(
+            (s for s in self.slots if any(i.instance_id == instance_id for i in s.instances)),
+            None,
+        )
+        if slot is None or slot.chosen is None:
+            return None
+        old = slot.chosen
+        _, ranked, _ = self.narrow(slot)
+        part = next((p for p in ranked if p["part_id"] != old["part_id"] and fits(p)), None)
+        if part is None:
+            return None
+        slot.chosen = part
+        self.result.chosen_parts[slot.slot_id] = part
+        reason = f"{card_for(old)['display_name']} does not fit: {why}"
+        emit(
+            "decision.made",
+            {
+                "decision": {
+                    "decision_id": self.next_decision(),
+                    "slot_id": slot.slot_id,
+                    "step": slot.order,
+                    "method": "solver",
+                    "chosen_part_id": part["part_id"],
+                    "chosen_short_id": None,
+                    "survivors": len(ranked),
+                    "reason": reason[:240],
+                    "model": None,
+                    "propagated": self.propagated(slot),
+                }
+            },
+            stage="compose",
+        )
+        built = {
+            inst.instance_id: self.build_part(slot, inst, self.sized_part(slot, inst, part))
+            for inst in slot.instances
+        }
+        self.result.parts = [built.get(p["instance_id"], p) for p in self.result.parts]
+        for bp in built.values():
+            emit("part.updated", {"part": bp}, stage="compose")
+        emit("slot.updated", {"slot": slot.json()}, stage="compose")
+        for conn in self.connections_for(slot, list(built.values())):
+            emit("connection.added", {"connection": conn}, stage="compose")
+        self.result.log.append(f"{slot.slot_id}: {part['part_id']} (resized: {why})")
+        return part
 
     def covering_slot(self, slot: Slot) -> Slot | None:
         """An already decided slot whose part also provides this slot's function.

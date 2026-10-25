@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from bara.catalog import Catalog
+from bara.live.layout import KEYBOARD_STYLES, keyboard_product
 from bara.live.llm_json import call_json
 from bara.router import Router, normalize
 
@@ -26,6 +27,8 @@ SIDES = ["left", "right", "center", None]
 DISPLAY_TYPES = ["oled", "epaper", "tft", "seven_segment", "lcd_char", "memory_lcd", None]
 COLOUR_TARGETS = ["case", "keycaps", "accent", "trackball", "knob", "all"]
 BLOCKING = ["primary_function", "which_device", None]
+# parts only a keyboard product is built from; another device's keys are its own buttons
+KEYBOARD_ONLY_FUNCTIONS = ("mech.keycap", "mech.stabilizer", "mech.plate")
 
 # Colour names a person types, as sRGB hex. Used by the rules path and to fill a hex the
 # model left out. Values are common paint-chip approximations, not brand colours.
@@ -64,11 +67,17 @@ SYSTEM_PROMPT = (
     "in_scope. A vague request is in_scope.\n"
     "functions: every function id the device needs (keys, controller, display, sensors, "
     "power, knob hardware, keycaps), from the enum.\n"
-    "layout_style: split for two halves, unibody for a one-piece keyboard, macropad for a "
-    "small key grid, none for devices that are not keyboards.\n"
-    "key_count: total keys across both halves; rows and cols per half; thumb_keys per half.\n"
-    "stagger: column for ergonomic splits, ortho for grids, row for classic boards.\n"
-    "switch_family: choc_v1 for low profile or choc, mx otherwise, null if no keys.\n"
+    "device: a generic product class in plain words, never a brand, product or model name "
+    "even when the request names one. device_class: the closest listed class, a hint only.\n"
+    "layout_style: only when the product itself is a computer keyboard, keypad or macropad "
+    "that sends key presses to a computer: split for two halves, unibody for a one-piece "
+    "keyboard, macropad for a small key grid. none for every other device, including ones "
+    "whose own controls are keys or buttons (those are the product's buttons, not a keyboard "
+    "layout).\n"
+    "key_count, rows, cols, thumb_keys, stagger, switch_family: keyboard products only "
+    "(key_count across both halves; rows and cols per half; stagger column for ergonomic "
+    "splits, ortho for grids, row for classic boards; switch_family choc_v1 for low profile "
+    "or choc, mx otherwise); null for every other device.\n"
     "mcu: a controller only when the request names one, else null.\n"
     "wireless: ble for wireless or bluetooth keyboards, wifi when the device needs the "
     "internet, none otherwise. power_source battery when wireless or handheld.\n"
@@ -219,9 +228,9 @@ def rules_brief(prompt: str, router: Router, catalog: Catalog) -> dict[str, Any]
         c["blocking_facet"] = None
         c["device_class"] = EXTRA_DEVICE_CLASS.get(functions[0].split(".")[0], "other")
 
-    is_keyboard = bool(re.search(r"\b(keyboard|keypad|macro ?pad|split|keys?)\b", text))
-    if re.search(r"\b\d+\s*x\s*\d+\b", text) and "pad" in text:
-        is_keyboard = True
+    # No model answered: only a product named as a keyboard takes the keyboard path. Keys or a
+    # grid on some other device are its buttons (the block diagram designs them).
+    is_keyboard = bool(re.search(r"\b(keyboard|keypad|macro ?pad|numpad)s?\b", text))
     layout_style = "none"
     if is_keyboard:
         layout_style = "split" if re.search(r"\bsplit\b", text) else "unibody"
@@ -356,7 +365,24 @@ def normalise_brief(brief: dict[str, Any], catalog: Catalog) -> dict[str, Any]:
     out = dict(brief)
     known = set(catalog.function_ids())
     out["functions"] = [f for f in out.get("functions", []) if f in known]
-    if out.get("layout_style") in ("split", "unibody", "macropad"):
+    if not keyboard_product(out):
+        # keys on a device that is not itself a keyboard are its own buttons: no keyboard
+        # layout, switch family or keycaps are forced onto it
+        out["layout_style"] = "none"
+        out["switch_family"] = None
+        out["stagger"] = None
+        for k in ("key_count", "rows", "cols", "thumb_keys"):
+            out[k] = None  # the device's own block diagram counts its buttons
+        out.pop("layout_preset", None)
+        out["functions"] = [f for f in out["functions"] if f not in KEYBOARD_ONLY_FUNCTIONS]
+        out["functions"] = [
+            "input.button" if f in ("input.key", "input.key_matrix") else f
+            for f in out["functions"]
+        ]
+        out["functions"] = [f for f in dict.fromkeys(out["functions"]) if f in known]
+    else:
+        if out.get("layout_style") not in KEYBOARD_STYLES:  # the concept chose a keyboard
+            out["layout_style"] = "unibody"
         for f in ("input.key", "mech.keycap", "compute.mcu"):
             if f not in out["functions"]:
                 out["functions"].append(f)
@@ -484,7 +510,8 @@ def spec_from_brief(
         soft.append(_req("switch_family", "eq", brief["switch_family"], "default", "Switches"))
     if brief.get("switch_type"):
         hard.append(
-            _req("switch_type", "eq", brief["switch_type"], "explicit", brief["switch_type"])
+            # the catalog names a switch's feel "actuation" (manifest facets)
+            _req("actuation", "eq", brief["switch_type"], "explicit", brief["switch_type"])
         )
     for req in clarified:
         hard.append(dict(req))
