@@ -24,7 +24,7 @@ import { LAYER_RANK, explodeZ, isKeycapPart, layerGap, layerOf, partLabel, type 
 import { elementPoses, type ElementPose } from "./layout";
 import { LabelOverlay, LabelProjector, labelOpacity } from "./labels";
 import { FocusDriver, nearFocused } from "./focus";
-import { defaultColor, ghost, placeholderMaterial, presetFor, presetMaterial, tinted, usesPreset } from "./materials";
+import { defaultColor, finishMaterial, ghost, placeholderMaterial, presetFor, presetMaterial, tinted, usesPreset, wearsFinish } from "./materials";
 import { registerAnchor, stage, stageBox } from "./stage";
 import { StudioEnvironment, StudioFloor, studioPalette, type StudioPalette } from "./studio";
 import { DemandDriver, StudioPost, postEnabled } from "./post";
@@ -313,6 +313,10 @@ function PartNode(props: PartNodeProps) {
   useEffect(() => () => placeholderGeom?.dispose(), [placeholderGeom]);
   const groups = useMemo<MeshGroup[]>(() => {
     if (loaded) {
+      if (wearsFinish(part.finish)) {
+        const mat = finishMaterial(part.finish);
+        return loaded.groups.map((g) => ({ ...g, material: mat }));
+      }
       // Keycaps, knobs and balls take the studio preset in the part's colour.
       if (usesPreset(preset)) {
         const mat = presetMaterial(preset, color);
@@ -328,7 +332,7 @@ function PartNode(props: PartNodeProps) {
     }
     // No model: a faint neutral shell with its edges drawn, labelled, so it never reads as the part.
     return placeholderGeom ? [{ geometry: placeholderGeom, material: placeholderMaterial(), weight: 0 }] : [];
-  }, [loaded, part.color?.hex, preset, color, placeholderGeom]);
+  }, [loaded, part.color?.hex, part.finish, preset, color, placeholderGeom]);
   const placeholderEdges = useMemo(() => (placeholderGeom ? new THREE.EdgesGeometry(placeholderGeom, 25) : null), [placeholderGeom]);
   useEffect(() => () => placeholderEdges?.dispose(), [placeholderEdges]);
   const assembled = useApp((s) => s.explode < 0.8);

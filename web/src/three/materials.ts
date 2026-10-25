@@ -1,7 +1,7 @@
 // Studio material presets (render recipe 2.5). One shared instance per
 // preset + colour, so 100 parts compile a handful of shader variants.
 import * as THREE from "three";
-import type { BuildPart } from "../spec/types";
+import type { BuildPart, Finish } from "../spec/types";
 import { layerOf } from "./explode";
 
 export type Preset = "keycap" | "case" | "pcb" | "switch" | "module" | "metal" | "glossy" | "battery" | "plastic";
@@ -134,4 +134,34 @@ export function ghost(src: THREE.MeshStandardMaterial, opacity: number): THREE.M
 const placeholderMat = new THREE.MeshStandardMaterial({ color: "#C3C7CD", roughness: 0.7, metalness: 0, transparent: true, opacity: 0.32, depthWrite: false });
 export function placeholderMaterial(): THREE.MeshStandardMaterial {
   return placeholderMat;
+}
+
+const finishCache = new Map<string, THREE.MeshPhysicalMaterial>();
+
+/** The finishing pass's surface for a part, one shared instance per distinct finish. */
+export function finishMaterial(f: Finish): THREE.MeshPhysicalMaterial {
+  const key = JSON.stringify(f);
+  let m = finishCache.get(key);
+  if (!m) {
+    const opacity = f.opacity ?? 1;
+    m = new THREE.MeshPhysicalMaterial({
+      color: new THREE.Color(f.color),
+      roughness: f.roughness ?? 0.5,
+      metalness: f.metalness ?? 0,
+      transmission: f.transmission ?? 0,
+      ior: f.ior ?? 1.5,
+      transparent: opacity < 1,
+      opacity,
+      emissive: new THREE.Color(f.emissive ?? "#000000"),
+      emissiveIntensity: f.emissive ? (f.emissive_intensity ?? 1) : 0,
+    });
+    finishCache.set(key, m);
+  }
+  return m;
+}
+
+/** Controls and displays wear the finish palette; boards, metal and connectors keep the
+ * library model's own materials, which are already real. */
+export function wearsFinish(f: Finish | null | undefined): f is Finish {
+  return !!f && (f.role === "control" || f.role === "display");
 }
