@@ -2,8 +2,8 @@
  "about": "Bara part meshes. Every GLB is converted with kicad-cli from an upstream KiCad footprint 3D model or an open-source STEP file; see SOURCES.md. glTF is metres, Y up; bbox_mm is in the SPEC 3.2 part frame (mm, Z up, z=0 at the PCB top for components, board bottom for whole boards).",
  "kicad_cli": "/opt/homebrew/bin/kicad-cli",
  "count": 244,
- "with_mesh": 207,
- "total_glb_bytes": 32421416,
+ "with_mesh": 206,
+ "total_glb_bytes": 32402428,
  "parts": [
   {
    "part_id": "sw:cherry_mx2a_brown",
@@ -11054,77 +11054,23 @@
     "source": "kicad",
     "commit": "10.0.7"
    },
-   "sources": [
-    {
-     "role": "model",
-     "file": "/Users/pranav/helloworld/bara/server/data/catalog/fetched/src/C965555/C965555.step",
-     "source_url": "https://www.lcsc.com/product-detail/C965555.html",
-     "source": "lcsc",
-     "commit": "fetched",
-     "licence": {
-      "spdx": "NOASSERTION",
-      "name": "LCSC/EasyEDA component library model",
-      "url": "https://easyeda.com/page/terms",
-      "commercial_ok": "unknown",
-      "copyleft": "unknown",
-      "attribution_required": "unknown",
-      "notes": "Fetched by part number from the LCSC/EasyEDA library (catalog_build.fetch_lcsc)."
-     },
-     "placement": "aligned_by_bbox"
-    }
+   "sources": [],
+   "unresolved_models": [
+    "${KICAD10_3DMODEL_DIR}/LED_SMD.3dshapes/LED_WS2812B-2020_PLCC4_2.0x2.0mm.step"
    ],
-   "status": "ok",
-   "glb": "server/data/assets/parts/ws2812b_2020.glb",
-   "url": "/assets/parts/ws2812b_2020.glb",
-   "bytes": 18988,
-   "raw_bytes": 202928,
-   "sha256": "20e289f594bc0bf9e59e976705f1382581707de4130a720afc1bda6e4298afda",
-   "bbox_mm": {
-    "min": [
-     -1.0,
-     -1.005,
-     0.0
-    ],
-    "max": [
-     1.0,
-     1.005,
-     0.84
-    ]
-   },
-   "nodes": [
-    "=>[0:1:1:3]"
-   ],
-   "notes": [
-    "aligned by bbox: rotate [0.0, 0.0, 0.0] deg, offset [0.0, 0.005, 0.025] mm (computed from model bounds)"
-   ],
+   "status": "missing",
+   "glb": null,
+   "url": null,
+   "bbox_mm": null,
+   "notes": [],
    "licence": {
-    "spdx": "CC-BY-SA-4.0 AND NOASSERTION",
-    "name": "CC-BY-SA 4.0 with the KiCad library exception; LCSC/EasyEDA component library model",
+    "spdx": "CC-BY-SA-4.0",
+    "name": "CC-BY-SA 4.0 with the KiCad library exception",
     "url": "https://www.kicad.org/libraries/license/",
-    "commercial_ok": "unknown",
+    "commercial_ok": "yes",
     "copyleft": "yes",
-    "attribution_required": "unknown",
-    "notes": "Combined: footprint and 3D model come from different sources.",
-    "parts": [
-     {
-      "spdx": "CC-BY-SA-4.0",
-      "name": "CC-BY-SA 4.0 with the KiCad library exception",
-      "url": "https://www.kicad.org/libraries/license/",
-      "commercial_ok": "yes",
-      "copyleft": "yes",
-      "attribution_required": "no",
-      "notes": "KiCad library exception: using the symbols, footprints and 3D models in a design does not make the design subject to the licence."
-     },
-     {
-      "spdx": "NOASSERTION",
-      "name": "LCSC/EasyEDA component library model",
-      "url": "https://easyeda.com/page/terms",
-      "commercial_ok": "unknown",
-      "copyleft": "unknown",
-      "attribution_required": "unknown",
-      "notes": "Fetched by part number from the LCSC/EasyEDA library (catalog_build.fetch_lcsc)."
-     }
-    ]
+    "attribution_required": "no",
+    "notes": "KiCad library exception: using the symbols, footprints and 3D models in a design does not make the design subject to the licence."
    }
   },
   {

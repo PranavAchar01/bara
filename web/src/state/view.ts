@@ -52,6 +52,21 @@ export interface ViewState {
   doneMs: number | null;
   placeDone: boolean;
   placementSolver: ServerPayloads["placement.updated"]["solver"] | null;
+  /**
+   * The build's versions, oldest first: what it was when built, then one per edit. `historyAt` is the
+   * one on screen; undo and redo restore their neighbours (engine POST /restore), and an edit made
+   * after an undo drops the versions past it, the way an editor does.
+   */
+  history: HistoryEntry[];
+  historyAt: number;
+  /** Label of the edit in progress (from its stage.started), for the version it makes. */
+  editLabel: string | null;
+}
+
+export interface HistoryEntry {
+  /** The engine revision this version was made at; restoring it brings this version back. */
+  revision: number;
+  label: string;
 }
 
 export function emptyStages(): Record<string, StageView> {
@@ -74,6 +89,9 @@ export function emptyView(startAt: number | null = null): ViewState {
     doneMs: null,
     placeDone: false,
     placementSolver: null,
+    history: [],
+    historyAt: -1,
+    editLabel: null,
   };
 }
 
@@ -115,19 +133,24 @@ export function reduceView(view: ViewState, env: ServerEnvelope<unknown>, now: n
       for (const [id, ms] of Object.entries(b.timings_ms ?? {})) {
         stages[id] = { ...(stages[id] ?? { id }), status: "ok", duration_ms: ms };
       }
+      // undo, redo or a pick from the history: the version it went back to is the one on screen now
+      const sp = payload<"build.snapshot">(env) as { reason?: string; restored_from?: number };
+      const back = sp.reason === "restore" ? (view.history ?? []).findIndex((h) => h.revision === sp.restored_from) : -1;
       return {
         ...view,
         stages,
         placeDone: view.placeDone || "place" in (b.timings_ms ?? {}) || b.status === "done",
+        historyAt: back >= 0 ? back : view.historyAt,
       };
     }
     case "stage.started": {
       const p = payload<"stage.started">(env);
       if (p.stage === "edit") {
+        const labelled = { ...view, editLabel: p.label ?? null };
         if (editMatches(view, env) && view.edit) {
-          return { ...view, edit: { ...view.edit, phase: "applying", label: p.label ?? view.edit.label } };
+          return { ...labelled, edit: { ...view.edit, phase: "applying", label: p.label ?? view.edit.label } };
         }
-        return view;
+        return labelled;
       }
       const prev = view.stages[p.stage] ?? { id: p.stage };
       return {
@@ -203,8 +226,9 @@ export function reduceView(view: ViewState, env: ServerEnvelope<unknown>, now: n
     }
     case "edit.applied": {
       const p = payload<"edit.applied">(env);
-      if (!view.edit || (p.msg_id !== view.edit.msg_id && p.edit_id !== view.edit.edit_id)) return view;
-      return { ...view, edit: { ...view.edit, phase: "applied", edit_id: p.edit_id, duration_ms: p.duration_ms } };
+      const versioned = addVersion(view, p.revision, view.editLabel ?? describeOps(p.ops));
+      if (!view.edit || (p.msg_id !== view.edit.msg_id && p.edit_id !== view.edit.edit_id)) return versioned;
+      return { ...versioned, edit: { ...view.edit, phase: "applied", edit_id: p.edit_id, duration_ms: p.duration_ms } };
     }
     case "edit.rejected": {
       const p = payload<"edit.rejected">(env);
@@ -223,5 +247,39 @@ export function reduceView(view: ViewState, env: ServerEnvelope<unknown>, now: n
     }
     default:
       return view;
+  }
+}
+
+/** A new version from an edit: anything past the one on screen (undone versions) is dropped first. */
+function addVersion(view: ViewState, revision: number, label: string): ViewState {
+  // the version before the first edit is the build as it came out (an edit is always one revision up)
+  const past = view.history ?? [];
+  const kept = past.length ? past.slice(0, (view.historyAt ?? past.length - 1) + 1) : [{ revision: revision - 1, label: "Built" }];
+  const history = [...kept, { revision, label }];
+  return { ...view, history, historyAt: history.length - 1, editLabel: null };
+}
+
+function describeOps(ops: EditOp[]): string {
+  const op = ops[0]?.op;
+  const n = ops.length > 1 ? ` (${ops.length})` : "";
+  switch (op) {
+    case "swap_part":
+      return `Swap${n}`;
+    case "remove_part":
+      return `Remove${n}`;
+    case "add_part":
+      return `Add${n}`;
+    case "recolor":
+      return "Recolour";
+    case "move":
+      return "Move";
+    case "resize":
+      return "Resize";
+    case "connect":
+      return "Connect";
+    case "disconnect":
+      return "Disconnect";
+    default:
+      return "Edit";
   }
 }

@@ -1,69 +1,55 @@
 """What a prompt typed over an open build asks for: a second device beside it, or a change to it.
 
-"add a mouse to the keyboard" names a thing and relates it to what is on screen. The language
-model reads it with the open build in view and decides: a device of its own (built on a new canvas
-next to the first, told what it pairs with), a change to the open device (the edit path), or a
-different device altogether. There is no word list here: the judgment is the model's.
+"add a mouse to the keyboard" names a thing and relates it to what is on screen. When that thing
+is something a build is made of (a speaker, an LED, a key matrix) it is a change to the build;
+otherwise it is a device of its own, built on a new canvas next to the first one.
 """
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
-from bara.live.ask import ask_json
+from bara.catalog import Catalog
+from bara.router import normalize
 
-SYSTEM = """You route one typed request made while a hardware device is open on screen.
-
-Decide what the request asks for:
-- "companion": a separate device that works alongside the open one (a mouse for a keyboard, a
-  dock for a console, a remote for a lamp). It is built as its own device and stands beside the
-  open one. Typical wording: add / make / connect / pair a <device> to or for the open device.
-- "modify": a change to the open device itself: a part, feature, size, layout or material of it
-  (add a speaker, more keys, a bigger screen, a different case colour).
-- "new": a wholly different device that has no relation to the open one.
-
-A thing that would sit INSIDE the open device's case is "modify". A thing with its own case, that
-a person holds or places on the desk next to the open device, is "companion".
-
-For "companion", write device_prompt: a complete build prompt for that new device alone, naming
-what it pairs with and how, e.g. "a wireless mouse that pairs over Bluetooth with a 75% keyboard,
-sized to sit beside it". Do not describe the open device's own parts. For "modify" and "new",
-device_prompt is the request unchanged."""
-
-SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {
-        "kind": {"type": "string", "enum": ["companion", "modify", "new"]},
-        "device": {"type": "string", "description": "short name of the new device, empty unless companion"},
-        "device_prompt": {"type": "string"},
-    },
-    "required": ["kind", "device", "device_prompt"],
-    "additionalProperties": False,
-}
+# "<verb> <thing> <link> <the build>", or "<thing> <link> <the build>"
+_VERB = r"(?:add|connect|pair|attach|hook up|plug in|plug|make|build|give|design|create)"
+_LINK = (
+    r"(?:to go with|that goes with|that pairs with|paired with|next to|beside|alongside"
+    r"|to|with|for)"
+)
+_REF = r"(?:the|this|my|it|that|our)"
+_RELATION = re.compile(
+    rf"^(?:{_VERB}\s+(?:me\s+)?)?(?:an?\s+|another\s+|matching\s+|some\s+)*"
+    rf"(?P<thing>[a-z0-9-]+(?:\s+[a-z0-9-]+){{0,3}}?)\s+(?P<link>{_LINK})\s+{_REF}\b"
+)
+# Links that put the thing beside the build, never inside it: "a trackball to go with it" is its own device.
+_BESIDE = {"to go with", "that goes with", "that pairs with", "paired with", "next to", "beside", "alongside"}
 
 
-async def classify(
-    prompt: str, has_build: bool, build_prompt: str = "", part_names: list[str] | None = None
-) -> dict[str, Any]:
-    """{"kind": "new" | "companion" | "modify", "thing": str | None, "prompt": str, "note": str}.
+def part_words(catalog: Catalog, function_words: dict[str, Any]) -> set[str]:
+    """Nouns that name what a build is made of: router function words and vocab labels."""
+    words = {w for k in function_words for w in k.split()}
+    for f in catalog.vocab.get("functions", []):
+        for text in (f.get("id", "").split(".")[-1].replace("_", " "), f.get("label", "")):
+            words |= {w for w in normalize(str(text)).split() if len(w) > 2}
+    return words
 
-    Without an open build, or when the model gives no usable answer, the request starts a build
-    as it stands ("new"); `note` says why."""
-    text = prompt.strip()
-    plain = {"kind": "new", "thing": None, "prompt": text, "note": ""}
+
+def classify(prompt: str, has_build: bool, parts: set[str]) -> dict[str, Any]:
+    """{"kind": "new" | "companion" | "modify", "thing": str | None, "prompt": str}."""
+    text = re.sub(r"\s+", " ", prompt.lower()).strip()
+    plain = re.sub(r"[^a-z0-9\s-]", " ", text)
+    plain = re.sub(r"\s+", " ", plain).strip()
     if not has_build:
-        return plain
-    parts = ", ".join((part_names or [])[:40])
-    question = (
-        f"Open device (its original prompt): {build_prompt.strip()[:400] or 'unknown'}\n"
-        f"Its parts: {parts or 'unknown'}\n\nRequest: {text[:600]}"
-    )
-    data, note = await ask_json(SYSTEM, question, SCHEMA, name="intent", fast=True, timeout_s=20.0, max_tokens=400, effort="low")
-    if not data or data.get("kind") not in ("companion", "modify", "new"):
-        return {**plain, "note": note}
-    kind = data["kind"]
-    device_prompt = str(data.get("device_prompt") or "").strip() or text
-    if kind == "companion":
-        thing = str(data.get("device") or "").strip() or None
-        return {"kind": "companion", "thing": thing, "prompt": device_prompt, "note": note}
-    return {"kind": kind, "thing": None, "prompt": text, "note": note}
+        return {"kind": "new", "thing": None, "prompt": prompt.strip()}
+    m = _RELATION.match(plain)
+    if not m:
+        return {"kind": "new", "thing": None, "prompt": prompt.strip()}
+    thing = m.group("thing").strip()
+    head = thing.split()[-1]
+    singular = head[:-1] if head.endswith("s") and len(head) > 3 else head
+    if (head in parts or singular in parts) and m.group("link") not in _BESIDE:
+        return {"kind": "modify", "thing": thing, "prompt": prompt.strip()}
+    return {"kind": "companion", "thing": thing, "prompt": f"a {thing}"}

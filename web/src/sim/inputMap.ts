@@ -252,7 +252,7 @@ const TYPING_MIN_KEYS = 8;
 export function deriveInputMap(build: Build | null): InputMap {
   const empty: InputMap = { mode: "pad", inputs: [], source: "position", displays: [] };
   if (!build) return empty;
-  const displays = build.parts.filter((p) => fn(p).startsWith("display.") && fn(p) !== "display.indicator_led").map((p) => p.instance_id);
+  const displays = build.parts.filter((p) => fn(p).startsWith("display.")).map((p) => p.instance_id);
   const keyRaws = collect(build, build.parts.filter(isKeyPart));
   const buttonRaws = collect(build, build.parts.filter(isButtonPart));
   if (!keyRaws.length && !buttonRaws.length) return { ...empty, displays };

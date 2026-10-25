@@ -1,8 +1,11 @@
 // The agent on stage. While a build runs, the bot leaves the prompt bar and
-// works the canvas: it glides beside whatever the build is touching and steers a
-// small cursor onto it, while the viewport outlines the part in 3D (agentFocus).
-// No 2D box: a flat square over the 3D scene read as something odd sitting there. When the build ends
-// and the queue is played out it flies home to the prompt bar.
+// works the canvas: it glides beside whatever the build is touching while the
+// viewport outlines the part in 3D (agentFocus), and its thought and speech
+// bubbles say what it is doing. One thing moves, one thing is lit: there is no
+// cursor of its own to follow as well. Picking is the bot's own gesture, a hop
+// toward the part with a ripple on it. No 2D box: a flat square over the 3D scene
+// read as something odd sitting there. When the build ends and the queue is played
+// out it flies home to the prompt bar.
 //
 // Other features ask it to do things through agentBus.ts (explain a part, act
 // out an ask, replays). Those requests play through the same queue and fly the
@@ -20,7 +23,7 @@ import { beatsFor, enqueue, paceFor } from "./director";
 import { speechFor } from "./mood";
 import { toggleTrace, useTrace } from "./traceState";
 import { canvasRect, partRect } from "../three/agentTargets";
-import { clamp, lerp, PRESETS, reducedMotion, Spring, type SpringCfg } from "./spring";
+import { clamp, lerp, PRESETS, reducedMotion, Spring, wander, type SpringCfg } from "./spring";
 import { narrate } from "../voice/voice";
 import "./agentStage.css";
 
@@ -45,10 +48,7 @@ const SPEECH_GAP_MS = 3000;
 const ALWAYS_SPEAK = new Set(["build.done", "build.failed", "clarify.request"]);
 
 // Slow, nearly critically damped glides: the bot drifts between major steps instead of darting.
-const FLOAT: SpringCfg = { stiffness: 32, damping: 11 }; // the bot: floaty, trails the cursor
-const STEER: SpringCfg = { stiffness: 70, damping: 16 }; // the cursor: gets there first
-/** The cursor's arrowhead: tip at (3, 3), wings out to the right and down, a notch at the back. */
-const ARROW = "M3 3 L17.2 8.9 L10.5 10.5 L8.9 17.2 Z";
+const FLOAT: SpringCfg = { stiffness: 32, damping: 11 }; // the bot: floaty, drifts between steps
 const FRAME: SpringCfg = { stiffness: 90, damping: 19 }; // the selection box
 
 type Phase = "home" | "out" | "returning";
@@ -175,7 +175,6 @@ function Stage() {
   const [phase, setPhase] = useState<Phase>("home");
   const traceOpen = useTrace((s) => s.open);
   const stage = useRef<HTMLDivElement>(null);
-  const cursorEl = useRef<HTMLDivElement>(null);
   const rippleEl = useRef<HTMLDivElement>(null);
   const botEl = useRef<HTMLDivElement>(null);
   const botBody = useRef<HTMLDivElement>(null);
@@ -293,17 +292,15 @@ function Stage() {
   useEffect(() => {
     const bx = new Spring(0, FLOAT);
     const by = new Spring(0, FLOAT);
-    const cx = new Spring(0, STEER);
-    const cy = new Spring(0, STEER);
     const box = { x: new Spring(0, FRAME), y: new Spring(0, FRAME), w: new Spring(0, FRAME), h: new Spring(0, FRAME) };
     const tilt = new Spring(0, PRESETS.smooth);
     const squash = new Spring(0, PRESETS.wobbly);
     const hop = new Spring(0, PRESETS.bouncy);
     const scale = new Spring(1, PRESETS.smooth);
-    const press = new Spring(1, PRESETS.wobbly);
-    const all = [bx, by, cx, cy, box.x, box.y, box.w, box.h, tilt, squash, hop, scale, press];
+    const all = [bx, by, box.x, box.y, box.w, box.h, tilt, squash, hop, scale];
 
     let cur: Beat | null = null;
+    const spot = { x: 0, y: 0 };
     let beatAt = 0;
     let boxShown = false;
     let pressed = false;
@@ -365,8 +362,6 @@ function Stage() {
       for (const [s, v] of [
         [bx, x],
         [by, y],
-        [cx, x + 10],
-        [cy, y + 8],
       ] as const) {
         s.value = s.target = v;
         s.velocity = 0;
@@ -454,23 +449,23 @@ function Stage() {
         box.w.target = x1 - x0;
         box.h.target = y1 - y0;
         if (!boxShown && b) {
-          // First box: start from a point at the cursor, so it grows out of it.
-          box.x.value = cx.value;
-          box.y.value = cy.value;
+          // First box: start from a point at the bot, so it grows out of it.
+          box.x.value = bx.value;
+          box.y.value = by.value;
           box.w.value = 0;
           box.h.value = 0;
           boxShown = true;
         }
-        // The cursor: into the box, riding the action.
+        // The spot it is working on, riding the action: where a pick ripples.
         let px = x0 + (x1 - x0) * 0.58;
         let py = y0 + (y1 - y0) * 0.52;
         if (b?.action === "scan") {
-          const ph = Math.min(1, t / 1.2);
+          const ph = (t / 1.2) % 1;
           px = x1 - Math.min(18, (x1 - x0) * 0.2);
           py = lerp(y0 + 4, y1 - 4, ph);
         } else if (b?.action === "trace" && trace.length) {
           const drawMs = Math.min(b.dwellMs * 0.7, 1400);
-          const [u, v] = along(trace, Math.min(1, (now - beatAt) / drawMs));
+          const [u, v] = along(trace, ((now - beatAt) / drawMs) % 1.6);
           px = x0 + ((x1 - x0) * u) / 100;
           py = y0 + ((y1 - y0) * v) / 100;
         } else if (b?.action === "type") {
@@ -481,11 +476,12 @@ function Stage() {
           px = x1 - 6;
           py = y0 + 6;
         }
-        cx.target = clamp(px, 4, W - 16);
-        cy.target = clamp(py, 4, H - 20);
+        spot.x = clamp(px, 4, W - 16);
+        spot.y = clamp(py, 4, H - 20);
         const p = perch({ x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, bx.value);
+        const bob = reduced ? 0 : 2.5 * wander(now / 900, 3);
         bx.target = p.x;
-        by.target = p.y;
+        by.target = p.y + bob;
         scale.target = 1;
       } else {
         // Flying home.
@@ -494,8 +490,6 @@ function Stage() {
         const hy = home ? home.y + home.h / 2 : window.innerHeight - 90;
         bx.target = hx;
         by.target = hy;
-        cx.target = hx;
-        cy.target = hy;
         scale.target = home ? home.w / BOT : 0.8;
         if (phaseRef.current === "returning" && (reduced || (Math.hypot(bx.value - hx, by.value - hy) < 3 && Math.hypot(bx.velocity, by.velocity) < 40))) {
           goHome();
@@ -503,13 +497,17 @@ function Stage() {
         }
       }
 
-      // Pick: press once the cursor has arrived.
-      if (b?.action === "pick" && !pressed && Math.hypot(cx.value - cx.target, cy.value - cy.target) < 4) {
+      // Pick: once the bot has settled beside the part, it hops toward it and the part ripples.
+      if (b?.action === "pick" && !pressed && target && Math.hypot(bx.value - bx.target, by.value - by.target) < 6) {
         pressed = true;
-        if (!reduced) press.impulse(-9);
+        if (!reduced) {
+          hop.impulse(-260);
+          squash.impulse(-5);
+          tilt.impulse(spot.x > bx.value ? 140 : -140);
+        }
         const rip = rippleEl.current;
         if (rip) {
-          rip.style.transform = `translate(${cx.value.toFixed(1)}px, ${cy.value.toFixed(1)}px)`;
+          rip.style.transform = `translate(${spot.x.toFixed(1)}px, ${spot.y.toFixed(1)}px)`;
           rip.classList.remove("on");
           void rip.offsetWidth; // restart the animation
           rip.classList.add("on");
@@ -550,12 +548,6 @@ function Stage() {
         bs.setProperty("--as-sx", (sx / scale.value).toFixed(3));
         bs.setProperty("--as-sy", (sy / scale.value).toFixed(3));
       }
-      if (cursorEl.current) {
-        // it tips a little into the way it is travelling, and settles back when it stops
-        const lean = clamp(cx.velocity * 0.012 - cy.velocity * 0.006, -14, 14);
-        cursorEl.current.style.transform = `translate(${cx.value.toFixed(1)}px, ${cy.value.toFixed(1)}px) rotate(${lean.toFixed(2)}deg) scale(${clamp(press.value, 0.6, 1.3).toFixed(3)})`;
-        cursorEl.current.dataset.on = phaseRef.current === "out" ? "1" : "0";
-      }
     };
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
@@ -565,20 +557,6 @@ function Stage() {
   return (
     <div ref={stage} className="agent-stage" data-on="0" aria-hidden="true">
       <div ref={rippleEl} className="as-ripple" data-bad={beat?.bad ? "1" : "0"} />
-      <div ref={cursorEl} className="as-cursor" data-on="0" data-bad={beat?.bad ? "1" : "0"}>
-        {/* A notched arrowhead: a rim in the page colour under a lit accent body; the tip is the element origin. */}
-        <svg viewBox="0 0 20 20" width="20" height="20">
-          <defs>
-            <linearGradient id="as-cur-g" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0" className="as-cur-lit" />
-              <stop offset="1" className="as-cur-deep" />
-            </linearGradient>
-          </defs>
-          <path className="as-cur-rim" d={ARROW} />
-          <path className="as-cur-body" d={ARROW} />
-          <path className="as-cur-shine" d="M5.2 5.2 L11.6 7.9" />
-        </svg>
-      </div>
       <div ref={botEl} className="as-bot" data-phase={phase} onClick={toggleTrace}>
         <div ref={botBody} className="as-bot-body">
           {phase !== "home" && <BaraBot size={BOT} bubbles say={say} typing={traceOpen} />}

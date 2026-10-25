@@ -80,7 +80,7 @@ export interface AppState {
   engineDetail: string | null;
   conn: ConnStatus;
   hello: ServerPayloads["hello"] | null;
-  screen: "home" | "drafts" | "workspace";
+  screen: "home" | "library" | "workspace";
   build: Build | null;
   view: ViewState;
   pendingStart: PendingStart | null;
@@ -126,6 +126,10 @@ export interface AppState {
   agentFocus: string | null;
   /** The bot has left the prompt bar and is working on the canvas. */
   agentOut: boolean;
+  /** Side panels over the canvas, closed until asked for: the parts list and the details. */
+  panels: { layers: boolean; details: boolean };
+  /** Bara's last short reply to something typed or said in the workspace, shown above the prompt. */
+  baraSays: { text: string; n: number } | null;
   /** Part under the pointer in the viewport (the bot explains it). */
   hoverPart: string | null;
   /** Exploded-view label under the pointer: its part is outlined (three/labels.tsx). */
@@ -178,6 +182,8 @@ export const useApp = create<AppState>(() => ({
   canvasRestoring: [],
   agentFocus: null,
   agentOut: false,
+  panels: { layers: false, details: false },
+  baraSays: null,
   hoverPart: null,
   hoverLabel: null,
   replaying: false,
@@ -215,16 +221,6 @@ export function focusPart(key: string | null): void {
   );
 }
 
-/**
- * A click on a part. In the exploded view a second click on the picked part puts it back; anywhere
- * else a click pulls the part out.
- */
-export function pickPart(key: string): void {
-  const s = useApp.getState();
-  if (s.explode > 0.5 && s.focusKey === key) focusPart(null);
-  else focusPart(key);
-}
-
 export function setView(preset: ViewPreset): void {
   // a new view is a new look at the whole build: put a focused part back first
   if (useApp.getState().focusKey) focusPart(null);
@@ -236,4 +232,9 @@ export function showToast(text: string): void {
   setTimeout(() => {
     if (useApp.getState().toast === text) useApp.setState({ toast: null });
   }, 4000);
+}
+
+/** Bara answers in one short line above the prompt; it fades on its own (SaysLine). */
+export function baraSay(text: string): void {
+  useApp.setState((s) => ({ baraSays: { text, n: (s.baraSays?.n ?? 0) + 1 } }));
 }

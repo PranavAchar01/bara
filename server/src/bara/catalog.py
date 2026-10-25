@@ -17,8 +17,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from bara import naming
-
 log = logging.getLogger(__name__)
 
 # Stream fixtures in the order their parts are added to the catalog.
@@ -210,9 +208,6 @@ def load_catalog(spec_dir: Path, catalog_dir: Path) -> Catalog:
     for part_id in overlay:
         if part_id not in cat.parts:
             log.warning("overlay part %s has no card in the fixtures; skipped", part_id)
-    # cards are what people see: generic names from the function; the records keep maker and MPN
-    for part_id, card in cat.cards.items():
-        naming.neutral(card, cat.parts.get(part_id))
 
     # Designs: full records from REST fixtures, then the overlay.
     full_design = body("design").get("design")

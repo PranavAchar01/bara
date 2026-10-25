@@ -26,7 +26,6 @@ import { readMode, readStoredKey, serverUrl, setAccessToken, setServer, socketUr
 import { discoverEngine } from "./engine";
 import { DefaultLoadingManager } from "three";
 import { RestClient, httpFetcher, stubFetcher, paths } from "./rest";
-import { linkWhenBuilt } from "../project/awaiting";
 import { loadFixtures } from "../spec/fixtures";
 
 let conn: Connection | null = null;
@@ -248,7 +247,7 @@ async function fetchBuild(buildId: string, prompt: string): Promise<{ build: Bui
   const lib = await rest.get<StoredBuild & { events: ServerEnvelope[] }>(paths.libraryBuild(buildId));
   if (lib.ok && Array.isArray(lib.body.events)) return { ...fold(lib.body.events, lib.body.prompt ?? prompt, lib.body.created_at ?? undefined), saved: true };
   const local = await loadEntry(buildId).catch(() => null);
-  if (local) return { build: local.build, view: { ...local.view, startAt: null, edit: null }, saved: true };
+  if (local) return { build: local.build, view: { ...emptyView(), ...local.view, startAt: null, edit: null }, saved: true };
   return null;
 }
 
@@ -312,16 +311,9 @@ export function isReady(): boolean {
 export async function routePrompt(prompt: string): Promise<void> {
   const s = useApp.getState();
   if (s.build?.status === "done" && !s.mode.mock) {
-    // The engine's language model reads the request with the open device in view: a second
-    // device beside it (told what it pairs with), a change to it, or something else entirely.
-    const res = await getRest().request<{ kind: string; prompt: string }>("POST", "/v1/intent", {
-      prompt,
-      has_build: true,
-      build_prompt: s.build.prompt,
-      part_names: s.build.parts.map((p) => p.label ?? p.card.display_name),
-    });
+    const res = await getRest().request<{ kind: string; prompt: string }>("POST", "/v1/intent", { prompt, has_build: true });
     if (res.ok && res.body.kind === "companion") {
-      linkWhenBuilt(addCompanionCanvas());
+      addCompanionCanvas();
       startBuild(res.body.prompt);
       return;
     }
@@ -347,12 +339,22 @@ export function startBuild(prompt: string): void {
  * carry on from the last event it sent. If the engine no longer has it (restarted), the saved copy
  * stays on screen to look at.
  */
+/** A build already open on a canvas: switch to it rather than load it again. */
+function showOpen(buildId: string): boolean {
+  if (!canvasOfBuild(useApp.getState(), buildId)) return false;
+  canvasForOpening(buildId);
+  useApp.setState({ screen: "workspace" });
+  return true;
+}
+
 export function openSaved(entry: { build: Build; view: ViewState }): void {
   const { build } = entry;
+  if (showOpen(build.build_id)) return;
   canvasForOpening(build.build_id);
   useApp.setState({
     build,
-    view: { ...entry.view, startAt: null, edit: null },
+    // a build saved by an older version of the app lacks newer view fields (history): fresh ones fill in
+    view: { ...emptyView(), ...entry.view, startAt: null, edit: null },
     screen: "workspace",
     selection: null,
     overlay: null,
@@ -416,6 +418,7 @@ export async function fetchLibrary(): Promise<StoredBuild[]> {
 
 /** Shows a stored build by feeding its recorded events through the same handler as a live socket. */
 export async function openLibraryBuild(buildId: string): Promise<boolean> {
+  if (showOpen(buildId)) return true;
   const res = await rest.get<StoredBuild & { events: ServerEnvelope[] }>(paths.libraryBuild(buildId));
   if (!res.ok) {
     showToast(res.error.message);
@@ -437,7 +440,23 @@ export async function openLibraryBuild(buildId: string): Promise<boolean> {
     dragPose: null,
   });
   for (const env of events) applyServerEnvelope(env);
+  // follow it from here on: the engine brings a stored build back to life, so edits, undo and
+  // history work on it like on one just built
+  const last = events.reduce((m, e) => Math.max(m, e.seq ?? 0), 0);
+  if (conn && last) {
+    conn.setCursor(buildId, last);
+    conn.send("build.resume", { build_id: buildId, last_seq: last });
+  }
   return true;
+}
+
+/** Put the open build back the way it was at an earlier version (undo, redo, history). */
+export async function restoreRevision(revision: number): Promise<boolean> {
+  const b = useApp.getState().build;
+  if (!b) return false;
+  const res = await rest.request<{ revision: number }>("POST", `/v1/builds/${encodeURIComponent(b.build_id)}/restore`, { revision });
+  if (!res.ok) showToast(res.error.message);
+  return res.ok;
 }
 
 export async function deleteLibraryBuild(buildId: string): Promise<boolean> {

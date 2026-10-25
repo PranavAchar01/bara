@@ -137,42 +137,18 @@ def best_match(keyword: str, rows: list[dict[str, Any]]) -> dict[str, Any] | Non
     return ranked[0] if ranked and score(ranked[0])[1] else None
 
 
-STOP_WORDS = {"the", "and", "for", "with", "module", "part", "type"}
-MIN_OVERLAP = 2 / 3
-
-
-def _words(text: str) -> set[str]:
-    return {w for w in re.findall(r"[a-z0-9.]+", text.lower().replace("-", "")) if len(w) >= 2}
-
-
-def overlap(keyword: str, row: dict[str, Any]) -> float:
-    """Share of the keyword's words found in the hit's own MPN, description and category."""
-    want = _words(keyword) - STOP_WORDS
-    if not want:
-        return 0.0
-    have = " ".join(str(row.get(k) or "") for k in ("mpn", "description", "category"))
-    text = have.lower().replace("-", "")
-    return sum(w in text for w in want) / len(want)
-
-
-def best_stocked(
-    rows: list[dict[str, Any]], function: str = "", keyword: str = ""
-) -> dict[str, Any] | None:
+def best_stocked(rows: list[dict[str, Any]], function: str = "") -> dict[str, Any] | None:
     """For a description rather than an MPN: the most relevant hit that is in stock, preferring a
     real manufacturer over a house part (the search returns them in relevance order). Words for
-    a panel or a cell also find its mating connector; only an interconnect block may take one.
-    When nothing in the hits is stocked, a hit that is plainly the described part (most of the
-    keyword's words in its own listing) still gives the build its real footprint and body."""
+    a panel or a cell also find its mating connector; only an interconnect block may take one."""
     connector_ok = function.split(".")[0] == "interconnect"
-    fits = [r for r in rows if connector_ok or "connector" not in r.get("category", "").lower()]
-    live = [r for r in fits if r["stock"] > 0]
+    live = [
+        r
+        for r in rows
+        if r["stock"] > 0 and (connector_ok or "connector" not in r.get("category", "").lower())
+    ]
     live.sort(key=lambda r: "jlcpcb" in r["brand"].lower())
-    if live:
-        return live[0]
-    if not keyword:
-        return None
-    ranked = sorted(fits, key=lambda r: -overlap(keyword, r))
-    return ranked[0] if ranked and overlap(keyword, ranked[0]) >= MIN_OVERLAP else None
+    return live[0] if live else None
 
 
 # --------------------------------------------------------------------------- record
@@ -448,7 +424,7 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         lcsc_id = hit["lcsc"]
     if args.keyword:
-        hit = best_stocked(search(args.keyword, 20), args.function, args.keyword)
+        hit = best_stocked(search(args.keyword, 20), args.function)
         if hit is None:
             sys.stderr.write(f"no stocked LCSC part for {args.keyword!r}\n")
             return 1

@@ -1,0 +1,513 @@
+/* Canvas-first workspace (App.tsx Workspace): the device fills the window under one strip of tabs and
+   tools; the prompt and the selection pill float at the bottom; the parts list and the details are paper
+   cards over the canvas, closed until asked for. Loaded after shell.css, so it overrides. */
+
+.workspace.canvas-first {
+  display: block;
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.canvas-first > .centre {
+  position: absolute;
+  inset: 0;
+  --tabs-h: 48px;
+}
+.canvas-first .centre-bottom {
+  bottom: 22px;
+}
+
+/* ---- the strip: Bara, the devices, the tools ---- */
+.canvas-first .canvas-tabs {
+  background: var(--paper);
+}
+.ct-home {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  border: 0;
+  border-right: 1px solid var(--line);
+  background: none;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 20px;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  flex: none;
+}
+.ct-conn {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ok);
+}
+.ct-conn.wait {
+  background: var(--warn, #c98a1b);
+}
+.ct-conn.off {
+  background: var(--fail);
+}
+.ct-spacer {
+  flex: 1;
+}
+.canvas-tabs .replay {
+  align-self: center;
+  margin-right: 6px;
+}
+.wt {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 10px 0 4px;
+  flex: none;
+}
+.wt-btn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+.wt-btn:hover:not(:disabled) {
+  background: var(--paper-3);
+  color: var(--ink);
+}
+.wt-btn.on {
+  background: var(--ink);
+  color: var(--paper);
+}
+.wt-btn:disabled {
+  opacity: 0.32;
+  cursor: default;
+}
+.wt-sep {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: var(--line);
+}
+.wt .btn.sm {
+  height: 32px;
+}
+.wt-history {
+  position: relative;
+  display: flex;
+  gap: 2px;
+}
+.wt-versions {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 30;
+  width: 260px;
+  max-height: 340px;
+  overflow: auto;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--paper);
+  box-shadow: var(--shadow-pop);
+}
+.wt-versions button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--ink);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.wt-versions button:hover:not(:disabled) {
+  background: var(--paper-2);
+}
+.wt-versions button:disabled {
+  cursor: default;
+}
+.wt-dot {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  border: 1.5px solid var(--ink-faint);
+}
+.wt-versions .now .wt-dot {
+  border-color: var(--ink);
+  background: var(--ink);
+}
+.wt-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wt-now {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+  color: var(--text-2);
+}
+
+/* ---- side panels: paper cards over the canvas ---- */
+.float-panel {
+  position: absolute;
+  top: calc(48px + 10px);
+  bottom: 12px;
+  z-index: 8;
+  width: 300px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--paper);
+  box-shadow: var(--shadow-pop);
+  animation: float-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.float-left {
+  left: 12px;
+  border-right: 1px solid var(--line);
+  padding: 0;
+}
+.float-right {
+  right: 12px;
+  width: 340px;
+  border-left: 1px solid var(--line);
+  --float-from: 14px;
+}
+.float-left {
+  --float-from: -14px;
+}
+@keyframes float-in {
+  from {
+    opacity: 0;
+    translate: var(--float-from, 0) 0;
+  }
+}
+/* the details card has its own close; its old toolbar (home, simulate, export) lives in the strip now */
+.float-right .panel-toolbar {
+  display: none;
+}
+.float-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.float-close:hover {
+  background: var(--paper-3);
+  color: var(--ink);
+}
+.float-right .tabs {
+  padding-right: 40px;
+}
+
+/* ---- the selection pill: Bara's ink, a name, a few actions ---- */
+.selection-bar {
+  position: relative;
+  align-self: center;
+  width: auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--paper);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.12),
+    0 14px 30px -14px rgb(0 0 0 / 0.5);
+  animation: sb-in 260ms cubic-bezier(0.34, 1.4, 0.64, 1) both;
+}
+@keyframes sb-in {
+  from {
+    opacity: 0;
+    translate: 0 8px;
+    scale: 0.96;
+  }
+}
+.sb-back,
+.sb-act {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--paper);
+  cursor: pointer;
+  transition: background 140ms ease;
+}
+.sb-back:hover,
+.sb-act:hover:not(:disabled) {
+  background: rgb(255 255 255 / 0.12);
+}
+.sb-act.on {
+  background: rgb(255 255 255 / 0.2);
+}
+.sb-act.danger {
+  background: var(--fail);
+}
+.sb-act:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.sb-name {
+  max-width: 240px;
+  padding: 0 6px 0 2px;
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-size: 16px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.sb-count {
+  margin-left: 6px;
+  font-size: 11px;
+  opacity: 0.65;
+}
+.sb-sep {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: rgb(255 255 255 / 0.2);
+}
+.sb-pop {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 10px);
+  z-index: 10;
+  min-width: 220px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: var(--shadow-pop);
+}
+.sb-menu {
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+}
+.sb-menu button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--ink);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.sb-menu button:hover {
+  background: var(--paper-2);
+}
+
+/* ---- Bara's one-line reply ---- */
+.says-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(520px, 100%);
+  padding: 6px 16px 6px 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--paper);
+  box-shadow: var(--shadow);
+  font-size: 14px;
+  animation: sb-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.says-eyes,
+.canvas-loading,
+.empty-eyes {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  border-radius: 999px;
+  background: var(--ink);
+}
+.says-eyes {
+  gap: 4px;
+  width: 34px;
+  height: 24px;
+}
+.says-eyes i,
+.canvas-loading i,
+.empty-eyes i {
+  border-radius: 999px;
+  background: var(--paper);
+}
+.says-eyes i {
+  width: 5px;
+  height: 8px;
+}
+
+/* ---- loading and empty: Bara waits in the middle ---- */
+.canvas-loading {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 4;
+  gap: 8px;
+  width: 64px;
+  height: 44px;
+  translate: -50% -50%;
+  animation: bara-wait 1.4s ease-in-out infinite;
+}
+.canvas-loading i {
+  width: 9px;
+  height: 13px;
+  animation: bara-blink 2.8s infinite;
+}
+@keyframes bara-wait {
+  50% {
+    translate: -50% calc(-50% - 5px);
+  }
+}
+@keyframes bara-blink {
+  0%,
+  90%,
+  100% {
+    scale: 1 1;
+  }
+  95% {
+    scale: 1 0.1;
+  }
+}
+.canvas-first .canvas-empty {
+  position: absolute;
+  inset: var(--tabs-h) 0 0;
+  display: grid;
+  place-items: center;
+  padding-bottom: 120px;
+}
+.canvas-first .canvas-empty-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+.empty-eyes {
+  gap: 12px;
+  width: 88px;
+  height: 62px;
+}
+.empty-eyes i {
+  width: 13px;
+  height: 19px;
+  animation: bara-blink 4.6s infinite;
+}
+.canvas-first .canvas-empty-inner h2 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(28px, 3vw, 40px);
+  letter-spacing: var(--track-display);
+}
+
+/* ---- the view options, folded into one button ---- */
+.vp-view-btn {
+  position: absolute;
+  right: 16px;
+  bottom: 22px;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+}
+.vp-view-btn:hover {
+  border-color: var(--ink-faint);
+}
+/* unfolded, it sits under the strip so it never meets the prompt */
+.canvas-first .vp-toolbar {
+  top: calc(var(--tabs-h) + 12px);
+  bottom: auto;
+}
+
+@media (max-width: 760px) {
+  .float-panel {
+    top: auto;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    width: auto;
+    max-height: 62vh;
+  }
+  .sb-name {
+    max-width: 110px;
+  }
+  .wt .btn.sm:not(.primary) {
+    display: none;
+  }
+  /* a phone keeps the strip to Bara, the devices and the tools that matter */
+  .canvas-tabs .replay,
+  .canvas-tabs .ct-add,
+  .wt-history .wt-btn[aria-label="Versions"] {
+    display: none;
+  }
+  .ct-home {
+    padding: 0 10px;
+  }
+  .ct-list {
+    flex: 1 1 auto;
+  }
+  .ct-tab {
+    min-width: 72px;
+  }
+  /* the prompt keeps its field: the Space hint and the voice toggle step out */
+  .canvas-first .promptbar.docked .talk-key kbd,
+  .canvas-first .promptbar.docked .voice-toggle {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .float-panel,
+  .selection-bar,
+  .says-line,
+  .canvas-loading,
+  .canvas-loading i,
+  .empty-eyes i {
+    animation: none;
+  }
+}
+
+/* the pill and Bara's line are as wide as what they say, not the prompt's width */
+.centre-bottom > .selection-bar,
+.centre-bottom > .says-line {
+  width: auto;
+}
