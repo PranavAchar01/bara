@@ -4,6 +4,7 @@ import { focusKeyOf } from "../three/Viewport3D";
 import { toggleTrace } from "../bot/traceState";
 import { ClarifyCard, DecisionTrace, ReuseCard, SpecCard, StageTimeline } from "./LeftColumn";
 import { ThoughtCard } from "../bot/ThoughtTrace";
+import { KicadChecks } from "./KicadChecks";
 import { PanelToolbar } from "./TopBar";
 import { applyEdit } from "../net/client";
 import { serverUrl } from "../net/mode";
@@ -263,6 +264,7 @@ export function ChecksPanel() {
           <div className="check-group">{rest.map(row)}</div>
         </details>
       )}
+      <KicadChecks />
     </Panel>
   );
 }

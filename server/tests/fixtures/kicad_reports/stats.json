@@ -1,0 +1,18 @@
+{
+  "metadata": {"generator": "KiCad 10.0.7", "project": "main", "board_name": "main"},
+  "board": {
+    "has_outline": true,
+    "width": "109.0000 mm",
+    "height": "153.0000 mm",
+    "area": "16610.503 mm²",
+    "front_copper_area": "321.179 mm²",
+    "back_copper_area": "427.153 mm²",
+    "min_track_clearance": "0.1516 mm",
+    "min_track_width": "0.1500 mm",
+    "min_drill_diameter": "0.3000 mm",
+    "board_thickness": "1.6000 mm"
+  },
+  "pads": {"through_hole": 61, "smd": 123, "connector": 0, "npth": 0, "castellated": 0, "press_fit": 0},
+  "vias": {"through": 53, "blind": 0, "buried": 0, "micro": 0},
+  "components": {"total": {"front": 19, "back": 1, "total": 20}}
+}

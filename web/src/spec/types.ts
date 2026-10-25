@@ -443,9 +443,59 @@ export interface Board {
   drc?: CheckStatus;
   /** KiCad's own evaluation: DRC counts, net integrity and the routing benchmark. */
   evaluation?: BoardEvaluation;
+  /** kicad-cli's own DRC (with schematic parity), ERC and board statistics on this board. */
+  kicad_checks?: KicadChecks;
+  /** seconds per board step: pcbnew, route, import, DRC, GLB, KiCad checks */
+  timings_s?: Record<string, number>;
   assets?: AssetRef[];
   status: BuildObjStatus;
   revision: number;
+}
+
+export interface KicadSection {
+  counts: Record<string, number>;
+  by_rule: Record<string, number>;
+  passed: boolean;
+  unconnected?: number;
+}
+export interface KicadViolation {
+  tool: Open<"drc" | "erc" | "parity">;
+  rule: string;
+  severity: string;
+  message: string;
+  refs: string[];
+  items?: string[];
+  instance_ids?: string[];
+  pos_mm?: Vec2;
+  note?: string;
+}
+export interface KicadStats {
+  width_mm?: number | null;
+  height_mm?: number | null;
+  area_mm2?: number | null;
+  copper_layers?: number;
+  copper_fill_pct?: number | null;
+  track_mm?: Record<string, number>;
+  track_total_mm?: number | null;
+  segments?: number | null;
+  vias?: number;
+  unrouted?: number;
+  components?: number;
+  pads?: number;
+  min_track_width_mm?: number | null;
+  min_clearance_mm?: number | null;
+}
+export interface KicadChecks {
+  status: Open<"ok" | "not_installed" | "failed">;
+  message?: string;
+  drc?: KicadSection;
+  erc?: KicadSection;
+  parity?: KicadSection;
+  stats?: KicadStats;
+  violations?: KicadViolation[];
+  total_violations?: number;
+  timings?: Record<string, number>;
+  kicad_version?: string | null;
 }
 
 export interface BoardEvaluation {

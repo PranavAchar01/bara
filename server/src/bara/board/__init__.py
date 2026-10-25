@@ -27,6 +27,7 @@ from bara.config import load_settings
 from bara.geometry import glbopt
 
 from . import kicad as K
+from . import kicad_checks as KC
 from . import registry as R
 from . import schematic as SCH
 from .layout import HALF_GAP_MM, BoardPlan, plan_boards, sensor_lens
@@ -805,6 +806,15 @@ def route_board(
         schematic = _schematic(
             plan, Path(res["kicad_pcb"]).parent, glb_root, res["key"], planned.get("title", "")
         )
+        # KiCad's own DRC (with schematic parity), ERC and board statistics, reported with the
+        # build; they never fail it (a missing kicad-cli reads "KiCad not installed").
+        report(f"{plan.name}: KiCad DRC, ERC and board statistics", None)
+        sch = Path(schematic["kicad_sch"]) if schematic.get("kicad_sch") else None
+        kicad_checks = KC.run_checks(Path(res["kicad_pcb"]), sch)
+        res["timings"] = {
+            **res["timings"],
+            "kicad_checks_s": (kicad_checks.get("timings") or {}).get("total_s", 0.0),
+        }
         drc = res["drc"]
         ok = drc["errors"] == 0 and drc["unconnected"] == 0
         glb_ref = _glb_ref(Path(res["glb_path"]), res["key"])
@@ -832,6 +842,8 @@ def route_board(
                 "router": f"freerouting {K.FREEROUTING_VERSION}",
             },
             "drc": "pass" if ok else "fail",
+            # seconds per board step (pcbnew, route, import, DRC, GLB, KiCad checks)
+            "timings_s": res["timings"],
             "assets": [glb_ref],
             "status": "ok" if ok else "failed",
             "revision": 0,
@@ -849,6 +861,7 @@ def route_board(
                 "timings": res["timings"],
                 "cache_hit": res["cache_hit"],
                 "schematic": schematic,
+                "kicad_checks": kicad_checks,
             }
         )
     main = boards[0]

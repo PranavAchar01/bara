@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any
 from shapely.geometry import Polygon
 
 from bara import bom as bom_mod
+from bara.board import kicad_checks as KC
 from bara.board.evaluate import evaluate as evaluate_board
 from bara.board.generic import board_footprint_mm
 from bara.live import adapters as A
@@ -526,9 +527,7 @@ class LiveRunner:
         opaque controls in one palette, dark-glass screen, real board and metal finishes),
         written as `finish` on parts, boards and the case and summarised on scene.finish."""
         st = self._stage(run, "render", "Choosing colours and materials")
-        msgs = finish_mod.events(
-            run.state, list(brief.get("colours") or []), brief.get("palette")
-        )
+        msgs = finish_mod.events(run.state, list(brief.get("colours") or []), brief.get("palette"))
         for msg_type, payload in msgs:
             st.emit(msg_type, payload)
         pal = ((run.state.get("scene") or {}).get("finish") or {}).get("palette_name", "")
@@ -1779,6 +1778,7 @@ class LiveRunner:
         board = routed
         id_map = self._instance_map(board, result)
         results = []
+        kicad_results: list[dict[str, Any]] = []
         seated_ids: set[str] = set()
         for entry in board["boards"]:
             spec_board = copy.deepcopy(entry["board"])
@@ -1801,6 +1801,13 @@ class LiveRunner:
                 entry.get("timings") or {},
             )
             spec_board["evaluation"] = evaluation["summary"]
+            kicad_checks = KC.attach_instances(
+                entry.get("kicad_checks") or {"status": "failed", "message": "not run"},
+                spec_board.get("footprints") or [],
+                {p["slot_id"]: p["instance_id"] for p in run.state["parts"] if p.get("slot_id")},
+                {**ROLE_SLOT, "switch": "switches"},
+            )
+            spec_board["kicad_checks"] = kicad_checks
             spec_board["revision"] = 1
             st.emit("board.updated", {"board": spec_board})
             seated = _seat_on_footprints(spec_board, run.state["parts"], seated_ids)
@@ -1849,7 +1856,10 @@ class LiveRunner:
                 }
             )
             results.extend(evaluation["checks"])
-        st.emit("check.result", {"results": results})
+            kicad_results.extend(KC.check_results(bid, kicad_checks))
+        st.emit("check.result", {"results": results + kicad_results})
+        # KiCad's ERC and parity report on the generated schematic; they inform, the
+        # stage's own DRC and routing checks decide it
         failed = any(r["status"] == "fail" for r in results)
         t = board.get("timings") or {}
         st.done(
