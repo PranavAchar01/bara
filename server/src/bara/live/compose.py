@@ -1247,6 +1247,7 @@ class Composer:
                 # nothing in the catalog is the named part, or none passes the filters: look
                 # further (KiCad, LCSC) before settling for the closest catalog part
                 had = len(self.extra.get(slot.slot_id, []))
+                before = ranked[idx]["part_id"] if idx is not None and idx < len(ranked) else None
                 await self.resolve_missing(slot, emit)
                 new = self.extra.get(slot.slot_id, [])[had:]
                 cands, ranked, applied = self.narrow(slot)
@@ -1256,6 +1257,8 @@ class Composer:
                 )
                 if hit is not None:
                     idx, reason = hit, f"No catalog part is a {slot.label.lower()}; looked further."
+                else:  # the list was narrowed again: the earlier index points into the old one
+                    idx = next((i for i, p in enumerate(ranked) if p["part_id"] == before), None)
                 method = "model_pick"
             if notes and method != "model_pick" and self.use_model:
                 emit(
