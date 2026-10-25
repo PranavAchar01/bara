@@ -613,15 +613,97 @@
   }
 }
 
-/* the terminal sits over the free area (left of the controls panel), centred there; the camera keeps the device below it */
+/* full screen play: the device has the canvas; the terminal of a keyboard is the right column, and
+   controls, console and checks are drawers behind the top bar */
 .app.sim-on .sim-terminal {
-  left: calc((100% - var(--play-w)) / 2);
-  width: min(640px, calc(100% - var(--play-w) - 48px));
-  height: 112px;
+  display: none;
+}
+.play-bar {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+.play-btn[aria-pressed="true"] {
+  border-color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+.play-live.paused {
+  background: var(--muted);
+  box-shadow: 0 0 0 4px var(--line);
+}
+.play-fps {
+  font-family: var(--font-mono);
+  color: var(--muted);
+}
+.play-legend {
+  position: absolute;
+  left: 16px;
+  right: calc(var(--play-w) + 16px);
+  bottom: 14px;
+  width: fit-content;
+  max-width: calc(100% - var(--play-w) - 32px);
+  margin: 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 16px;
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--paper) 92%, transparent);
+  font-size: 12px;
+  color: var(--ink-soft);
+  pointer-events: none;
+  animation: play-up 0.5s ease both;
+}
+.play-legend b {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--ink);
+  margin-right: 2px;
+}
+.play-paused {
+  position: absolute;
+  top: 56px;
+  left: 16px;
+  right: calc(var(--play-w) + 16px);
+  width: fit-content;
+  margin: 0 auto;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 12px;
+  pointer-events: none;
+}
+.play-term.log-only {
+  grid-template-columns: 1fr;
+}
+.play-dock .play-log {
+  max-height: 140px;
+}
+.play-typing .play-head {
+  border-bottom: 1px solid var(--line);
+}
+.play-typing-text {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 14px 16px;
+  overflow: auto;
+  font: 500 18px/1.45 var(--font-mono);
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--ink);
+}
+.play-typing-hint {
+  margin: 0;
+  padding: 10px 16px 14px;
+  border-top: 1px solid var(--line);
 }
 @media (max-width: 860px) {
-  .app.sim-on .sim-terminal {
-    left: 50%;
-    width: calc(100% - 32px);
+  .play-legend,
+  .play-paused {
+    right: 16px;
+    max-width: calc(100% - 32px);
   }
 }

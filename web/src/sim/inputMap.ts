@@ -39,6 +39,11 @@ export interface SimInput {
   pressKey: string;
   /** World position in mm, before any explode. */
   pos: V3;
+  /**
+   * Not a player control: reset, boot, power and mode buttons, and extra copies of a system
+   * button a part lists more than once. Kept for the engine, left off the playable overlay.
+   */
+  spare?: boolean;
 }
 
 export type SimMode = "typing" | "game" | "pad";
@@ -318,6 +323,32 @@ function nameKeys(raws: Raw[], content: string): Named[] {
 
 const TYPING_MIN_KEYS = 8;
 
+const NOT_PLAYED = new Set(["RESET", "BOOT", "POWER", "MODE"]);
+
+/**
+ * Flags the system buttons a player never presses (reset, boot, power, mode) and the extra copies
+ * of a name: of several SELECTs, the one nearest the other controls stays playable.
+ */
+export function markSpares(inputs: SimInput[]): void {
+  const played = inputs.filter((i) => i.role !== "system");
+  const [cx, cy] = centroid(played.length ? played.map((i) => i.pos) : inputs.map((i) => i.pos));
+  const byName = new Map<string, SimInput[]>();
+  for (const i of inputs) {
+    if (i.role !== "system") continue;
+    if (NOT_PLAYED.has(i.name)) {
+      i.spare = true;
+      continue;
+    }
+    byName.set(i.name, [...(byName.get(i.name) ?? []), i]);
+  }
+  for (const same of byName.values()) {
+    if (same.length < 2) continue;
+    const dist = (i: SimInput) => Math.hypot(i.pos[0] - cx, i.pos[1] - cy);
+    const keep = same.reduce((a, b) => (dist(b) < dist(a) ? b : a));
+    for (const i of same) if (i !== keep) i.spare = true;
+  }
+}
+
 /** The build's input map; empty inputs when it has no key or button parts. */
 export function deriveInputMap(build: Build | null): InputMap {
   const empty: InputMap = { mode: "pad", inputs: [], source: "position", displays: [] };
@@ -343,6 +374,7 @@ export function deriveInputMap(build: Build | null): InputMap {
     pressKey: pressKeyOf(n.raw.part, n.raw.poseIndex, n.raw.element),
     pos: n.raw.pos,
   }));
+  markSpares(inputs);
   const typing = !!content && keyRaws.length >= TYPING_MIN_KEYS;
   const mode: SimMode = typing ? "typing" : displays.length ? "game" : "pad";
   return { mode, inputs, source: content && keyRaws.length ? "keymap" : "position", displays };

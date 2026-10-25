@@ -152,6 +152,23 @@
   color: #e8edf5;
   user-select: none;
 }
+.sim-key-legend {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  color: #f7f8fa;
+  /* a dark outline keeps the legend readable on light and dark caps alike */
+  text-shadow:
+    0 0 2px rgba(10, 12, 16, 0.9),
+    0 0 1px rgba(10, 12, 16, 0.9);
+  user-select: none;
+  white-space: nowrap;
+}
+.sim-key-legend.down {
+  color: #8fc0ff;
+}
 .sim-hint {
   color: var(--muted);
   padding: 0 6px;

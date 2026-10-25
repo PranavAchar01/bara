@@ -132,6 +132,9 @@ function drawRemote(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, r:
     img.data.set([c[0], c[1], c[2], 255], i * 4);
   }
   pctx.putImageData(img, 0, 0);
+  // the panel's off pixels fill the whole face, so the picture reads as the screen itself, not a box on it
+  ctx.fillStyle = shades[0];
+  ctx.fillRect(0, 0, W, H);
   const k = Math.min(W / w, H / h);
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(paint, (W - w * k) / 2, (H - h * k) / 2, w * k, h * k);

@@ -312,6 +312,8 @@ interface DockProps {
   tones: number;
   /** Another device's output in the same combined device (CombinedDisplay). */
   children?: ReactNode;
+  /** Shown as the console drawer: the serial log stays even when the device has nothing else to show. */
+  always?: boolean;
 }
 
 /** The device's outputs, each shown the way the surface spec says: lights, a speaker, a motor, text. */
@@ -325,7 +327,7 @@ export function OutputsDock(p: DockProps) {
   const motors = p.surface.outputs.filter((o) => o.show === "motor");
   const consoles = p.surface.outputs.some((o) => o.show === "console");
   const hasOutputs = lights.length + buzzers.length + motors.length > 0;
-  if (!hasOutputs && !consoles && !p.typed && !p.children) return null;
+  if (!hasOutputs && !consoles && !p.typed && !p.children && !p.always) return null;
   return (
     <section className="play-dock" aria-label="Outputs">
       {hasOutputs && (
@@ -360,7 +362,7 @@ export function OutputsDock(p: DockProps) {
         </div>
       )}
       {p.children}
-      {(consoles || p.typed) && <Terminal lines={p.lines} typed={p.typed} powered={!!p.snap?.powered} />}
+      {(consoles || p.typed || p.always) && <Terminal lines={p.lines} typed={p.typed} powered={!!p.snap?.powered} />}
     </section>
   );
 }
@@ -372,14 +374,16 @@ function Terminal(props: { lines: { key: number; text: string; tone: string }[];
     if (el) el.scrollTop = el.scrollHeight;
   }, [props.lines]);
   return (
-    <div className="play-term">
-      <div className="play-typed" aria-label="What the device typed">
-        <span className="play-muted small">typed</span>
-        <pre>
-          {props.typed}
-          <span className="play-caret" aria-hidden />
-        </pre>
-      </div>
+    <div className={`play-term ${props.typed ? "" : "log-only"}`}>
+      {props.typed && (
+        <div className="play-typed" aria-label="What the device typed">
+          <span className="play-muted small">typed</span>
+          <pre>
+            {props.typed}
+            <span className="play-caret" aria-hidden />
+          </pre>
+        </div>
+      )}
       <div ref={ref} className="play-log" role="log" aria-live="polite">
         {props.lines.length === 0 && <div className="play-muted">{props.powered ? "Operate the device." : "The device is off."}</div>}
         {props.lines.slice(-60).map((l) => (
@@ -392,13 +396,14 @@ function Terminal(props: { lines: { key: number; text: string; tone: string }[];
   );
 }
 
-/** A short beep through WebAudio each time the firmware drives its buzzer. */
-export function useBuzzer(tones: number): void {
+/** A short beep through WebAudio each time the firmware drives its buzzer, unless the sound is off. */
+export function useBuzzer(tones: number, muted = false): void {
   const ctx = useRef<AudioContext | null>(null);
   const seen = useRef(tones);
   useEffect(() => {
     if (tones === seen.current) return;
     seen.current = tones;
+    if (muted) return;
     try {
       const Ctor = window.AudioContext;
       ctx.current ??= new Ctor();
@@ -415,7 +420,7 @@ export function useBuzzer(tones: number): void {
     } catch {
       // no audio output on this machine: the buzzer still shows as lit
     }
-  }, [tones]);
+  }, [tones, muted]);
 }
 
 export function toneCount(events: SimEvent[]): number {

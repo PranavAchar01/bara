@@ -12,7 +12,8 @@ import { elementPoses } from "../three/layout";
 import type { Build } from "../spec/types";
 import { serverUrl } from "../net/mode";
 import { setActiveMachine, type DemoMachine } from "./api";
-import { deriveInputMap } from "./inputMap";
+import { deriveInputMap, type InputMap } from "./inputMap";
+import { controlLegend } from "./physical";
 import { closeSimPanel } from "./simPanelStore";
 import { enterBridge, showRemote, simHooks, useSim } from "./simStore";
 import { hotspotSlots } from "./SimHotspots";
@@ -26,14 +27,31 @@ import "./sim.css";
 import "./simulator.css";
 import "./play.css";
 
+/** A device that draws no pixels steps five times a second; one that does steps every animation frame. */
 const TICK_MS = 200;
-const FAST_TICK_MS = 90;
+/** Longest stretch of device time one frame may run (a background tab comes back without a jump). */
+const MAX_FRAME_MS = 100;
+/** The panel and dock re-render this often at most while frames stream in; the screen itself redraws every frame. */
+const SNAP_MS = 100;
 const MAX_LINES = 400;
 
 const FIRMWARE_GROUPS = new Set(["firmware", "emulation", "pinmap"]);
 const CHECK_KEY = 1_000_000_000;
 type Line = { key: number; text: string; tone: "out" | "in" | "hid" | "sys" };
 type Act = (id: string, a: InputAction, v?: number | boolean) => void;
+/** What the screen is laid out for: a handheld to play, a keyboard to type on, or any other device. */
+type Kind = "game" | "typing" | "pad";
+
+function kindOf(map: InputMap): Kind {
+  if (map.inputs.some((i) => i.role === "key")) return "typing";
+  return map.mode === "game" || map.inputs.some((i) => i.role === "dpad") ? "game" : "pad";
+}
+
+/** Right column width for this layout, in px: what the viewport leaves free for the device. */
+function rightColumn(kind: Kind, controls: boolean): number {
+  if (kind === "typing") return 400;
+  return controls ? 340 : 0;
+}
 
 export function SimView() {
   const build = useApp((s) => s.build);
@@ -97,6 +115,14 @@ function Simulator(props: { build: Build }) {
   const [lines, setLines] = useState<Line[]>([]);
   const [typed, setTyped] = useState("");
   const [tones, setTones] = useState(0);
+  const kind = useMemo(() => kindOf(map), [map]);
+  const [paused, setPaused] = useState(false);
+  const [muted, setMuted] = useState(true);
+  const [consoleOpen, setConsoleOpen] = useState(false);
+  const [controls, setControls] = useState(kind === "pad");
+  const [fps, setFps] = useState(0);
+  const lastSnap = useRef(0);
+  useRightColumn(rightColumn(kind, controls));
   const seq = useRef(0);
   const inflight = useRef(false);
   const chain = useRef<Promise<unknown>>(Promise.resolve());
@@ -121,7 +147,12 @@ function Simulator(props: { build: Build }) {
     }
     const fresh: SimEvent[] = s.events.filter((e) => e.seq > seq.current);
     seq.current = Math.max(seq.current, s.seq);
-    setSnap(s);
+    // every frame reaches the display face; the panels hear about it at most ten times a second
+    const now = performance.now();
+    if (reset || fresh.length || now - lastSnap.current > SNAP_MS) {
+      lastSnap.current = now;
+      setSnap(s);
+    }
     const beeps = toneCount(fresh);
     if (beeps) setTones((n) => n + beeps);
     showRemote({ powered: s.powered, bootloader: !!s.bootloader, fb: s.fb ?? null, rows: s.screen });
@@ -213,23 +244,40 @@ function Simulator(props: { build: Build }) {
     [id, call],
   );
 
-  // the device runs in real time while the screen is open; faster when it draws pixels
-  const running = !!data?.snapshot && !busy;
+  // the device runs in real time while the screen is open: one engine step per animation frame when
+  // it draws pixels (a step takes a couple of ms), five a second when it does not. One step is in
+  // flight at a time, so a press sent between frames reaches the firmware before the next frame.
+  const running = !!data?.snapshot && !busy && !paused;
   const fast = !!snap?.fb;
   useEffect(() => {
     if (!running) return;
     let last = performance.now();
-    const t = window.setInterval(() => {
-      if (inflight.current) return;
+    let raf = 0;
+    let frames = 0;
+    let since = last;
+    const frame = () => {
+      raf = requestAnimationFrame(frame);
       const now = performance.now();
-      const ms = Math.min(600, now - last);
+      if (now - since >= 1000) {
+        setFps(Math.round((frames * 1000) / (now - since)));
+        frames = 0;
+        since = now;
+      }
+      if (inflight.current) return;
+      const ms = now - last;
+      if (!fast && ms < TICK_MS) return;
       last = now;
       inflight.current = true;
-      call(() => sim.run(id, ms, seq.current), true).finally(() => {
+      call(() => sim.run(id, Math.min(fast ? MAX_FRAME_MS : 600, ms), seq.current), true).finally(() => {
         inflight.current = false;
+        frames++;
       });
-    }, fast ? FAST_TICK_MS : TICK_MS);
-    return () => window.clearInterval(t);
+    };
+    raf = requestAnimationFrame(frame);
+    return () => {
+      cancelAnimationFrame(raf);
+      setFps(0);
+    };
   }, [id, running, fast, call]);
 
   // a click on the 3D model, or a real key, reaches the firmware through here
@@ -300,7 +348,7 @@ function Simulator(props: { build: Build }) {
       if (c.kind === "sensor" && v !== undefined && v !== c.default) act(c.input_id, "sensor", v);
     }
   }, [data, surface, id, act]);
-  useBuzzer(tones);
+  useBuzzer(tones, muted);
 
   const ask = useCallback(
     async (text: string): Promise<string> => {
@@ -322,20 +370,40 @@ function Simulator(props: { build: Build }) {
     [id, adopt, surface, setLayout, act],
   );
   const [checks, setChecks] = useState(false);
-  const rows = surface && layout ? resolveRows(surface, layout) : [];
+  const rows = surface && layout ? playableRows(resolveRows(surface, layout), map) : [];
+  const legend = kind === "game" ? controlLegend(map.inputs) : [];
   const fw = data?.firmware;
   const mode = fw?.mode === "emulated" ? `Firmware running on an emulated ${fw.board.label}` : fw?.mode === "host" ? `Firmware running in the host harness (no emulator for ${fw.board.label})` : "Not running";
   return (
     <div className="play" role="dialog" aria-label="Simulation">
       <header className="play-bar">
-        <span className="play-live" aria-hidden />
-        <strong>Simulation</strong>
+        <span className={`play-live ${paused ? "paused" : ""}`} aria-hidden />
+        <strong>{kind === "game" ? "Game mode" : kind === "typing" ? "Keyboard mode" : "Simulation"}</strong>
         {plan && (
           <span className="play-testing" title={plan.testing}>
             {plan.testing}
           </span>
         )}
+        {fast && running && <span className="play-fps small">{fps} fps</span>}
         <span className="spacer" />
+        <button type="button" className="play-btn" disabled={!data?.snapshot || !!busy} aria-pressed={paused} onClick={() => setPaused((v) => !v)} title="Stop or start the device's clock">
+          {paused ? "Resume" : "Pause"}
+        </button>
+        <button type="button" className="play-btn" disabled={!data || !!busy} onClick={reset} title="Load the firmware again and reboot the device">
+          Reset
+        </button>
+        <button type="button" className="play-btn" aria-pressed={!muted} onClick={() => setMuted((v) => !v)} title="Play the buzzer's beeps through the speakers">
+          {muted ? "Sound off" : "Sound on"}
+        </button>
+        <button type="button" className="play-btn" aria-pressed={consoleOpen} onClick={() => setConsoleOpen((v) => !v)} title="Serial output, lights and the firmware check">
+          Console
+        </button>
+        <button type="button" className="play-btn" aria-pressed={controls} onClick={() => setControls((v) => !v)} title="Every input and sensor, with Arrange and Ask">
+          Controls
+        </button>
+        <button type="button" className="play-btn" aria-pressed={checks} onClick={() => setChecks((v) => !v)} title="Tests, firmware, signals and the build agent">
+          Checks
+        </button>
         <button type="button" className="play-btn primary" onClick={closeSimPanel} title="Back to the build (Esc)">
           Back <kbd>Esc</kbd>
         </button>
@@ -355,23 +423,43 @@ function Simulator(props: { build: Build }) {
         </div>
       ) : (
         <>
-          <PlayPanel
-            title={data.io.device.name ?? "Device"}
-            mode={mode}
-            surface={surface}
-            rows={rows}
-            layout={layout}
-            setLayout={setLayout}
-            snap={snap}
-            act={act}
-            busy={!!busy}
-            onReset={reset}
-            onChecks={() => setChecks((v) => !v)}
-            onAsk={ask}
-          />
-          <OutputsDock surface={surface} snap={snap} typed={typed} lines={lines} tones={tones}>
-            {plan && <CombinedDisplay plan={plan} screen={combo} powered={!!snap?.powered} />}
-          </OutputsDock>
+          {controls ? (
+            <PlayPanel
+              title={data.io.device.name ?? "Device"}
+              mode={mode}
+              surface={surface}
+              rows={rows}
+              layout={layout}
+              setLayout={setLayout}
+              snap={snap}
+              act={act}
+              busy={!!busy}
+              onReset={reset}
+              onChecks={() => setChecks((v) => !v)}
+              onAsk={ask}
+            />
+          ) : (
+            kind === "typing" && <TypingPanel typed={typed} powered={!!snap?.powered} paused={paused} />
+          )}
+          {legend.length > 0 && !consoleOpen && (
+            <aside className="play-legend" aria-label="Keyboard controls">
+              {legend.map((r) => (
+                <span key={r.control}>
+                  <b>{r.control}</b> {r.keys}
+                </span>
+              ))}
+            </aside>
+          )}
+          {paused && (
+            <div className="play-paused" role="status">
+              Paused
+            </div>
+          )}
+          {consoleOpen && (
+            <OutputsDock surface={surface} snap={snap} typed={kind === "typing" ? "" : typed} lines={lines} tones={tones} always>
+              {plan && <CombinedDisplay plan={plan} screen={combo} powered={!!snap?.powered} />}
+            </OutputsDock>
+          )}
           {checks && (
             <div className="play-checks sx">
               <button type="button" className="play-btn play-checks-x" onClick={() => setChecks(false)}>
@@ -383,6 +471,61 @@ function Simulator(props: { build: Build }) {
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * The panel lists what a player presses: reset and boot style buttons the board carries are left
+ * to the Reset and Boot chips, and a control listed twice under one name shows once.
+ */
+function playableRows<T extends { input_id: string; label: string; control?: string }>(rows: T[], map: InputMap): T[] {
+  const spare = new Set(map.inputs.filter((i) => i.spare).map((i) => `${i.instanceId}#${i.index}`));
+  const seen = new Set<string>();
+  return rows.filter((r) => {
+    if (spare.has(r.input_id)) return false;
+    if (r.control !== "button" && r.control !== "key") return true;
+    const name = r.label.trim().toLowerCase();
+    if (seen.has(name)) return false;
+    seen.add(name);
+    return true;
+  });
+}
+
+/** Reserve the right column of the workspace for this layout, and give it back on the way out. */
+function useRightColumn(px: number): void {
+  useEffect(() => {
+    const root = document.documentElement.style;
+    // a phone keeps its bottom sheet (play.css): the column is a desktop layout
+    if (window.innerWidth <= 860) return;
+    root.setProperty("--play-w", `${px}px`);
+    return () => {
+      root.removeProperty("--play-w");
+    };
+  }, [px]);
+}
+
+/** Keyboard mode's terminal: what the firmware typed over USB, as a computer would show it. */
+function TypingPanel(props: { typed: string; powered: boolean; paused: boolean }) {
+  const ref = useRef<HTMLPreElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [props.typed]);
+  return (
+    <aside className="play-panel play-typing" aria-label="Terminal">
+      <header className="play-head">
+        <div>
+          <strong className="play-title">Terminal</strong>
+          <div className="play-sub small">{props.powered ? (props.paused ? "Paused" : "What the keyboard types over USB") : "The device is off"}</div>
+        </div>
+      </header>
+      <pre ref={ref} className="play-typing-text" role="log" aria-live="polite" data-typed={props.typed}>
+        <span className="play-muted">$ </span>
+        {props.typed}
+        <span className="play-caret" aria-hidden />
+      </pre>
+      <p className="small play-muted play-typing-hint">Click a key on the keyboard, or type on your own.</p>
+    </aside>
   );
 }
 

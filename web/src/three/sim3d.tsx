@@ -24,6 +24,25 @@ export interface InputHandlers {
 }
 
 const mouseHeld = new Set<string>();
+/**
+ * Modifiers clicked with the mouse stay down until the next key is clicked, as on a phone's
+ * keyboard: click Shift, then K, and the firmware sends a capital K. A second click lets one go.
+ */
+const latched = new Set<string>();
+const MODIFIER = /^[LR](SHFT|CTRL|ALT|GUI)$/;
+
+function isModifier(input: SimInput): boolean {
+  return !!input.code && MODIFIER.test(input.code);
+}
+
+function releaseLatched(): void {
+  const { byId } = useSim.getState();
+  for (const id of latched) {
+    const input = byId.get(id);
+    if (input) releaseInput(input);
+  }
+  latched.clear();
+}
 /** A press waits this long for a drag to show itself before the key goes down (a tap goes down on release). */
 const PRESS_HOLD_MS = 70;
 let pending: { input: SimInput; x: number; y: number; timer: number } | null = null;
@@ -93,7 +112,14 @@ export function inputHandlers(
       if (!input) return;
       e.stopPropagation();
       if (pending?.input.id === input.id) commit();
-      if (mouseHeld.delete(input.id)) releaseInput(input);
+      if (mouseHeld.delete(input.id)) {
+        if (isModifier(input) && !latched.has(input.id)) latched.add(input.id);
+        else {
+          latched.delete(input.id);
+          releaseInput(input);
+          if (!isModifier(input)) releaseLatched();
+        }
+      }
       if (!mouseHeld.size && !pending) stopDragWatch();
     },
     onPointerOver: (e) => {
@@ -137,6 +163,7 @@ export function SimDriver() {
     const id = window.setInterval(() => invalidate(), 250);
     return () => {
       window.clearInterval(id);
+      latched.clear();
       clearCaps();
       invalidate();
     };
@@ -216,9 +243,53 @@ function ProxyCap(props: {
         zIndexRange={[20, 0]}
         style={{ pointerEvents: "none" }}
       >
-        <span className="sim-cap-label">{capLabel(input.name)}</span>
+        <span className={input.role === "key" ? "sim-key-legend" : "sim-cap-label"} data-sim-legend={input.name}>
+          {input.role === "key" ? input.name.slice(0, 4) : capLabel(input.name)}
+        </span>
       </Html>
     </group>
+  );
+}
+
+/** A key's printed legend, on top of its cap and moving down with it. */
+function KeyLegend(props: { input: SimInput }) {
+  const { input } = props;
+  const group = useRef<THREE.Group>(null);
+  const box = useMemo(() => new THREE.Box3(), []);
+  useFrame(() => {
+    const g = group.current;
+    if (!g) return;
+    const b = partWorldBox(input.instanceId, box);
+    g.visible = !!b;
+    if (!b) return;
+    const depth = caps.depth.get(input.pressKey) ?? 0;
+    g.position.set(input.pos[0], input.pos[1], b.max.z + 0.2 - depth);
+  });
+  const down = useSim((s) => !!s.runtime?.held.has(input.id));
+  return (
+    <group ref={group}>
+      <Html center zIndexRange={[20, 0]} style={{ pointerEvents: "none" }}>
+        <span className={`sim-key-legend ${down ? "down" : ""}`} data-sim-legend={input.name}>
+          {input.name.length > 4 ? input.name.slice(0, 4) : input.name}
+        </span>
+      </Html>
+    </group>
+  );
+}
+
+/** Legends on a keyboard's keys, so every key can be found and clicked. */
+export function SimKeyLegends(props: { covered: Set<string> }) {
+  const active = useSim((s) => s.active);
+  const map = useSim((s) => s.map);
+  // keys the board model draws get a cap of their own, which carries the label
+  const keys = useMemo(() => (map?.inputs ?? []).filter((i) => i.role === "key" && !props.covered.has(i.instanceId)), [map, props.covered]);
+  if (!active || !keys.length) return null;
+  return (
+    <>
+      {keys.map((k) => (
+        <KeyLegend key={k.id} input={k} />
+      ))}
+    </>
   );
 }
 
@@ -233,7 +304,7 @@ export function SimCaps(props: { covered: Set<string> }) {
   const top = useRef(0);
   const invalidate = useThree((s) => s.invalidate);
   const proxies = useMemo(
-    () => (map?.inputs ?? []).filter((i) => props.covered.has(i.instanceId)),
+    () => (map?.inputs ?? []).filter((i) => props.covered.has(i.instanceId) && !i.spare),
     [map, props.covered],
   );
   useFrame(() => {
@@ -279,28 +350,24 @@ export function SimScreens() {
   );
 }
 
+/** Canvas pixels for a picture of this many mm: the long side near 480 px, steps of 8 so a resize is rare. */
+function canvasSize(w: number, h: number): [number, number] {
+  const k = 480 / Math.max(w, h, 1e-3);
+  return [Math.max(8, Math.round((w * k) / 8) * 8), Math.max(8, Math.round((h * k) / 8) * 8)];
+}
+
 function ScreenPlane(props: { instanceId: string }) {
   const spec = useSim((s) => s.screen);
   const group = useRef<THREE.Group>(null);
   const mesh = useRef<THREE.Mesh>(null);
+  const mat = useRef<THREE.MeshBasicMaterial>(null);
   const bezel = useRef<THREE.Mesh>(null);
   const turned = useRef<THREE.Group>(null);
   const drawn = useRef(-1);
   const box = useMemo(() => new THREE.Box3(), []);
-  const scale = spec ? Math.max(1, Math.round(320 / spec.w)) : 1;
-  const canvas = useMemo(() => {
-    const c = document.createElement("canvas");
-    c.width = (spec?.w ?? 160) * scale;
-    c.height = (spec?.h ?? 120) * scale;
-    return c;
-  }, [spec, scale]);
-  const texture = useMemo(() => {
-    const t = new THREE.CanvasTexture(canvas);
-    t.colorSpace = THREE.SRGBColorSpace;
-    t.minFilter = THREE.LinearFilter;
-    return t;
-  }, [canvas]);
-  useEffect(() => () => texture.dispose(), [texture]);
+  // the canvas follows the picture's shape, so the firmware's frame fills the whole face
+  const surface = useRef<{ canvas: HTMLCanvasElement; texture: THREE.CanvasTexture } | null>(null);
+  useEffect(() => () => surface.current?.texture.dispose(), []);
   const invalidate = useThree((s) => s.invalidate);
   useFrame(() => {
     const { runtime } = useSim.getState();
@@ -312,9 +379,10 @@ function ScreenPlane(props: { instanceId: string }) {
     const flat: [number, number] = [b.max.x - b.min.x, b.max.y - b.min.y];
     let face = flat;
     let angle = 0;
-    if (useSim.getState().view.up) {
+    const handheld = !!useSim.getState().view.up;
+    if (handheld) {
       // a handheld: the picture stands upright for the person, its top toward the screen's top,
-      // never mirrored, fitted inside the panel as measured across and up that view
+      // never mirrored, and covers the panel's whole face as measured across and up that view
       const [ux, uy] = screenFrame.up();
       if (Math.abs(ux) > Math.abs(uy)) face = [flat[1], flat[0]];
       angle = Math.atan2(-ux, uy);
@@ -323,24 +391,41 @@ function ScreenPlane(props: { instanceId: string }) {
       face = [flat[1], flat[0]];
       angle = Math.PI / 2;
     }
-    const [w, h] = screenSizeMm(spec, face);
+    const [w, h] = handheld ? [face[0] * 0.97, face[1] * 0.97] : screenSizeMm(spec, face);
+    const [cw, ch] = canvasSize(w, h);
+    let cur = surface.current;
+    if (!cur || cur.canvas.width !== cw || cur.canvas.height !== ch) {
+      cur?.texture.dispose();
+      const canvas = document.createElement("canvas");
+      canvas.width = cw;
+      canvas.height = ch;
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.minFilter = THREE.LinearFilter;
+      cur = surface.current = { canvas, texture };
+      if (mat.current) {
+        mat.current.map = texture;
+        mat.current.needsUpdate = true;
+      }
+      drawn.current = -1;
+    }
     if (turned.current) turned.current.rotation.z = angle;
     const top = caseTop();
     const z = Math.max(b.max.z, top ?? -Infinity) + 0.2;
     g.position.set((b.min.x + b.max.x) / 2, (b.min.y + b.max.y) / 2, z);
     mesh.current?.scale.set(w, h, 1);
-    bezel.current?.scale.set(w + 1.6, h + 1.6, 1);
+    bezel.current?.scale.set(w + (handheld ? 0.6 : 1.6), h + (handheld ? 0.6 : 1.6), 1);
     const tickKey =
       runtime.version * 1000 + (Math.floor(performance.now() / 500) % 2);
     if (drawn.current !== tickKey) {
       drawn.current = tickKey;
       drawScreen(
-        canvas,
+        cur.canvas,
         runtime,
-        { ...spec, w: canvas.width, h: canvas.height },
+        { ...spec, w: cw, h: ch },
         performance.now(),
       );
-      texture.needsUpdate = true;
+      cur.texture.needsUpdate = true;
       invalidate();
     }
   });
@@ -358,7 +443,7 @@ function ScreenPlane(props: { instanceId: string }) {
         </mesh>
         <mesh ref={mesh} raycast={() => null} renderOrder={6}>
           <planeGeometry args={[1, 1]} />
-          <meshBasicMaterial map={texture} toneMapped={false} />
+          <meshBasicMaterial ref={mat} toneMapped={false} />
         </mesh>
       </group>
     </group>

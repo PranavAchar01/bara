@@ -119,7 +119,13 @@ export function exitSimulation(): void {
 export function showRemote(remote: RemoteScreen): void {
   const { runtime } = useSim.getState();
   if (!runtime) return;
+  const was = runtime.remote;
   runtime.remote = remote;
+  const same =
+    !!was && was.powered === remote.powered && was.bootloader === remote.bootloader && was.fb?.b64 === remote.fb?.b64 && was.rows.join("\n") === remote.rows.join("\n");
+  if (same) return;
+  // the display face redraws on the runtime's version, so a new frame shows on the next paint
+  runtime.version++;
   useSim.setState((s) => ({ version: s.version + 1 }));
 }
 

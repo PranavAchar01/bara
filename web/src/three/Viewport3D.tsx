@@ -46,7 +46,7 @@ import { pressKeyOf, screenFrame, type SimInput } from "../sim/inputMap";
 import { canSimulate, enterSimulation, exitSimulation, useSim } from "../sim/simStore";
 import { SimOverlay } from "../sim/SimOverlay";
 import { SimHotspotsHost } from "../sim/SimHotspots";
-import { inputHandlers, SimCaps, SimDriver, SimScreens } from "./sim3d";
+import { inputHandlers, SimCaps, SimDriver, SimKeyLegends, SimScreens } from "./sim3d";
 
 const DEG = Math.PI / 180;
 
@@ -1154,10 +1154,13 @@ function simFreeArea(cam: THREE.PerspectiveCamera): { w: number; canvasW: number
   const r = canvas.getBoundingClientRect();
   const narrow = window.innerWidth <= 860;
   const panel = narrow ? null : document.querySelector<HTMLElement>(".play-panel")?.getBoundingClientRect();
-  const panelW = narrow ? 0 : panel && panel.width > 0 ? window.innerWidth - panel.left : Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--play-w")) || 340;
+  // the right column is as wide as the layout asks (none for a handheld with its controls tucked away)
+  const reserved = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--play-w"));
+  const panelW = narrow ? 0 : panel && panel.width > 0 ? window.innerWidth - panel.left : Number.isFinite(reserved) ? reserved : 340;
   const w = Math.min(r.right, window.innerWidth - panelW) - Math.max(0, r.left);
   const canvasH = r.height;
-  const dock = document.querySelector<HTMLElement>(".play-dock")?.offsetHeight ?? SIM_DOCK_PX;
+  // under the device: the console drawer when it is open, else the key legend, else only a margin
+  const dock = document.querySelector<HTMLElement>(".play-dock")?.offsetHeight ?? document.querySelector<HTMLElement>(".play-legend")?.offsetHeight ?? (document.querySelector(".play") ? 0 : SIM_DOCK_PX);
   // the terminal sits over the top of the canvas: the device starts below it, never under it
   const term = document.querySelector<HTMLElement>(".sim-terminal")?.getBoundingClientRect();
   const termBottom = term && term.height > 0 ? term.bottom - r.top + SIM_EDGE_PX / 2 : 0;
@@ -1510,7 +1513,7 @@ function CameraRig() {
         const b = document.querySelector<HTMLElement>(s)?.getBoundingClientRect();
         return b ? `${Math.round(b.left)},${Math.round(b.top)},${Math.round(b.width)},${Math.round(b.height)}` : "-";
       };
-      return `${window.innerWidth}x${window.innerHeight}|${r(".viewport canvas")}|${r(".play-panel")}|${r(".sim-terminal")}|${r(".play-dock")}`;
+      return `${window.innerWidth}x${window.innerHeight}|${r(".viewport canvas")}|${r(".play-panel")}|${r(".sim-terminal")}|${r(".play-dock")}|${r(".play-legend")}`;
     };
     let last = sig();
     const id = window.setInterval(() => {
@@ -2187,6 +2190,7 @@ function SceneContents(props: {
       </group>
       <CompanionRow />
       <SimCaps covered={showBoard ? covered : NO_COVER} />
+      <SimKeyLegends covered={showBoard ? covered : NO_COVER} />
       <SimScreens />
       <MoveGizmo mode={props.gizmoMode} />
       <CameraRig />
