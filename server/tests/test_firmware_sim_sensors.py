@@ -47,4 +47,4 @@ def test_sensor_reading_reaches_screen_and_alert(tmp_path: Path) -> None:
     s.run_ms(600)
     snap = s.snapshot()
     assert any("sense" in e.get("text", "") and "Soil" in e.get("text", "") for e in snap["events"])
-    assert any(l["kind"] == "tone" for l in snap["leds"])
+    assert any(o["kind"] == "tone" for o in snap["leds"])

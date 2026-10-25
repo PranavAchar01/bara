@@ -268,7 +268,13 @@ class _Base:
             v = max(lo, min(hi, float(value)))
             self.inputs.axis[input_id] = int(round((v - lo) / ((hi - lo) or 1.0) * 4095))
             self._emit(
-                {"type": "input", "id": input_id, "label": r["label"], "value": v, "unit": r["unit"]}
+                {
+                    "type": "input",
+                    "id": input_id,
+                    "label": r["label"],
+                    "value": v,
+                    "unit": r["unit"],
+                }
             )
             self._sync_inputs()
 
@@ -292,7 +298,12 @@ class _Base:
                     if pin in self.tone_pins:
                         on = self.now_ms() - self.tone_last.get(pin, -1e9) <= 3
                     leds.append(
-                        {"id": o["id"], "label": o["label"], "kind": o["kind"], "on": on and self.powered}
+                        {
+                            "id": o["id"],
+                            "label": o["label"],
+                            "kind": o["kind"],
+                            "on": on and self.powered,
+                        }
                     )
             return {
                 "mode": self.kind,

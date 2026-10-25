@@ -124,9 +124,13 @@ def inputs_header(io: dict[str, Any], cfg: FwConfig, board: Board) -> str:
         kind, p1, p2 = KIND_CODE[r["fw_kind"]], _pin(board, r.get("pin")), _pin(board, pin2)
         hid, adc = int(r.get("hid") or 0), int(r.get("adc") or 0)
         unit = c_str(str(r.get("unit") or ""), 8)
-        lo10, hi10 = int(round(float(r.get("min", 0)) * 10)), int(round(float(r.get("max", 0)) * 10))
+        lo10, hi10 = (
+            int(round(float(r.get("min", 0)) * 10)),
+            int(round(float(r.get("max", 0)) * 10)),
+        )
         body.append(
-            f"  {{{label}, {kind}, {p1}, {p2}, 0x{hid:02X}, {adc}, {unit}, {lo10}, {hi10}}}, /* {note} */"
+            f"  {{{label}, {kind}, {p1}, {p2}, 0x{hid:02X}, {adc}, "
+            f"{unit}, {lo10}, {hi10}}}, /* {note} */"
         )
     if not body:
         body = ['  {"none", 0, 255, 255, 0, 0, "", 0, 0},']

@@ -19,6 +19,7 @@ from .agent import ai_labels, apply_labels, chat_patch
 from .codegen import FwConfig
 from .io import controller_part
 from .session import SimBuild, SimStore
+from .surface import SurfaceStore, make_surface
 
 INPUT_ACTIONS = {"press", "release", "tap", "turn", "axis", "sensor", "power", "reset"}
 
@@ -38,6 +39,7 @@ def sim_routes(api: APIRouter, svc: Any) -> None:
     store = SimStore(
         svc.settings.assets_dir, boards_root=svc.settings.data_dir / "cache" / "boards"
     )
+    surfaces = SurfaceStore(svc.settings.data_dir / "cache" / "sim_surface")
     models = {
         "cerebras_model": svc.settings.cerebras_model,
         "anthropic_model": svc.settings.anthropic_model,
@@ -201,6 +203,17 @@ def sim_routes(api: APIRouter, svc: Any) -> None:
 
         return body({"snapshot": await run_in_threadpool(go)})
 
+    @api.post("/v1/builds/{build_id}/sim/surface")
+    async def sim_surface(build_id: str, request: Request) -> JSONResponse:
+        """The play surface: which controls, how each output shows. One model call, checked
+        against the real parts and cached per build; the parts alone decide when none answers."""
+        sb = need(build_id)
+        data = await json_body(request) if await request.body() else {}
+        surface = await make_surface(
+            sb.state, sb.io, surfaces, build_id, **models, refresh=bool(data.get("refresh"))
+        )
+        return body({"surface": surface})
+
     @api.post("/v1/builds/{build_id}/sim/reset")
     async def sim_reset(build_id: str) -> JSONResponse:
         sb = need(build_id)
@@ -241,14 +254,17 @@ def sim_routes(api: APIRouter, svc: Any) -> None:
         sb.chat.append({"role": "user", "text": message})
         patch, reply, kind, by = await chat_patch(message, sb.cfg.to_dict(), sb.io, **models)
         rebuilt = False
-        if kind == "question" and not patch:
+        ops = patch.pop("surface_ops", [])
+        if ops and not reply:
+            reply = "Done."
+        if kind == "question" and not patch and not ops:
             mcu = mcu_part(sb.state)
             if mcu and mcu.get("part_id") and not reply:
                 ans, _note = await part_ask.answer(sb.state, mcu["part_id"], message, **models)
                 if ans:
                     reply = ans.answer
         results: list[dict[str, Any]] = []
-        if patch:
+        if patch:  # firmware settings changed
             merged = {**sb.cfg.to_dict(), **{k: v for k, v in patch.items() if k != "labels"}}
             merged["labels"] = {**sb.cfg.labels, **(patch.get("labels") or {})}
             async with lock_for(build_id):
@@ -266,6 +282,7 @@ def sim_routes(api: APIRouter, svc: Any) -> None:
             "role": "agent",
             "text": reply,
             "changes": patch,
+            "surface_ops": ops,
             "rebuilt": rebuilt,
             "by": by,
             "build_status": sb.fw.get("status") if rebuilt else None,
