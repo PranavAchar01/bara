@@ -80,7 +80,7 @@ export interface AppState {
   engineDetail: string | null;
   conn: ConnStatus;
   hello: ServerPayloads["hello"] | null;
-  screen: "home" | "library" | "workspace";
+  screen: "home" | "drafts" | "workspace";
   build: Build | null;
   view: ViewState;
   pendingStart: PendingStart | null;
@@ -219,6 +219,16 @@ export function focusPart(key: string | null): void {
       : // putting it back leaves nothing selected: no outline or name tag lingers on the whole build
         { focusKey: null, overlay: s.overlay === "focus" ? null : s.overlay, selection: s.focusKey ? null : s.selection, moving: null },
   );
+}
+
+/**
+ * A click on a part. In the exploded view a second click on the picked part puts it back; anywhere
+ * else a click pulls the part out.
+ */
+export function pickPart(key: string): void {
+  const s = useApp.getState();
+  if (s.explode > 0.5 && s.focusKey === key) focusPart(null);
+  else focusPart(key);
 }
 
 export function setView(preset: ViewPreset): void {

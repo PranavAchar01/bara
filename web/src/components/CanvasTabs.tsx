@@ -16,6 +16,7 @@ import { closeCanvasTab } from "../net/client";
 import { Icon } from "../ui/common";
 import "./canvasTabs.css";
 import { stopReplay } from "../bot/replay";
+import { ProjectButton } from "../project/ProjectPanel";
 import { ReplayControl } from "../bot/ReplayControl";
 import { WorkTools } from "./WorkTools";
 
@@ -69,6 +70,7 @@ export function CanvasTabs() {
           />
         </svg>
       </button>
+      <ProjectButton />
       <span className="ct-spacer" />
       <ReplayControl />
       <WorkTools />

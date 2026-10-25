@@ -1,12 +1,18 @@
-// Your builds, on the Library page (Figma 21), in Bara's own language: a small Bara keeps the shelf, the
-// newest build sits large on a plate, and the rest stand on a shelf by day. Each shows the finished product
-// alone, rendered by scripts/render-shots.mjs; one not rendered yet gets a blueprint drawn from what was asked for. Click to reopen; × (twice) to remove;
-// type to filter.
+// The Library page (/library): finished builds from the engine (the gallery, one per kind of device,
+// every check held) with its own Build button, then this browser's drafts in Bara's own language: a small
+// Bara keeps the shelf, the newest draft sits large on a gridded plate like the hero's, and the rest stand
+// on a shelf by day. Every tile shows the build's finished product alone, rendered (library/shots.ts,
+// scripts/render-shots.mjs); one not rendered yet falls back to a drawing of its parts or, for a draft, a
+// blueprint drawn from what was asked for. Click to reopen; × (twice) to remove a draft; type to filter.
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { openLibraryBuild, openSaved } from "../net/client";
 import { showToast, useApp } from "../state/store";
 import { Icon } from "../ui/common";
 import { deleteEntry, loadEntry, useLibrary, type LibraryCard } from "../library/library";
+import { loadGallery, useGallery, type GalleryItem } from "../library/gallery";
+import { BuildStill } from "./BuildScene";
+import { openBuildDialog } from "./BuildDialog";
+import { OpenSource } from "./OpenSource";
 
 const DAY = 86_400_000;
 
@@ -282,7 +288,7 @@ export function Library() {
       <header className="lib-head">
         <div className="lib-title-row">
           <Keeper />
-          <h2 id="lib-h">Your builds</h2>
+          <h2 id="lib-h">Your drafts</h2>
           {cards.length > 0 && <span className="lib-count mono">{cards.length}</span>}
         </div>
         {cards.length > 3 && (
@@ -291,7 +297,7 @@ export function Library() {
               <circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" strokeWidth="1.6" />
               <path d="M10.5 10.5L14 14" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
             </svg>
-            <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a build" aria-label="Search your builds" />
+            <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a draft" aria-label="Search your drafts" />
           </label>
         )}
       </header>
@@ -326,5 +332,72 @@ export function Library() {
         </>
       )}
     </section>
+  );
+}
+
+/** A finished build's picture: its rendered product alone; the drawing from its own data only when no shot exists yet. */
+function GalleryPicture(props: { item: GalleryItem }) {
+  const { item } = props;
+  const [broken, setBroken] = useState(false);
+  if (item.shot && !broken) return <img className="lib-shot" src={item.shot} alt="" loading="lazy" onError={() => setBroken(true)} />;
+  if (item.preview) return <BuildStill build={item.preview} className="gal-still" />;
+  return item.thumb ? <img src={item.thumb} alt="" loading="lazy" /> : null;
+}
+
+export function GalleryCard(props: { item: GalleryItem }) {
+  const { item } = props;
+  const [opening, setOpening] = useState(false);
+  const open = async () => {
+    // a bundled replay (engine library out of reach) is offered as a prompt to build again
+    if (item.offline) {
+      openBuildDialog(item.prompt.charAt(0).toLowerCase() + item.prompt.slice(1));
+      return;
+    }
+    setOpening(true);
+    await openLibraryBuild(item.build_id);
+    setOpening(false);
+  };
+  return (
+    <li className={`gal-card ${opening ? "opening" : ""}`}>
+      <button type="button" className="gal-open" onClick={() => void open()} aria-label={`Open the ${item.title.toLowerCase()} build`}>
+        <span className="gal-thumb">
+          <GalleryPicture item={item} />
+        </span>
+        <span className="gal-meta">
+          <span className="gal-title">{item.title}</span>
+          <span className="gal-sub">{item.checks} checks passed</span>
+        </span>
+      </button>
+    </li>
+  );
+}
+
+/** Library page: the finished builds (library/gallery.ts picks them) under a Build button, then the drafts. */
+export function LibraryPage() {
+  const items = useGallery((s) => s.items);
+  const ready = useGallery((s) => s.ready);
+  const drafts = useLibrary((s) => s.cards.length);
+  useEffect(() => void loadGallery(), []);
+  return (
+    <div className="libpage">
+      <header className="libpage-head">
+        <div>
+          <h1>Library</h1>
+          <p className="muted">Finished builds. Every check held. Open one to look inside, or start your own.</p>
+        </div>
+        <button type="button" className="btn primary libpage-build" onClick={() => openBuildDialog()} aria-haspopup="dialog">
+          Build
+        </button>
+      </header>
+      <section className="gallery" aria-label="Finished builds">
+        <ul className="gal-grid">
+          {ready
+            ? items.map((it) => <GalleryCard key={it.build_id} item={it} />)
+            : [0, 1, 2, 3, 4, 5].map((i) => <li key={i} className="gal-card is-loading" aria-hidden />)}
+        </ul>
+      </section>
+      <OpenSource />
+      {drafts > 0 && <Library />}
+    </div>
   );
 }

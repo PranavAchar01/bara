@@ -1,37 +1,55 @@
-"""A prompt over an open build: a device of its own beside it, or a change to it."""
+"""A prompt over an open build: a device of its own beside it, or a change to it. The model
+decides; these tests stand in for its answers and check what the engine does with them."""
 
 from __future__ import annotations
 
+import asyncio
+from typing import Any
+
+import pytest
+
 from bara import intent
 
-PARTS = {"speaker", "led", "key", "matrix", "display", "screen", "battery"}
+
+def fake(answer: dict[str, Any] | None, seen: list[str] | None = None):  # type: ignore[no-untyped-def]
+    async def ask(system: str, prompt: str, schema: dict, **kw: Any):  # type: ignore[no-untyped-def]
+        if seen is not None:
+            seen.append(prompt)
+        return answer, "ok" if answer else "no answer"
+
+    return ask
 
 
-def test_new_thing_beside_the_build_is_a_companion() -> None:
-    for p in ("add a mouse to the keyboard", "Connect a mouse to it.", "a mouse to go with this"):
-        r = intent.classify(p, True, PARTS)
-        assert r["kind"] == "companion", p
-        assert r["thing"] == "mouse"
-        assert r["prompt"] == "a mouse"
+def test_companion_carries_what_it_pairs_with(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[str] = []
+    monkeypatch.setattr(
+        intent,
+        "ask_json",
+        fake({"kind": "companion", "device": "mouse", "device_prompt": "a wireless mouse that pairs with a 75% keyboard"}, seen),
+    )
+    r = asyncio.run(intent.classify("add a mouse to the keyboard", True, "a 75% keyboard", ["Switch", "PCB"]))
+    assert r["kind"] == "companion" and r["thing"] == "mouse"
+    assert "pairs with" in r["prompt"]
+    assert "75% keyboard" in seen[0] and "Switch, PCB" in seen[0]
 
 
-def test_a_part_of_a_build_is_a_change() -> None:
-    for p in ("add a speaker to the keyboard", "add some LEDs to it", "attach a screen to this"):
-        assert intent.classify(p, True, PARTS)["kind"] == "modify", p
+def test_change_keeps_the_request_as_typed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(intent, "ask_json", fake({"kind": "modify", "device": "", "device_prompt": "rewritten"}))
+    r = asyncio.run(intent.classify("add a speaker to it", True))
+    assert r["kind"] == "modify" and r["prompt"] == "add a speaker to it"
 
 
-def test_a_part_named_beside_the_build_is_still_its_own_device() -> None:
-    for p in ("build a screen to go with it", "a battery pack next to the keyboard", "a speaker beside it"):
-        assert intent.classify(p, True, PARTS)["kind"] == "companion", p
+def test_no_open_build_or_no_answer_starts_a_build(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(intent, "ask_json", fake({"kind": "companion", "device": "x", "device_prompt": "x"}))
+    assert asyncio.run(intent.classify("a mouse", False))["kind"] == "new"
+    monkeypatch.setattr(intent, "ask_json", fake(None))
+    r = asyncio.run(intent.classify("add a mouse to the keyboard", True))
+    assert r["kind"] == "new" and r["prompt"] == "add a mouse to the keyboard" and r["note"]
 
 
-def test_plain_prompts_and_empty_canvases_start_over() -> None:
-    assert intent.classify("a gameboy", True, PARTS)["kind"] == "new"
-    assert intent.classify("add a mouse to the keyboard", False, PARTS)["kind"] == "new"
-
-
-def test_route(client) -> None:  # type: ignore[no-untyped-def]
-    r = client.post("/v1/intent", json={"prompt": "add a mouse to the keyboard", "has_build": True})
+def test_route(client, monkeypatch: pytest.MonkeyPatch) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch.setattr(intent, "ask_json", fake({"kind": "companion", "device": "mouse", "device_prompt": "a mouse for it"}))
+    r = client.post("/v1/intent", json={"prompt": "add a mouse to the keyboard", "has_build": True, "build_prompt": "a keyboard", "part_names": ["Switch"]})
     assert r.status_code == 200
     assert r.json()["kind"] == "companion"
     assert client.post("/v1/intent", json={}).status_code == 400

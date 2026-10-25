@@ -1,0 +1,210 @@
+/* Project: the devices in one scene and the links between them. A pill in the canvas tab strip
+   opens a panel down the right of the canvas. */
+.pj-pill {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  border: 0;
+  border-left: 1px solid var(--line);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.pj-pill:hover,
+.pj-pill.on {
+  background: var(--surface);
+}
+.pj-count {
+  color: var(--muted);
+}
+
+.pj-panel {
+  position: absolute;
+  top: calc(var(--tabs-h, 34px) + 10px);
+  right: 10px;
+  width: 340px;
+  max-height: calc(100% - var(--tabs-h, 34px) - 90px);
+  overflow-y: auto;
+  z-index: 8;
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px 14px;
+  border: 1px solid var(--line);
+  border-radius: calc(var(--radius) + 4px);
+  background: var(--surface);
+  box-shadow: var(--shadow-pop);
+  animation: pj-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes pj-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+.pj-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.pj-head h3 {
+  margin: 0;
+  font-size: 15px;
+}
+.pj-x {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+.pj-x:hover {
+  background: var(--sunken);
+  color: var(--text);
+}
+.pj-sec {
+  display: grid;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.pj-sec:first-of-type {
+  border-top: 0;
+}
+.pj-sec h4 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.pj-empty {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.pj-devices {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.pj-device {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.pj-device:hover {
+  border-color: var(--line-strong);
+}
+.pj-device.active {
+  border-color: var(--accent);
+}
+.pj-dname {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.pj-dmeta {
+  font-size: 11px;
+  color: var(--muted);
+}
+.pj-add,
+.pj-manual {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.pj-add input,
+.pj-manual select {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  padding: 0 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+.pj-manual summary {
+  width: 100%;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.pj-manual select {
+  flex-basis: 100%;
+}
+.pj-suggest,
+.pj-link {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 9px;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  border: 1px dashed var(--line-strong);
+  font-size: 12px;
+}
+.pj-link {
+  border-style: solid;
+  border-color: var(--line);
+}
+.pj-link.warning {
+  border-color: var(--warn);
+}
+.pj-ends {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.pj-ends > span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.pj-note {
+  font-size: 11px;
+  color: var(--ok);
+}
+.pj-note.warning {
+  color: var(--warn);
+}
+.pj-note.bad {
+  color: var(--fail);
+}
+.pj-ico {
+  color: var(--text-2);
+}
+.pj-total {
+  margin: 0;
+  font-size: 13px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pj-panel {
+    animation: none;
+  }
+}

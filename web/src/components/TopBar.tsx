@@ -1,10 +1,14 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { ShoppingListButton } from "./ShoppingList";
 import { useApp } from "../state/store";
 import { paths } from "../net/rest";
 import { serverUrl, storeKey } from "../net/mode";
 import { Icon } from "../ui/common";
 import type { ConnStatus } from "../net/connection";
 import { SimulateButton } from "../sim/SimulateButton";
+import { useLibrary } from "../library/library";
+import { BaraMark } from "./Handoff";
+import { openBuildDialog } from "./BuildDialog";
 
 const CONN_LABEL: Record<ConnStatus, string> = {
   connecting: "Connecting",
@@ -34,8 +38,10 @@ export function TopBar() {
   return (
     <header className="topbar">
       <button type="button" className="brand" onClick={() => useApp.setState({ screen: "home" })} title="Home">
+        <BaraMark className="brand-mark" />
         <span>Bara</span>
       </button>
+      {screen === "home" && <LandingNav />}
       {screen === "workspace" && build && (
         <div className="topbar-build">
           <span className="mono muted">{build.build_id}</span>
@@ -46,7 +52,8 @@ export function TopBar() {
         </div>
       )}
       <div className="topbar-right">
-        {(mock || hello?.mock) && <span className="badge tone-info">mock</span>}
+        {screen === "workspace" && (mock || hello?.mock) && <span className="badge tone-info">mock</span>}
+        {/* Which model answers is a detail for the hover, not a label on the page. */}
         <span
           className={`conn-pill tone-${CONN_TONE[conn]}`}
           aria-live="polite"
@@ -60,20 +67,60 @@ export function TopBar() {
             <Icon name="home" /> Home
           </button>
         )}
-        {screen === "workspace" ? (
-          <ExportMenu />
-        ) : (
-          <button
-            type="button"
-            className={`btn sm ${screen === "library" ? "primary" : ""}`}
-            aria-pressed={screen === "library"}
-            onClick={() => useApp.setState({ screen: screen === "library" ? "home" : "library" })}
-          >
-            <Icon name="library" /> Library
+        {screen === "workspace" && <ShoppingListButton />}
+        <ExportMenu />
+        {screen === "home" && (
+          <button type="button" className="btn primary sm nav-build" onClick={() => openBuildDialog()} aria-haspopup="dialog">
+            Start building
           </button>
         )}
+        {screen !== "workspace" && <DraftsButton />}
       </div>
     </header>
+  );
+}
+
+const NAV: { id: string; label: string }[] = [
+  { id: "how", label: "How it works" },
+  { id: "examples", label: "Examples" },
+  { id: "faq", label: "FAQ" },
+];
+
+/** Anchor links to the landing's sections; the page scrolls inside its own container. */
+function LandingNav() {
+  return (
+    <nav className="ld-nav" aria-label="On this page">
+      {NAV.map((n) => (
+        <a
+          key={n.id}
+          href={`#${n.id}`}
+          onClick={(e) => {
+            e.preventDefault();
+            document.getElementById(n.id)?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+          }}
+        >
+          {n.label}
+        </a>
+      ))}
+    </nav>
+  );
+}
+
+/** Top right of Home: opens the Library page (finished builds plus this browser's drafts); on Library it goes back. */
+function DraftsButton() {
+  const screen = useApp((s) => s.screen);
+  const count = useLibrary((s) => s.cards.length);
+  const on = screen === "drafts";
+  return (
+    <button
+      type="button"
+      className={`btn sm drafts-btn ${on ? "on" : ""}`}
+      aria-current={on ? "page" : undefined}
+      onClick={() => useApp.setState({ screen: on ? "home" : "drafts" })}
+    >
+      Library
+      {count > 0 && <span className="drafts-n mono">{count}</span>}
+    </button>
   );
 }
 
@@ -141,6 +188,7 @@ export function PanelToolbar() {
       </button>
       <span className="spacer" />
       <SimulateButton />
+      <ShoppingListButton compact />
       <ExportMenu primary />
     </div>
   );

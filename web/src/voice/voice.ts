@@ -1,7 +1,10 @@
 // Bara's voice (Figma 19 Voice · talk to Bara). Hold Space to talk and let go to send, or tap Space (or
 // the mic) and just talk: a pause at the end of what you said sends it. Ums and stutters are taken out
-// before Bara sees it. Bara answers out loud through the engine's voice stream, with the words shown
-// under the eyes; without it, the browser's own speech fills in, so nothing depends on one service.
+// before Bara sees it. Bara answers out loud through the engine's streamed speech (OpenAI when the
+// engine has its key), with the words shown under the eyes; without it, the browser's own speech fills
+// in, so nothing depends on one service. Replies are cut to one or two short sentences, the first one
+// starts playing while the next downloads, talking again stops it (barge-in), and the time from the
+// end of your speech to the first sound is kept in `latencyMs`.
 import { create } from "zustand";
 import { speechFor } from "../bot/mood";
 import { answerClarify } from "../net/client";
@@ -25,6 +28,8 @@ export interface VoiceState {
   /** Replies are spoken. Turns on the first time you talk; V toggles it. */
   replies: boolean;
   error: string | null;
+  /** Milliseconds from the end of your speech to the first sound of the answer, last time. */
+  latencyMs: number | null;
 }
 
 const STORE_KEY = "voice.replies";
@@ -44,7 +49,21 @@ export const useVoice = create<VoiceState>(() => ({
   caption: null,
   replies: storedReplies(),
   error: null,
+  latencyMs: null,
 }));
+
+// when you stopped talking, for the latency reading; cleared once the first sound plays
+let speechEndedAt: number | null = null;
+function markSpeechEnd(): void {
+  speechEndedAt = performance.now();
+}
+function markFirstSound(): void {
+  if (speechEndedAt === null) return;
+  const ms = Math.round(performance.now() - speechEndedAt);
+  speechEndedAt = null;
+  // an answer long after you stopped talking is some other line, not the reply to that speech
+  if (ms < 30000) useVoice.setState({ latencyMs: ms });
+}
 
 export function setReplies(on: boolean, announce = false): void {
   useVoice.setState({ replies: on });
@@ -94,9 +113,21 @@ export function sentences(text: string): string[] {
   return out;
 }
 
+/** A spoken reply is one or two short sentences: more is a lecture, and it delays the first word of
+ *  the next turn. The caption shows exactly what is said. */
+export function trimReply(text: string, askedWords = 12): string {
+  const pieces = text.trim().replace(/\s+/g, " ").split(/(?<=[.!?])\s+/).filter(Boolean);
+  // a short ask gets one short sentence; a longer one can have two
+  const said = pieces.slice(0, askedWords <= 5 ? 1 : 2).join(" ");
+  if (said.length <= 200) return said;
+  if (pieces[0].length <= 200) return pieces[0];
+  return `${said.slice(0, 197).replace(/\s+\S*$/, "")}...`;
+}
+
 function ttsAudio(line: string): HTMLAudioElement {
   const a = new Audio(serverUrl(`/v1/tts?text=${encodeURIComponent(line)}`));
   a.preload = "auto";
+  a.addEventListener("playing", markFirstSound, { once: true });
   return a;
 }
 
@@ -198,6 +229,7 @@ function speakInBrowser(text: string, gen: number): void {
   const v = browserVoice();
   if (v) u.voice = v;
   u.rate = 1.1;
+  u.onstart = markFirstSound;
   u.onend = () => gen === speechGen && finished();
   // blocked (no click on the page yet) or failed: move on, so the next line isn't stuck behind it
   u.onerror = () => gen === speechGen && finished();
@@ -207,7 +239,7 @@ function speakInBrowser(text: string, gen: number): void {
 /** Says a reply when replies are on (or `force`); the caption shows while it plays. `then` runs
  *  when it has been said through, which is how a spoken conversation hands the turn back. */
 export function speak(text: string, force = false, then?: () => void): void {
-  const clean = text.trim();
+  const clean = trimReply(text, askedWords);
   if (!clean || (!force && !useVoice.getState().replies)) return;
   // the mic is open: talking now would talk over the person and into the mic
   if (useVoice.getState().listening) return;
@@ -337,12 +369,15 @@ function setLevel(v: number): void {
 }
 
 /** Where a finished utterance goes: the part in focus if there is one, otherwise the prompt. */
+// how long the last thing said to Bara was, so the reply can match it
+let askedWords = 12;
 function deliver(text: string, id: number, handsFree: boolean): void {
   if (delivered === id) return;
   delivered = id;
   const t = cleanTranscript(text);
   if (!t) return;
   lastHandsFree = handsFree ? performance.now() : 0;
+  askedWords = t.split(/\s+/).length;
   if (!useVoice.getState().replies) setReplies(true);
   // Bara asked something: the reply answers it, it doesn't start a new build
   const q = useApp.getState().build?.clarify;
@@ -535,6 +570,7 @@ async function finish(t: Turn, send: boolean): Promise<void> {
   window.clearTimeout(quietTimer);
   window.clearTimeout(t.maxTimer);
   if (cur === t) cur = null;
+  if (send) markSpeechEnd();
   const handsFree = useVoice.getState().mode === "auto";
   useVoice.setState({ listening: false, mode: null, ...(send ? {} : { heard: "" }) });
   const r = t.recognition;
@@ -568,7 +604,9 @@ async function finish(t: Turn, send: boolean): Promise<void> {
 /** Opens the mic. Hands-free ("auto") sends when the speaker pauses; "hold" sends when let go. */
 export async function startListening(mode: ListenMode = "auto", opts: { quietMs?: number } = {}): Promise<void> {
   if (useVoice.getState().listening) return;
+  // barge-in: talking while Bara talks stops it at once, before the mic even opens
   stopSpeaking();
+  speechEndedAt = null;
   quietMs = opts.quietMs ?? QUIET_MS;
   const t: Turn = {
     id: ++turns,

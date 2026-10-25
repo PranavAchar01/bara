@@ -119,7 +119,12 @@ export async function act(raw: string): Promise<void> {
   }
 
   // a second device, or a part to add, as the engine reads the line
-  const r = await getRest().request<{ kind: string; thing: string | null; prompt: string }>("POST", "/v1/intent", { prompt: text, has_build: true });
+  const r = await getRest().request<{ kind: string; thing: string | null; prompt: string }>("POST", "/v1/intent", {
+    prompt: text,
+    has_build: true,
+    build_prompt: build.prompt,
+    part_names: build.parts.map((p) => p.label ?? p.card.display_name),
+  });
   if (r.ok && r.body.kind === "companion") {
     addCompanionCanvas();
     startBuild(r.body.prompt);

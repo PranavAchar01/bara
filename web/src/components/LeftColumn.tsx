@@ -209,9 +209,11 @@ export function SpecCard() {
   const running = useApp((s) => s.build?.status === "running");
   const [hover, setHover] = useState<number[] | null>(null);
   if (!spec) {
+    // nothing to show before the request is understood: no empty box
+    if (!running) return null;
     return (
       <Panel title="Spec">
-        {running ? <Skeleton lines={3} /> : <Empty>The spec appears once the request is understood.</Empty>}
+        <Skeleton lines={3} />
       </Panel>
     );
   }
@@ -306,7 +308,7 @@ export function ReuseCard() {
   const tier = known(tierRaw, ["exact", "substitute", "compose"] as const);
   const reqs = new Map([...(spec?.hard_requirements ?? []), ...(spec?.soft_requirements ?? [])].map((r) => [r.req_id, r]));
   if (!reuse && tier === "unknown") {
-    return <Panel title="Design reuse">{running && spec ? <Skeleton /> : <Empty>Waiting for the spec.</Empty>}</Panel>;
+    return running && spec ? <Panel title="Design reuse"><Skeleton /></Panel> : null;
   }
   const card = reuse?.design ?? design;
   return (
@@ -365,7 +367,9 @@ const SLOT_TONE: Record<string, Tone> = {
 /** C06 DecisionTrace. */
 export function DecisionTrace() {
   const slots = useApp((s) => s.build?.slots ?? []);
+  const running = useApp((s) => s.build?.status === "running");
   const sorted = useMemo(() => [...slots].sort((a, b) => (a.order ?? 999) - (b.order ?? 999)), [slots]);
+  if (sorted.length === 0 && !running) return null;
   return (
     <Panel title="Decisions" meta={slots.length ? `${slots.filter((s) => s.state === "decided").length}/${slots.length}` : undefined} className="decisions">
       {sorted.length === 0 ? <Empty>Slots appear after the design step.</Empty> : sorted.map((s) => <SlotRow key={s.slot_id} slot={s} />)}

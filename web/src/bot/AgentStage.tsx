@@ -23,7 +23,7 @@ import { beatsFor, enqueue, paceFor } from "./director";
 import { speechFor } from "./mood";
 import { toggleTrace, useTrace } from "./traceState";
 import { canvasRect, partRect } from "../three/agentTargets";
-import { clamp, lerp, PRESETS, reducedMotion, Spring, wander, type SpringCfg } from "./spring";
+import { clamp, lerp, PRESETS, reducedMotion, Spring, type SpringCfg } from "./spring";
 import { narrate } from "../voice/voice";
 import "./agentStage.css";
 
@@ -460,12 +460,12 @@ function Stage() {
         let px = x0 + (x1 - x0) * 0.58;
         let py = y0 + (y1 - y0) * 0.52;
         if (b?.action === "scan") {
-          const ph = (t / 1.2) % 1;
+          const ph = Math.min(1, t / 1.2);
           px = x1 - Math.min(18, (x1 - x0) * 0.2);
           py = lerp(y0 + 4, y1 - 4, ph);
         } else if (b?.action === "trace" && trace.length) {
           const drawMs = Math.min(b.dwellMs * 0.7, 1400);
-          const [u, v] = along(trace, ((now - beatAt) / drawMs) % 1.6);
+          const [u, v] = along(trace, Math.min(1, (now - beatAt) / drawMs));
           px = x0 + ((x1 - x0) * u) / 100;
           py = y0 + ((y1 - y0) * v) / 100;
         } else if (b?.action === "type") {
@@ -479,9 +479,8 @@ function Stage() {
         spot.x = clamp(px, 4, W - 16);
         spot.y = clamp(py, 4, H - 20);
         const p = perch({ x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, bx.value);
-        const bob = reduced ? 0 : 2.5 * wander(now / 900, 3);
         bx.target = p.x;
-        by.target = p.y + bob;
+        by.target = p.y;
         scale.target = 1;
       } else {
         // Flying home.
