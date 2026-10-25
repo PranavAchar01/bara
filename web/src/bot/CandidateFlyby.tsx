@@ -136,9 +136,9 @@ export function CandidateFlyby() {
     };
 
     const unsub = useApp.subscribe((st) => {
-      const fresh = st.log.filter((e) => e.id > seen && e.dir === "in");
-      if (!fresh.length) return;
+      const fresh = st.log.filter((e) => e.id > seen && e.dir === "in" && (!e.buildId || e.buildId === st.build?.build_id));
       seen = st.log.at(-1)?.id ?? seen;
+      if (!fresh.length) return;
       for (const e of fresh) {
         const env = envelopeOf(e.raw);
         const item = tracker.feed(e.type, env.payload, env.seq ?? e.seq);
