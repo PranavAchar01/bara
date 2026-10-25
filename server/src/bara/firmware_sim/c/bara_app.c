@@ -15,6 +15,7 @@ typedef struct {
   u8 adc;  /* ADC channel for an axis or sensor */
   const char *unit; /* sensor unit */
   i32 lo10, hi10;   /* sensor range, tenths of a unit */
+  i32 rest10;       /* sensor resting value, tenths of a unit */
 } bara_input_t;
 
 #include "bara_inputs.h"
@@ -304,7 +305,9 @@ static void sensor(int i, u32 now) {
     if (k + 1 < SCREEN_ROWS) line_set3(k + 1, n, in->unit, "");
   }
   int pct = (int)udiv_((u32)(v10 - in->lo10) * 100u, (u32)(span ? span : 1));
-  if (pct <= 10 || pct >= 90) alert |= (u8)(1u << (k & 7));
+  int rest = (int)udiv_((u32)(in->rest10 - in->lo10) * 100u, (u32)(span ? span : 1));
+  /* the end a sensor rests at is normal (a full battery, an empty room); only the far end alerts */
+  if ((pct <= 10 && rest > 10) || (pct >= 90 && rest < 90)) alert |= (u8)(1u << (k & 7));
   else alert &= (u8)~(1u << (k & 7));
 }
 

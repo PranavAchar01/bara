@@ -30,6 +30,8 @@ const TICK_MS = 200;
 const FAST_TICK_MS = 90;
 const MAX_LINES = 400;
 
+const FIRMWARE_GROUPS = new Set(["firmware", "emulation", "pinmap"]);
+const CHECK_KEY = 1_000_000_000;
 type Line = { key: number; text: string; tone: "out" | "in" | "hid" | "sys" };
 type Act = (id: string, a: InputAction, v?: number | boolean) => void;
 
@@ -161,6 +163,30 @@ function Simulator(props: { build: Build }) {
       live = false;
     };
   }, [id, map, adopt]);
+
+  // the firmware's own tests run once when the device boots; the console says how they came out
+  const checked = useRef<string | null>(null);
+  useEffect(() => {
+    if (!data || checked.current === id) return;
+    checked.current = id;
+    const ids = data.tests.filter((t) => FIRMWARE_GROUPS.has(t.group)).map((t) => t.id);
+    if (!ids.length) return;
+    sim
+      .tests(id, ids)
+      .then((r) => {
+        const mine = r.results.filter((t) => FIRMWARE_GROUPS.has(t.group));
+        const failed = mine.filter((t) => t.status === "fail");
+        const ran = mine.filter((t) => t.status === "pass").length;
+        const text = failed.length
+          ? `firmware check: FAILED ${failed.map((t) => t.id).join(", ")}`
+          : ran
+            ? `firmware check: OK (${ran} of ${mine.length} tests pass)`
+            : "firmware check: no tests ran";
+        setLines((prev) => prev.concat({ key: CHECK_KEY, text, tone: failed.length ? "hid" : "sys" }));
+        setData(r.sim);
+      })
+      .catch(() => undefined);
+  }, [data, id]);
 
   // one call at a time, in the order they were made: a release can never overtake its press, and a
   // slow answer can never carry a later `since` past events another answer has not delivered yet

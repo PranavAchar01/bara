@@ -56,6 +56,9 @@ Rules:
 - requirement: the key numbers the chosen part must meet to make the product what it is, as one
   short phrase (a display's diagonal size and resolution, a connector standard, a rated
   voltage or current, a battery capacity). Empty when any part of the function will do.
+- Controls with different roles are different blocks: a direction pad, action buttons and
+  menu buttons each get their own block with their own count, never merged into one switch
+  block. Count every control the person uses in the use case.
 - Every block must serve a function the product's brief implies. Do not add parts the product
   does not have.
 - A companion device sold with the product (a USB receiver dongle, a charging dock, a remote,
@@ -134,7 +137,8 @@ it is missing. Walk every function chain the product implies and check each link
 - sound out: source, converter or codec, amplifier, transducer, connector
 - sound in: transducer, preamp or converter, controller
 - display: panel, its driver or bridge, backlight supply, connector to the board
-- input: the sensor or switch, anything that conditions its signal, the controller input
+- input: the sensor or switch, anything that conditions its signal, the controller input; every
+  role the person controls with (steer, act, confirm) has its own control
 - wireless or wired link: radio or PHY, antenna or connector, protection
 - storage: the medium, its socket or controller
 - power: input or cell, protection, charger or converter, regulators for each voltage, monitor

@@ -9,6 +9,13 @@ import type { Board, BoardFootprint, Build, BuildPart } from "../spec/types";
 import { elementPoses, rotateZ, type V3 } from "../three/layout";
 import { charOf, isBackspace, isShift, keyCodes, keyLabel, parseKeymap } from "./keymap";
 
+/**
+ * How the operating view lies on screen, set by the viewport: a device whose long axis runs along
+ * the build's y axis is turned a quarter so it fills the screen, and a button is up, left or right
+ * as the person sees it, not as the build frame has it.
+ */
+export const screenFrame: { turned: () => boolean } = { turned: () => false };
+
 export type InputRole = "key" | "dpad" | "action" | "system";
 
 export interface SimInput {
@@ -188,6 +195,10 @@ function systemNames(part: BuildPart): string[] {
   return [...text.matchAll(SYSTEM_WORDS)].map((m) => m[1].toUpperCase());
 }
 
+function isShoulderPart(part: BuildPart): boolean {
+  return /shoulder|bumper|trigger/i.test(`${part.label ?? ""} ${part.card.display_name}`);
+}
+
 function isSystemPart(part: BuildPart): boolean {
   return systemNames(part).length > 0;
 }
@@ -200,10 +211,17 @@ interface Named {
 }
 
 /** Names for buttons without a keymap, from where they sit on the control face (plus shape, then position). */
-function nameButtons(raws: Raw[]): Named[] {
+function nameButtons(all: Raw[]): Named[] {
   const out: Named[] = [];
+  // names follow the screen: turned a quarter, screen-right is the build's +y and screen-up its -x
+  const turned = screenFrame.turned();
+  const raws = turned ? all.map((r) => ({ ...r, pos: [r.pos[1], -r.pos[0], r.pos[2]] as V3 })) : all;
+  const back = new Map(raws.map((r, i) => [r, all[i]]));
   const system = raws.filter((r) => isSystemPart(r.part));
-  const rest = raws.filter((r) => !isSystemPart(r.part));
+  const shoulders = raws.filter((r) => !isSystemPart(r.part) && isShoulderPart(r.part));
+  const rest = raws.filter((r) => !isSystemPart(r.part) && !isShoulderPart(r.part));
+  // shoulder buttons sit on the top edge: left to right on screen they are L and R
+  [...shoulders].sort((p, q) => p.pos[0] - q.pos[0]).forEach((raw, i, all) => out.push({ raw, name: all.length === 1 ? "L" : i === 0 ? "L" : i === all.length - 1 ? "R" : `S${i + 1}`, role: "action" }));
   const plus = findPlus(rest.map((r) => ({ x: r.pos[0], y: r.pos[1] })));
   const used = new Set<number>();
   if (plus) {
@@ -228,7 +246,7 @@ function nameButtons(raws: Raw[]): Named[] {
     const word = words[k] ?? words[words.length - 1] ?? spare.shift() ?? "BTN";
     out.push({ raw: r, name: word, role: "system" });
   }
-  return out;
+  return out.map((n) => ({ ...n, raw: back.get(n.raw) ?? n.raw }));
 }
 
 function keymapOf(build: Build): string | null {

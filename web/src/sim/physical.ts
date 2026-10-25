@@ -54,6 +54,8 @@ const GAME_KEYS: Record<string, string[]> = {
   B: ["KeyZ", "KeyJ"],
   X: ["KeyC", "KeyI"],
   Y: ["KeyV", "KeyU"],
+  L: ["KeyQ"],
+  R: ["KeyE"],
   START: ["Enter"],
   SELECT: ["ShiftRight", "Backspace"],
   RESET: ["KeyR"],

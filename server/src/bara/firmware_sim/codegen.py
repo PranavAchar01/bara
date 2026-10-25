@@ -128,9 +128,10 @@ def inputs_header(io: dict[str, Any], cfg: FwConfig, board: Board) -> str:
             int(round(float(r.get("min", 0)) * 10)),
             int(round(float(r.get("max", 0)) * 10)),
         )
+        rest10 = int(round(float(r.get("default", r.get("min", 0))) * 10))
         body.append(
             f"  {{{label}, {kind}, {p1}, {p2}, 0x{hid:02X}, {adc}, "
-            f"{unit}, {lo10}, {hi10}}}, /* {note} */"
+            f"{unit}, {lo10}, {hi10}, {rest10}}}, /* {note} */"
         )
     if not body:
         body = ['  {"none", 0, 255, 255, 0, 0, "", 0, 0},']

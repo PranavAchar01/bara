@@ -48,3 +48,26 @@ def test_sensor_reading_reaches_screen_and_alert(tmp_path: Path) -> None:
     snap = s.snapshot()
     assert any("sense" in e.get("text", "") and "Soil" in e.get("text", "") for e in snap["events"])
     assert any(o["kind"] == "tone" for o in snap["leds"])
+
+
+def test_a_full_battery_gauge_does_not_raise_the_alert(tmp_path: Path) -> None:
+    spec = monitor()
+    spec["parts"] = [
+        part("u_mcu", "compute.mcu", "nRF52840 board", pid="mod:nice_nano_v2"),
+        part("u_gauge", "power.fuel_gauge", "Fuel gauge"),
+        part("u_buz", "output.buzzer", "Buzzer"),
+        part("u_disp", "display.oled", "OLED 128x64"),
+    ]
+    io = plan_io(spec)
+    cfg = FwConfig()
+    assert compile_firmware(io, cfg, tmp_path)["status"] == "ok"
+    s = make_chip(io, cfg, tmp_path / "firmware.elf")
+    s.run_ms(1500)
+    pin = next(o["pin"] for o in io["outputs"] if o["kind"] == "tone")
+    from bara.firmware_sim.mcu import pin_number
+
+    assert not [e for e in s.wave.get(pin_number(s.board, pin), []) if e[0] > 100]
+    gauge = next(i for i in io["inputs"] if i["kind"] == "sensor")
+    s.set_sensor(gauge["id"], 5)
+    s.run_ms(900)
+    assert [e for e in s.wave.get(pin_number(s.board, pin), []) if e[0] > 1500]
