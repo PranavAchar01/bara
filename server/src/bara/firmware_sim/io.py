@@ -66,6 +66,36 @@ HID_USAGE: dict[str, int] = {
     "RGUI": 0xE7,
     "K_APP": 0x65,
 }
+# QMK spellings of the ZMK key names above, where they differ from KC_<name>.
+QMK_NAMES = {
+    **{f"N{d}": f"KC_{d}" for d in range(10)},
+    "SEMI": "KC_SCLN",
+    "SQT": "KC_QUOT",
+    "GRAVE": "KC_GRV",
+    "COMMA": "KC_COMM",
+    "FSLH": "KC_SLSH",
+    "BSLH": "KC_BSLS",
+    "LBKT": "KC_LBRC",
+    "RBKT": "KC_RBRC",
+    "MINUS": "KC_MINS",
+    "EQUAL": "KC_EQL",
+    "RET": "KC_ENT",
+    "SPACE": "KC_SPC",
+    "LSHFT": "KC_LSFT",
+    "RSHFT": "KC_RSFT",
+    "LCTRL": "KC_LCTL",
+    "RCTRL": "KC_RCTL",
+    "K_APP": "KC_APP",
+    "PG_UP": "KC_PGUP",
+    "PG_DN": "KC_PGDN",
+}
+_FROM_QMK = {v: k for k, v in QMK_NAMES.items()}
+
+
+def qmk_name(code: str) -> str:
+    return QMK_NAMES.get(code, f"KC_{code}")
+
+
 _KEY_WORDS = {
     "RET": "Enter",
     "ENTER": "Enter",
@@ -190,12 +220,18 @@ def key_label(code: str | None, n: int) -> str:
 
 
 def keymap_codes(firmware: dict[str, Any] | None) -> list[str]:
-    """`&kp X` codes of the first keymap layer, in binding order."""
+    """Key codes of the first keymap layer, in binding order: ZMK `&kp X` or QMK `KC_X`."""
     for f in (firmware or {}).get("files") or []:
-        if str(f.get("path", "")).endswith(".keymap") and f.get("content"):
-            body = re.search(r"bindings\s*=\s*<([\s\S]*?)>", f["content"])
+        path, text = str(f.get("path", "")), f.get("content") or ""
+        if path.endswith(".keymap"):
+            body = re.search(r"bindings\s*=\s*<([\s\S]*?)>", text)
             if body:
                 return [m.group(1) for m in re.finditer(r"&kp\s+(\w+)", body.group(1))]
+        elif path.endswith("keymap.c"):
+            body = re.search(r"LAYOUT\(([\s\S]*?)\)", text)
+            if body:
+                kcs = re.findall(r"KC_\w+", body.group(1))
+                return [_FROM_QMK.get(kc, kc.removeprefix("KC_")) for kc in kcs]
     return []
 
 

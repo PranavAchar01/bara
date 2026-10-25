@@ -49,3 +49,15 @@ def test_split_halves_meet_at_t_and_y() -> None:
     # the right half's column 0 is its outer edge, so reading by column runs P back to Y
     assert _by_row(halves[1], right, 0) == "P O I U Y".split()
     assert _by_row(halves[0], left, 1) == "A S D F G".split()
+
+
+def test_qmk_keymap_reaches_the_simulator() -> None:
+    from bara.firmware_sim.io import keymap_codes
+    from bara.live.firmware import _qmk
+
+    keys = preset_keys("ansi_60")
+    half = Half(side="none", rows=5, cols=14, thumbs=0, keys=keys)
+    files = _qmk(KeyboardPlan(style="unibody", halves=[half], key_count=len(keys)))
+    codes = keymap_codes({"files": files})
+    assert codes[14:20] == "TAB Q W E R T".split()
+    assert codes[0] == "ESC" and codes[1] == "N1" and "SPACE" in codes

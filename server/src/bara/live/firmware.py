@@ -12,6 +12,7 @@ import re
 import shutil
 from typing import Any
 
+from bara.firmware_sim.io import qmk_name
 from bara.live.layout import KeyboardPlan
 
 # part words -> (driver library, ZMK/QMK/ESPHome name). Hand-set from each project's docs.
@@ -138,7 +139,8 @@ def _key_code(key: dict[str, Any], half: Any, split: bool) -> str | None:
     return codes[at] if 0 <= at < len(codes) else None
 
 
-def _keymap_rows(plan: KeyboardPlan) -> list[str]:
+def _keymap_codes(plan: KeyboardPlan) -> list[list[str]]:
+    """One key code per key, half by half, in key order."""
     split = len(plan.halves) > 1
     codes: list[list[str | None]] = []
     used: set[str] = set()
@@ -147,17 +149,54 @@ def _keymap_rows(plan: KeyboardPlan) -> list[str]:
         used |= {c for c in line if c}
         codes.append(line)
     spare = iter([k for k in SPARE_KEYS if k not in used] * 4)
-    rows: list[str] = []
+    out: list[list[str]] = []
     t = 0
     for half, line in zip(plan.halves, codes, strict=True):
-        out = []
+        filled = []
         for key, code in zip(half.keys, line, strict=True):
             if key.get("thumb"):
                 code = THUMBS[t % len(THUMBS)]
                 t += 1
-            out.append(f"&kp {code or next(spare)}")
-        rows.append("  ".join(out))
-    return rows
+            filled.append(code or next(spare))
+        out.append(filled)
+    return out
+
+
+def _keymap_rows(plan: KeyboardPlan) -> list[str]:
+    return ["  ".join(f"&kp {c}" for c in half) for half in _keymap_codes(plan)]
+
+
+def _qmk(plan: KeyboardPlan) -> list[dict[str, Any]]:
+    """keyboard.json with a LAYOUT over the key matrix, and a default keymap.c in key order."""
+    half = plan.halves[0]
+    rows, cols = half.matrix
+    layout = [
+        {"matrix": k.get("matrix") or k["pos"], "x": k["x_u"], "y": k["y_u"]}
+        | ({"w": k["w_u"]} if k.get("w_u", 1.0) != 1.0 else {})
+        for k in half.keys
+    ]
+    qmk = {
+        "keyboard_name": "bara",
+        "matrix_size": {"rows": rows, "cols": cols},
+        "processor": "atmega32u4",
+        "bootloader": "caterina",
+        "layouts": {"LAYOUT": {"layout": layout}},
+    }
+    kcs = [qmk_name(c) for c in _keymap_codes(plan)[0]]
+    lines = [", ".join(kcs[i : i + 14]) for i in range(0, len(kcs), 14)]
+    keymap = (
+        "#include QMK_KEYBOARD_H\n\n"
+        "const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {\n"
+        "    [0] = LAYOUT(\n        " + ",\n        ".join(lines) + "\n    )\n};\n"
+    )
+    return [
+        {
+            "path": "keyboards/bara/keyboard.json",
+            "language": "json",
+            "content": json.dumps(qmk, indent=2) + "\n",
+        },
+        {"path": "keyboards/bara/keymaps/default/keymap.c", "language": "c", "content": keymap},
+    ]
 
 
 def _zmk(
@@ -355,20 +394,7 @@ def make_firmware(
     if framework == "zmk" and plan is not None:
         files = _zmk(brief, plan, boards, set(peripherals))
     elif framework == "qmk" and plan is not None:
-        rows, cols = plan.halves[0].matrix
-        qmk = {
-            "keyboard_name": "bara",
-            "matrix_size": {"rows": rows, "cols": cols},
-            "processor": "atmega32u4",
-            "bootloader": "caterina",
-        }
-        files = [
-            {
-                "path": "keyboards/bara/keyboard.json",
-                "language": "json",
-                "content": json.dumps(qmk, indent=2) + "\n",
-            }
-        ]
+        files = _qmk(plan)
     elif framework == "esphome":
         files = _esphome(brief, peripherals)
     else:

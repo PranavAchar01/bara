@@ -244,7 +244,7 @@ function ProxyCap(props: {
         style={{ pointerEvents: "none" }}
       >
         <span className={input.role === "key" ? "sim-key-legend" : "sim-cap-label"} data-sim-legend={input.name}>
-          {input.role === "key" ? input.name.slice(0, 4) : capLabel(input.name)}
+          {input.role === "key" ? input.name.slice(0, 5) : capLabel(input.name)}
         </span>
       </Html>
     </group>
@@ -270,7 +270,7 @@ function KeyLegend(props: { input: SimInput }) {
     <group ref={group}>
       <Html center zIndexRange={[20, 0]} style={{ pointerEvents: "none" }}>
         <span className={`sim-key-legend ${down ? "down" : ""}`} data-sim-legend={input.name}>
-          {input.name.length > 4 ? input.name.slice(0, 4) : input.name}
+          {input.name.slice(0, 5)}
         </span>
       </Html>
     </group>

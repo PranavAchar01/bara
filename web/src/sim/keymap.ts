@@ -97,7 +97,16 @@ export function isShift(code: string): boolean {
 }
 
 /** Short name shown on hover and in the event strip: the character, or the code as ZMK spells it. */
+// What a real keycap prints for the keys that are words, short enough for a 1u cap
+const CAP_WORDS: Record<string, string> = {
+  ESC: "Esc", TAB: "Tab", CAPS: "Caps", RET: "Enter", BSPC: "Bksp", SPACE: "", DEL: "Del", INS: "Ins",
+  LSHFT: "Shift", RSHFT: "Shift", LCTRL: "Ctrl", RCTRL: "Ctrl", LALT: "Alt", RALT: "Alt", LGUI: "Cmd", RGUI: "Cmd",
+  K_APP: "Menu", HOME: "Home", END: "End", PG_UP: "PgUp", PG_DN: "PgDn",
+  UP: "\u2191", DOWN: "\u2193", LEFT: "\u2190", RIGHT: "\u2192",
+};
+
 export function keyLabel(code: string): string {
+  if (code in CAP_WORDS) return CAP_WORDS[code];
   const digit = /^(?:N|NUMBER_)([0-9])$/.exec(code);
   if (digit) return digit[1];
   const plain = PLAIN[code];

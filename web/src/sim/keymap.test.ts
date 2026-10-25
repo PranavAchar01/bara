@@ -51,6 +51,7 @@ describe("charOf", () => {
     expect(isBackspace("BSPC")).toBe(true);
     expect(isBackspace("Q")).toBe(false);
     expect(keyLabel("N7")).toBe("7");
-    expect(keyLabel("BSPC")).toBe("BSPC");
+    expect(keyLabel("BSPC")).toBe("Bksp");
+    expect(keyLabel("LSHFT")).toBe("Shift");
   });
 });
