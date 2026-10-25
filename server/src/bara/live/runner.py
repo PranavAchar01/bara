@@ -355,7 +355,7 @@ class _Stage:
             self.last_progress = fraction
         self.emit(
             "stage.progress",
-            {"stage": self.stage, "message": message[:200], "fraction": fraction},
+            {"stage": self.stage, "message": message[:120], "fraction": fraction},
         )
 
     def done(self, status: str = "ok", message: str | None = None) -> None:
@@ -754,8 +754,11 @@ class LiveRunner:
         fits. The concept is a reading grounded in what was retrieved, never a fixed label."""
         # a generic product class, never a brand or a model name the request may have typed
         product = str(brief.get("device") or "") or _product_name(run, brief)
-        st.progress("Scouting open-source designs (Apify scout)", 0.4)
+        first = apify_scout.YOU_CREDIT if apify_scout.you_enabled() else apify_scout.CREDIT
+        st.progress(f"Scouting open-source designs ({first})", 0.4)
         scout = await apify_scout.run(product)
+        if scout.source != first and scout.mode != "off":  # You.com failed: say who answered
+            st.progress(f"Scouting open-source designs ({scout.source})", 0.45)
         run.apify_scout = scout  # type: ignore[attr-defined]
         if scout.mode != "off":
             st.progress(scout.summary(), 0.5)

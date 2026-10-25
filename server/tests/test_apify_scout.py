@@ -102,6 +102,7 @@ def cache(tmp_path, monkeypatch):
     monkeypatch.setattr(ap, "STATS", tmp_path / "stats.jsonl")
     monkeypatch.delenv("APIFY_TOKEN", raising=False)
     monkeypatch.delenv("BARA_APIFY", raising=False)
+    monkeypatch.delenv("YOU_API_KEY", raising=False)
     return tmp_path
 
 
@@ -174,3 +175,51 @@ def test_bom_credits_apify_for_scouted_price() -> None:
     assert out["totals"]["sourced_via_apify"] == 1
     plain = bom.bom(build, None, {})
     assert plain["rows"][0]["sourced_via"] == "" and plain["rows"][0]["unit_price_usd"] is None
+
+
+def _you_search(cands, note="ok"):
+    async def fake(product, *, require_you=False):
+        return cands, note
+
+    return fake
+
+
+def test_you_answers_first_and_apify_is_not_touched(cache, monkeypatch) -> None:
+    monkeypatch.setenv("YOU_API_KEY", "k")
+    cand = {"repo": "https://github.com/a/console", "licence": "MIT", "fit": "close", "stars": 3}
+    monkeypatch.setattr(ap.open_designs, "search", _you_search([cand]))
+
+    async def no_apify(inp):
+        raise AssertionError("Apify must not run when You.com answered")
+
+    monkeypatch.setattr(ap, "execute", no_apify)
+    res = asyncio.run(ap.run("handheld console"))
+    assert res.source == "You.com" and res.mode == "you.com"
+    assert res.summary().startswith("You.com: 1 open designs")
+
+
+@pytest.mark.parametrize("outcome", ["error", "empty", "timeout"])
+def test_you_failure_falls_back_to_apify(cache, monkeypatch, outcome) -> None:
+    monkeypatch.setenv("YOU_API_KEY", "k")
+
+    async def search(product, *, require_you=False):
+        if outcome == "timeout":
+            await asyncio.sleep(5)
+        return [], "search failed: HTTPStatusError" if outcome == "error" else "ok"
+
+    monkeypatch.setattr(ap.open_designs, "search", search)
+    monkeypatch.setattr(ap, "YOU_TIMEOUT_S", 0.05)
+    called = []
+
+    async def fake_execute(inp):
+        called.append(inp)
+        return (
+            [{"type": "design", "repo": "https://github.com/b/kbd", "licence": "MIT"}],
+            "local",
+            [],
+        )
+
+    monkeypatch.setattr(ap, "execute", fake_execute)
+    res = asyncio.run(ap.run("keyboard"))
+    assert called and res.source == "Apify scout" and res.mode == "local"
+    assert res.summary().startswith("Apify scout (local)")

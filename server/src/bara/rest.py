@@ -374,10 +374,24 @@ def build_router(svc: Services) -> APIRouter:
             }
         )
 
+    def _voice_key(request: Request) -> str | None:
+        return voice.session_key(request.query_params.get("sid"))
+
     @api.get("/v1/voice")
-    def voice_info() -> JSONResponse:
+    def voice_info(request: Request) -> JSONResponse:
         """Whether Bara can speak and listen here, and with which voice."""
-        return body(voice.settings())
+        return body(voice.settings(_voice_key(request)))
+
+    @api.post("/v1/voice/key")
+    async def voice_key(request: Request) -> JSONResponse:
+        """Hold the visitor's own OpenAI key for their browser session (memory only, never logged).
+        An empty key forgets it. Voice models are the one part the visitor brings a key for."""
+        data = await request.json()
+        sid, user_key = str(data.get("sid") or "")[:64], str(data.get("key") or "").strip()
+        if not re.fullmatch(r"[A-Za-z0-9_-]{8,64}", sid) or len(user_key) > 300:
+            raise ApiError("E_BAD_MESSAGE", "Send a session id and a key.")
+        voice.set_session_key(sid, user_key or None)
+        return body({"own_key": bool(user_key)})
 
     @api.get("/v1/tts")
     async def tts(request: Request) -> Response:
@@ -386,7 +400,7 @@ def build_router(svc: Services) -> APIRouter:
         if not text:
             raise ApiError("E_BAD_MESSAGE", "Send text.")
         try:
-            client, resp = await voice.open_speech(text)
+            client, resp = await voice.open_speech(text, _voice_key(request))
         except RuntimeError as exc:
             raise ApiError("E_LLM_UNAVAILABLE", f"No voice: {exc}") from exc
         return StreamingResponse(
@@ -409,7 +423,9 @@ def build_router(svc: Services) -> APIRouter:
             else None
         )
         try:
-            text = await voice.transcribe(audio, request.headers.get("content-type", ""), terms)
+            text = await voice.transcribe(
+                audio, request.headers.get("content-type", ""), terms, _voice_key(request)
+            )
         except RuntimeError as exc:
             raise ApiError("E_LLM_UNAVAILABLE", f"No transcription: {exc}") from exc
         return body({"text": text})
