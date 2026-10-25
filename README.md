@@ -24,6 +24,23 @@ Type "a wireless split keyboard with an OLED" and watch it come together. Bara p
   <img src="docs/readme/build.gif" alt="Bara building a wireless split keyboard" width="760" />
 </p>
 
+## Inside the app
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/readme/app-home.jpg" alt="Landing page" /><br /><b>Start</b> · describe a device in one line</td>
+    <td width="50%"><img src="docs/readme/app-edit.jpg" alt="Editing a part" /><br /><b>Edit</b> · click a part to swap, recolour, move, or ask</td>
+  </tr>
+  <tr>
+    <td><img src="docs/readme/app-explode.jpg" alt="Exploded view" /><br /><b>Explode</b> · pull it apart and see every layer</td>
+    <td><img src="docs/readme/app-board.jpg" alt="Routed board" /><br /><b>Board</b> · a routed KiCad PCB that passes DRC</td>
+  </tr>
+  <tr>
+    <td><img src="docs/readme/app-simulate.jpg" alt="Simulation" /><br /><b>Simulate</b> · run the generated firmware and press the keys</td>
+    <td><img src="docs/readme/app-library.jpg" alt="Library" /><br /><b>Library</b> · past builds and 135 open-source boards</td>
+  </tr>
+</table>
+
 ## Meet Bara
 
 <img src="docs/readme/bara.gif" alt="Bara, the agent" width="180" align="right" />
