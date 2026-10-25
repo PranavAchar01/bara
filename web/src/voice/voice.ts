@@ -9,7 +9,7 @@
 import { create } from "zustand";
 import { speechFor, speechMoodFor, type SpeechMood } from "../bot/mood";
 import { answerClarify } from "../net/client";
-import { authHeaders, serverUrl } from "../net/mode";
+import { authHeaders, serverReady, serverUrl } from "../net/mode";
 import { showToast, useApp } from "../state/store";
 import { Clip, hearCue } from "./pcm";
 import { cleanTranscript, endOfTurnMs, isNoise, pickOption } from "./turn";
@@ -168,6 +168,7 @@ function ttsAudio(line: string, mood: SpeechMood): Clip {
 async function engineCanSpeak(): Promise<boolean> {
   if (engineVoice !== null) return engineVoice;
   try {
+    await serverReady();
     await registerKey();
     const res = await fetch(serverUrl(withVoiceSid("/v1/voice")), { headers: authHeaders() });
     const info = res.ok ? ((await res.json()) as { tts?: boolean; needs_user_key?: boolean; own_key?: boolean }) : null;

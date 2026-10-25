@@ -22,15 +22,17 @@ import {
 import { loadEntry } from "../library/library";
 import { Connection, type SocketLike } from "./connection";
 import { FakeSocket, MockHub } from "./fakeSocket";
-import { readMode, readStoredKey, serverUrl, setAccessToken, setServer, socketUrl, splitKey, storeKey, type Mode } from "./mode";
+import { readMode, readStoredKey, serverReady, serverUrl, setAccessToken, setServer, socketUrl, splitKey, storeKey, type Mode } from "./mode";
 import { discoverEngine } from "./engine";
-import { RestClient, httpFetcher, stubFetcher, paths } from "./rest";
+import { RestClient, httpFetcher, stubFetcher, paths, type Fetcher } from "./rest";
 import { linkWhenBuilt } from "../project/awaiting";
 import { loadFixtures } from "../spec/fixtures";
 
 let conn: Connection | null = null;
 let hellos = 0;
-let rest: RestClient = new RestClient(httpFetcher(null));
+// requests sent while the engine is still being looked up wait for it (a /build/<id> link opens early)
+let liveFetcher: Fetcher = httpFetcher(null);
+let rest: RestClient = new RestClient((method, path, body) => serverReady().then(() => liveFetcher(method, path, body)));
 
 const RAW_CAP = 4000;
 function rawOf(v: unknown): string {
@@ -186,21 +188,23 @@ async function resolveMode(env: Env): Promise<Mode> {
 
 export async function startClient(): Promise<Mode> {
   const mode = await resolveMode(import.meta.env as Env);
-  setServer(mode.server);
   useApp.setState({ mode });
   let factory: (url: string) => SocketLike;
   if (mode.mock) {
     const fx = await loadFixtures();
-    rest = new RestClient(stubFetcher(fx.rest));
+    liveFetcher = stubFetcher(fx.rest);
+    rest = new RestClient(liveFetcher);
     const server = new MockHub(fx, { speed: mode.speed, forcedFixture: mode.fixture });
     factory = () => new FakeSocket(server);
   } else {
-    rest = new RestClient(httpFetcher(mode.server));
+    liveFetcher = httpFetcher(mode.server);
+    rest = new RestClient(liveFetcher);
     // GLB loaders resolve /assets/... against the page; send them to the remote server instead.
     // three is loaded on its own (the landing does not need it), and before any loader can run
     if (mode.server || readStoredKey()) void import("three").then(({ DefaultLoadingManager }) => DefaultLoadingManager.setURLModifier((u) => serverUrl(u)));
     factory = (url) => new WebSocket(url) as unknown as SocketLike;
   }
+  setServer(mode.server); // after the fetcher swap: requests held for it go to the engine it found
   conn = new Connection({
     url: socketUrl(mode.server ? new URL(mode.server) : window.location),
     socketFactory: factory,

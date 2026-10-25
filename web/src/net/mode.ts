@@ -39,8 +39,18 @@ export function setAccessToken(token: string | null): void {
   accessToken = token;
 }
 
+let markReady: () => void = () => {};
+const ready = new Promise<void>((resolve) => (markReady = resolve));
+
+/** Resolves once the page knows which engine it talks to. On the deployed site that takes a lookup,
+ *  and a request sent before it would go to the site itself and come back 404. */
+export function serverReady(): Promise<void> {
+  return ready;
+}
+
 export function setServer(server: string | null): void {
   currentServer = server;
+  markReady();
 }
 
 export function readStoredKey(): string | null {
