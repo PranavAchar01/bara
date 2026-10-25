@@ -614,6 +614,7 @@ def test_body_is_thickened_to_the_real_stack() -> None:
     fake = SimpleNamespace(
         WALL_STACK_MM=3.0, STACK_CLEARANCE_MM=1.0, _warn=lambda *a: seen.append(a[-1])
     )
+    fake._stack_mm = lambda b: Runner._stack_mm(fake, b)  # type: ignore[attr-defined]
     board = {
         "boards": [
             {

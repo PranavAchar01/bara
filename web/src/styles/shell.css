@@ -1143,8 +1143,7 @@
   flex: none;
 }
 
-/* Landing: one screen and one Build button over a small mock of the app replaying real builds
-   from scratch (BuildScene). Never scrolls on a desktop screen. */
+/* Landing (Figma: Landing C2). The first screen is one plate: a recorded build plays behind, Bara talks in front. */
 .home.landing {
   display: block;
   position: relative;
@@ -1235,6 +1234,35 @@
   gap: 4px;
   min-width: 0;
   overflow: hidden;
+}
+.landing > section,
+.landing > figure,
+.landing > .library {
+  width: min(1328px, calc(100% - 32px));
+  margin-left: auto;
+  margin-right: auto;
+}
+.ld-hero {
+  height: calc(100svh - 48px);
+  min-height: 520px;
+  padding: clamp(10px, 2vh, 20px) 0;
+}
+/* After tryclean.ai's hero plate, in Bara's paper: rounded, the recording as its backdrop. */
+.ld-plate {
+  position: relative;
+  height: 100%;
+  border-radius: 24px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--paper-2);
+}
+.ld-bg {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  /* a recording, not a control: nothing in it can be clicked, selected or dragged */
+  pointer-events: none;
+  user-select: none;
 }
 .mk-tab {
   padding: 4px 10px;
@@ -1701,6 +1729,7 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: 62% 50%;
 }
 .gal-still {
   padding: 12px;
@@ -1713,6 +1742,496 @@
 }
 .gal-title {
   font-size: 15px;
+  font-weight: 600;
+}
+/* paper rises from the left so the words and the bot sit on calm ground, the build plays on the right */
+.ld-plate::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    var(--paper) 0%,
+    color-mix(in srgb, var(--paper) 94%, transparent) 30%,
+    color-mix(in srgb, var(--paper) 60%, transparent) 46%,
+    transparent 64%
+  );
+}
+.ld-stage {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  bottom: 0;
+  left: clamp(24px, 4vw, 64px);
+  width: clamp(320px, 44%, 580px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: clamp(20px, 4vh, 40px);
+}
+.ld-stage h1 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(34px, min(3.5vw, 5.6vh), 56px);
+  line-height: 0.98;
+  letter-spacing: var(--track-display);
+  text-wrap: balance;
+}
+
+/* The hero's Build button (HeroAgent): Bara's own ink stadium with two small eyes that watch the pointer.
+   It breathes a faint halo and casts a real shadow, so it reads as a control in front of the recording. */
+.hero-cta {
+  --cta-h: 64px;
+  position: relative;
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  height: var(--cta-h);
+  padding: 0 10px 0 22px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--paper);
+  cursor: pointer;
+  /* a keycap: a lit top edge, a dark lip under it */
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.14),
+    inset 0 -3px 0 rgb(0 0 0 / 0.35),
+    0 1px 0 rgb(0 0 0 / 0.25),
+    0 14px 30px -12px rgb(0 0 0 / 0.45);
+  transition: transform 160ms cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 160ms ease, opacity 120ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+/* the halo: a slow ring that only the live control has */
+.hero-cta::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  border: 1.5px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  opacity: 0;
+  animation: cta-halo 3.2s ease-out infinite;
+  pointer-events: none;
+}
+@keyframes cta-halo {
+  0% { opacity: 0.7; transform: scale(1); }
+  70%, 100% { opacity: 0; transform: scale(1.18, 1.45); }
+}
+.hero-cta:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.16),
+    inset 0 -3px 0 rgb(0 0 0 / 0.35),
+    0 1px 0 rgb(0 0 0 / 0.25),
+    0 20px 38px -14px rgb(0 0 0 / 0.5);
+}
+.hero-cta:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.1),
+    inset 0 -1px 0 rgb(0 0 0 / 0.35),
+    0 6px 14px -8px rgb(0 0 0 / 0.45);
+  transition-duration: 60ms;
+}
+.hero-cta:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+.hero-cta:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.hero-cta.is-away {
+  opacity: 0;
+  pointer-events: none;
+  transition: none;
+}
+/* same proportions as Bara's eyes: two 13x19 pills, 25 apart */
+.cta-eyes {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  width: calc(var(--cta-h) * 0.36 * 2);
+  height: calc(var(--cta-h) * 0.36);
+  transform: translate(var(--look-x, 0), var(--look-y, 0));
+  transition: transform 140ms ease-out;
+}
+.cta-eyes i {
+  width: 34.2%;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--paper);
+  transform-origin: 50% 60%;
+  animation: cta-blink 4.6s infinite;
+}
+.hero-cta:hover .cta-eyes i {
+  animation: none;
+  transform: scaleY(1.12);
+}
+@keyframes cta-blink {
+  0%, 92%, 100% { transform: scaleY(1); }
+  95% { transform: scaleY(0.1); }
+}
+.cta-label {
+  font-family: var(--font-display);
+  font-size: 22px;
+  letter-spacing: -0.015em;
+  white-space: nowrap;
+}
+.cta-go {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-left: 4px;
+  border-radius: 50%;
+  background: var(--paper);
+  color: var(--ink);
+  transition: transform 160ms ease;
+}
+.hero-cta:hover .cta-go {
+  transform: translateX(2px);
+}
+
+/* The intro (AgentIntro): paper washes out from the button, the button becomes Bara, Bara asks. */
+.agent-intro {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+}
+.ai-wash {
+  position: absolute;
+  inset: 0;
+  background: var(--paper);
+}
+.ai-morph {
+  position: fixed;
+  border-radius: 999px;
+  background: var(--ink);
+  box-shadow: 0 14px 30px -12px rgb(0 0 0 / 0.45);
+}
+.ai-morph {
+  overflow: hidden;
+}
+.ai-morph-rest {
+  position: absolute;
+  right: 10px;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--paper);
+  animation: ai-let-go 220ms ease-in forwards;
+}
+@keyframes ai-let-go {
+  to { opacity: 0; transform: translateX(-10px); }
+}
+.ai-morph-eyes {
+  position: absolute;
+  display: flex;
+  justify-content: space-between;
+}
+.ai-morph-eyes i {
+  width: 34.2%;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--paper);
+}
+.ai-bot {
+  position: fixed;
+  line-height: 0;
+}
+.ai-talk {
+  position: fixed;
+  left: 50%;
+  width: min(620px, calc(100vw - 32px));
+  transform: translate(-50%, 12px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 26px;
+  opacity: 0;
+  transition: opacity 360ms ease 260ms, transform 520ms cubic-bezier(0.22, 1, 0.36, 1) 260ms;
+}
+.ph-here .ai-talk {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+.ph-leaving .ai-talk,
+.ph-leaving .ai-bot,
+.ph-leaving .ai-close {
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+.ai-ask {
+  min-height: 1em;
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(34px, 4.4vw, 54px);
+  line-height: 1;
+  letter-spacing: var(--track-display);
+  text-align: center;
+}
+.ai-caret {
+  display: inline-block;
+  width: 3px;
+  height: 0.82em;
+  margin-left: 4px;
+  vertical-align: -0.06em;
+  background: var(--accent);
+  animation: ai-caret 1s steps(1) infinite;
+}
+@keyframes ai-caret {
+  50% { opacity: 0; }
+}
+.ai-field {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px;
+  border: 1.5px solid var(--ink);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: 0 16px 40px -22px rgb(0 0 0 / 0.45);
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+.ai-field:focus-within {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent), 0 16px 40px -22px rgb(0 0 0 / 0.45);
+}
+.st-listening .ai-field {
+  border-color: var(--accent);
+}
+.ai-field input {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 20px;
+  letter-spacing: -0.015em;
+  outline: none;
+}
+.ai-field input::placeholder {
+  color: var(--text-2);
+  opacity: 0.75;
+}
+.ai-field input:disabled {
+  opacity: 1;
+  -webkit-text-fill-color: var(--ink);
+}
+.ai-mic,
+.ai-send {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease, transform 160ms ease, opacity 160ms ease;
+}
+.ai-mic {
+  border: 1.5px solid var(--line);
+  background: var(--paper-2);
+  color: var(--ink);
+}
+.ai-mic svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+.ai-mic svg rect {
+  fill: currentColor;
+  stroke: none;
+}
+.ai-mic:hover:not(:disabled) {
+  border-color: var(--ink);
+}
+.ai-mic.on {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+  animation: ai-mic 1.2s ease-in-out infinite;
+}
+@keyframes ai-mic {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent); }
+  50% { box-shadow: 0 0 0 8px color-mix(in srgb, var(--accent) 0%, transparent); }
+}
+.ai-send {
+  border: 0;
+  background: var(--ink);
+  color: var(--paper);
+}
+.ai-send:hover:not(:disabled) {
+  transform: translateX(2px);
+}
+.ai-mic:disabled,
+.ai-send:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.ai-close {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 300ms ease 400ms;
+}
+.ph-here .ai-close {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-cta::before,
+  .cta-eyes i,
+  .ai-caret,
+  .ai-mic.on { animation: none; }
+  .ai-talk,
+  .ai-close { transition: opacity 200ms ease; transform: translate(-50%, 0); }
+  .ai-close { transform: none; }
+}
+
+.ld-steps {
+  margin-top: 64px;
+  border-top: 1.5px solid var(--ink);
+  padding-top: 16px;
+}
+.ld-sh {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.ld-sh h2,
+.landing .lib-head h2 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(32px, 3vw, 44px);
+  letter-spacing: var(--track-display);
+}
+.ld-steps ol {
+  list-style: none;
+  margin: 20px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
+}
+.ld-still {
+  position: relative;
+  background: #ececec;
+  overflow: hidden;
+}
+.ld-still img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.ld-sel {
+  position: absolute;
+  border: 1.5px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+  border-radius: 1px;
+}
+.ld-sel .h {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: var(--paper);
+  border: 1.5px solid var(--accent);
+}
+.ld-sel .tl { left: -4.75px; top: -4.75px; }
+.ld-sel .tr { right: -4.75px; top: -4.75px; }
+.ld-sel .bl { left: -4.75px; bottom: -4.75px; }
+.ld-sel .br { right: -4.75px; bottom: -4.75px; }
+.ld-chip {
+  position: absolute;
+  left: -1.5px;
+  bottom: calc(100% + 5px);
+  padding: 2px 7px;
+  border-radius: 3px;
+  background: var(--accent);
+  color: #fff;
+  font: 600 11px var(--font-sans);
+  white-space: nowrap;
+}
+.ld-chip.below {
+  bottom: auto;
+  top: calc(100% + 5px);
+}
+.ld-scan {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 46%;
+  height: 1.5px;
+  background: var(--accent);
+}
+.ld-cursor {
+  position: absolute;
+}
+.ld-trace {
+  position: absolute;
+  inset: 6px;
+  width: calc(100% - 12px);
+  height: calc(100% - 12px);
+}
+.ld-trace path {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  stroke-dasharray: 6 4;
+  vector-effect: non-scaling-stroke;
+}
+.ld-code {
+  position: absolute;
+  left: calc(100% + 8px);
+  top: 4px;
+  padding: 5px 8px;
+  border-radius: 4px;
+  background: var(--ink);
+  color: #fff;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.ld-code i {
+  display: inline-block;
+  width: 6px;
+  height: 12px;
+  margin-left: 2px;
+  vertical-align: -2px;
+  background: var(--accent);
+}
+.ld-st {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 12px;
+}
+.ld-n {
+  font: 800 34px/0.8 var(--font-sans);
+  letter-spacing: -0.05em;
+}
+.ld-st b {
+  font-size: 17px;
   font-weight: 600;
 }
 .gal-sub {
@@ -2001,4 +2520,48 @@
 }
 .sl-foot a.btn {
   text-decoration: none;
+}
+/* Narrow: the words and Bara first, the recording below them as a picture of its own. */
+@media (max-width: 760px) {
+  .ld-hero {
+    height: auto;
+    min-height: 0;
+  }
+  .ld-plate {
+    height: auto;
+    display: flex;
+    flex-direction: column;
+  }
+  .ld-plate::after {
+    display: none;
+  }
+  .ld-stage {
+    position: static;
+    width: auto;
+    padding: 28px 20px 22px;
+    gap: 22px;
+  }
+  .ld-bg {
+    order: 2;
+    position: relative;
+    inset: auto;
+    aspect-ratio: 16 / 10;
+    border-top: 1px solid var(--line);
+  }
+  .hero-cta {
+    --cta-h: 58px;
+  }
+  .cta-label {
+    font-size: 20px;
+  }
+}
+@media (max-width: 980px) {
+  .ld-steps ol {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 560px) {
+  .ld-steps ol {
+    grid-template-columns: 1fr;
+  }
 }

@@ -46,6 +46,8 @@ const ALWAYS_SPEAK = new Set(["build.done", "build.failed", "clarify.request"]);
 // Slow, nearly critically damped glides: the bot drifts between major steps instead of darting.
 const FLOAT: SpringCfg = { stiffness: 32, damping: 11 }; // the bot: floaty, trails the cursor
 const STEER: SpringCfg = { stiffness: 70, damping: 16 }; // the cursor: gets there first
+/** The cursor's arrowhead: tip at (3, 3), wings out to the right and down, a notch at the back. */
+const ARROW = "M3 3 L17.2 8.9 L10.5 10.5 L8.9 17.2 Z";
 const FRAME: SpringCfg = { stiffness: 90, damping: 19 }; // the selection box
 
 type Phase = "home" | "out" | "returning";
@@ -547,7 +549,9 @@ function Stage() {
         bs.setProperty("--as-sy", (sy / scale.value).toFixed(3));
       }
       if (cursorEl.current) {
-        cursorEl.current.style.transform = `translate(${cx.value.toFixed(1)}px, ${cy.value.toFixed(1)}px) scale(${clamp(press.value, 0.6, 1.3).toFixed(3)})`;
+        // it tips a little into the way it is travelling, and settles back when it stops
+        const lean = clamp(cx.velocity * 0.012 - cy.velocity * 0.006, -14, 14);
+        cursorEl.current.style.transform = `translate(${cx.value.toFixed(1)}px, ${cy.value.toFixed(1)}px) rotate(${lean.toFixed(2)}deg) scale(${clamp(press.value, 0.6, 1.3).toFixed(3)})`;
         cursorEl.current.dataset.on = phaseRef.current === "out" ? "1" : "0";
       }
     };
@@ -560,8 +564,17 @@ function Stage() {
     <div ref={stage} className="agent-stage" data-on="0" aria-hidden="true">
       <div ref={rippleEl} className="as-ripple" data-bad={beat?.bad ? "1" : "0"} />
       <div ref={cursorEl} className="as-cursor" data-on="0" data-bad={beat?.bad ? "1" : "0"}>
-        <svg viewBox="0 0 16 20" width="16" height="20">
-          <path d="M1.5 1.5v15.2l4.1-3.9 2.7 6.1 2.6-1.1-2.7-6h5.7z" />
+        {/* A notched arrowhead: a rim in the page colour under a lit accent body; the tip is the element origin. */}
+        <svg viewBox="0 0 20 20" width="20" height="20">
+          <defs>
+            <linearGradient id="as-cur-g" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" className="as-cur-lit" />
+              <stop offset="1" className="as-cur-deep" />
+            </linearGradient>
+          </defs>
+          <path className="as-cur-rim" d={ARROW} />
+          <path className="as-cur-body" d={ARROW} />
+          <path className="as-cur-shine" d="M5.2 5.2 L11.6 7.9" />
         </svg>
       </div>
       <div ref={botEl} className="as-bot" data-phase={phase} onClick={toggleTrace}>

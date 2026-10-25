@@ -222,6 +222,8 @@ def geometry_brief(brief: dict[str, Any]) -> dict[str, Any]:
         out["edge_thickness_mm"] = float(brief.get("edge_thickness_mm") or 0.0)
         if brief.get("anchors"):
             out["anchors"] = list(brief["anchors"])
+        if brief.get("shape_features"):
+            out["shape_features"] = list(brief["shape_features"])
     return out
 
 

@@ -370,7 +370,8 @@ def _box(it: Item) -> Symbol:
 
 
 def _natural(s: str) -> tuple:
-    return tuple(int(t) if t.isdigit() else t for t in re.findall(r"\d+|\D+", s))
+    # Tagged so pin "1" and pin "A1" compare (digit runs before text) instead of raising.
+    return tuple((0, int(t), "") if t.isdigit() else (1, 0, t) for t in re.findall(r"\d+|\D+", s))
 
 
 def symbol_for(it: Item) -> Symbol:

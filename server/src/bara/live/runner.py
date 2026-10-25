@@ -1391,6 +1391,7 @@ class LiveRunner:
             brief["body_thickness_mm"] = product.thickness_mm
             brief["edge_thickness_mm"] = product.edge_thickness_mm
             brief["anchors"] = product.anchors
+            brief["shape_features"] = product.features
         board, err = await asyncio.to_thread(A.plan_board, gb, parts, run.build_id)
         board, err, parts = await self._swap_to_fit(run, st, gb, result, parts, board, err)
         board, err, parts = await self._swap_to_thickness(
@@ -1416,6 +1417,8 @@ class LiveRunner:
             gb["product_form"] = product.json()
             brief["body_thickness_mm"] = product.thickness_mm
             brief["edge_thickness_mm"] = product.edge_thickness_mm
+            brief["anchors"] = product.anchors  # the case opens where the redrawn form says
+            brief["shape_features"] = product.features
             board, err = await asyncio.to_thread(A.plan_board, gb, parts, run.build_id)
         report = (gb.get("product_form") or {}).get("fit_report")
         if product is not None and report and report["ok"]:

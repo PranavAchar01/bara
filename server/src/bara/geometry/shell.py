@@ -260,7 +260,17 @@ class Body:
         return p.z_floor + p.rb, p.z_top - p.rt
 
 
-def build_body(plan: Polygon, prof: Profile, edge_len: float = 1.0) -> Body:
+@dataclass
+class Shape:
+    """The form features that change the body itself, in the plan's frame."""
+
+    thin: list[tuple[Polygon, float]] = field(default_factory=list)  # appendage, its thickness
+    wedge: tuple[float, float] | None = None  # (direction of the thick end, extra depth there)
+
+
+def build_body(
+    plan: Polygon, prof: Profile, edge_len: float = 1.0, shape: Shape | None = None
+) -> Body:
     x0, y0, x1, y1 = plan.bounds
     step = max(0.5, max(x1 - x0, y1 - y0) / 360.0)
     ras = build_raster(plan, step)
@@ -278,14 +288,20 @@ def build_body(plan: Polygon, prof: Profile, edge_len: float = 1.0) -> Body:
     s_bot = 1.0 - (1.0 - u) ** 1.6
     top0 = prof.z_top + prof.crown * s_top  # the surface before the rim is rounded
     bot0 = prof.z_floor - prof.belly * s_bot
-    top = top0 - _fillet(dpos, prof.rt)
-    bot = bot0 + _fillet(dpos, prof.rb)
+    rt_a = np.full_like(d, prof.rt)
+    rb_a = np.full_like(d, prof.rb)
+    if shape is not None:
+        top0, bot0, rt_a, rb_a = _shaped(ras, shape, prof, top0, bot0, rt_a, rb_a)
+    top = top0 - _fillet_a(dpos, rt_a)
+    bot = bot0 + _fillet_a(dpos, rb_a)
 
     tl, bl, dl = top0.ravel().tolist(), bot0.ravel().tolist(), d.ravel().tolist()
     nx, ny, inv = ras.nx, ras.ny, 1.0 / step
     rx0, ry0 = ras.x0, ras.y0
-    rt, rb = prof.rt, prof.rb
+    rt0, rb0 = prof.rt, prof.rb
     hypot = math.hypot
+    local = shape is not None and bool(shape.thin)  # fillet radii vary over the plan
+    rtl, rbl = rt_a.ravel().tolist(), rb_a.ravel().tolist()
 
     def sdf(x: float, y: float, z: float) -> float:
         fx, fy = (x - rx0) * inv, (y - ry0) * inv
@@ -298,6 +314,10 @@ def build_body(plan: Polygon, prof: Profile, edge_len: float = 1.0) -> Body:
         dd = dl[i] * w00 + dl[i + 1] * w10 + dl[i + nx] * w01 + dl[i + nx + 1] * w11
         tt = tl[i] * w00 + tl[i + 1] * w10 + tl[i + nx] * w01 + tl[i + nx + 1] * w11
         bb = bl[i] * w00 + bl[i + 1] * w10 + bl[i + nx] * w01 + bl[i + nx + 1] * w11
+        rt, rb = rt0, rb0
+        if local:
+            rt = rtl[i] * w00 + rtl[i + 1] * w10 + rtl[i + nx] * w01 + rtl[i + nx + 1] * w11
+            rb = rbl[i] * w00 + rbl[i + 1] * w10 + rbl[i + nx] * w01 + rbl[i + nx + 1] * w11
         # distance to the top and bottom faces; within a fillet radius of the rim the rounded
         # edge is a true circle (a distance field, so the iso-surface stays smooth)
         a, b = tt - z, z - bb
@@ -312,7 +332,47 @@ def build_body(plan: Polygon, prof: Profile, edge_len: float = 1.0) -> Body:
     lo = (x0 - 2 * step, y0 - 2 * step, zlo)
     hi = (x1 + 2 * step, y1 + 2 * step, zhi)
     solid = mf.Manifold.level_set(sdf, [*lo, *hi], edge_len)
+    pieces = solid.decompose()
+    if len(pieces) > 1:  # sub-voxel crumbs the iso-surface leaves where two heights blend
+        solid = max(pieces, key=lambda m: m.volume())
     return Body(plan, ras, top, bot, prof, solid)
+
+
+def _fillet_a(d: np.ndarray, r: np.ndarray) -> np.ndarray:
+    x = np.clip(d, 0.0, r)
+    return r - np.sqrt(np.maximum(r * r - (r - x) ** 2, 0.0))
+
+
+def _shaped(
+    ras: Raster,
+    shape: Shape,
+    prof: Profile,
+    top0: np.ndarray,
+    bot0: np.ndarray,
+    rt_a: np.ndarray,
+    rb_a: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """A wedge deepens the underside toward its thick end, so the face and every part on it stay
+    where they are and the product sits tilted toward the person; an appendage is a flat plate
+    on the floor plane, its edges rounded to suit its thickness."""
+    xs = ras.x0 + ras.step * np.arange(ras.nx)
+    ys = ras.y0 + ras.step * np.arange(ras.ny)
+    gx, gy = np.meshgrid(xs, ys)
+    if shape.wedge is not None and shape.wedge[1] > 0.05:
+        a = math.radians(shape.wedge[0])
+        proj = gx * math.cos(a) + gy * math.sin(a)
+        inside = ras.d > 0
+        lo, hi = float(proj[inside].min()), float(proj[inside].max())
+        bot0 = bot0 - shape.wedge[1] * np.clip((proj - lo) / max(hi - lo, 1e-6), 0.0, 1.0)
+    for poly, th in shape.thin:
+        m = shapely.contains_xy(poly, gx.ravel(), gy.ravel()).reshape(gx.shape).astype(float)
+        m = np.clip(_blur(m, 1.2 / ras.step), 0.0, 1.0)
+        top0 = top0 * (1 - m) + (prof.z_floor + th) * m
+        bot0 = bot0 * (1 - m) + prof.z_floor * m
+        r = 0.4 * th
+        rt_a = rt_a * (1 - m) + np.minimum(rt_a, r) * m
+        rb_a = rb_a * (1 - m) + np.minimum(rb_a, r) * m
+    return top0, bot0, rt_a, rb_a
 
 
 # ---------------------------------------------------------------- anchors -> sites
@@ -394,6 +454,8 @@ def sites_from_anchors(
             )
             near = None
             best = 30.0 if kind == "port" else max(6.0, 0.7 * pitch)
+            if s.mount == "edge":
+                best = max(best, 12.0)  # the anchor rides the rim, its switch sits inboard
             for f in feats:
                 if f.ref in claimed or f.role in ("battery", "sensor", "trackball"):
                     continue
@@ -518,6 +580,9 @@ class Features:
     wheels: list[dict[str, Any]] = field(default_factory=list)  # wheel slots, for checks
     claimed: set[str] = field(default_factory=set)
     kinds: dict[str, int] = field(default_factory=dict)
+    # parts a finger reaches some way other than straight down through the top: a side button,
+    # a bumper bar over them, or a press through the stick or wheel above
+    reached: set[str] = field(default_factory=set)
 
 
 def shoulder_lobes(sites: list[Site], plan: Polygon) -> list[Polygon]:
@@ -590,6 +655,7 @@ def build_features(
             out.kinds[s.kind] = out.kinds.get(s.kind, 0) + 1
             continue
         if s.kind == "button" and s.mount == "front" and _under_knob(s, knobs, clear):
+            out.reached.add(s.ref)
             continue  # pressed through the wheel or stick above it (a mouse's middle click)
         if s.kind == "inner":
             continue
@@ -605,7 +671,7 @@ def build_features(
             if s.group not in cross:
                 cross[s.group] = _cross_sites([t for t in sites if t.group == s.group])
                 _dpad(out, cross[s.group], body, seat, zmax, clear)
-            elif not any(t is s for t in cross[s.group]):
+            if not any(t is s for t in cross[s.group]):
                 _button(out, s, body, seat, zmax, clear)  # the slot's other switches (A/B, start)
         elif s.kind == "light":
             _light(out, s, body, seat, zmax)
@@ -709,6 +775,7 @@ def _grille(out: Features, s: Site, body: Body, seat: float, zmax: float) -> Non
     w, d = (s.w, s.d) if s.w and s.d else (12.0, 12.0)
     span, length = max(w, d), max(4.0, min(w, d) - 1.0)
     n = max(2, int(span // GRILLE_PITCH_MM))
+    n += 1 - n % 2  # odd: one slot runs over the part's centre, where its sound port is
     zc = body.top_at(s.x, s.y)
     ang = math.radians(s.rot)
     ux, uy = math.cos(ang), math.sin(ang)  # slots step along the footprint's long side
@@ -802,6 +869,7 @@ def _shoulder(out: Features, group: list[Site], body: Body, seat: float, clear: 
     ]
     bar = mf.Manifold.batch_hull(ends).scale((1.0, 1.0, 0.72)).translate((0, 0, zt - 0.2))
     out.caps.append(bar)
+    out.reached.update(s.ref for s in group)
     for s in group:
         if s.w and s.d:
             c = 2 * clear
@@ -876,6 +944,7 @@ def _edge_button(out: Features, s: Site, body: Body, wall_mm: float, clear: floa
     hit = _exit_distance(body.plan, s.x, s.y, nx, ny)
     if hit is None:
         return
+    out.reached.add(s.ref)
     lo, hi = body.land()
     zc = 0.5 * (lo + hi)
     r_c = max(max(s.w, s.d) / 2, 2.6)
@@ -928,3 +997,56 @@ def _cut(
         "center_mm": [round(x, 3), round(y, 3), round(z, 3)],
         "size_mm": [round(size, 3), round(size2 if size2 is not None else size, 3)],
     }
+
+
+# ---------------------------------------------------------------- surface features
+
+GROOVE_W_MM, GROOVE_DEPTH_MM = 1.0, 0.7  # lid and tile lines
+RECESS_DEPTH_MM, RAISED_MM = 1.0, 1.2
+
+
+def _skin(body: Body, cs: mf.CrossSection, seat: float, depth: float) -> mf.Manifold:
+    """The body's material within `depth` under its top surface, over the cross-section: a cut
+    that follows the crown instead of a flat floor."""
+    zmax = float(body.solid.bounding_box()[5]) + 1.0
+    return _prism(cs, seat, zmax) - body.solid.translate((0.0, 0.0, -depth))
+
+
+def surface_features(out: Features, feats: list[dict[str, Any]], body: Body, seat: float) -> None:
+    """Grooves, pockets, pads and lenses on the main face, from the form's features."""
+    for f in feats:
+        kind = f.get("kind")
+        cx, cy = (float(v) for v in f.get("centre") or (0.0, 0.0))
+        w, h = float(f.get("width_mm") or 0.0), float(f.get("height_mm") or 0.0)
+        rot = float(f.get("rot_deg") or 0.0)
+        if w <= 0 or h <= 0 or kind not in ("panel_grid", "recess", "raised", "lens"):
+            continue
+        box = _rrect(cx, cy, w, h, rot, min(2.0, 0.2 * min(w, h)))
+        if kind == "panel_grid":
+            lines = [box - box.offset(-GROOVE_W_MM, mf.JoinType.Round)]
+            cols, rows = max(1, int(f.get("cols") or 1)), max(1, int(f.get("rows") or 1))
+            a = math.radians(rot)
+            ux, uy, vx, vy = math.cos(a), math.sin(a), -math.sin(a), math.cos(a)
+            for i in range(1, cols):
+                u = -w / 2 + i * w / cols
+                lines.append(_rrect(cx + ux * u, cy + uy * u, GROOVE_W_MM, h, rot, 0.0))
+            for j in range(1, rows):
+                v = -h / 2 + j * h / rows
+                lines.append(_rrect(cx + vx * v, cy + vy * v, w, GROOVE_W_MM, rot, 0.0))
+            grid = mf.CrossSection.batch_boolean(lines, mf.OpType.Add) ^ box
+            out.cuts.append(_skin(body, grid, seat, GROOVE_DEPTH_MM))
+        elif kind == "recess":
+            out.cuts.append(_skin(body, box, seat, RECESS_DEPTH_MM))
+        elif kind == "raised":
+            zmax = float(body.solid.bounding_box()[5]) + RAISED_MM + 1.0
+            out.adds.append(_prism(box, seat, zmax) ^ body.solid.translate((0, 0, RAISED_MM)))
+        else:  # a clear dome seated in a low rim
+            tall = max(float(f.get("thickness_mm") or 0.0), 0.5)
+            zc = body.top_at(cx, cy)
+            dome = mf.Manifold.sphere(1.0, 64).scale((w / 2, h / 2, tall)).rotate((0, 0, rot))
+            out.glass.append(dome.translate((cx, cy, zc - 0.3)).trim_by_plane((0, 0, 1), seat))
+            rim = box.offset(1.2, mf.JoinType.Round) - box
+            zmax = float(body.solid.bounding_box()[5]) + 2.0
+            out.adds.append(_prism(rim, seat, zmax) ^ body.solid.translate((0, 0, 0.8)))
+        out.cutouts.append(_cut(kind, cx, cy, body.top_at(cx, cy), max(w, h), "unknown"))
+        out.kinds[kind] = out.kinds.get(kind, 0) + 1

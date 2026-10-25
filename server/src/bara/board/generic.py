@@ -244,7 +244,7 @@ def plan_device_board(
                 0.0,
                 0.0,
                 "top",
-                label=str(record.get("display_name") or part.get("label") or fp.name)[:60],
+                label=_label(part, record, fp.name),
                 height_mm=_height(record),
                 meta={"instance_id": part["instance_id"], "pins": _pins_for(record, fp)},
                 model_override=_model_for(fp),
@@ -549,13 +549,21 @@ def _bbox_mm(record: dict[str, Any]) -> tuple[float, float, float] | None:
     return (w, h, t) if min(w, h) > 0 else None
 
 
+def _label(part: dict[str, Any], record: dict[str, Any], default: str) -> str:
+    """What a footprint is called on the board and in the schematic: the part's card name (a
+    plain "Key switch"), never the library record's maker and series."""
+    card = part.get("card") or {}
+    return str(card.get("display_name") or part.get("label") or record.get("display_name")
+               or default)[:60]  # fmt: skip
+
+
 def _module_cell(part: dict[str, Any], record: dict[str, Any], ref: str, touch: set[str]) -> Item:
     """A module with its own envelope (panel, power supply, driver board): placed on the form,
     not packed on the PCB; a connector on the main board carries its supply."""
     w, h, t = _bbox_mm(record) or (1.0, 1.0, 1.0)
     return Item(
         ref, "module", None, 0, 0, 0, "bottom",
-        label=str(record.get("display_name") or part.get("label") or "module")[:60],
+        label=_label(part, record, "module"),
         on_pcb=False, size_mm=(w, h), height_mm=t,
         meta={
             "instance_id": part["instance_id"],
@@ -581,7 +589,7 @@ def _battery_cell(part: dict[str, Any], record: dict[str, Any], ref: str) -> Ite
         0,
         0,
         "bottom",
-        label=str(record.get("display_name") or R.BATTERY_CELL["label"])[:60],
+        label=_label(part, record, R.BATTERY_CELL["label"]),
         on_pcb=False,
         size_mm=(float(w), float(h)),
         height_mm=float(t),
