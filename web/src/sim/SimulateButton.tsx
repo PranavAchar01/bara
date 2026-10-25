@@ -1,38 +1,21 @@
-import { useEffect } from "react";
 import { useApp } from "../state/store";
 import { Icon } from "../ui/common";
 import { openSimPanel } from "./simPanelStore";
 
-// A /build/<id>#/sim/<id> link: read once at load, since the router rewrites the address before the build arrives.
-let linkedSim: string | null = typeof window === "undefined" ? null : (/^#\/sim\/([A-Za-z0-9_-]{1,64})$/.exec(window.location.hash)?.[1] ?? null);
-
-/** The firmware simulator needs the parts and the controller, not a finished case: a build that failed
- *  at a later stage (enclosure, routing) still simulates. */
-function useSimReady(): { ready: boolean; id: string | null } {
-  const ready = useApp((s) => !!s.build && (s.build.status === "done" || s.build.status === "failed") && (s.build.parts?.length ?? 0) > 0);
-  const id = useApp((s) => s.build?.build_id ?? null);
-  return { ready, id };
-}
-
-/** Top right of the workspace, beside Export: opens the simulation screen (same as the viewport's "simulate"). */
+/** Top right of the workspace, beside Export: opens the build's firmware panel (the bot can demo the device there). The in-viewport "simulate" toggle is the main simulation mode. */
 export function SimulateButton() {
-  const { ready, id } = useSimReady();
-  // a /build/<id>#/sim/<id> link opens the simulator once that build has loaded
-  useEffect(() => {
-    if (ready && id && linkedSim === id) {
-      linkedSim = null;
-      openSimPanel();
-    }
-  }, [ready, id]);
+  const hasFirmware = useApp((s) => !!s.build?.firmware);
+  const running = useApp((s) => s.build?.status === "running" || s.build?.status === "awaiting_input");
+  const ready = hasFirmware && !running;
   return (
     <button
       type="button"
       className="btn sm"
       disabled={!ready}
       onClick={openSimPanel}
-      title={ready ? "Build the firmware, run it on the device and test it" : "Simulation opens when the build has its parts"}
+      title={ready ? "Run the build's firmware on the device, or let the bot demo it" : hasFirmware ? "The firmware panel opens when the build is done" : "The firmware panel needs the build's firmware"}
     >
-      <Icon name="play" size={12} /> Simulate
+      <Icon name="play" size={12} /> Firmware
     </button>
   );
 }

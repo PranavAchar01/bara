@@ -108,7 +108,7 @@ export function useNow(active: boolean, ms = 100): number {
   return now;
 }
 
-export function Icon(props: { name: "x" | "stop" | "send" | "chevron" | "export" | "home" | "play"; size?: number }) {
+export function Icon(props: { name: "x" | "stop" | "send" | "chevron" | "export" | "home" | "play" | "library"; size?: number }) {
   const s = props.size ?? 14;
   const common = { width: s, height: s, viewBox: "0 0 16 16", "aria-hidden": true } as const;
   switch (props.name) {
@@ -128,6 +128,15 @@ export function Icon(props: { name: "x" | "stop" | "send" | "chevron" | "export"
       return (
         <svg {...common}>
           <path d="M3 8h9M8.5 4.5L12 8l-3.5 3.5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+    case "library":
+      return (
+        <svg {...common}>
+          <rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1" fill="none" stroke="currentColor" strokeWidth="1.5" />
+          <rect x="9" y="2.5" width="4.5" height="4.5" rx="1" fill="none" stroke="currentColor" strokeWidth="1.5" />
+          <rect x="2.5" y="9" width="4.5" height="4.5" rx="1" fill="none" stroke="currentColor" strokeWidth="1.5" />
+          <rect x="9" y="9" width="4.5" height="4.5" rx="1" fill="none" stroke="currentColor" strokeWidth="1.5" />
         </svg>
       );
     case "chevron":

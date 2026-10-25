@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { ShoppingListButton } from "./ShoppingList";
 import { useApp } from "../state/store";
 import { paths } from "../net/rest";
 import { serverUrl, storeKey } from "../net/mode";
@@ -7,7 +6,6 @@ import { Icon } from "../ui/common";
 import { ReplayControl } from "../bot/ReplayControl";
 import type { ConnStatus } from "../net/connection";
 import { SimulateButton } from "../sim/SimulateButton";
-import { useLibrary } from "../library/library";
 
 const CONN_LABEL: Record<ConnStatus, string> = {
   connecting: "Connecting",
@@ -37,7 +35,7 @@ export function TopBar() {
   return (
     <header className="topbar">
       <button type="button" className="brand" onClick={() => useApp.setState({ screen: "home" })} title="Home">
-        <span>Hardware builder</span>
+        <span>Bara</span>
       </button>
       {screen === "workspace" && build && (
         <div className="topbar-build">
@@ -49,8 +47,7 @@ export function TopBar() {
         </div>
       )}
       <div className="topbar-right">
-        {screen === "workspace" && (mock || hello?.mock) && <span className="badge tone-info">mock</span>}
-        {/* Which model answers is a detail for the hover, not a label on the page. */}
+        {(mock || hello?.mock) && <span className="badge tone-info">mock</span>}
         <span
           className={`conn-pill tone-${CONN_TONE[conn]}`}
           aria-live="polite"
@@ -64,29 +61,20 @@ export function TopBar() {
             <Icon name="home" /> Home
           </button>
         )}
-        {screen === "workspace" && <ShoppingListButton />}
-        <ExportMenu />
-        {screen !== "workspace" && <DraftsButton />}
+        {screen === "workspace" ? (
+          <ExportMenu />
+        ) : (
+          <button
+            type="button"
+            className={`btn sm ${screen === "library" ? "primary" : ""}`}
+            aria-pressed={screen === "library"}
+            onClick={() => useApp.setState({ screen: screen === "library" ? "home" : "library" })}
+          >
+            <Icon name="library" /> Library
+          </button>
+        )}
       </div>
     </header>
-  );
-}
-
-/** Top right of Home: opens the Library page (finished builds plus this browser's drafts); on Library it goes back. */
-function DraftsButton() {
-  const screen = useApp((s) => s.screen);
-  const count = useLibrary((s) => s.cards.length);
-  const on = screen === "drafts";
-  return (
-    <button
-      type="button"
-      className={`btn sm drafts-btn ${on ? "on" : ""}`}
-      aria-current={on ? "page" : undefined}
-      onClick={() => useApp.setState({ screen: on ? "home" : "drafts" })}
-    >
-      Library
-      {count > 0 && <span className="drafts-n mono">{count}</span>}
-    </button>
   );
 }
 
@@ -155,7 +143,6 @@ export function PanelToolbar() {
       </button>
       <span className="spacer" />
       <SimulateButton />
-      <ShoppingListButton compact />
       <ExportMenu primary />
     </div>
   );

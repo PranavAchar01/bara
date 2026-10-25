@@ -15,7 +15,6 @@ import { closeCanvasTab } from "../net/client";
 import { Icon } from "../ui/common";
 import "./canvasTabs.css";
 import { stopReplay } from "../bot/replay";
-import { ProjectButton } from "../project/ProjectPanel";
 
 const STATUS_TITLE: Record<CanvasStatus, string> = {
   empty: "Empty",
@@ -62,7 +61,6 @@ export function CanvasTabs() {
           />
         </svg>
       </button>
-      <ProjectButton />
     </nav>
   );
 }
