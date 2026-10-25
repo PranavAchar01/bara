@@ -238,7 +238,11 @@ class Item:
         may hang past the edge, the way a module's antenna is meant to sit."""
         keep = self.keepout_poly()
         poly = self.footprint_poly()
-        return poly.difference(keep) if keep is not None else poly
+        if keep is None:
+            return poly
+        if self.fp is not None and self.fp.fab:  # the module's own antenna end stays aboard
+            keep = keep.difference(self.world(box(*self.fp.fab)))
+        return poly.difference(keep)
 
     def cutout_poly(self) -> Polygon | None:
         """A hole the footprint cuts in the board (its own Edge.Cuts), in board coords."""

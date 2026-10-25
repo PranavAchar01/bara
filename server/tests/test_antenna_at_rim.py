@@ -4,6 +4,8 @@ so only its body has to fit the outline."""
 
 from __future__ import annotations
 
+from shapely.geometry import box
+
 from bara.board.generic import form_region, place_in_form
 from bara.board.layout import Item
 from bara.board.libs import find_footprint
@@ -21,5 +23,6 @@ def test_a_module_antenna_hangs_past_the_edge() -> None:
     assert pf["fit_report"]["ok"], log
     region = form_region(pf, 1.0)
     assert region.buffer(-0.4).contains(mcu.body_poly())
+    assert region.contains(mcu.world(box(*fp.fab)))  # the module itself never leaves the board
     keep = mcu.keepout_poly()
     assert keep is not None and keep.difference(region).area > 0.5 * keep.area  # mostly outside
