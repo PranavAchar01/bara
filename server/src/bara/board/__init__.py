@@ -15,18 +15,20 @@ import fcntl
 import hashlib
 import json
 import shutil
+import subprocess
 import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-from shapely.geometry import Point, Polygon
+from shapely.geometry import Point, Polygon, box
 
 from bara.config import load_settings
 from bara.geometry import glbopt
 
 from . import kicad as K
 from . import registry as R
+from . import schematic as SCH
 from .layout import HALF_GAP_MM, BoardPlan, plan_boards, sensor_lens
 from .libs import LIBRARIES, repo_commit
 
@@ -145,23 +147,36 @@ def _fp_lib_table(plan_data: dict) -> str:
     return f"(fp_lib_table\n  (version 7)\n{body})\n"
 
 
-def _cache_key(kicad_input: dict, passes: int) -> str:
+def _cache_key(kicad_input: dict, passes: int, effort: int = 0) -> str:
     stable = json.loads(json.dumps(kicad_input))
     stable.pop("board_path", None)
     stable.pop("dsn_path", None)
-    blob = json.dumps(
-        {
-            "v": CACHE_VERSION,
-            "input": stable,
-            "rules": K.RULES,
-            "passes": passes,
-            "freerouting": K.FREEROUTING_VERSION,
-            "strategies": K.ROUTE_STRATEGIES,
-            "script": hashlib.sha256(K.SCRIPT.read_bytes()).hexdigest(),
-        },
-        sort_keys=True,
-    )
+    key = {
+        "v": CACHE_VERSION,
+        "input": stable,
+        "rules": K.RULES,
+        "passes": passes,
+        "freerouting": K.FREEROUTING_VERSION,
+        "strategies": K.ROUTE_STRATEGIES,
+        "script": hashlib.sha256(K.SCRIPT.read_bytes()).hexdigest(),
+    }
+    if effort:  # a repair round asks for more than the cached attempt tried
+        key["effort"] = effort
+    blob = json.dumps(key, sort_keys=True)
     return hashlib.sha256(blob.encode()).hexdigest()[:24]
+
+
+def _ladder_id(effort: int) -> list:
+    """What a routing run tries: a cached incomplete result from a shorter ladder is stale."""
+    return json.loads(json.dumps([K.LAYER_LADDER, K.FOUR_LAYER_STRATEGIES, effort]))
+
+
+def _cache_usable(cached: dict, effort: int) -> bool:
+    """A cached board is reused when it routed, or when it was given everything this run
+    would try. Otherwise the same input would come back with the same open connections."""
+    if int((cached.get("drc") or {}).get("unconnected", 0)) == 0:
+        return True
+    return cached.get("ladder") == _ladder_id(effort)
 
 
 @contextmanager
@@ -176,6 +191,17 @@ def _key_lock(path: Path) -> Iterator[None]:
             fcntl.flock(fh, fcntl.LOCK_UN)
 
 
+def _strategies(layers: int, effort: int) -> list[tuple[str, list[str], dict | None, int]]:
+    base = K.ROUTE_STRATEGIES if layers == 2 else K.FOUR_LAYER_STRATEGIES
+    out = [(name, extra, None, layers) for name, extra in base]
+    if effort:  # repair rounds: search orders the first pass did not try
+        out += [
+            (f"ripup_{c}", [f"--router.scoring.start_ripup_costs={c}"], None, layers)
+            for c in (25 * effort, 100 + 150 * effort)
+        ]
+    return out
+
+
 def _route_one(
     plan: BoardPlan,
     work_root: Path,
@@ -184,18 +210,19 @@ def _route_one(
     route_timeout_s: float,
     passes: int,
     progress: Progress,
+    effort: int = 0,
 ) -> dict:
     t0 = time.monotonic()
     probe = K.plan_json(plan, Path("main.kicad_pcb"), Path("main.dsn"))
-    key = _cache_key(probe, passes)
+    key = _cache_key(probe, passes, effort)
     work = work_root / key
     result_path = work / "result.json"
     glb = glb_root / f"{key}.glb"
     # Identical boards from concurrent builds share this key, work dir and GLB path. Without
     # the lock their kicad-cli runs interleave into one corrupt GLB that then stays cached.
     with _key_lock(work_root / f"{key}.lock"):
-        if result_path.exists() and glb.exists():
-            cached = json.loads(result_path.read_text())
+        cached = json.loads(result_path.read_text()) if result_path.exists() else None
+        if cached is not None and glb.exists() and _cache_usable(cached, effort):
             if not glbopt.is_valid(glb) and (work / "main.kicad_pcb").exists():
                 # Routing is cached and fine; only the GLB is damaged: export it again.
                 progress(f"{plan.name}: re-exporting damaged GLB {key}", 0.85)
@@ -227,29 +254,30 @@ def _route_one(
         deadline = time.monotonic() + route_timeout_s
         drc: dict = {}
         route: dict = {}
-        strategies: list[tuple[str, list[str], dict | None]] = [
-            (name, extra, None) for name, extra in K.ROUTE_STRATEGIES
-        ]
-        best: tuple[int, dict, Path] | None = None  # (score, drc, saved board)
+        ladder = list(K.LAYER_LADDER)
+        strategies = _strategies(ladder.pop(0), effort)
+        best: tuple[int, dict, Path, int] | None = None  # (score, drc, saved board, layers)
         widened = False
         i = 0
         while i < len(strategies):
-            strategy, extra, rules = strategies[i]
+            strategy, extra, rules, layers = strategies[i]
             remaining = deadline - time.monotonic()
             if i and remaining < 10:
                 break
             for stale in (pcb, dsn, ses):
                 stale.unlink(missing_ok=True)
+            data = K.with_layers(plan_data, layers)
             if rules is not None:
-                widened_plan = {**plan_data, "rules": rules}
-                plan_path.write_text(json.dumps(widened_plan, indent=1))
-            progress(f"{plan.name}: writing KiCad board", 0.1)
+                data["rules"] = rules
+            plan_path.write_text(json.dumps(data, indent=1))
+            progress(f"{plan.name}: writing KiCad board ({layers} layers)", 0.1)
             t = time.monotonic()
             K.build_pcb(plan_path)
             timings["kicad_build_s"] = round(time.monotonic() - t, 2)
 
             progress(
-                f"{plan.name}: autorouting with Freerouting {K.FREEROUTING_VERSION} ({strategy})",
+                f"{plan.name}: autorouting with Freerouting {K.FREEROUTING_VERSION} "
+                f"({strategy}, {layers} layers)",
                 0.25,
             )
             try:
@@ -261,13 +289,15 @@ def _route_one(
                 if "timed out" not in str(exc):
                     raise
                 # too slow on this board: try again with relaxed rules and fewer passes
-                attempts.append({"strategy": strategy, "timed_out": True})
+                attempts.append({"strategy": strategy, "layers": layers, "timed_out": True})
                 passes = max(10, passes // 2)
                 if not widened:
-                    strategies.insert(i + 1, ("wide_rules", [], K.WIDE_RULES))
+                    strategies.insert(i + 1, ("wide_rules", [], K.WIDE_RULES, layers))
                     widened = True
                 if i + 1 >= len(strategies) or deadline - time.monotonic() < 10:
-                    raise
+                    if best is None:
+                        raise
+                    break
                 i += 1
                 continue
             timings["route_s"] = round(timings.get("route_s", 0.0) + route["seconds"], 2)
@@ -284,17 +314,19 @@ def _route_one(
             attempts.append(
                 {
                     "strategy": strategy,
+                    "layers": layers,
                     "route_s": route["seconds"],
                     "passes": route.get("passes"),
                     "errors": drc["errors"],
                     "unconnected": drc["unconnected"],
                 }
             )
+            # an open connection is worse than a DRC error; at equal score fewer layers win
             score = drc["errors"] + 3 * drc["unconnected"]
             if best is None or score < best[0]:
                 saved = work / "best.kicad_pcb"
                 shutil.copyfile(pcb, saved)
-                best = (score, drc, saved)
+                best = (score, drc, saved, layers)
             if drc["errors"] == 0 and drc["unconnected"] == 0:
                 break
             if (
@@ -304,9 +336,20 @@ def _route_one(
                 and best[1]["unconnected"] == 0
                 and any(k.removeprefix("error:") in K.WIDENABLE for k in best[1].get("by_type", {}))
             ):
-                strategies.append(("wide_rules", [], K.WIDE_RULES))
+                strategies.append(("wide_rules", [], K.WIDE_RULES, best[3]))
                 widened = True
-            progress(f"{plan.name}: {drc['errors']} DRC errors after {strategy}, retrying", 0.3)
+            elif (
+                i == len(strategies) - 1 and ladder and best is not None and best[1]["unconnected"]
+            ):
+                # every search order left connections open on this layer count: add layers,
+                # with a budget of its own (the first ladder step may have used all of it)
+                strategies += _strategies(ladder.pop(0), effort)
+                deadline = max(deadline, time.monotonic() + route_timeout_s)
+            progress(
+                f"{plan.name}: {drc['errors']} DRC errors, {drc['unconnected']} unconnected "
+                f"after {strategy} ({layers} layers), retrying",
+                0.3,
+            )
             i += 1
         if best is None:
             raise K.ToolError("no routing strategy finished inside the time budget")
@@ -326,12 +369,15 @@ def _route_one(
             "kicad_pcb": str(pcb),
             "glb_path": str(glb),
             "drc": drc,
+            "copper_layers": best[3],
+            "ladder": _ladder_id(effort),
             "routing": {
                 **K.count_routing(pcb),
                 "router_unrouted": route.get("unrouted"),
                 "passes": route.get("passes"),
                 "unrouted_nets": drc.get("unconnected_nets", []),
                 "strategy": attempts[-1]["strategy"],
+                "copper_layers": best[3],
                 "attempts": attempts,
             },
             "timings": timings,
@@ -339,6 +385,35 @@ def _route_one(
         }
         result_path.write_text(json.dumps(result, indent=1))
         return result
+
+
+def _schematic(plan: BoardPlan, work: Path, glb_root: Path, key: str, title: str) -> dict:
+    """The board's schematic beside its routed copper, exported to SVG and PDF (served next
+    to the GLB) and checked against the board's own nets."""
+    sch = work / "main.kicad_sch"
+    name = f"{title} ({plan.name} board)" if plan.name != "main" else title
+    sheet = SCH.write(plan.items, sch, title=name)
+    try:
+        files = SCH.export(sch, work / "schematic", K.KICAD_CLI)
+        off = SCH.mismatches(plan.items, SCH.netlist(sch, K.KICAD_CLI))
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+        return {"kicad_sch": str(sch), "status": "failed", "error": str(exc)[-400:]}
+    out = {
+        "kicad_sch": str(sch),
+        "page": sheet.page,
+        "blocks": sheet.blocks,
+        "symbols": sheet.symbols,
+        "matches_board": not off,
+        "mismatches": off[:10],
+        "status": "ok" if not off else "failed",
+    }
+    for kind, src in files.items():
+        dst = glb_root / f"{key}.sch.{kind}"
+        shutil.copyfile(src, dst)
+        sha = hashlib.sha256(dst.read_bytes()).hexdigest()[:16]
+        out[kind] = str(dst)
+        out[f"{kind}_url"] = f"/assets/cache/boards/{dst.name}?v={sha}"
+    return out
 
 
 # ---------------------------------------------------------------- records
@@ -361,6 +436,11 @@ def _placements(
         # x/y and placement.position_mm are the footprint origin (where the KiCad model sits);
         # x_mm/y_mm are the body (courtyard) centre, which is what size_mm is centred on.
         cx, cy = _to_build(*it.centre(), dx, dy) if it.fp else (bx, by)
+        if it.fp is not None and it.fp.keepouts and it.fp.fab:  # the clearance is not body
+            x0, y0, x1, y1 = it.fp.fab
+            size = [x1 - x0, y1 - y0]
+            c = it.world(box(x0, y0, x1, y1)).centroid
+            cx, cy = _to_build(c.x, c.y, dx, dy)
         out.append(
             {
                 "ref": it.ref,
@@ -493,6 +573,19 @@ def _attach_daughter_boards(boards: list[dict]) -> None:
             cab["to_ref"] = ref
 
 
+SUPPLY_NETS = ("3V3", "BAT+", "VBAT_IN", "VDD18", "VDDPIX", "5V", "VBUS", "VBAT")
+
+
+def _drop_lone_supplies(plan: BoardPlan) -> None:
+    """A supply pin nothing draws from is an unused pad, not a net: a keyboard with no screen
+    leaves its controller's 3V3 output open."""
+    pads = [(it, pin) for it in plan.items if it.on_pcb for pin, net in it.pads.items() if net]
+    for it, pin in pads:
+        net = it.pads[pin]
+        if net in SUPPLY_NETS and sum(o.pads.get(q) == net for o, q in pads) == 1:
+            it.pads[pin] = ""
+
+
 def _nets(plan: BoardPlan, side_tag: str) -> list[dict]:
     members: dict[str, list[dict]] = {}
     for it in plan.items:
@@ -505,13 +598,7 @@ def _nets(plan: BoardPlan, side_tag: str) -> list[dict]:
                 )
     out = []
     for name in sorted(members):
-        kind = (
-            "ground"
-            if name == "GND"
-            else "power"
-            if name in ("3V3", "BAT+", "VBAT_IN", "VDD18", "VDDPIX", "5V", "VBUS", "VBAT")
-            else "signal"
-        )
+        kind = "ground" if name == "GND" else "power" if name in SUPPLY_NETS else "signal"
         out.append({"name": name, "kind": kind, "members": members[name]})
     return out
 
@@ -545,7 +632,7 @@ def _footprints(placements: list[dict]) -> list[dict]:
             "label": p.get("label"),
             "role": p.get("role"),
             "lib_id": p.get("lib_id") or None,
-            "instance_id": p.get("instance_id"),
+            "instance_id": p.get("for_instance_id") or p.get("instance_id"),
             "center_mm": [round(p["x_mm"], 3), round(p["y_mm"], 3)],
             "size_mm": [round(v, 3) for v in (p.get("size_mm") or [1, 1])[:2]],
             "rot_deg": p.get("rot_deg", 0.0),
@@ -593,6 +680,8 @@ def plan_board(brief: dict, parts: list[dict], *, build_id: str | None = None) -
         plans = [plan_device_board(parts, log, brief)]
     else:
         b, plans, log = plan_boards(brief)
+    for plan in plans:
+        _drop_lone_supplies(plan)
     plan_s = round(time.monotonic() - t, 3)
     roles = _parts_by_role(parts)
     fp_hint, model_hint = _catalog_lookup(roles.get("mcu"))
@@ -666,6 +755,7 @@ def plan_board(brief: dict, parts: list[dict], *, build_id: str | None = None) -
     _attach_daughter_boards(boards)
     return {
         "build_id": build_id,
+        "title": str(brief.get("device") or brief.get("name") or ""),
         "boards": boards,
         "controller": {bd["name"]: bd["controller"] for bd in boards if bd["controller"]},
         "pin_budget": {bd["name"]: bd["pin_budget"] for bd in boards if bd["pin_budget"]},
@@ -689,8 +779,10 @@ def route_board(
     progress: Progress | None = None,
     route_timeout_s: float = 300.0,
     passes: int = 100,
+    effort: int = 0,
 ) -> dict:
-    """Phase 2: write each planned board with pcbnew, autoroute, DRC, export the GLB."""
+    """Phase 2: write each planned board with pcbnew, autoroute, DRC, export the GLB.
+    effort > 0 (a repair round) widens the search past what an incomplete cached run tried."""
     report: Progress = progress or (lambda _msg, _frac: None)
     t0 = time.monotonic()
     settings = load_settings()
@@ -706,7 +798,13 @@ def route_board(
         def sub(msg: str, frac: float | None, _i: int = i) -> None:
             report(msg, None if frac is None else (_i + frac) / len(boards))
 
-        res = _route_one(plan, work_root, glb_root, origin_plan, route_timeout_s, passes, sub)
+        res = _route_one(
+            plan, work_root, glb_root, origin_plan, route_timeout_s, passes, sub, effort
+        )
+        report(f"{plan.name}: drawing the schematic", None)
+        schematic = _schematic(
+            plan, Path(res["kicad_pcb"]).parent, glb_root, res["key"], planned.get("title", "")
+        )
         drc = res["drc"]
         ok = drc["errors"] == 0 and drc["unconnected"] == 0
         glb_ref = _glb_ref(Path(res["glb_path"]), res["key"])
@@ -719,7 +817,7 @@ def route_board(
             "outline_mm": entry["outline"],
             "size_mm": entry["size_mm"],
             "thickness_mm": PCB_THICKNESS_MM,
-            "layers": 2,
+            "layers": int(res.get("copper_layers") or 2),
             "position_mm": [0.0, 0.0, 0.0],
             "rotation_deg": [0.0, 0.0, 0.0],
             "nets": entry["nets"],
@@ -750,6 +848,7 @@ def route_board(
                 "routing": res["routing"],
                 "timings": res["timings"],
                 "cache_hit": res["cache_hit"],
+                "schematic": schematic,
             }
         )
     main = boards[0]
@@ -775,6 +874,7 @@ def route_board(
             "nets": main["nets"],
             "outline": main["outline"],
             "placements": main["placements"],
+            "schematic": main["schematic"],
         }
     )
     return planned

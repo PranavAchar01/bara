@@ -32,12 +32,18 @@ Rules:
   search_terms: up to three real manufacturer part numbers (MPNs) a hobbyist can buy on LCSC or
   that exist in KiCad's library, best first. For generic parts (buttons, headers, batteries)
   leave search_terms empty. Never invent an MPN; if you do not know one, leave it empty.
+- Every block is a standard part a hobbyist can buy. Where mass-produced products of this kind
+  use a custom part (custom display glass, printed membranes, single-purpose chips), choose the
+  nearest standard part instead (a display module, discrete switches, the microcontroller
+  doing the job in firmware) and describe it that way in the label.
 - Include everything the product needs to work as that product: the controller (compute.mcu, or
   compute.sbc when the product runs a full operating system), a power path, the sensing and
   I/O its function implies (a pointing device needs its sensor, an audio device its codec or
   amplifier and transducer, a display device its driver or bridge and connector, a wireless
   product its radio), and the mechanical parts users touch.
-- List only parts that must be chosen and bought. Leave out: the enclosure, the PCB, cables,
+- List only parts that must be chosen and bought. Leave out: the enclosure and everything
+  that is made as part of it (display windows, lens covers, plates, weights, feet, bezels,
+  light pipes; the case stage makes those), the PCB, cables,
   fasteners, gaskets, standoffs, resistors/capacitors/inductors/diodes/crystals (support parts
   are added automatically), on-chip radios and antennas of a module you already list, and
   rigid flex details. compute.mcu means a programmable microcontroller module only; a dedicated
