@@ -18,6 +18,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from typing import Any
 
+from bara.board.generic import gpio_pins
 from bara.kicad_generated import GLB_URL, SERVER, KicadIndex, glb_stem
 from bara.live import completeness as cp
 from bara.live.ask import ask_json
@@ -523,7 +524,7 @@ class Composer:
         cid = self.board_controller_for(part)
         if cid is not None:
             return self.board_controllers[cid]
-        return gpio_count(part)
+        return gpio_count(part) or gpio_pins(part)  # no typed gpio interface: its KiCad pins
 
     def pin_need_for(self, side: str) -> tuple[int, list[str]]:
         half = None

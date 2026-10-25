@@ -28,7 +28,7 @@ from shapely.ops import unary_union
 
 from . import registry as R
 from .layout import BoardPlan, Item, _assign_gpio, _search
-from .libs import FootprintInfo, find_footprint, footprint_ref, symbol_pins
+from .libs import FootprintInfo, find_footprint, footprint_ref, library_symbol, symbol_pins
 
 PART_GAP = 1.2  # courtyard to courtyard between packed parts
 EDGE_COPPER_MM = 0.5  # widest board-edge clearance kicad.py rules ask (0.45 mm)
@@ -120,6 +120,15 @@ def _footprint(record: dict[str, Any]) -> FootprintInfo | None:
         return None
 
 
+def gpio_pins(record: dict[str, Any]) -> int | None:
+    """GPIO pins a controller part has, read from the same pin map the board planner wires."""
+    fp = _footprint(record)
+    if fp is None:
+        return None
+    n = sum(1 for name in _pins_for(record, fp).values() if GPIO_NAME.match(_clean(name)))
+    return n or None
+
+
 def _registry_match(fp: FootprintInfo) -> dict[str, Any] | None:
     """The registry controller or screen whose footprint is this one (or its variant)."""
     for ctrl in R.CONTROLLERS:
@@ -154,6 +163,11 @@ def _pins_for(record: dict[str, Any], fp: FootprintInfo) -> dict[str, str]:
             return dict(symbol_pins("kicad", f"{lib}.kicad_sym", sym))
         except (OSError, KeyError):
             return {}
+    own = library_symbol(fp.lib, fp.name)  # the symbol shipped beside the footprint
+    if own is not None:
+        pins = symbol_pins(*own)
+        if pins and len(set(pins) & {p.number for p in fp.pads}) * 2 >= len(pins):
+            return dict(pins)
     return {}
 
 
