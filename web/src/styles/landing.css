@@ -1,0 +1,402 @@
+/* The landing's story (Landing.tsx) and Bara out on the page (LandingGuide.tsx). The hero plate and the
+   Build button keep their rules in shell.css; this file adds the bands below it and the guide. */
+
+.ld-cta-wrap {
+  display: flex;
+  align-self: flex-start;
+}
+
+/* ---- One line in, a device out ---- */
+.ld-how li > b {
+  display: block;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 22px;
+  letter-spacing: var(--track-display);
+}
+.ld-how li > p {
+  margin: 6px 0 0;
+}
+.sa-parts li {
+  justify-content: flex-start;
+}
+.sa-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sa-src {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 10px;
+}
+.sa-fw {
+  width: 78%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 0 12px;
+  border: 1.5px solid var(--ink);
+  border-radius: 10px;
+  background: var(--paper);
+  font-size: 11px;
+  overflow: hidden;
+}
+.sa-fw > span:not(.sa-fw-bar) {
+  padding: 0 12px;
+}
+.sa-fw > span:last-child {
+  color: var(--accent);
+}
+.sa-fw-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--paper-2);
+  color: var(--ink-soft);
+}
+.sa-fw-bar i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ok);
+}
+
+/* ---- The library, live ---- */
+.ld-more {
+  border: 1.5px solid var(--ink);
+  border-radius: 999px;
+  padding: 7px 16px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.ld-more:hover {
+  background: var(--ink);
+  color: var(--paper);
+}
+.ld-sub {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 28px 0 14px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.ld-count {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--paper-2);
+  border: 1px solid var(--line);
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--ink-soft);
+}
+.ld-gal {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+/* the placeholders hold the cards' size, so nothing below jumps when the library arrives */
+.ld-gal .gal-card.is-loading,
+.ld-os-wait {
+  min-height: 236px;
+  background: var(--paper-2);
+}
+.ld-os {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
+}
+.ld-os-wait {
+  min-height: 200px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.ld-os-card {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  padding: 0 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  overflow: hidden;
+  cursor: pointer;
+  transition: box-shadow 0.15s, transform 0.15s;
+}
+.ld-os-card:hover {
+  box-shadow: var(--shadow);
+  transform: translateY(-2px);
+}
+.ld-os-thumb {
+  display: block;
+  aspect-ratio: 16 / 10;
+  background: var(--surface-2);
+  margin-bottom: 10px;
+}
+.ld-os-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.ld-os-title {
+  padding: 0 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ld-os-sub {
+  padding: 2px 12px 0;
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+
+/* ---- Try it ---- */
+#try {
+  scroll-margin-top: 16px;
+}
+.ld-band-p {
+  margin: -8px 0 0;
+  color: var(--ink-soft);
+  font-size: 16px;
+}
+.ld-band-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+}
+.ld-band-talk.btn {
+  height: auto;
+  padding: 14px 28px;
+  font-size: 16px;
+  border-radius: 999px;
+  border: 1.5px solid var(--ink);
+  background: var(--paper);
+}
+
+@media (max-width: 900px) {
+  .ld-gal,
+  .ld-os {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 520px) {
+  .ld-gal,
+  .ld-os {
+    gap: 12px;
+  }
+  .ld-gal .gal-card.is-loading,
+  .ld-os-wait {
+    min-height: 170px;
+  }
+}
+
+/* ---- Bara on the page: the leaning arrowhead, its name chip and what it is saying ----
+   The element's origin is the arrow's tip; LandingGuide moves it with transforms only. */
+.lg {
+  --lg-c: var(--accent);
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 40;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+  will-change: transform;
+}
+.lg.is-on {
+  opacity: 1;
+}
+.lg.is-on .lg-hit {
+  pointer-events: auto;
+}
+.lg-hit {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  pointer-events: none;
+}
+.lg-hit:focus-visible .lg-chip {
+  outline: 2px solid var(--lg-c);
+  outline-offset: 2px;
+}
+.lg-cursor {
+  position: absolute;
+  left: -3px;
+  top: -3px;
+  transform-origin: 3px 3px;
+  overflow: visible;
+  filter: drop-shadow(0 3px 6px color-mix(in srgb, var(--lg-c) 45%, transparent)) drop-shadow(0 1px 1px rgb(0 0 0 / 25%));
+}
+.lg-cur-rim {
+  fill: var(--surface);
+  stroke: var(--surface);
+  stroke-width: 4.2;
+  stroke-linejoin: round;
+}
+.lg-cur-body {
+  fill: url(#lg-cur-g);
+  stroke: url(#lg-cur-g);
+  stroke-width: 1.4;
+  stroke-linejoin: round;
+}
+.lg-cur-lit {
+  stop-color: color-mix(in srgb, var(--lg-c) 70%, white);
+}
+.lg-cur-deep {
+  stop-color: var(--lg-c);
+}
+.lg-cur-shine {
+  fill: none;
+  stroke: rgb(255 255 255 / 55%);
+  stroke-width: 1.1;
+  stroke-linecap: round;
+}
+.lg-chip {
+  position: absolute;
+  left: 16px;
+  top: 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding: 0 12px 0 9px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 6px 16px rgb(20 20 20 / 22%);
+  transition: transform 0.18s ease;
+}
+.lg-hit:hover .lg-chip {
+  transform: scale(1.06);
+}
+/* Bara's two eyes, small, looking where the mouse is */
+.lg-eyes {
+  display: inline-flex;
+  gap: 3px;
+  transform: translate(var(--look-x, 0), var(--look-y, 0));
+}
+.lg-eyes i {
+  width: 5px;
+  height: 8px;
+  border-radius: 3px;
+  background: var(--paper);
+  animation: lg-blink 5.2s infinite;
+}
+@keyframes lg-blink {
+  0%, 94%, 100% { transform: scaleY(1); }
+  96% { transform: scaleY(0.12); }
+}
+.lg-talk {
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  font-weight: 400;
+  transition: max-width 0.25s ease, opacity 0.2s ease;
+}
+.lg-hit:hover .lg-talk,
+.lg-hit:focus-visible .lg-talk {
+  max-width: 90px;
+  opacity: 0.8;
+}
+.lg-say {
+  position: absolute;
+  left: 16px;
+  top: 52px;
+  width: max-content;
+  max-width: min(240px, calc(100vw - 56px));
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 4px 14px 14px 14px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 13.5px;
+  line-height: 1.4;
+  text-align: left;
+  box-shadow: var(--shadow);
+  translate: var(--say-dx, 0) 0;
+}
+/* the untyped rest holds its room, so the line never reflows as it types */
+.lg-say-rest {
+  visibility: hidden;
+}
+/* near the right edge it works from the other side */
+.lg.is-flip .lg-cursor {
+  transform-origin: 3px 3px;
+  scale: -1 1;
+}
+.lg.is-flip .lg-chip {
+  left: auto;
+  right: 16px;
+}
+.lg.is-flip .lg-say {
+  left: auto;
+  right: 16px;
+  border-radius: 14px 4px 14px 14px;
+}
+/* the tap when it reaches what it is talking about */
+.lg-ring {
+  position: absolute;
+  left: -14px;
+  top: -14px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid var(--lg-c);
+  opacity: 0;
+}
+.lg-ring.on {
+  animation: lg-ring 0.6s ease-out;
+}
+@keyframes lg-ring {
+  from { transform: scale(0.3); opacity: 0.8; }
+  to { transform: scale(1.5); opacity: 0; }
+}
+@media (max-width: 520px) {
+  .lg-say {
+    font-size: 12.5px;
+    max-width: min(210px, calc(100vw - 56px));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lg,
+  .lg-chip,
+  .lg-talk {
+    transition: none;
+  }
+  .lg-eyes i {
+    animation: none;
+  }
+}

@@ -1,11 +1,18 @@
-// Home (Figma: Landing C2, "the product, with Bara at work"). The first screen is one plate: a recording of a real
-// build (scripts/record-hero.mjs) plays behind, and Bara's Build button sits in front; pressing it turns the
-// page over to Bara, who asks what to make (HeroAgent). Then four stills show what Bara does on the canvas, then a call to start.
+// Home (Figma: Landing C2, "the product, with Bara at work"). One short story, with Bara showing the way:
+// the first screen is one plate, a recording of a real build (scripts/record-hero.mjs) behind and Bara's
+// Build button in front; pressing it turns the page over to Bara, who asks what to make (HeroAgent). Then
+// what a build gives you, the library as it stands, and a call to try it. Bara itself (LandingGuide) is out
+// on the page the whole way down, pointing at each part and saying what it is; click it to talk.
 import { useEffect, useRef, useState } from "react";
 import { AgentIntro, HeroCta, type IntroOpen } from "./HeroAgent";
+import { LandingGuide, type GuideHandle } from "./LandingGuide";
 import { BaraMark } from "./Handoff";
-import { openBuildDialog } from "./BuildDialog";
+import { openBuildDialog } from "./buildDialogStore";
+import { GalleryCard } from "./Library";
+import { loadGallery, useGallery } from "../library/gallery";
+import { loadOpenSource, scrubMakers, thumbUrl, useOpenSource } from "../library/openSource";
 import { useApp } from "../state/store";
+import "../styles/landing.css";
 
 // Bump V when scripts/record-hero.mjs writes a new take, so no browser plays cached bytes of the old one.
 const V = "6";
@@ -68,139 +75,70 @@ function DemoVideo() {
   );
 }
 
-/** The first screen: one plate, the recording playing behind, and Bara's Build button in front. */
-export function LandingHero() {
+/** The whole landing. It owns the intro, so both the hero's button and Bara on the page can open it. */
+export function Landing() {
   const [intro, setIntro] = useState<IntroOpen | null>(null);
+  const guide = useRef<GuideHandle>(null);
+  const fromBara = (seed = ""): IntroOpen | null => {
+    const o = guide.current?.origin();
+    return o ? { from: o.from, eyes: o.eyes, seed, label: "Bara" } : null;
+  };
+  // the hero button opens it from itself while it is on screen; scrolled away, typing opens it from Bara
+  const open = (o: IntroOpen) => {
+    const seen = o.from.bottom > 0 && o.from.top < window.innerHeight;
+    setIntro(seen ? o : (fromBara(o.seed) ?? o));
+  };
+  const talk = () => {
+    const o = fromBara();
+    if (o) setIntro(o);
+  };
   return (
-    <section className="ld-hero">
+    <main className="home landing">
+      <LandingHero onOpen={open} away={intro !== null} />
+      <HowBand />
+      <LiveLibrary />
+      <TryIt onTalk={talk} />
+      <LandingFoot />
+      <LandingGuide ref={guide} away={intro !== null} onTalk={talk} />
+      {intro && <AgentIntro open={intro} onClose={() => setIntro(null)} />}
+    </main>
+  );
+}
+
+/** The first screen: one plate, the recording playing behind, and Bara's Build button in front. */
+function LandingHero(props: { onOpen: (o: IntroOpen) => void; away: boolean }) {
+  return (
+    <section className="ld-hero" data-guide-section="hero">
       <div className="ld-plate">
-        <figure className="ld-bg" aria-label="A recording of Bara building a device, start to finish">
+        <figure className="ld-bg" aria-label="A recording of Bara building a device, start to finish" data-say="That's me at work. A real build, recorded start to finish." data-at="0.42,0.42">
           <DemoVideo />
         </figure>
         <div className="ld-stage">
           <h1>Describe a device. Watch Bara build it from real parts.</h1>
-          <HeroCta onOpen={setIntro} hidden={intro !== null} />
+          <span className="ld-cta-wrap" data-say="Press this and tell me what to make. Or just click me." data-at="0.92,0.7">
+            <HeroCta onOpen={props.onOpen} hidden={props.away} />
+          </span>
         </div>
       </div>
-      {intro && <AgentIntro open={intro} onClose={() => setIntro(null)} />}
     </section>
   );
 }
 
-type Box = { x: number; y: number; w: number; h: number };
-/** Boxes in the still's own pixels (700 × 460), turned into percentages so they scale with it. */
-const pct = (b: Box) => ({ left: `${(b.x / 700) * 100}%`, top: `${(b.y / 460) * 100}%`, width: `${(b.w / 700) * 100}%`, height: `${(b.h / 460) * 100}%` });
+/* ---- What a build gives you ---- */
 
-function Selection(props: { box: Box; label: string; below?: boolean; children?: React.ReactNode }) {
-  return (
-    <span className="ld-sel" style={pct(props.box)}>
-      <i className="h tl" />
-      <i className="h tr" />
-      <i className="h bl" />
-      <i className="h br" />
-      <span className={`ld-chip ${props.below ? "below" : ""}`}>{props.label}</span>
-      {props.children}
-    </span>
-  );
-}
+type ArtKind = "parts" | "board" | "case" | "firmware";
 
-const CURSOR = (
-  <svg width="16" height="20" viewBox="0 0 16 20" aria-hidden>
-    <path d="M1.5 1.5v15.2l4.1-3.9 2.7 6.1 2.6-1.1-2.7-6h5.7z" fill="#161616" stroke="#fff" strokeWidth="1.2" strokeLinejoin="round" />
-  </svg>
-);
-
-const STEPS: { title: string; text: string; overlay: React.ReactNode }[] = [
-  {
-    title: "Reads what you want",
-    text: "Turns one line into a spec, and asks one question if it has to.",
-    overlay: (
-      <Selection box={{ x: 70, y: 35, w: 590, h: 395 }} label="Reading “one big knob”" below>
-        <i className="ld-scan" />
-      </Selection>
-    ),
-  },
-  {
-    title: "Picks each part",
-    text: "Flies to each part, picks it from tens of thousands of real ones and drops it in place.",
-    overlay: (
-      <>
-        <Selection box={{ x: 105, y: 110, w: 345, h: 300 }} label="Picking Gateron Yellow ×9" />
-        <span className="ld-cursor" style={{ left: `${(210 / 700) * 100}%`, top: `${(160 / 460) * 100}%` }}>
-          {CURSOR}
-        </span>
-      </>
-    ),
-  },
-  {
-    title: "Routes the board",
-    text: "Draws the traces across a real KiCad board, live.",
-    overlay: (
-      <Selection box={{ x: 200, y: 70, w: 230, h: 110 }} label="Routing PCB" below>
-        <svg className="ld-trace" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
-          <path d="M5 70 H35 V25 H70 V60 H95" />
-        </svg>
-      </Selection>
-    ),
-  },
-  {
-    title: "Writes the firmware",
-    text: "Types the firmware for the exact pins it chose, then runs the checks.",
-    overlay: (
-      <Selection box={{ x: 260, y: 75, w: 100, h: 70 }} label="Writing firmware" below>
-        <span className="ld-code mono">
-          Wire.begin(6, 7);<i />
-        </span>
-      </Selection>
-    ),
-  },
-];
-
-export function AgentSteps() {
-  return (
-    <section className="ld-steps" aria-labelledby="ld-steps-h">
-      <header className="ld-sh">
-        <h2 id="ld-steps-h">Bara works where you can see it</h2>
-        <span className="cap">Every step is an action on the canvas</span>
-      </header>
-      <ol>
-        {STEPS.map((s, i) => (
-          <li key={s.title}>
-            <div className="ld-still">
-              <img src="/landing/agent-steps.jpg" alt="" loading="lazy" />
-              <span aria-hidden>{s.overlay}</span>
-            </div>
-            <div className="ld-st">
-              <span className="ld-n">{i + 1}</span>
-              <b>{s.title}</b>
-            </div>
-            <p>{s.text}</p>
-          </li>
-        ))}
-      </ol>
-    </section>
-  );
-}
-
-/* ---- Below the hero: how it works, what you get, examples, FAQ, a closing call, the footer ---- */
-
-/** Small drawings built in code, one per step. They use the page's own ink and paper. */
-function StepArt(props: { kind: "describe" | "parts" | "board" | "case" }) {
+/** Small drawings built in code, one per card. They use the page's own ink and paper. */
+function StepArt(props: { kind: ArtKind }) {
   switch (props.kind) {
-    case "describe":
-      return (
-        <div className="sa sa-describe">
-          <BaraMark className="sa-bot" />
-          <span className="sa-field mono">a macropad with one big knob</span>
-        </div>
-      );
     case "parts":
       return (
         <ul className="sa sa-parts mono">
-          {["Rotary encoder", "Key switch ×9", "Small controller board"].map((p) => (
+          {["Rotary encoder", "Key switch ×9", "Controller board"].map((p) => (
             <li key={p}>
               <i aria-hidden />
-              {p}
+              <span className="sa-name">{p}</span>
+              <span className="sa-src">KiCad lib</span>
             </li>
           ))}
         </ul>
@@ -218,103 +156,185 @@ function StepArt(props: { kind: "describe" | "parts" | "board" | "case" }) {
         <svg className="sa sa-case" viewBox="0 0 220 120" aria-hidden>
           <path d="M20 44 L110 14 L200 44 L200 84 L110 108 L20 84 Z" />
           <path d="M20 44 L110 70 L200 44 M110 70 V108" />
-          <circle cx="170" cy="30" r="12" className="play" />
-          <path d="M166 24 L176 30 L166 36 Z" className="tri" />
         </svg>
+      );
+    case "firmware":
+      return (
+        <div className="sa sa-fw mono" aria-hidden>
+          <span className="sa-fw-bar">
+            <i />
+            Simulator
+          </span>
+          <span>&gt; boot</span>
+          <span>&gt; keys 9/9 ok</span>
+          <span>&gt; knob turned +1</span>
+        </div>
       );
   }
 }
 
-const HOW: { kind: "describe" | "parts" | "board" | "case"; title: string; text: string }[] = [
-  { kind: "describe", title: "Describe it", text: "Type or say what you want in one line. Bara asks one question only if it has to." },
-  { kind: "parts", title: "Real parts", text: "Bara picks a real part for every line and keeps a shopping list as it goes." },
-  { kind: "board", title: "Routes the board", text: "It lays out and routes a KiCad board around those parts, then runs the design checks." },
-  { kind: "case", title: "Case and simulate", text: "A case closes around the board. Run the firmware in the simulator, then export the files." },
+const HOW: { kind: ArtKind; title: string; text: string; say: string }[] = [
+  {
+    kind: "parts",
+    title: "Real parts",
+    text: "Every part comes from an open-source library, with its source and licence beside it.",
+    say: "Every part I pick is a real one. Hover it in the build to see where it came from and its licence.",
+  },
+  {
+    kind: "board",
+    title: "A routed board",
+    text: "A KiCad board laid out and routed around those parts, then checked.",
+    say: "Then I lay out a KiCad board and route every trace, live, and run the checks.",
+  },
+  {
+    kind: "case",
+    title: "A case that fits",
+    text: "A printable case closes around the board. STL, 3MF and STEP.",
+    say: "A case closes around that board. You can print it.",
+  },
+  {
+    kind: "firmware",
+    title: "Firmware, running",
+    text: "Firmware for the pins it chose, running in a simulator before you build anything.",
+    say: "And the firmware runs in a simulator, so you see it work before you build it.",
+  },
 ];
 
-const GET: { title: string; text: string }[] = [
-  { title: "Real parts", text: "Every part is a real one, with a shopping list you can buy from." },
-  { title: "A KiCad board", text: "A routed board that has passed the design rule check." },
-  { title: "A printable case", text: "STL, 3MF and STEP files that fit that board." },
-  { title: "Firmware that runs", text: "Source for the pins Bara chose, which you can run in the simulator." },
-];
-
-const FAQ: { q: string; a: string }[] = [
-  { q: "What does Bara make?", a: "Small electronics you can hold: keyboards, macropads, controllers and desk gadgets. Each one gets a board, a case and firmware." },
-  { q: "Does Bara order the parts?", a: "No. It gives you a shopping list with the real part for each line, and you buy them yourself." },
-  { q: "Can I change a build?", a: "Yes. Swap a part, move it, resize the case or ask Bara for a change. The checks run again after each edit." },
-  { q: "What files do I get?", a: "The KiCad board files, the case as STL, 3MF and STEP, the firmware source and the shopping list." },
-  { q: "What if my idea is too big?", a: "Bara is best with devices made of keys, knobs, displays and a small board. If a build fails, it tells you what stopped it." },
-];
-
-/** Everything under the hero. The nav in the top bar scrolls to these ids. */
-export function LandingSections() {
+function HowBand() {
   return (
-    <>
-      <section id="how" className="ld-sec" aria-labelledby="ld-how-h">
-        <header className="ld-sh">
-          <h2 id="ld-how-h">How it works</h2>
-          <span className="cap">From one line to files you can build from</span>
-        </header>
-        <ol className="ld-how">
-          {HOW.map((h, i) => (
-            <li key={h.title}>
-              <div className="ld-art">
-                <StepArt kind={h.kind} />
-              </div>
-              <div className="ld-st">
-                <span className="ld-n">{i + 1}</span>
-                <b>{h.title}</b>
-              </div>
-              <p>{h.text}</p>
-            </li>
-          ))}
-        </ol>
-      </section>
-      <section className="ld-sec" aria-labelledby="ld-get-h">
-        <header className="ld-sh">
-          <h2 id="ld-get-h">What you get</h2>
-          <span className="cap">Everything is in the download</span>
-        </header>
-        <ul className="ld-get">
-          {GET.map((g) => (
-            <li key={g.title}>
-              <b>{g.title}</b>
-              <p>{g.text}</p>
-            </li>
-          ))}
-        </ul>
-      </section>
-      <section id="faq" className="ld-sec" aria-labelledby="ld-faq-h">
-        <header className="ld-sh">
-          <h2 id="ld-faq-h">Questions</h2>
-        </header>
-        <div className="ld-faq">
-          {FAQ.map((f) => (
-            <details key={f.q}>
-              <summary>{f.q}</summary>
-              <p>{f.a}</p>
-            </details>
-          ))}
-        </div>
-      </section>
-      <section className="ld-band" aria-labelledby="ld-band-h">
-        <h2 id="ld-band-h">Describe a device. Get something you can build.</h2>
-        <button type="button" className="btn primary ld-band-btn" onClick={() => openBuildDialog()} aria-haspopup="dialog">
+    <section id="how" className="ld-sec" aria-labelledby="ld-how-h" data-guide-section="how">
+      <header className="ld-sh">
+        <h2 id="ld-how-h">One line in, a device out</h2>
+        <span className="cap">What every build gives you</span>
+      </header>
+      <ol className="ld-how">
+        {HOW.map((h) => (
+          <li key={h.title}>
+            <div className="ld-art" data-say={h.say} data-at="0.78,0.32">
+              <StepArt kind={h.kind} />
+            </div>
+            <b>{h.title}</b>
+            <p>{h.text}</p>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+/* ---- The library, as it stands ---- */
+
+/** Calls load once the section is near, so the first screen never waits on the library. */
+function useNear<T extends Element>(load: () => void) {
+  const ref = useRef<T>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      ([e]) => {
+        if (!e.isIntersecting) return;
+        load();
+        io.disconnect();
+      },
+      { rootMargin: "600px 0px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+    // load is a stable module function
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return ref;
+}
+
+const loadLibrary = () => {
+  void loadGallery();
+  void loadOpenSource();
+};
+
+function LiveLibrary() {
+  const ref = useNear<HTMLElement>(loadLibrary);
+  const items = useGallery((s) => s.items);
+  const ready = useGallery((s) => s.ready);
+  const boards = useOpenSource((s) => s.boards);
+  const osReady = useOpenSource((s) => s.ready);
+  const toLibrary = () => useApp.setState({ screen: "drafts" });
+  const shown = items.slice(0, 4);
+  const firstBoards = boards.slice(0, 4);
+  return (
+    <section ref={ref} id="library" className="ld-sec ld-lib" aria-labelledby="ld-lib-h" data-guide-section="library">
+      <header className="ld-sh">
+        <h2 id="ld-lib-h">The library, live</h2>
+        <button type="button" className="ld-more" onClick={toLibrary}>
+          Open the library
+        </button>
+      </header>
+      <h3 className="ld-sub">Built by Bara</h3>
+      <ul className="gal-grid ld-gal" data-say="These are builds I finished, every check passed. Open one to look inside." data-at="0.12,0.22">
+        {ready && shown.length > 0
+          ? shown.map((it, i) => <GalleryCard key={it.build_id} item={it} index={i} />)
+          : [0, 1, 2, 3].map((i) => <li key={i} className="gal-card is-loading" aria-hidden />)}
+      </ul>
+      <h3 className="ld-sub">
+        Open-source boards to start from
+        {boards.length > 0 && <span className="ld-count mono">{boards.length}</span>}
+      </h3>
+      <ul className="ld-os" data-say="These are open-source KiCad boards from GitHub, each with its maker and licence." data-at="0.12,0.25">
+        {osReady && firstBoards.length > 0
+          ? firstBoards.map((b) => (
+              <li key={b.slug}>
+                <button type="button" className="ld-os-card" onClick={toLibrary} aria-label={`${scrubMakers(b.title)}, in the library`}>
+                  <span className="ld-os-thumb">{b.thumb && <img src={thumbUrl(b)} alt="" loading="lazy" decoding="async" />}</span>
+                  <span className="ld-os-title">{scrubMakers(b.title)}</span>
+                  <span className="ld-os-sub mono">
+                    {b.parts} parts · {b.license ?? "No licence"}
+                  </span>
+                </button>
+              </li>
+            ))
+          : [0, 1, 2, 3].map((i) => <li key={i} className="ld-os-wait" aria-hidden />)}
+      </ul>
+    </section>
+  );
+}
+
+/* ---- Try it ---- */
+
+function TryIt(props: { onTalk: () => void }) {
+  return (
+    <section id="try" className="ld-band" aria-labelledby="ld-band-h" data-guide-section="try">
+      <h2 id="ld-band-h">Your turn. What should Bara build?</h2>
+      <p className="ld-band-p">One line is enough. Type it, or say it.</p>
+      <div className="ld-band-row">
+        <button
+          type="button"
+          className="btn primary ld-band-btn"
+          onClick={() => openBuildDialog()}
+          aria-haspopup="dialog"
+          data-say="Your turn. Tell me what to make, in one line."
+          data-at="0.9,0.75"
+        >
           Start building
         </button>
-      </section>
-      <footer className="ld-foot">
-        <span className="ld-foot-brand">
-          <BaraMark className="brand-mark" />
-          Bara
-          <span className="brand-by">by Tangible Parts</span>
-        </span>
-        <button type="button" className="ld-foot-link" onClick={() => useApp.setState({ screen: "drafts" })}>
-          Library
+        <button type="button" className="btn ld-band-talk" onClick={props.onTalk} aria-haspopup="dialog">
+          Talk to Bara
         </button>
-        <span className="ld-foot-year">© {new Date().getFullYear()}</span>
-      </footer>
-    </>
+      </div>
+    </section>
+  );
+}
+
+function LandingFoot() {
+  return (
+    <footer className="ld-foot">
+      <span className="ld-foot-brand">
+        <BaraMark className="brand-mark" />
+        Bara
+        <span className="brand-by">by Tangible Parts</span>
+      </span>
+      <button type="button" className="ld-foot-link" onClick={() => useApp.setState({ screen: "drafts" })}>
+        Library
+      </button>
+      <span className="ld-foot-year">© {new Date().getFullYear()}</span>
+    </footer>
   );
 }

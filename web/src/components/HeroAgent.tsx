@@ -67,6 +67,10 @@ function useIdeaGhost(on: boolean): { ghost: string; idea: string } {
 export interface IntroOpen {
   from: DOMRect;
   seed: string;
+  /** Where the eyes start, when it opens from something other than the hero button (Bara on the page). */
+  eyes?: DOMRect;
+  /** The label that lets go as it moves; the hero button's own when left out. */
+  label?: string;
 }
 
 /** The hero's Build button. Its eyes watch the pointer and blink; a slow halo breathes around it. */
@@ -153,7 +157,7 @@ type Phase = "wash" | "here" | "leaving";
 
 /** The paper wash, the button becoming Bara, and Bara asking what's up. */
 export function AgentIntro(props: { open: IntroOpen; onClose: () => void }) {
-  const { from, seed } = props.open;
+  const { from, seed, label } = props.open;
   const still = reducedMotion();
   const [phase, setPhase] = useState<Phase>(still ? "here" : "wash");
   const [text, setText] = useState(seed);
@@ -213,7 +217,7 @@ export function AgentIntro(props: { open: IntroOpen; onClose: () => void }) {
       ],
       { duration: GLIDE_MS, easing: "cubic-bezier(0.5, 0, 0.2, 1.15)", fill: "forwards" },
     );
-    const cta = document.querySelector<HTMLElement>(".hero-cta .cta-eyes")?.getBoundingClientRect();
+    const cta = props.open.eyes ?? document.querySelector<HTMLElement>(".hero-cta .cta-eyes")?.getBoundingClientRect();
     morphEyes.current?.animate(
       [
         cta
@@ -312,10 +316,12 @@ export function AgentIntro(props: { open: IntroOpen; onClose: () => void }) {
           </div>
           {/* the label and arrow let go as the button starts to move, instead of blinking out */}
           <div className="ai-morph-rest" style={{ height: from.height }}>
-            <span className="cta-label">Start building</span>
-            <span className="cta-go">
-              <Icon name="send" size={14} />
-            </span>
+            <span className="cta-label">{label ?? "Start building"}</span>
+            {!label && (
+              <span className="cta-go">
+                <Icon name="send" size={14} />
+              </span>
+            )}
           </div>
         </div>
       )}
