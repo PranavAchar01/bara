@@ -20,17 +20,24 @@ from .codegen import FwConfig
 from .io import controller_part
 from .session import SimBuild, SimStore
 
-INPUT_ACTIONS = {"press", "release", "tap", "turn", "axis", "power"}
+INPUT_ACTIONS = {"press", "release", "tap", "turn", "axis", "power", "reset"}
 
 
 def mcu_part(state: dict[str, Any]) -> dict[str, Any] | None:
     return controller_part([p for p in state.get("parts") or [] if p.get("instance_id")])
 
 
+def _label(session: Any, input_id: str) -> str:
+    row = session.inputs.by_id.get(input_id) or {}
+    return str(row.get("label") or "").lower()
+
+
 def sim_routes(api: APIRouter, svc: Any) -> None:
     from bara.rest import ApiError, body  # rest imports this module inside build_router
 
-    store = SimStore(svc.settings.assets_dir)
+    store = SimStore(
+        svc.settings.assets_dir, boards_root=svc.settings.data_dir / "cache" / "boards"
+    )
     models = {
         "cerebras_model": svc.settings.cerebras_model,
         "anthropic_model": svc.settings.anthropic_model,
@@ -60,6 +67,28 @@ def sim_routes(api: APIRouter, svc: Any) -> None:
     def lock_for(build_id: str) -> asyncio.Lock:
         return locks.setdefault(build_id, asyncio.Lock())
 
+    def part_record(part_id: str) -> dict[str, Any] | None:
+        record = svc.catalog.part(part_id)
+        if record is None and svc.engine.live is not None:
+            try:
+                record = svc.engine.live.source.get_part(part_id)
+            except KeyError:
+                record = None
+        return record
+
+    def with_controller_record(state: dict[str, Any]) -> dict[str, Any]:
+        """Attach the controller's part record: the card is generic, the record says which chip."""
+        mcu = mcu_part(state)
+        if mcu is None or not mcu.get("part_id"):
+            return state
+        rec = part_record(str(mcu["part_id"])) or {}
+        keep = {k: rec.get(k) for k in ("display_name", "mpn", "facets") if rec.get(k)}
+        parts = [
+            {**p, "record": keep} if p.get("instance_id") == mcu.get("instance_id") else p
+            for p in state.get("parts") or []
+        ]
+        return {**state, "parts": parts}
+
     def need(build_id: str) -> SimBuild:
         sb = store.get(build_id)
         if sb is None:
@@ -85,7 +114,7 @@ def sim_routes(api: APIRouter, svc: Any) -> None:
             sb = store.get(build_id)
             if sb is not None and last and last[1] == key and time.monotonic() - last[0] < 10:
                 return body({"sim": sb.view()})  # the same start a moment ago: reuse it
-            state = build_state(build_id)
+            state = with_controller_record(build_state(build_id))
             if mcu_part(state) is None:
                 raise ApiError(
                     "E_NOT_FOUND", "This build has no controller, so no firmware to run."
@@ -126,6 +155,8 @@ def sim_routes(api: APIRouter, svc: Any) -> None:
                 try:
                     if action == "power":
                         s.set_power(bool(data.get("value", True)))
+                    elif action == "reset":  # value true = boot button held: bootloader
+                        s.reboot(bootloader=bool(data.get("value")))
                     elif action == "turn":
                         s.turn(iid, int(data.get("value") or 1))
                     elif action == "axis":
@@ -136,6 +167,14 @@ def sim_routes(api: APIRouter, svc: Any) -> None:
                         s.press(iid, False)
                     else:
                         s.press(iid, action == "press")
+                    pressed = action in ("press", "tap")
+                    if pressed and "reset" in _label(s, iid):
+                        # the reset button restarts the chip; with the boot button held it
+                        # comes up in the bootloader instead of the firmware
+                        boot_held = any(
+                            "boot" in _label(s, k) for k, v in s.inputs.closed.items() if v
+                        )
+                        s.reboot(bootloader=boot_held)
                 except KeyError as exc:
                     raise ApiError("E_BAD_MESSAGE", f"No input {iid}.") from exc
                 s.run_ms(float(data.get("run_ms") or 20))
@@ -215,8 +254,10 @@ def sim_routes(api: APIRouter, svc: Any) -> None:
                 sb.plan()
                 await run_in_threadpool(sb.compile)
                 rebuilt = True
-                quick = [t for t in sb.view()["tests"] if t["group"] in ("firmware", "emulation")]
-                results = await run_in_threadpool(sb.run_tests, [t["id"] for t in quick])
+                # every check that can run again does: firmware, emulation, pin map, ngspice, KiCad
+                results = await run_in_threadpool(
+                    sb.run_tests, [t["id"] for t in sb.view()["tests"]]
+                )
         passed = sum(1 for r in results if r["status"] == "pass")
         failed = sum(1 for r in results if r["status"] == "fail")
         entry = {

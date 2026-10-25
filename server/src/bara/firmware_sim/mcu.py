@@ -225,9 +225,11 @@ BOARDS: dict[str, Board] = {
 
 
 def board_for(mcu_part: dict[str, Any] | None) -> Board:
-    """The board record for the build's controller part: its id, then its record's words and specs
-    (display names are generic now, so the chip family comes from the id, summary or specs)."""
+    """The board record for the build's controller part: its id, its summary, then its part record
+    (`record`: catalog or live source, which keeps the maker data the generic card drops:
+    display_name, mpn, facets.mcu_family)."""
     card = (mcu_part or {}).get("card") or {}
+    record = (mcu_part or {}).get("record") or {}
     blob = " ".join(
         str(x).lower()
         for x in (
@@ -236,8 +238,9 @@ def board_for(mcu_part: dict[str, Any] | None) -> Board:
             card.get("summary"),
             card.get("source_url"),
             (mcu_part or {}).get("display_name"),
-            (mcu_part or {}).get("mpn"),
-            *(f"{k.get('label')} {k.get('value')}" for k in card.get("key_specs") or []),
+            record.get("display_name"),
+            record.get("mpn"),
+            *(str(v) for v in (record.get("facets") or {}).values()),
         )
     )
     if "xiao" in blob and "nrf52" in blob:
