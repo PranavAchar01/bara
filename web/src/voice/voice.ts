@@ -202,21 +202,37 @@ type Recognition = {
 const TAP_MS = 260;
 /** Hands-free with nothing said for this long: let it go quietly. */
 const QUIET_MS = 7000;
-/** After letting go, how long to wait for the recogniser's final words before sending what it has. */
+/** After the turn ends, how long to wait for the recogniser's last words before sending what it has. */
 const FINAL_WAIT_MS = 300;
-/** Recording without a recogniser: a silence this long after speech ends the turn. */
+/** With no words from the recogniser, a silence this long after speech ends a hands-free turn. */
 const VAD_SILENCE_MS = 900;
+/** Below this the mic is giving nothing at all: muted, or the wrong input picked. */
+const DEAD_MIC_RMS = 0.002;
 
-let recognition: Recognition | null = null;
-let recorder: MediaRecorder | null = null;
-let chunks: Blob[] = [];
-let cancelled = false;
-/** One number per listening turn, so a late callback from an old turn does nothing. */
-let turn = 0;
+/** One turn of listening. The browser's recogniser gives live words where it works; the mic is
+ *  recorded alongside, so when the recogniser hears nothing (it can fail without a word, offline or
+ *  blocked) the engine still writes it down. The mic level decides when someone actually spoke. */
+interface Turn {
+  id: number;
+  recognition: Recognition | null;
+  recorder: MediaRecorder | null;
+  chunks: Blob[];
+  started: number;
+  /** The mic level says someone talked, and when it was last loud. */
+  spoke: boolean;
+  lastLoud: number;
+  loudest: number;
+  /** The level watcher is running (the mic opened). */
+  metered: boolean;
+  unwatch: () => void;
+  done: boolean;
+}
+
+let cur: Turn | null = null;
+let turns = 0;
 let delivered = 0;
 let endTimer = 0;
 let quietTimer = 0;
-let finalTimer = 0;
 let quietMs = QUIET_MS;
 /** When the last spoken turn was sent hands-free; replies to it hand the mic straight back. */
 let lastHandsFree = 0;
@@ -226,10 +242,8 @@ function recognitionClass(): (new () => Recognition) | null {
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 }
 
-function clearTimers(): void {
-  window.clearTimeout(endTimer);
-  window.clearTimeout(quietTimer);
-  window.clearTimeout(finalTimer);
+function setLevel(v: number): void {
+  document.documentElement.style.setProperty("--mic-level", v.toFixed(2));
 }
 
 /** Where a finished utterance goes: the part in focus if there is one, otherwise the prompt. */
@@ -244,17 +258,6 @@ function deliver(text: string, id: number, handsFree: boolean): void {
   window.dispatchEvent(new CustomEvent(target, { detail: t }));
 }
 
-/** Hands-free: (re)start the clock that ends the turn once the speaker pauses. */
-function armEndOfTurn(): void {
-  const s = useVoice.getState();
-  if (!s.listening || s.mode !== "auto") return;
-  window.clearTimeout(endTimer);
-  window.clearTimeout(quietTimer);
-  const wait = endOfTurnMs(s.heard);
-  if (wait === null) quietTimer = window.setTimeout(cancelListening, quietMs);
-  else endTimer = window.setTimeout(stopListening, wait);
-}
-
 async function transcribe(blob: Blob, id: number, handsFree: boolean): Promise<void> {
   useVoice.setState({ transcribing: true });
   try {
@@ -267,6 +270,7 @@ async function transcribe(blob: Blob, id: number, handsFree: boolean): Promise<v
     if (!res.ok) throw new Error(`Couldn't write that down (${res.status}).`);
     const text = ((await res.json()) as { text?: string }).text ?? "";
     useVoice.setState({ heard: cleanTranscript(text) });
+    if (!cleanTranscript(text)) useVoice.setState({ error: "Didn't catch that. Try again?" });
     deliver(text, id, handsFree);
   } catch (e) {
     useVoice.setState({ error: e instanceof Error ? e.message : "Couldn't hear that." });
@@ -275,8 +279,34 @@ async function transcribe(blob: Blob, id: number, handsFree: boolean): Promise<v
   }
 }
 
-/** Watches the mic level so a recording (no recogniser) can tell speech from silence. */
-function watchLevel(stream: MediaStream, id: number): () => void {
+/** Hands-free: decide whether the speaker has finished. Words, when there are any, set the pause
+ *  (endOfTurnMs); without words the mic level alone does. */
+function armEndOfTurn(t: Turn): void {
+  const s = useVoice.getState();
+  if (t.done || s.mode !== "auto") return;
+  window.clearTimeout(endTimer);
+  const wait = endOfTurnMs(s.heard);
+  if (wait === null) return;
+  const fire = () => {
+    // still talking, the words just haven't caught up
+    if (t.metered && performance.now() - t.lastLoud < 250) endTimer = window.setTimeout(fire, 250);
+    else void finish(t, true);
+  };
+  endTimer = window.setTimeout(fire, wait);
+}
+
+function armQuiet(t: Turn): void {
+  window.clearTimeout(quietTimer);
+  if (useVoice.getState().mode !== "auto") return;
+  quietTimer = window.setTimeout(() => {
+    if (t.done || t.spoke || useVoice.getState().heard) return;
+    void finish(t, false);
+    if (t.metered && t.loudest < DEAD_MIC_RMS) useVoice.setState({ error: "No sound from your mic. Check which input is selected." });
+  }, quietMs);
+}
+
+/** Watches the mic level: drives the level ring (--mic-level) and tells speech from silence. */
+function watchLevel(stream: MediaStream, t: Turn): () => void {
   const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   if (!Ctx) return () => {};
   const ctx = new Ctx();
@@ -284,160 +314,180 @@ function watchLevel(stream: MediaStream, id: number): () => void {
   analyser.fftSize = 1024;
   ctx.createMediaStreamSource(stream).connect(analyser);
   const buf = new Float32Array(analyser.fftSize);
-  const started = performance.now();
-  let floor = 0.01;
-  let spoke = false;
-  let lastLoud = started;
+  let floor = 0.005;
+  t.metered = true;
   const tick = window.setInterval(() => {
-    if (turn !== id) return;
+    if (t.done) return;
     analyser.getFloatTimeDomainData(buf);
     let sum = 0;
     for (const v of buf) sum += v * v;
     const rms = Math.sqrt(sum / buf.length);
     const now = performance.now();
+    t.loudest = Math.max(t.loudest, rms);
     // the first moment is room noise; after that the floor only drifts down
-    if (now - started < 250) floor = Math.max(floor, rms);
+    if (now - t.started < 250) floor = Math.max(floor, rms);
     else if (rms < floor) floor = floor * 0.95 + rms * 0.05;
-    if (rms > Math.max(0.02, floor * 2.5)) {
-      spoke = true;
-      lastLoud = now;
-      useVoice.setState({ heard: useVoice.getState().heard || "…" });
+    const loud = rms > Math.max(0.015, floor * 2.5);
+    if (loud) {
+      t.spoke = true;
+      t.lastLoud = now;
     }
-    if (useVoice.getState().mode !== "auto") return;
-    if (spoke && now - lastLoud > VAD_SILENCE_MS) stopListening();
-    else if (!spoke && now - started > quietMs) cancelListening();
+    setLevel(Math.min(1, rms * 12));
+    // hands-free with no words from the recogniser: the level alone ends the turn
+    if (useVoice.getState().mode === "auto" && !useVoice.getState().heard && t.spoke && now - t.lastLoud > VAD_SILENCE_MS) void finish(t, true);
   }, 50);
   return () => {
     window.clearInterval(tick);
+    setLevel(0);
     void ctx.close();
   };
 }
 
-async function record(id: number): Promise<void> {
+async function openMic(t: Turn): Promise<void> {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
-    if (turn !== id) {
-      stream.getTracks().forEach((t) => t.stop());
+    if (t.done) {
+      stream.getTracks().forEach((x) => x.stop());
       return;
     }
-    // the level watcher below decides when a hands-free recording ends
-    clearTimers();
     const rec = new MediaRecorder(stream);
-    const unwatch = watchLevel(stream, id);
-    recorder = rec;
-    chunks = [];
     rec.ondataavailable = (e) => {
-      if (e.data.size) chunks.push(e.data);
+      if (e.data.size) t.chunks.push(e.data);
     };
-    rec.onstop = () => {
+    const unwatch = watchLevel(stream, t);
+    t.unwatch = () => {
       unwatch();
-      stream.getTracks().forEach((t) => t.stop());
-      if (recorder === rec) recorder = null;
-      const handsFree = useVoice.getState().mode === "auto";
-      useVoice.setState({ listening: false, mode: null, heard: "" });
-      if (!cancelled && chunks.length) void transcribe(new Blob(chunks, { type: rec.mimeType || "audio/webm" }), id, handsFree);
+      stream.getTracks().forEach((x) => x.stop());
     };
+    t.recorder = rec;
     rec.start();
-    // released before the mic opened: stop right away and send what there is
-    if (!useVoice.getState().listening) rec.stop();
   } catch {
-    useVoice.setState({ listening: false, error: "Microphone access is blocked." });
+    // no recording; the recogniser may still hear, and if there is none either, say so
+    if (!t.recognition && !t.done) {
+      useVoice.setState({ error: "Microphone access is blocked." });
+      void finish(t, false);
+    }
   }
+}
+
+/** The recording so far, once the recorder has handed over its last piece. */
+function stopRecording(t: Turn): Promise<Blob | null> {
+  const rec = t.recorder;
+  t.recorder = null;
+  if (!rec || rec.state === "inactive") {
+    t.unwatch();
+    return Promise.resolve(null);
+  }
+  return new Promise((resolve) => {
+    rec.onstop = () => {
+      t.unwatch();
+      resolve(t.chunks.length ? new Blob(t.chunks, { type: rec.mimeType || "audio/webm" }) : null);
+    };
+    rec.stop();
+  });
+}
+
+/** Ends a turn. Sending: the recogniser's words if it has any (fastest), else the recording, written
+ *  down by the engine, if the mic heard someone. */
+async function finish(t: Turn, send: boolean): Promise<void> {
+  if (t.done) return;
+  t.done = true;
+  window.clearTimeout(endTimer);
+  window.clearTimeout(quietTimer);
+  if (cur === t) cur = null;
+  const handsFree = useVoice.getState().mode === "auto";
+  useVoice.setState({ listening: false, mode: null, ...(send ? {} : { heard: "" }) });
+  const r = t.recognition;
+  t.recognition = null;
+  const recording = stopRecording(t);
+  if (!send) {
+    r?.abort();
+    void recording;
+    return;
+  }
+  if (r) {
+    if (useVoice.getState().heard) {
+      // let the recogniser settle its last words, but never make the speaker wait long on it
+      await new Promise<void>((resolve) => {
+        r.onend = () => resolve();
+        window.setTimeout(resolve, FINAL_WAIT_MS);
+        r.stop();
+      });
+    }
+    r.abort();
+  }
+  const heard = useVoice.getState().heard;
+  const blob = await recording;
+  if (heard) deliver(heard, t.id, handsFree);
+  else if (t.spoke && blob) await transcribe(blob, t.id, handsFree);
+  else if (t.metered && t.loudest < DEAD_MIC_RMS) useVoice.setState({ error: "No sound from your mic. Check which input is selected." });
 }
 
 /** Opens the mic. Hands-free ("auto") sends when the speaker pauses; "hold" sends when let go. */
 export async function startListening(mode: ListenMode = "auto", opts: { quietMs?: number } = {}): Promise<void> {
   if (useVoice.getState().listening) return;
   stopSpeaking();
-  clearTimers();
-  cancelled = false;
   quietMs = opts.quietMs ?? QUIET_MS;
-  const id = ++turn;
+  const t: Turn = { id: ++turns, recognition: null, recorder: null, chunks: [], started: performance.now(), spoke: false, lastLoud: 0, loudest: 0, metered: false, unwatch: () => {}, done: false };
+  cur = t;
   useVoice.setState({ listening: true, mode, heard: "", error: null });
-  armEndOfTurn();
+  armQuiet(t);
   const Rec = recognitionClass();
   if (Rec) {
     const r = new Rec();
-    recognition = r;
     r.continuous = true;
     r.interimResults = true;
     r.lang = navigator.language || "en-US";
     r.onresult = (e) => {
-      if (recognition !== r) return;
+      if (t.done) return;
       let text = "";
       for (let i = 0; i < e.results.length; i++) text += e.results[i][0].transcript;
       useVoice.setState({ heard: cleanTranscript(text) });
-      armEndOfTurn();
+      armEndOfTurn(t);
     };
     r.onerror = (e) => {
-      if (recognition !== r) return;
-      recognition = null;
-      if (e.error === "not-allowed") {
-        clearTimers();
-        useVoice.setState({ listening: false, mode: null, error: "Microphone access is blocked." });
-        return;
+      if (t.recognition !== r) return;
+      t.recognition = null;
+      if (e.error === "not-allowed" || e.error === "audio-capture") {
+        useVoice.setState({ error: e.error === "not-allowed" ? "Microphone access is blocked." : "No microphone found." });
+        void finish(t, false);
       }
-      if (e.error === "aborted" || e.error === "no-speech") {
-        clearTimers();
-        useVoice.setState({ listening: false, mode: null });
-        return;
-      }
-      // no recognition service here (common outside Chrome): record and let the engine listen
-      if (useVoice.getState().listening) void record(id);
+      // anything else (network, no service, no speech): the recording carries on without it
     };
     r.onend = () => {
-      if (recognition !== r) return;
-      recognition = null;
-      clearTimers();
-      const { heard, mode } = useVoice.getState();
-      useVoice.setState({ listening: false, mode: null });
-      if (!cancelled) deliver(heard, id, mode === "auto");
+      if (t.recognition !== r) return;
+      t.recognition = null;
+      // the recogniser gave up on its own; hands-free with words in hand, that is the end of the turn
+      if (useVoice.getState().mode === "auto" && useVoice.getState().heard) void finish(t, true);
     };
     try {
       r.start();
-      return;
+      t.recognition = r;
     } catch {
-      recognition = null;
+      // no recogniser after all; the recording is enough
     }
   }
-  await record(id);
+  await openMic(t);
 }
 
 /** A held press turned out to be a tap: keep listening, hands-free. */
 export function keepListening(): void {
-  if (!useVoice.getState().listening) return;
+  const t = cur;
+  if (!t || !useVoice.getState().listening) return;
   useVoice.setState({ mode: "auto" });
-  armEndOfTurn();
+  armQuiet(t);
+  armEndOfTurn(t);
 }
 
 /** Stop and send what was said. */
 export function stopListening(): void {
-  clearTimers();
-  const r = recognition;
-  if (r) {
-    // the recogniser can take a moment to settle its last words; don't make the speaker wait on it
-    const id = turn;
-    r.stop();
-    finalTimer = window.setTimeout(() => {
-      if (recognition !== r || turn !== id) return;
-      recognition = null;
-      const { heard, mode } = useVoice.getState();
-      useVoice.setState({ listening: false, mode: null });
-      r.abort();
-      deliver(heard, id, mode === "auto");
-    }, FINAL_WAIT_MS);
-  } else if (recorder && recorder.state !== "inactive") recorder.stop();
+  if (cur) void finish(cur, true);
   else useVoice.setState({ listening: false, mode: null });
 }
 
 /** Stop and throw it away (Esc). */
 export function cancelListening(): void {
-  cancelled = true;
-  clearTimers();
-  const r = recognition;
-  recognition = null;
-  r?.abort();
-  if (recorder && recorder.state !== "inactive") recorder.stop();
+  if (cur) void finish(cur, false);
   useVoice.setState({ listening: false, mode: null, heard: "" });
 }
 

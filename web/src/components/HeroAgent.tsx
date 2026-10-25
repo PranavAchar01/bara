@@ -151,6 +151,7 @@ export function AgentIntro(props: { open: IntroOpen; onClose: () => void }) {
   const heard = useVoice((s) => s.heard);
   const transcribing = useVoice((s) => s.transcribing);
   const voiceMode = useVoice((s) => s.mode);
+  const voiceError = useVoice((s) => s.error);
   const { ghost, idea } = useIdeaGhost(phase === "here" && !text && !listening && !transcribing && !pending);
 
   // Where Bara lands: the middle, a little high, at a size that suits the screen.
@@ -335,7 +336,19 @@ export function AgentIntro(props: { open: IntroOpen; onClose: () => void }) {
                 setText(idea);
               }
             }}
-            placeholder={listening ? (voiceMode === "hold" ? "Listening… let go to send" : "Listening… just pause when you're done") : ready ? ghost : "Waking up"}
+            placeholder={
+              listening
+                ? voiceMode === "hold"
+                  ? "Listening… let go to send"
+                  : "Listening… just pause when you're done"
+                : transcribing
+                  ? "Writing down what you said…"
+                  : voiceError
+                    ? voiceError
+                    : ready
+                      ? ghost
+                      : "Waking up"
+            }
             aria-label="What should Bara build?"
             maxLength={maxChars}
             disabled={!ready || pending || transcribing}
