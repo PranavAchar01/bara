@@ -14,13 +14,14 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from bara import SERVER_VERSION, SPEC_VERSION, geometry, intent, part_ask, voice
+from bara import bom as bom_mod
 from bara.edits import Reject
 from bara.library import BUILD_ID_RE
 from bara.llm import providers_configured
 from bara.services import Services
 from bara.util import error_obj, http_status
 
-EXPORT_FORMATS = {"bom_csv", "stl", "3mf", "step", "kicad", "firmware_zip", "zip"}
+EXPORT_FORMATS = {"bom_csv", "bom_json", "stl", "3mf", "step", "kicad", "firmware_zip", "zip"}
 GEOMETRY_FORMATS = {"stl": "stl", "3mf": "3mf", "step": "step", "kicad": "zip"}
 
 
@@ -82,6 +83,16 @@ def _value_matches(actual: Any, wanted: str) -> bool:
 def build_router(svc: Services) -> APIRouter:
     api = APIRouter()
     cat = svc.catalog
+
+    def part_record(part_id: str) -> dict[str, Any] | None:
+        record = cat.part(part_id)
+        if record is None and svc.engine.live is not None:
+            # builds pick from the live source (catalog db, fetched, KiCad-generated tier)
+            try:
+                record = svc.engine.live.source.get_part(part_id)
+            except KeyError:
+                record = None
+        return record
 
     def run_or_404(build_id: str):
         run = svc.engine.get(build_id)
@@ -170,13 +181,7 @@ def build_router(svc: Services) -> APIRouter:
 
     @api.get("/v1/parts/{part_id:path}")
     def part(part_id: str) -> JSONResponse:
-        record = cat.part(part_id)
-        if record is None and svc.engine.live is not None:
-            # builds pick from the live source (catalog db, fetched, KiCad-generated tier)
-            try:
-                record = svc.engine.live.source.get_part(part_id)
-            except KeyError:
-                record = None
+        record = part_record(part_id)
         if record is None:
             raise ApiError("E_UNKNOWN_PART", f"No part {part_id}.")
         return body({"part": record})
@@ -227,8 +232,6 @@ def build_router(svc: Services) -> APIRouter:
             201,
         )
 
-    words = intent.part_words(cat, svc.router.keywords.get("function_words", {}))
-
     @api.post("/v1/intent")
     async def prompt_intent(request: Request) -> JSONResponse:
         """Over an open build: does the prompt add a device beside it, change it, or start over."""
@@ -239,7 +242,16 @@ def build_router(svc: Services) -> APIRouter:
         prompt = data.get("prompt")
         if not isinstance(prompt, str) or not prompt.strip():
             raise ApiError("E_BAD_MESSAGE", "Send prompt.")
-        return body(intent.classify(prompt, bool(data.get("has_build")), words))
+        names = data.get("part_names")
+        build_prompt = data.get("build_prompt")
+        return body(
+            await intent.classify(
+                prompt,
+                bool(data.get("has_build")),
+                build_prompt if isinstance(build_prompt, str) else "",
+                [n for n in names if isinstance(n, str)] if isinstance(names, list) else None,
+            )
+        )
 
     @api.get("/v1/library")
     def library_list() -> JSONResponse:
@@ -385,14 +397,20 @@ def build_router(svc: Services) -> APIRouter:
             suffix = "_kicad" if fmt == "kicad" else ""
             return _download(data, f"{build_id}{suffix}.{GEOMETRY_FORMATS[fmt]}", media)
         if fmt == "bom_csv":
-            return _download(bom_csv(build).encode(), f"{build_id}_bom.csv", "text/csv")
+            data = bom_mod.bom_csv(build, part_record).encode()
+            return _download(data, f"{build_id}_bom.csv", "text/csv")
+        if fmt == "bom_json":
+            return body({"build_id": build_id, "bom": bom_mod.bom(build, part_record)})
         include_all = fmt == "zip"
         if not include_all and not (build.get("firmware") or {}).get("files"):
             raise ApiError("E_ASSET_MISSING", "This build has no firmware files.")
-        data = build_zip(svc, build, include_all)
+        data = build_zip(svc, build, include_all, part_record)
         name = f"{build_id}.zip" if include_all else f"{build_id}_firmware.zip"
         return _download(data, name, "application/zip")
 
+    from bara.firmware_sim.api import sim_routes
+
+    sim_routes(api, svc)
     return api
 
 
@@ -404,8 +422,9 @@ def _download(data: bytes, filename: str, media_type: str) -> Response:
     )
 
 
-def bom_csv(build: dict[str, Any]) -> str:
-    return geometry.exports.bom_csv(build)
+def bom_csv(build: dict[str, Any], lookup: bom_mod.Lookup | None = None) -> str:
+    """The shopping BOM (purchase links, quantities, the printed case) as CSV."""
+    return bom_mod.bom_csv(build, lookup)
 
 
 def _safe_rel(path: str) -> str | None:
@@ -429,7 +448,12 @@ def _asset_bytes(svc: Services, url: str | None) -> bytes | None:
     return path.read_bytes()
 
 
-def build_zip(svc: Services, build: dict[str, Any], include_all: bool) -> bytes:
+def build_zip(
+    svc: Services,
+    build: dict[str, Any],
+    include_all: bool,
+    lookup: bom_mod.Lookup | None = None,
+) -> bytes:
     buf = io.BytesIO()
     missing: list[str] = []
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -448,7 +472,7 @@ def build_zip(svc: Services, build: dict[str, Any], include_all: bool) -> bytes:
             else:
                 zf.writestr(prefix + rel, data)
         if include_all:
-            zf.writestr("bom.csv", bom_csv(build))
+            zf.writestr("bom.csv", bom_csv(build, lookup))
             zf.writestr("wiring.csv", geometry.exports.wiring_csv(build))
             zf.writestr("build.json", json.dumps(build, indent=2))
         lines = [f"Bara export of {build['build_id']} (revision {build['revision']})."]

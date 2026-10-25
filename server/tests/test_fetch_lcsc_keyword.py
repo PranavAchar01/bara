@@ -21,3 +21,22 @@ def test_a_display_search_skips_the_panel_connector() -> None:
 
 def test_an_interconnect_block_may_take_the_connector() -> None:
     assert best_stocked(ROWS, "interconnect.connector")["mpn"] == "FH12-14S-0.5SH(55)"
+
+
+def _desc(mpn: str, description: str, stock: int) -> dict:
+    return {**_row(mpn, "Display Modules", stock), "description": description}
+
+
+def test_an_unstocked_listing_that_is_the_described_part_still_resolves() -> None:
+    rows = [
+        _desc("5inch HDMI LCD", "5inch HDMI LCD 800x480", 0),
+        _desc("2.9inch e-Paper Module", "2.9inch E-Ink display module", 0),
+    ]
+    hit = best_stocked(rows, "display.epaper", "2.9 inch e-paper display")
+    assert hit is not None and hit["mpn"] == "2.9inch e-Paper Module"
+
+
+def test_an_unstocked_unrelated_listing_is_not_taken() -> None:
+    rows = [_desc("5inch HDMI LCD", "5inch HDMI LCD 800x480", 0)]
+    assert best_stocked(rows, "display.epaper", "2.9 inch e-paper display") is None
+    assert best_stocked(rows, "display.epaper") is None
