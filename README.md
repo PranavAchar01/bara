@@ -1,5 +1,7 @@
 <p align="center">
-  <img src="web/public/og/tangible-parts.png" alt="Bara by Tangible Parts" width="720" />
+  <a href="https://youtu.be/Tw2DHo8dgQ8">
+    <img src="https://img.youtube.com/vi/Tw2DHo8dgQ8/maxresdefault.jpg" alt="Watch the Bara demo video" width="720" />
+  </a>
 </p>
 
 <p align="center">
@@ -19,9 +21,6 @@
 ---
 
 <p align="center">
-  <a href="https://youtu.be/Tw2DHo8dgQ8">
-    <img src="https://img.youtube.com/vi/Tw2DHo8dgQ8/maxresdefault.jpg" alt="Watch the Bara demo video" width="720" />
-  </a><br />
   <b><a href="https://youtu.be/Tw2DHo8dgQ8">▶ Watch the 3-minute demo</a></b>
 </p>
 
