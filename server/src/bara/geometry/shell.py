@@ -667,6 +667,9 @@ def build_features(
     clearance; sites without a part use a finger-sized default."""
     out = Features()
     zmax = body.profile.z_top + body.profile.crown + 2.0
+    # a tall part under the shell gets a closed boss (hide_part); every opening must cut through
+    # the boss's top, or a thin lid is left floating over the window
+    zmax = max([zmax, *(s.z_hi + clear + SKIN_MM + 0.5 for s in sites if s.w and s.d)])
     done_groups: set[int] = set()
     cross: dict[int, list[Site]] = {}
     knobs = [k for k in sites if k.kind in ("stick", "knob", "wheel") and k.mount == "front"]
