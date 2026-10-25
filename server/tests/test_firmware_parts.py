@@ -56,3 +56,12 @@ def test_a_display_slot_named_after_its_part_still_gets_configured() -> None:
     ]
     text = "".join(f["content"] for f in files_of(slots)[0]["files"])
     assert "model: SH1106 128x64" in text
+
+
+def test_a_status_led_is_not_a_display() -> None:
+    slots = [
+        slot("controller", "compute.mcu", ESP),
+        slot("b_3_mm_status_led", "display.indicator_led", {"part_id": "led:3mm_tht"}),
+    ]
+    text = "".join(f["content"] for f in files_of(slots)[0]["files"])
+    assert "display:" not in text
