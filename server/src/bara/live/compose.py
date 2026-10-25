@@ -70,6 +70,10 @@ SLOT_KINDS: dict[str, tuple[str, str, str, str | None]] = {
     "interconnect.jack": ("jack", "TRRS jack", "jack", None),
     "interconnect.cable": ("cable", "Split cable", "cable", None),
 }
+# one per key on each half: the board puts a matrix diode under every switch
+PER_KEY = ("input.key", "component.diode")
+# a hot-swap socket is one per switch too, though its slot is a generic connector until picked
+HOTSWAP_PREFIX = "hs:"
 # Functions that are not a part slot: the controller covers comms and USB, the generated
 # case is the enclosure, the KiCad board is the PCB.
 NO_SLOT_PREFIX = ("comms.",)
@@ -312,6 +316,15 @@ def _side_suffix(side: str) -> str:
     return {"left": "_l", "right": "_r", "center": "_c"}.get(side, "")
 
 
+def _is_hotswap(part: dict[str, Any] | None) -> bool:
+    return bool(part) and str(part.get("part_id", "")).startswith(HOTSWAP_PREFIX)
+
+
+def _per_key(base_id: str, plan: KeyboardPlan) -> list[Instance]:
+    """One BOM line per half, as many as that half has keys."""
+    return [Instance(f"{base_id}{_side_suffix(h.side)}", h.side, len(h.keys)) for h in plan.halves]
+
+
 def _slug(text: str) -> str:
     return re.sub(r"[^a-z0-9_]+", "_", text.lower()).strip("_")[:40] or "x"
 
@@ -358,14 +371,16 @@ def derive_slots(
             prefix = _slug(tail)[:10]
             feature = None
         instances: list[Instance] = []
-        if fid in ("input.key", "mech.keycap", "mech.stabilizer") and plan is not None:
+        if fid in (*PER_KEY, "mech.keycap", "mech.stabilizer") and plan is not None:
             for half in plan.halves:
                 lay = (
                     f"lay_{'l' if half.side == 'left' else 'r' if half.side == 'right' else 'main'}"
                 )
                 base_id = f"u_{prefix}{_side_suffix(half.side)}"
-                if fid == "input.key":
-                    instances.append(Instance(base_id, half.side, len(half.keys), layout_id=lay))
+                if fid in PER_KEY:
+                    # switches sit on the layout's keys; diodes are counted, the board places them
+                    on = lay if fid == "input.key" else None
+                    instances.append(Instance(base_id, half.side, len(half.keys), layout_id=on))
                     continue
                 # one BOM line per physical size: a 6.25u spacebar is not a 1u cap
                 groups: dict[float, list[float]] = {}
@@ -626,6 +641,8 @@ class Composer:
                 continue
             if slot.function_id.startswith(("mech.", "power.")) and slot.need is None:
                 continue  # feet, mounts and power parts cost no controller pins
+            if slot.function_id in PER_KEY or _is_hotswap(slot.chosen):
+                continue  # matrix diodes and sockets ride on the key matrix's own pins
             for inst in slot.instances:
                 if inst.side != side and side != "none":
                     continue
@@ -1415,6 +1432,9 @@ class Composer:
                     continue
                 slot.chosen = part
                 self.result.chosen_parts[slot.slot_id] = part
+                if _is_hotswap(part) and self.plan is not None:
+                    slot.label = "Hot-swap socket"
+                    slot.instances = _per_key(slot.instances[0].instance_id, self.plan)
                 if method == "default":
                     reason = self._default_reason(slot, part, applied)
                 emit(
