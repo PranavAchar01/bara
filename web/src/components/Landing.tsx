@@ -1,12 +1,13 @@
 // Home (Figma: Landing C2, "the product, with Bara at work"). Bara itself roams the page (LandingAgent). Under the prompt a
-// recording of a real build plays in a product window, then four stills show what Bara does on
-// the canvas, then the user's own builds.
+// recording of a real build (scripts/record-demo.mjs) plays in a product window on a plate, all on the first screen,
+// then four stills show what Bara does on the canvas, then the user's own builds.
 import { useEffect, useRef, useState } from "react";
-import { useApp } from "../state/store";
 import { LandingAgent } from "./LandingAgent";
 import { ExampleChips, PromptBar } from "./PromptBar";
 
-const VIDEO = { mp4: "/landing/bara-demo.mp4", webm: "/landing/bara-demo.webm", poster: "/landing/bara-demo.jpg" };
+// Bump V when scripts/record-demo.mjs writes a new take, so no browser plays cached bytes of the old one.
+const V = "2";
+const VIDEO = { mp4: `/landing/bara-demo.mp4?v=${V}`, webm: `/landing/bara-demo.webm?v=${V}`, poster: `/landing/bara-demo.jpg?v=${V}` };
 const FALLBACK_POSTER = "/landing/hero-poster.jpg";
 
 /** Muted, looping, never interactive. Plays only while on screen; a still under reduced motion. */
@@ -44,22 +45,23 @@ function DemoVideo() {
       aria-hidden
       onError={() => setFailed(true)}
     >
-      <source src={VIDEO.webm} type="video/webm" onError={() => undefined} />
-      <source src={VIDEO.mp4} type="video/mp4" onError={() => setFailed(true)} />
+      <source src={VIDEO.webm} type="video/webm" />
+      {/* a source can report an error for an aborted load; fall back only when no source is left to play */}
+      <source src={VIDEO.mp4} type="video/mp4" onError={() => ref.current?.networkState === HTMLMediaElement.NETWORK_NO_SOURCE && setFailed(true)} />
     </video>
   );
 }
 
+/** The first screen: a short head, then the recording on a plate that fills the rest of the viewport, so it plays without a scroll. */
 export function LandingHero() {
-  const health = useApp((s) => s.health);
   return (
-    <>
+    <div className="ld-hero">
       <LandingAgent />
       <section className="ld-head">
         <div className="ld-copy">
           <h1>Describe a device. Watch Bara build it from real parts.</h1>
-          <p>It picks open parts, routes the board, shapes the case and writes the firmware, out on the canvas where you can see every move.</p>
-          <div className="ld-home" aria-hidden />
+          <p>Open parts, a routed board, a case and firmware, built where you can see it.</p>
+          <div className="ld-home ld-home-narrow" aria-hidden />
         </div>
         <div className="ld-ask">
           <div className="ld-field">
@@ -72,16 +74,14 @@ export function LandingHero() {
           </div>
         </div>
       </section>
-      <figure className="ld-window" aria-label="A recording of Bara building a device">
+      <figure className="ld-plate" aria-label="A recording of Bara building a device, start to finish">
+        {/* On a wide screen the bot rests in the plate's gutter, beside the recording */}
+        <div className="ld-home ld-home-plate" aria-hidden />
         <div className="ld-frame">
           <DemoVideo />
         </div>
-        <figcaption>
-          <span>A real build, start to finish: Bara picks the parts, places them, routes the board, cases it and writes the firmware.</span>
-          {health && <span className="mono">{(health.part_count ?? 0).toLocaleString()} parts in the catalog</span>}
-        </figcaption>
       </figure>
-    </>
+    </div>
   );
 }
 

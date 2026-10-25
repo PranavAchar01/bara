@@ -72,7 +72,8 @@ export function LandingAgent() {
       const a = document.activeElement;
       if (armed && a instanceof HTMLElement && a.matches(PROMPT)) return "ask";
       const f = q(".ld-frame")?.getBoundingClientRect();
-      if (f) {
+      // The recording is on the first screen, so the bot only walks onto it once the reader scrolls toward it.
+      if (f && window.scrollY > 40) {
         const vis = Math.min(f.bottom, innerHeight) - Math.max(f.top, 0);
         if (vis > f.height * 0.5 && f.top < innerHeight * 0.55) return "demo";
       }
@@ -107,7 +108,8 @@ export function LandingAgent() {
           return { cx: r.l + 22 + S / 2, cy: Math.min(r.b - 22 - oval * S, floor), scale: 1 };
         }
       }
-      const home = q(".ld-home");
+      // one slot per layout; the hidden one has no box
+      const home = [...box.querySelectorAll<HTMLElement>(".ld-home")].find((h) => h.offsetParent !== null);
       if (!home) return null;
       const r = rel(home.getBoundingClientRect());
       // sits on the slot's floor, leaving its top for the speech bubble

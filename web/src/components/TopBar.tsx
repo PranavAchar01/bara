@@ -48,12 +48,11 @@ export function TopBar() {
       )}
       <div className="topbar-right">
         {(mock || hello?.mock) && <span className="badge tone-info">mock</span>}
-        {health?.llm?.provider && (
-          <span className="muted small" title={`Fallback: ${health.llm_fallback?.provider ?? "none"} ${health.llm_fallback?.model ?? ""}`}>
-            {health.llm.provider} {health.llm.model}
-          </span>
-        )}
-        <span className={`conn-pill tone-${CONN_TONE[conn]}`} aria-live="polite">
+        <span
+          className={`conn-pill tone-${CONN_TONE[conn]}`}
+          aria-live="polite"
+          title={health?.llm?.provider ? `${health.llm.provider} ${health.llm.model}. Fallback: ${health.llm_fallback?.provider ?? "none"} ${health.llm_fallback?.model ?? ""}` : undefined}
+        >
           <span className="dot" />
           {CONN_LABEL[conn]}
         </span>
