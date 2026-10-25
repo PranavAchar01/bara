@@ -123,6 +123,27 @@ describe("deriveInputMap: keyboard with a keymap", () => {
   });
 });
 
+describe("deriveInputMap: keyboard with a QMK keymap", () => {
+  const keymap = "const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {\n  [0] = LAYOUT(\n    KC_H, KC_I, KC_SPC, KC_T, KC_H, KC_E, KC_R, KC_E\n  )\n};";
+  const wide: Layout = { ...ROW, keys: Array.from({ length: 8 }, (_, i) => ({ i, x_u: i, y_u: 0 })) };
+  const b = build([part({ id: "sw", fn: "input.key", quantity: 8, layout: "L" })], {
+    layouts: [wide],
+    firmware: { framework: "qmk", files: [{ path: "keyboards/bara/keymaps/default/keymap.c", content: keymap }] },
+  });
+
+  it("names keys from keymap.c and types a space", () => {
+    const map = deriveInputMap(b);
+    expect(map.mode).toBe("typing");
+    expect(map.inputs.map((i) => i.code)).toEqual(["H", "I", "SPACE", "T", "H", "E", "R", "E"]);
+    const rt = createRuntime(map);
+    for (const i of map.inputs) {
+      press(rt, i, map.inputs);
+      release(rt, i);
+    }
+    expect(rt.terminal.text).toBe("hi there");
+  });
+});
+
 describe("deriveInputMap: keys without a keymap", () => {
   it("falls back to position order names", () => {
     const map = deriveInputMap(build([part({ id: "sw", fn: "input.key", quantity: 4, layout: "L" })], { layouts: [ROW] }));

@@ -7,6 +7,7 @@
 // `&kp` codes) and names the rest from where each button sits on the control face.
 import type { Board, BoardFootprint, Build, BuildPart } from "../spec/types";
 import { elementPoses, rotateZ, type V3 } from "../three/layout";
+import { keymapFile, parseKeymapSource } from "./firmware";
 import { charOf, isBackspace, isShift, keyCodes, keyLabel, parseKeymap } from "./keymap";
 
 /**
@@ -330,14 +331,18 @@ export function screenUp(build: Build | null): [number, number] | null {
   return toScreen ? snapAxis(toScreen, 5) : null;
 }
 
-function keymapOf(build: Build): string | null {
-  const file = build.firmware?.files.find((f) => /\.keymap$/.test(f.path) && f.content);
-  return file?.content ?? null;
+/** Base-layer key codes of the build's keymap, ZMK `.keymap` or QMK `keymap.c`; null for a non-key binding. */
+function keymapOf(build: Build): (string | null)[] | null {
+  const file = build.firmware ? keymapFile(build.firmware) : null;
+  if (!file?.content) return null;
+  const base = parseKeymapSource(file.path, file.content).layers[0]?.bindings ?? [];
+  if (base.length) return base.map((b) => (b.kind === "kp" ? b.key : null));
+  const bare = keyCodes(parseKeymap(file.content)); // a bindings block outside a keymap node
+  return bare.length ? bare : null;
 }
 
 /** Keymap codes on key switches: record order when the counts agree, position order when they do not. */
-function nameKeys(raws: Raw[], content: string): Named[] {
-  const codes = keyCodes(parseKeymap(content));
+function nameKeys(raws: Raw[], codes: (string | null)[]): Named[] {
   const ordered = codes.length === raws.length ? raws : orderByPosition(raws);
   return ordered.map((raw, i): Named => {
     const code = codes[i] ?? null;
@@ -381,10 +386,10 @@ export function deriveInputMap(build: Build | null): InputMap {
   const keyRaws = collect(build, build.parts.filter(isKeyPart));
   const buttonRaws = collect(build, build.parts.filter(isButtonPart));
   if (!keyRaws.length && !buttonRaws.length) return { ...empty, displays };
-  const content = keymapOf(build);
+  const codes = keymapOf(build);
   const named: Named[] = [];
   if (keyRaws.length) {
-    if (content) named.push(...nameKeys(keyRaws, content));
+    if (codes) named.push(...nameKeys(keyRaws, codes));
     else orderByPosition(keyRaws).forEach((raw, i) => named.push({ raw, name: `K${i + 1}`, role: "key", code: null }));
   }
   named.push(...nameButtons(buttonRaws, screenUp(build) ?? screenFrame.up()));
@@ -399,9 +404,9 @@ export function deriveInputMap(build: Build | null): InputMap {
     pos: n.raw.pos,
   }));
   markSpares(inputs);
-  const typing = !!content && keyRaws.length >= TYPING_MIN_KEYS;
+  const typing = !!codes && keyRaws.length >= TYPING_MIN_KEYS;
   const mode: SimMode = typing ? "typing" : displays.length ? "game" : "pad";
-  return { mode, inputs, source: content && keyRaws.length ? "keymap" : "position", displays };
+  return { mode, inputs, source: codes && keyRaws.length ? "keymap" : "position", displays };
 }
 
 export { charOf, isBackspace, isShift };
