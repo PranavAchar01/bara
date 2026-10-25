@@ -67,3 +67,12 @@ def test_a_wired_part_that_fits_turned_is_turned() -> None:
     cell = _cell(60.0, 30.0)
     _off_board_fit([cell], outline, pf, [])
     assert pf["fit_report"]["ok"] is True and cell.rot == 90.0
+
+
+def test_a_wired_part_with_no_clear_spot_does_not_fit() -> None:
+    outline = Polygon([(-50, -30), (50, -30), (50, 30), (-50, 30)])
+    pf: dict[str, Any] = {"fit_report": {"ok": True}}
+    log: list[str] = []
+    cell = _cell(20.0, 10.0)
+    _off_board_fit([cell], outline, pf, log, crowded=[cell])
+    assert pf["fit_report"]["ok"] is False and "no spot clear" in log[-1]

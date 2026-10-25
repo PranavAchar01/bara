@@ -290,6 +290,7 @@ def plan_device_board(
         blocked.append(it.footprint_poly())
     seat = _anchor_targets(pf, off_board, 1.0) if pf and off_board else {}
     held: dict[str, list[Polygon]] = {"top": [], "bottom": []}  # envelopes already taken
+    crowded: list[Item] = []  # off-board parts with no spot clear of the others
     for it in sorted(off_board, key=lambda o: -(o.size_mm[0] * o.size_mm[1] if o.size_mm else 0)):
         it.side = "bottom"
         cx, cy = _centre(blocked) if fitted is None else (fitted.centroid.x, fitted.centroid.y)
@@ -300,10 +301,11 @@ def plan_device_board(
         it.x, it.y = cx, cy
         # every off-board part (module or cell) moves clear of the parts on its side: a cell
         # left at the centre sat over a mouse's downward-facing sensor
-        _clear_of(it, held, on_board, fitted, spot is not None)
+        if not _clear_of(it, held, on_board, fitted, spot is not None):
+            crowded.append(it)
         held[it.side].append(it.footprint_poly())
     if fitted is not None and pf and (pf.get("fit_report") or {}).get("ok"):
-        _off_board_fit(off_board, fitted, pf, log)
+        _off_board_fit(off_board, fitted, pf, log, crowded)
 
     # controller GPIO for every peripheral signal, nearest pad first
     if mcu is not None:
@@ -627,7 +629,7 @@ def _clear_of(
     on_board: list[Item],
     region: Polygon | None,
     anchored: bool,
-) -> None:
+) -> bool:
     """Move an off-board part to the nearest spot where its envelope overlaps no other module
     and no board part on that side. Only an unanchored part may change sides: one anchored to
     a face (a thumbstick on the front) moves along that face, never through the board."""
@@ -664,6 +666,7 @@ def _clear_of(
                 break
     if best is not None:
         it.x, it.y, it.side = x0 + best[1], y0 + best[2], best[3]
+    return best is not None
 
 
 def _best_spot(
@@ -950,18 +953,24 @@ def _face_the_rim(it: Item, region: Polygon, target: tuple[float, float]) -> tup
 
 
 def _off_board_fit(
-    off_board: list[Item], fitted: Polygon, pf: dict[str, Any], log: list[str]
+    off_board: list[Item],
+    fitted: Polygon,
+    pf: dict[str, Any],
+    log: list[str],
+    crowded: list[Item] | None = None,
 ) -> None:
     """A wired part off the board (a cell, a module) still lives inside the product, under or
-    over the board: one larger than the outline either way round does not fit, and is reported
-    the way a footprint with no free spot is."""
+    over the board: one larger than the outline either way round, or with no spot clear of the
+    parts on both faces, does not fit, and is reported the way a footprint with no free spot
+    is (compose swaps it for a smaller part, or the form is redrawn)."""
     room = prepared.prep(fitted.buffer(OFF_BOARD_SLACK_MM, join_style="mitre"))
     for it in off_board:
         if it.size_mm is None:
             continue
         w, h = it.size_mm
         x0, y0, x1, y1 = fitted.bounds
-        if (w <= x1 - x0 and h <= y1 - y0) or (h <= x1 - x0 and w <= y1 - y0):
+        packed = any(c is it for c in crowded or [])
+        if not packed and ((w <= x1 - x0 and h <= y1 - y0) or (h <= x1 - x0 and w <= y1 - y0)):
             if room.contains(it.footprint_poly()):
                 continue
             rot = it.rot
@@ -976,10 +985,14 @@ def _off_board_fit(
             "mm": [round(w, 1), round(h, 1)],
             "mm2": round(w * h),
         }
+        why = (
+            "has no spot clear of the board parts on either face of the"
+            if packed
+            else "is larger than the"
+        )
         log.append(
-            f"FORM_OVERFLOW: {it.label or it.ref} {w:.1f}x{h:.1f} mm, wired off the board, is "
-            f"larger than the {x1 - x0:.1f} x {y1 - y0:.1f} mm product outline; the product is "
-            "never scaled to fit"
+            f"FORM_OVERFLOW: {it.label or it.ref} {w:.1f}x{h:.1f} mm, wired off the board, {why} "
+            f"{x1 - x0:.1f} x {y1 - y0:.1f} mm product outline; the product is never scaled to fit"
         )
         return
 
