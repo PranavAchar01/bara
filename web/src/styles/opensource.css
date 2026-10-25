@@ -43,3 +43,11 @@
 .os-parts button span { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .os-parts button:hover, .os-parts button.on { background: var(--surface-2); }
 @media (max-width: 760px) { .os-d-body { grid-template-columns: 1fr; } }
+.os-3d { position: relative; aspect-ratio: 16 / 11; border: 1px solid var(--line); border-radius: 12px; background: radial-gradient(120% 90% at 50% 40%, var(--surface), var(--surface-2)); overflow: hidden; touch-action: none; }
+.os-3d canvas { display: block; cursor: grab; }
+.os-3d canvas:active { cursor: grabbing; }
+.os-3d-poster { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; opacity: 0.55; }
+.os-3d-note, .os-3d-hint { position: absolute; left: 12px; bottom: 10px; font-size: 11px; color: var(--text-2); pointer-events: none; }
+.os-3d-hint { opacity: 0.8; }
+.os-card { animation: lib-rise 480ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+@media (prefers-reduced-motion: reduce) { .os-card { animation: none; } }

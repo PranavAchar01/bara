@@ -125,3 +125,12 @@ export async function loadParts(slug: string): Promise<OsPart[]> {
 }
 
 export const thumbUrl = (b: Pick<OsBoard, "slug">) => `/explore/thumb/${encodeURIComponent(b.slug)}.webp`;
+
+/** Where a board's 3D model is read from, in order: this site's own copy under /explore/glb (put there by
+ *  scripts/sync-board-glbs.mjs, not committed: the set is ~150 MB), then the board library's published copy,
+ *  which is the same file and is served with open CORS. */
+export const BOARD_GLB_REMOTE = "https://etch.chat/world/boards";
+export function boardGlbUrls(slug: string): string[] {
+  const s = encodeURIComponent(slug);
+  return [`/explore/glb/${s}.glb`, `${BOARD_GLB_REMOTE}/${s}/board.glb`];
+}

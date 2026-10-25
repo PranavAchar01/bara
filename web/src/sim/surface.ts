@@ -165,6 +165,39 @@ const CONTROL_OF: Record<string, ControlKind> = { key: "key", mkey: "key", butto
 const GROUP_OF: Record<string, string> = { key: "Keys", button: "Buttons", switch: "Switches", encoder: "Knobs", axis: "Sticks", sensor: "Measurements" };
 const SHOW_OF: Record<string, OutputShow> = { display: "screen", led: "led", tone: "buzzer", motor: "motor", serial: "console", hid: "console" };
 
+const GENERIC_LABEL = /^(adjustment|adjust|setting|control|input|knob|dial|slider|axis|channel|value|menu selection)(\s*\d+)?(\s+press)?$/i;
+
+/** A placeholder rather than a name: empty, or a word like "Adjustment 2". */
+export function isGenericLabel(label: string): boolean {
+  const t = label.trim();
+  return !t || GENERIC_LABEL.test(t);
+}
+
+function derivedLabel(c: SurfaceControl, index: number, count: number): string {
+  const n = count > 1 ? ` ${index + 1}` : "";
+  if (c.kind === "sensor") return c.unit ? `Sensor reading${n} (${c.unit})` : `Sensor reading${n}`;
+  if (c.kind === "axis") {
+    const ax = /\.([xy])$/.exec(c.input_id);
+    return ax ? `Joystick ${ax[1].toUpperCase()} axis (%)` : `Potentiometer position${n} (%)`;
+  }
+  if (c.kind === "encoder") return `Rotary encoder position${n} (steps)`;
+  if (c.kind === "switch") return `Switch position${n} (on/off)`;
+  if (c.input_id.endsWith(".press")) return `Encoder push switch${n} (pressed)`;
+  return `Push button${n} (pressed)`;
+}
+
+/** Replace placeholder control labels with a standardized label and unit, whatever produced them. */
+export function fixLabels(surface: Surface): Surface {
+  const groupOf = (c: SurfaceControl) => `${c.kind}:${c.input_id.endsWith(".press")}`;
+  const sameGroup = (c: SurfaceControl) => surface.controls.filter((x) => groupOf(x) === groupOf(c));
+  const controls = surface.controls.map((c) => {
+    if (!isGenericLabel(c.label)) return c;
+    const group = sameGroup(c);
+    return { ...c, label: derivedLabel(c, group.indexOf(c), group.length) };
+  });
+  return { ...surface, controls };
+}
+
 /** The surface read straight off the plan, for when the engine's spec cannot be had. */
 export function fallbackSurface(io: SimIo): Surface {
   const controls: SurfaceControl[] = io.inputs.map((i) => ({
@@ -181,5 +214,5 @@ export function fallbackSurface(io: SimIo): Surface {
     default: i.default,
   }));
   const outputs = io.outputs.map((o) => ({ output_id: o.id, kind: o.kind, show: SHOW_OF[o.kind] ?? "console", label: cleanName(o.label) }));
-  return { controls, outputs, lead: controls[0]?.input_id ?? "", sig: "client", by: "parts" };
+  return fixLabels({ controls, outputs, lead: controls[0]?.input_id ?? "", sig: "client", by: "parts" });
 }

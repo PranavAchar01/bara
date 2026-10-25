@@ -36,7 +36,7 @@ import { DemandDriver, StudioPost, postEnabled } from "./post";
 import { SHOT_ID } from "./shot";
 import { Glyph } from "../ui/glyphs";
 import { Icon } from "../ui/common";
-import { BoardPlaceholder, BoardStatus, FootprintHover, footprintBoxes } from "./board";
+import { BoardPlaceholder, BoardStatus, FootprintHover, boardBadge, footprintBoxes } from "./board";
 import { AgentTargetProbe, partWorldBox, registerPart } from "./agentTargets";
 import { agentPose, easeOut } from "./agentCam";
 import { caps } from "../sim/press";
@@ -671,6 +671,9 @@ function CasePieceNode(props: {
             geometry={g}
             material={material}
             onClick={(e) => {
+              // A see-through shell lets the click reach the part you can see inside it (a key, the
+              // board, the controller): only a click on bare case picks the case.
+              if (material.transparent && material.opacity < 0.5 && throughShell(e, ref.current)) return;
               if (useApp.getState().explode > 0.5 && !useSim.getState().active) {
                 e.stopPropagation();
                 pickPart(props.focusKey);
@@ -742,6 +745,17 @@ function EnclosureNode(props: { enc: Enclosure; theme: Theme; selected: boolean;
   );
 }
 
+/** True when the click also hits a part of the build behind this shell (not the shell itself). */
+function throughShell(e: ThreeEvent<MouseEvent>, shell: THREE.Object3D | null): boolean {
+  const root = stage.root;
+  if (!root || !shell) return false;
+  const under = (o: THREE.Object3D | null, owner: THREE.Object3D) => {
+    for (let x = o; x; x = x.parent) if (x === owner) return true;
+    return false;
+  };
+  return e.intersections.some((h) => h.distance > e.distance && h.object.visible && (h.object as THREE.Mesh).isMesh && under(h.object, root) && !under(h.object, shell));
+}
+
 /** Board GLB from the board stage (kicad-cli export): drawn with KiCad's own materials. */
 function boardModelUrl(board: Board): string | null {
   return modelAsset(board.assets, false)?.url ?? null;
@@ -792,9 +806,12 @@ function BoardNode(props: {
   const { board, onCovered } = props;
   const model = useModel(boardModelUrl(board), true);
   const loaded = model.status === "ready" && model.model.groups.length > 0 ? model.model : null;
-  // Routing (pending) or the GLB still on its way: the placeholder breathes and says which.
-  const busy = !loaded && (board.status === "pending" || model.status === "loading");
-  const statusText = board.status === "pending" ? "Routing on KiCad" : model.status === "loading" ? "Loading 3D board" : null;
+  const playing = useSim((s) => s.active);
+  const buildOver = useApp((s) => s.view.done !== null || s.view.failure !== null);
+  const boardStage = useApp((s) => s.view.stages.board?.status);
+  // Routing or the GLB still on its way: the placeholder breathes and says which; a failed load offers a retry.
+  const badge = loaded ? null : boardBadge({ boardStatus: board.status, model, buildOver, boardStage, playing });
+  const busy = badge !== null && !badge.retry;
   const boxes = useMemo(() => footprintBoxes(board, loaded), [board, loaded]);
   const match = useMemo(() => (loaded ? matchComponents(loaded, board, props.candidates) : null), [loaded, board, props.candidates]);
   const coveredKey = useMemo(() => (match ? [...new Set([...match.owner.values()].map((c) => c.instanceId))].sort().join("|") : ""), [match]);
@@ -843,7 +860,7 @@ function BoardNode(props: {
         <BoardPiece groups={[]} board={board} layer="pcb" labelKey={props.labelKey} anchor={anchorLocal} targetId={targetId} targetBox={targetBox}>
           <BoardPlaceholder board={board} busy={busy} />
           {hover}
-          {busy && statusText && <BoardStatus board={board} text={statusText} />}
+          {badge && <BoardStatus board={board} badge={badge} />}
         </BoardPiece>
       </group>
     );
@@ -1016,11 +1033,14 @@ export function sizedFill(box: THREE.Box3, fill: number): number {
   return fill * Math.min(1, Math.max(0.55, Math.sqrt(diag / FULL_SIZE_DIAG_MM)));
 }
 
-/** Share of the view (its tighter axis) the framed device or devices may span: room all round. */
-const FIT_MIN = 0.55;
-const FIT_MAX = 0.65;
+/**
+ * Share of the view (its tighter axis) the framed device or devices may span: the device sits small
+ * on the desk with plenty of breathing room, so a first look is calm rather than a wall of parts.
+ */
+const FIT_MIN = 0.36;
+const FIT_MAX = 0.46;
 
-/** 55% of the view for a thumb-sized device up to 65% for a full-size keyboard or bigger. */
+/** 36% of the view for a thumb-sized device up to 46% for a full-size keyboard or bigger. */
 export function sceneFill(box: THREE.Box3): number {
   const diag = box.getSize(new THREE.Vector3()).length();
   return FIT_MIN + (FIT_MAX - FIT_MIN) * Math.min(1, Math.max(0, diag / FULL_SIZE_DIAG_MM));
@@ -1040,8 +1060,37 @@ function sceneDir(): THREE.Vector3 | null {
   return new THREE.Vector3(x, y, z);
 }
 
-/** Share of the sim stage the device spans: it is the whole point of the screen. */
-const SIM_FILL = 0.88;
+/** Share of the free sim area the device spans on its tighter axis: a modest margin all round. */
+const SIM_FILL = 0.82;
+
+/** Space the play layout keeps clear around the device, in px (the top bar and the outputs dock). */
+const SIM_TOP_PX = 56;
+const SIM_DOCK_PX = 160;
+const SIM_EDGE_PX = 32;
+
+/**
+ * The part of the canvas the device may use once play mode has settled: the canvas minus the play
+ * panel on the right, the top bar and the outputs dock. Null when the canvas is not on the page.
+ */
+function simFreeArea(cam: THREE.PerspectiveCamera): { w: number; canvasW: number; left: number; canvasH: number; freeH: number; top: number; bottom: number } | null {
+  const canvas = document.querySelector<HTMLElement>(".viewport canvas");
+  if (!canvas) return null;
+  const r = canvas.getBoundingClientRect();
+  const narrow = window.innerWidth <= 860;
+  const panel = narrow ? null : document.querySelector<HTMLElement>(".play-panel")?.getBoundingClientRect();
+  const panelW = narrow ? 0 : panel && panel.width > 0 ? window.innerWidth - panel.left : Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--play-w")) || 340;
+  const w = Math.min(r.right, window.innerWidth - panelW) - Math.max(0, r.left);
+  const canvasH = r.height;
+  const dock = document.querySelector<HTMLElement>(".play-dock")?.offsetHeight ?? SIM_DOCK_PX;
+  // the terminal sits over the top of the canvas: the device starts below it, never under it
+  const term = document.querySelector<HTMLElement>(".sim-terminal")?.getBoundingClientRect();
+  const termBottom = term && term.height > 0 ? term.bottom - r.top + SIM_EDGE_PX / 2 : 0;
+  const top = Math.max(0, SIM_TOP_PX - Math.max(0, r.top), termBottom);
+  const bottom = dock + SIM_EDGE_PX + (narrow ? window.innerHeight * 0.46 : 0);
+  const freeH = canvasH - top - bottom;
+  if (w < 80 || freeH < 80 || !Number.isFinite(cam.fov)) return null;
+  return { w, canvasW: r.width, left: Math.max(0, -r.left), canvasH, freeH, top, bottom };
+}
 
 /**
  * The operating direction turned about the vertical so the device's long floor axis runs across
@@ -1067,7 +1116,27 @@ function framePose(kind: FrameKind, cam: THREE.PerspectiveCamera, predictExplode
   if (kind === "sim") {
     // The operating view: straight at the control face, the device filling most of the viewport.
     const { view } = useSim.getState();
-    return fitPose(box, simDir(new THREE.Vector3(...view.dir).normalize()), cam, 1, SIM_FILL, 0.02);
+    const dir = simDir(new THREE.Vector3(...view.dir).normalize());
+    const free = simFreeArea(cam);
+    if (!free) return fitPose(box, dir, cam, 1, SIM_FILL, 0.02);
+    // Fit inside the free area (left of the play panel, between the top bar and the outputs dock),
+    // judged at the size the canvas settles to: the workspace is still resizing when the glide starts.
+    const tanV = Math.tan((cam.fov * DEG) / 2) * (free.freeH / free.canvasH);
+    const virt = cam.clone();
+    virt.fov = (2 * Math.atan(tanV)) / DEG;
+    virt.aspect = free.w / free.freeH;
+    const fit = fitPose(box, dir, virt, 1, SIM_FILL, (free.bottom - free.top) / 2 / free.freeH);
+    // and centre it across the free area, not the whole canvas (the play panel covers the right of it)
+    const shiftX = (free.canvasW / 2 - (free.left + free.w / 2)) / free.canvasW;
+    if (Math.abs(shiftX) > 1e-3) {
+      const right = new THREE.Vector3().crossVectors(dir.clone().negate(), cam.up).normalize();
+      if (right.lengthSq() < 1e-6) right.set(1, 0, 0);
+      const tanH = Math.tan((cam.fov * DEG) / 2) * cam.aspect;
+      const d = right.multiplyScalar(2 * tanH * fit.dist * shiftX);
+      fit.target.add(d);
+      fit.pos.add(d);
+    }
+    return fit;
   }
   if (kind === "hero" || kind === "iso" || kind === "scene") {
     return fitPose(box, sceneDir() ?? HERO_DIR.clone().normalize(), cam, 1, sceneFill(box), 0.05);
@@ -1081,7 +1150,7 @@ function framePose(kind: FrameKind, cam: THREE.PerspectiveCamera, predictExplode
         : kind === "front"
         ? new THREE.Vector3(0, -1, 0.18)
         : new THREE.Vector3(1, 0, 0.18);
-  return fitPose(box, dir.normalize(), cam, 1, sizedFill(box, 0.7), 0.05);
+  return fitPose(box, dir.normalize(), cam, 1, sizedFill(box, 0.56), 0.05);
 }
 
 /** How far the picked part lifts out of its layer, mm. */
@@ -1284,6 +1353,28 @@ function CameraRig() {
       savedCam.current = null;
       anim.current = { fromP: cam.position.clone(), fromT: ctl?.target.clone() ?? new THREE.Vector3(), toP: back.pos, toT: back.target, t: 0 };
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [simActive]);
+  useEffect(() => {
+    // While playing, the play panel, the terminal and the outputs dock arrive and resize after the
+    // glide starts (the firmware boots first): re-fit whenever that layout changes, so the device
+    // always sits in the free area and never under the terminal or the panel.
+    if (!simActive) return;
+    const sig = () => {
+      const r = (s: string) => {
+        const b = document.querySelector<HTMLElement>(s)?.getBoundingClientRect();
+        return b ? `${Math.round(b.left)},${Math.round(b.top)},${Math.round(b.width)},${Math.round(b.height)}` : "-";
+      };
+      return `${window.innerWidth}x${window.innerHeight}|${r(".viewport canvas")}|${r(".play-panel")}|${r(".sim-terminal")}|${r(".play-dock")}`;
+    };
+    let last = sig();
+    const id = window.setInterval(() => {
+      const now = sig();
+      if (now === last) return;
+      last = now;
+      if (!userMoved.current) start("sim");
+    }, 250);
+    return () => window.clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [simActive]);
   useEffect(() => {

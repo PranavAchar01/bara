@@ -1,9 +1,11 @@
 // Open-source boards on the Library page, ported from Etch's Explore: real KiCad projects from GitHub with
 // category chips, search, a "Copyable only" licence switch and a sort. Opening one shows its credits (who
 // made it, which commit, which licence, both linked: the licences ask for that), what it is made of, and
-// a one-line "what is this part" for every part, taken from the board's own part descriptions.
+// a one-line "what is this part" for every part, taken from the board's own part descriptions, beside an
+// interactive 3D view of the board itself (LibraryBoard3D) where picking a part lights it.
 import { useEffect, useMemo, useRef, useState } from "react";
 import "../styles/opensource.css";
+import { LibraryBoard3D } from "./LibraryBoard3D";
 import { capital, filterBoards, loadOpenSource, loadParts, scrubMakers, thumbUrl, useOpenSource, type OsBoard, type OsPart, type OsSort } from "../library/openSource";
 
 const FIRST = 8;
@@ -107,6 +109,7 @@ function BoardDetail({ b, onClose }: { b: OsBoard; onClose: () => void }) {
     return (parts ?? []).filter((p) => !t || `${p.ref} ${p.value} ${p.footprint} ${p.what}`.toLowerCase().includes(t));
   }, [parts, q]);
   const picked = parts?.find((p) => p.ref === sel) ?? null;
+  const refs = useMemo(() => new Set((parts ?? []).map((p) => p.ref)), [parts]);
   const size = b.size_mm ? `${b.size_mm[0].toFixed(0)} × ${b.size_mm[1].toFixed(0)} mm` : null;
   return (
     <div className="modal-scrim" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
@@ -122,7 +125,7 @@ function BoardDetail({ b, onClose }: { b: OsBoard; onClose: () => void }) {
         </header>
         <div className="os-d-body">
           <div className="os-d-left">
-            {b.thumb && <img className="os-d-img" src={thumbUrl(b)} alt="" />}
+            <LibraryBoard3D slug={b.slug} title={scrubMakers(b.title)} refs={refs} selected={sel} onPick={setSel} poster={b.thumb ? thumbUrl(b) : undefined} />
             {b.description && <p className="os-desc">{capital(scrubMakers(b.description))}</p>}
             <ul className="os-facts">
               <li>{b.parts} parts</li>

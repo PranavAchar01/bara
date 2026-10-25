@@ -19,9 +19,12 @@ from typing import Any
 
 import httpx
 
+from bara.llm import record_usage
+
 log = logging.getLogger(__name__)
 SEARCH_URL = "https://ydc-index.io/v1/search"
-CACHE = Path(__file__).resolve().parents[3] / "data/cache/web"
+_DEFAULT_CACHE = Path(__file__).resolve().parents[3] / "data/cache/web"
+CACHE = Path(os.environ.get("BARA_WEB_CACHE_DIR") or _DEFAULT_CACHE)
 MAX_IMAGE_BYTES = 3_000_000
 MIN_IMAGE_BYTES = 4_000  # favicons and blank placeholders
 TIMEOUT_S = 15.0
@@ -84,6 +87,7 @@ async def reference_photos(product: str, limit: int = 3) -> tuple[list[bytes], l
     try:
         async with httpx.AsyncClient(timeout=TIMEOUT_S) as client:
             hits = await _search(client, query, key)
+            record_usage("you.com", "search", "websearch", {"searches": 1})
             hits = [h for h in hits if h.get("thumbnail_url")]
             got = await asyncio.gather(*(_fetch(client, h["thumbnail_url"]) for h in hits))
     except (httpx.HTTPError, ValueError) as exc:

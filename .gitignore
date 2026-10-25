@@ -17,3 +17,4 @@ server/data/assets/parts/*.glb
 server/data/catalog/kicad_index.jsonl
 server/data/catalog/kicad_index.sqlite
 server/data/assets/parts/kicad_gen/
+web/public/explore/glb/

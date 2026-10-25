@@ -18,13 +18,14 @@ from jsonschema import Draft202012Validator
 
 from bara.live.llm_json import _for_anthropic
 from bara.live.websearch import media_type
-from bara.llm import anthropic_headers
+from bara.llm import anthropic_headers, record_usage
 
 log = logging.getLogger(__name__)
 DEFAULT_MODEL = "claude-sonnet-5-5"
 FAST_MODEL = "claude-sonnet-5-5"  # part picks need the same judgment as the reasoning stages
 # answers by question: the same question (prompt, schema, images, model) is answered once
-CACHE = Path(__file__).resolve().parents[3] / "data/cache/llm"
+_DEFAULT_CACHE = Path(__file__).resolve().parents[3] / "data/cache/llm"
+CACHE = Path(os.environ.get("BARA_LLM_CACHE_DIR") or _DEFAULT_CACHE)
 
 
 def model_name(fast: bool = False) -> str:
@@ -64,7 +65,9 @@ async def ask_json(
         model + ("" if effort == "high" else effort), system, prompt, schema, images or []
     )
     try:
-        return json.loads(cached.read_text()), "ok (cached)"
+        data = json.loads(cached.read_text())
+        record_usage("cache", model, name, {"cached": True})
+        return data, "ok (cached)"
     except (OSError, ValueError):
         pass
     key = os.environ.get("ANTHROPIC_API_KEY")
@@ -103,6 +106,7 @@ async def ask_json(
                 ),
                 timeout=timeout_s,
             )
+            record_usage("anthropic", model, name, response.usage)
             if response.stop_reason != "max_tokens":
                 break
     except Exception as exc:  # any failure is reported, the caller decides what it means

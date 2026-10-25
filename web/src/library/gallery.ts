@@ -133,9 +133,17 @@ export function offlineGallery(): GalleryItem[] {
 export const useGallery = create<{ items: GalleryItem[]; ready: boolean }>(() => ({ items: [], ready: false }));
 
 let loading: Promise<void> | null = null;
+
+/** Picks the gallery again, after a build was deleted or restored. */
+export function reloadGallery(): Promise<void> {
+  loading = null;
+  return loadGallery();
+}
+
 export function loadGallery(): Promise<void> {
   loading ??= (async () => {
-    const builds = await fetchLibrary().catch(() => []);
+    // an engine from before hiding still lists deleted builds, stamped: they stay out of the gallery
+    const builds = (await fetchLibrary().catch(() => [])).filter((b) => !b.hidden_at);
     const items = builds.length ? await pickGallery(builds) : [];
     useGallery.setState({ items: items.length ? items : offlineGallery(), ready: true });
   })();

@@ -3,16 +3,19 @@
 // Bara keeps the shelf, the newest draft sits large on a gridded plate like the hero's, and the rest stand
 // on a shelf by day. Every tile shows the build's finished product alone, rendered (library/shots.ts,
 // scripts/render-shots.mjs); one not rendered yet falls back to a drawing of its parts or, for a draft, a
-// blueprint drawn from what was asked for. Click to reopen; × (twice) to remove a draft; type to filter.
+// blueprint drawn from what was asked for. Click to reopen; × (twice) to delete a build, which only hides it
+// (Deleted, at the foot of the page, brings it back); type to filter. Tiles rise in once on load and then
+// hold still: only the hovered card moves.
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { openLibraryBuild, openSaved } from "../net/client";
 import { showToast, useApp } from "../state/store";
 import { Icon } from "../ui/common";
-import { deleteEntry, loadEntry, useLibrary, type LibraryCard } from "../library/library";
-import { loadGallery, useGallery, type GalleryItem } from "../library/gallery";
+import { deleteEntry, loadEntry, restoreEntry, useLibrary, type LibraryCard } from "../library/library";
+import { loadGallery, reloadGallery, useGallery, type GalleryItem } from "../library/gallery";
 import { BuildStill } from "./BuildScene";
 import { openBuildDialog } from "./BuildDialog";
 import { OpenSource } from "./OpenSource";
+import "../styles/library.css";
 
 const DAY = 86_400_000;
 
@@ -121,7 +124,7 @@ function Blueprint(props: { prompt: string }) {
  *  request until it has one. Never the workspace snapshot: that one stands on the studio floor and grid. */
 function Picture(props: { card: LibraryCard }) {
   const [broken, setBroken] = useState(false);
-  if (props.card.shot && !broken) return <img className="lib-shot" src={props.card.shot} alt="" loading="lazy" onError={() => setBroken(true)} />;
+  if (props.card.shot && !broken) return <img className="lib-shot" src={props.card.shot} alt="" loading="lazy" decoding="async" onError={() => setBroken(true)} />;
   return <Blueprint prompt={props.card.prompt} />;
 }
 
@@ -137,23 +140,58 @@ function untilt(e: ReactPointerEvent<HTMLElement>) {
   e.currentTarget.style.setProperty("--tilt-y", "0deg");
 }
 
-function Remove(props: { card: LibraryCard }) {
+/** Deletes a build from the library, in two clicks. Soft: the build is hidden, never erased, and Deleted
+ *  at the foot of the page restores it. */
+function Remove(props: { id: string; name: string; after?: () => void }) {
   const [confirm, setConfirm] = useState(false);
-  const { card } = props;
   return (
     <button
       type="button"
       className={`lib-del ${confirm ? "confirm" : ""}`}
       onClick={() => {
-        if (confirm) void deleteEntry(card.build_id);
+        if (confirm) void deleteEntry(props.id).then(props.after);
         else setConfirm(true);
       }}
       onBlur={() => setConfirm(false)}
-      aria-label={confirm ? `Remove “${card.prompt}” for good` : `Remove “${card.prompt}”`}
-      title={confirm ? (card.remote ? "Click again to delete it for everyone" : "Click again to remove it") : "Remove from the library"}
+      aria-label={confirm ? `Delete “${props.name}”, it can be restored` : `Delete “${props.name}”`}
+      title={confirm ? "Click again to delete. It stays restorable under Deleted." : "Delete from the library"}
     >
-      {confirm ? "Remove?" : <Icon name="x" size={12} />}
+      {confirm ? "Delete?" : <Icon name="x" size={12} />}
     </button>
+  );
+}
+
+/** The deleted builds, folded away at the foot of the page, each one a click from coming back. */
+function Deleted() {
+  const hidden = useLibrary((s) => s.hidden);
+  const [open, setOpen] = useState(false);
+  if (hidden.length === 0) return null;
+  return (
+    <section className="lib-deleted" aria-label="Deleted builds">
+      <button type="button" className="lib-deleted-toggle mono" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+        Deleted <span>{hidden.length}</span>
+      </button>
+      {open && (
+        <ul className="lib-deleted-list">
+          {hidden.map((c) => (
+            <li key={c.build_id}>
+              <span>{c.summary || c.prompt}</span>
+              <button
+                type="button"
+                className="btn sm"
+                onClick={() =>
+                  void restoreEntry(c.build_id).then(() => {
+                    void reloadGallery();
+                  })
+                }
+              >
+                Restore
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 
@@ -192,7 +230,7 @@ function BuildCard(props: { card: LibraryCard; now: number; index: number }) {
         <span className="lib-title">{card.prompt}</span>
         <Meta card={card} now={props.now} />
       </button>
-      <Remove card={card} />
+      <Remove id={card.build_id} name={card.prompt} after={reloadGallery} />
     </li>
   );
 }
@@ -223,7 +261,7 @@ function Latest(props: { card: LibraryCard; now: number }) {
           </span>
         </button>
       </div>
-      <Remove card={card} />
+      <Remove id={card.build_id} name={card.prompt} after={reloadGallery} />
     </article>
   );
 }
@@ -339,12 +377,12 @@ export function Library() {
 function GalleryPicture(props: { item: GalleryItem }) {
   const { item } = props;
   const [broken, setBroken] = useState(false);
-  if (item.shot && !broken) return <img className="lib-shot" src={item.shot} alt="" loading="lazy" onError={() => setBroken(true)} />;
+  if (item.shot && !broken) return <img className="lib-shot" src={item.shot} alt="" loading="lazy" decoding="async" onError={() => setBroken(true)} />;
   if (item.preview) return <BuildStill build={item.preview} className="gal-still" />;
   return item.thumb ? <img src={item.thumb} alt="" loading="lazy" /> : null;
 }
 
-export function GalleryCard(props: { item: GalleryItem }) {
+export function GalleryCard(props: { item: GalleryItem; index?: number }) {
   const { item } = props;
   const [opening, setOpening] = useState(false);
   const open = async () => {
@@ -358,7 +396,7 @@ export function GalleryCard(props: { item: GalleryItem }) {
     setOpening(false);
   };
   return (
-    <li className={`gal-card ${opening ? "opening" : ""}`}>
+    <li className={`gal-card ${opening ? "opening" : ""}`} style={props.index != null ? { animationDelay: `${Math.min(props.index, 12) * 45}ms` } : undefined}>
       <button type="button" className="gal-open" onClick={() => void open()} aria-label={`Open the ${item.title.toLowerCase()} build`}>
         <span className="gal-thumb">
           <GalleryPicture item={item} />
@@ -368,6 +406,7 @@ export function GalleryCard(props: { item: GalleryItem }) {
           <span className="gal-sub">{item.checks} checks passed</span>
         </span>
       </button>
+      {!item.offline && <Remove id={item.build_id} name={item.title} after={reloadGallery} />}
     </li>
   );
 }
@@ -392,12 +431,13 @@ export function LibraryPage() {
       <section className="gallery" aria-label="Finished builds">
         <ul className="gal-grid">
           {ready
-            ? items.map((it) => <GalleryCard key={it.build_id} item={it} />)
+            ? items.map((it, i) => <GalleryCard key={it.build_id} item={it} index={i} />)
             : [0, 1, 2, 3, 4, 5].map((i) => <li key={i} className="gal-card is-loading" aria-hidden />)}
         </ul>
       </section>
       <OpenSource />
       {drafts > 0 && <Library />}
+      <Deleted />
     </div>
   );
 }

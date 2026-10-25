@@ -47,9 +47,31 @@ def test_record_list_get_delete(client) -> None:
     assert [e["type"] for e in got["events"]] == ["stage.started", "build.done"]
     assert got["events"][0]["seq"] == 1
     assert client.delete("/v1/library/b_aaaa1111").status_code == 200
-    assert client.get("/v1/library/b_aaaa1111").status_code == 404
-    assert client.delete("/v1/library/b_aaaa1111").status_code == 404
     assert [r["build_id"] for r in client.get("/v1/library").json()["builds"]] == ["b_bbbb2222"]
+    assert client.delete("/v1/library/b_zzzz9999").status_code == 404
+
+
+def test_delete_hides_and_restore_brings_it_back(client) -> None:
+    svc = client.app.state.services
+    lib = svc.engine.library
+    _finish(_run("b_aaaa1111", lib, "2026-10-01T00:00:00Z"))
+    shot = svc.settings.assets_dir / "cache" / "shots" / "b_aaaa1111.webp"
+    shot.parent.mkdir(parents=True)
+    shot.write_bytes(b"RIFF....WEBP")
+    events = lib.root / "b_aaaa1111.jsonl"
+    before = events.read_bytes()
+    assert client.delete("/v1/library/b_aaaa1111").status_code == 200
+    # hidden, not gone: every file stays and the build still opens by its id
+    assert client.get("/v1/library").json()["builds"] == []
+    hidden = client.get("/v1/library?hidden=1").json()["builds"]
+    assert [r["build_id"] for r in hidden] == ["b_aaaa1111"] and hidden[0]["hidden_at"]
+    assert events.read_bytes() == before and shot.is_file()
+    assert client.get("/v1/library/b_aaaa1111").status_code == 200
+    assert client.post("/v1/library/b_aaaa1111/restore").status_code == 200
+    rows = client.get("/v1/library").json()["builds"]
+    assert [r["build_id"] for r in rows] == ["b_aaaa1111"] and "hidden_at" not in rows[0]
+    assert client.get("/v1/library?hidden=1").json()["builds"] == []
+    assert client.post("/v1/library/b_zzzz9999/restore").status_code == 404
 
 
 def test_unfinished_build_is_not_listed(client) -> None:
@@ -100,7 +122,7 @@ def test_list_carries_product_shot_once_rendered(client) -> None:
     assert url.startswith("/assets/cache/shots/b_cccc3333.webp?v=")
 
 
-def test_shot_upload_is_listed_and_deleted_with_the_build(client) -> None:
+def test_shot_upload_is_listed_and_kept_when_the_build_is_hidden(client) -> None:
     lib = client.app.state.services.engine.library
     _finish(_run("b_dddd4444", lib, "2026-10-04T00:00:00Z"))
     webp = b"RIFF" + (100).to_bytes(4, "little") + b"WEBPVP8 " + b"\0" * 96
@@ -109,7 +131,7 @@ def test_shot_upload_is_listed_and_deleted_with_the_build(client) -> None:
     assert r.json()["shot_url"].startswith("/assets/cache/shots/b_dddd4444.webp?v=")
     assert client.get("/v1/library").json()["builds"][0]["shot_url"] == r.json()["shot_url"]
     client.delete("/v1/library/b_dddd4444")
-    assert not (lib.assets_dir / "cache" / "shots" / "b_dddd4444.webp").exists()
+    assert (lib.assets_dir / "cache" / "shots" / "b_dddd4444.webp").exists()
 
 
 def test_shot_upload_rejects_non_webp_and_unknown_builds(client) -> None:

@@ -8,7 +8,7 @@ import { openLibraryBuild } from "../net/client";
 import { useApp } from "../state/store";
 import { DeviceScene } from "../three/Viewport3D";
 import { onModelsChanged } from "../three/assets";
-import { cropShot } from "../library/shots";
+import { cropShot, SHOT_DPR } from "../library/shots";
 
 declare global {
   interface Window {
@@ -19,6 +19,8 @@ declare global {
 
 /** Quiet this long after the last model landed counts as fully drawn. */
 const SETTLE_MS = 2500;
+/** A build whose models never stop arriving (one keeps retrying) is shot as it stands after this long. */
+const DEADLINE_MS = 60_000;
 
 export function ShotPage(props: { buildId: string }) {
   const [loaded, setLoaded] = useState(false);
@@ -44,6 +46,11 @@ export function ShotPage(props: { buildId: string }) {
       window.__shot = window.__shotData ? "shot" : "failed";
     };
     let t = window.setTimeout(take, SETTLE_MS);
+    const deadline = window.setTimeout(() => {
+      off();
+      window.clearTimeout(t);
+      take();
+    }, DEADLINE_MS);
     const off = onModelsChanged(() => {
       window.__shot = "loading";
       window.clearTimeout(t);
@@ -52,13 +59,14 @@ export function ShotPage(props: { buildId: string }) {
     return () => {
       off();
       window.clearTimeout(t);
+      window.clearTimeout(deadline);
     };
   }, [loaded]);
   const scene = useMemo(() => <DeviceScene />, []);
   if (!loaded || !hasBuild) return null;
   return (
     <div className="shot-stage">
-      <Canvas dpr={2} frameloop="always" camera={{ up: [0, 0, 1], position: [-120, -380, 260], near: 1, far: 10000, fov: 32 }} gl={{ antialias: true, alpha: true, preserveDrawingBuffer: true }}>
+      <Canvas dpr={SHOT_DPR} frameloop="always" camera={{ up: [0, 0, 1], position: [-120, -380, 260], near: 1, far: 10000, fov: 32 }} gl={{ antialias: true, alpha: true, preserveDrawingBuffer: true, powerPreference: "high-performance" }}>
         {scene}
       </Canvas>
     </div>

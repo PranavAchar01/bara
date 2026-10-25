@@ -2,7 +2,7 @@
 // what to restore when it ends. The viewport's own state (explode, toggles, focus) stays in the
 // app store; entering and leaving only set and restore it.
 import { create } from "zustand";
-import { focusPart, useApp, type Toggles, type ViewPreset } from "../state/store";
+import { focusPart, setPlayGuard, useApp, type Toggles, type ViewPreset } from "../state/store";
 import type { Build } from "../spec/types";
 import { deriveInputMap, type InputMap, type SimInput } from "./inputMap";
 import { createRuntime, press, release, type RemoteScreen, type Runtime } from "./runtime";
@@ -29,9 +29,12 @@ interface SimState {
   saved: Saved | null;
   /** Bumped when the runtime changes, so views redraw. */
   version: number;
+  /** What the running firmware has typed (play mode), echoed by the terminal over the device. */
+  typed: string;
 }
 
 export const useSim = create<SimState>(() => ({
+  typed: "",
   active: false,
   map: null,
   runtime: null,
@@ -43,6 +46,9 @@ export const useSim = create<SimState>(() => ({
   saved: null,
   version: 0,
 }));
+
+// while playing, a click on the device presses its control: no pick, no pull-out, no selection
+setPlayGuard(() => useSim.getState().active);
 
 /** Time (ms, performance.now clock) until which an input's cap stays down, so a quick tap still shows. */
 export const capHold = new Map<string, number>();
@@ -100,7 +106,7 @@ function leaveStage(): void {
   if (!active) return;
   capHold.clear();
   simHooks.press = simHooks.release = undefined;
-  useSim.setState({ active: false, runtime: null, hover: null });
+  useSim.setState({ active: false, runtime: null, hover: null, typed: "" });
   if (saved) useApp.setState({ explode: saved.explode, preset: saved.preset, toggles: saved.toggles });
 }
 

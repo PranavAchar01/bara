@@ -612,3 +612,16 @@
     bottom: calc(46vh + 12px);
   }
 }
+
+/* the terminal sits over the free area (left of the controls panel), centred there; the camera keeps the device below it */
+.app.sim-on .sim-terminal {
+  left: calc((100% - var(--play-w)) / 2);
+  width: min(640px, calc(100% - var(--play-w) - 48px));
+  height: 112px;
+}
+@media (max-width: 860px) {
+  .app.sim-on .sim-terminal {
+    left: 50%;
+    width: calc(100% - 32px);
+  }
+}

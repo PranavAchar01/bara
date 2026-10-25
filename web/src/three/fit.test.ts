@@ -35,13 +35,13 @@ describe("sizedFill", () => {
 
 describe("sceneFill", () => {
   const dev = (w: number, h: number, d: number) => new THREE.Box3(new THREE.Vector3(0, 0, 0), new THREE.Vector3(w, h, d));
-  it("frames every device at 55 to 65 percent of the view, small ones smaller", () => {
+  it("frames every device at 36 to 46 percent of the view, small ones smaller", () => {
     const keyboard = sceneFill(dev(355, 130, 38));
     const mouse = sceneFill(dev(62, 105, 38));
-    expect(keyboard).toBeCloseTo(0.65, 2);
-    expect(mouse).toBeGreaterThanOrEqual(0.55);
+    expect(keyboard).toBeCloseTo(0.46, 2);
+    expect(mouse).toBeGreaterThanOrEqual(0.36);
     expect(mouse).toBeLessThan(keyboard);
-    expect(sceneFill(dev(2000, 2000, 2000))).toBeLessThanOrEqual(0.65);
-    expect(sceneFill(dev(1, 1, 1))).toBeGreaterThanOrEqual(0.55);
+    expect(sceneFill(dev(2000, 2000, 2000))).toBeLessThanOrEqual(0.46);
+    expect(sceneFill(dev(1, 1, 1))).toBeGreaterThanOrEqual(0.36);
   });
 });

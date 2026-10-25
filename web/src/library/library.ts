@@ -5,7 +5,8 @@
 import { create } from "zustand";
 import type { Build } from "../spec/types";
 import type { ViewState } from "../state/view";
-import { deleteLibraryBuild, fetchLibrary, type StoredBuild } from "../net/client";
+import { deleteLibraryBuild, fetchLibrary, getRest, type StoredBuild } from "../net/client";
+import { paths } from "../net/rest";
 import { serverUrl } from "../net/mode";
 
 export interface LibraryCard {
@@ -24,6 +25,8 @@ export interface LibraryCard {
   mock: boolean;
   /** Listed from the engine's shared library, so it may have no copy in this browser. */
   remote?: boolean;
+  /** Hidden from the library (deleted from view); every byte is kept and Restore shows it again. */
+  hidden?: boolean;
 }
 
 export interface LibraryEntry {
@@ -58,8 +61,9 @@ function done<T>(req: IDBRequest<T>): Promise<T> {
   });
 }
 
-export const useLibrary = create<{ cards: LibraryCard[]; ready: boolean; unavailable: boolean }>(() => ({
+export const useLibrary = create<{ cards: LibraryCard[]; hidden: LibraryCard[]; ready: boolean; unavailable: boolean }>(() => ({
   cards: [],
+  hidden: [],
   ready: false,
   unavailable: false,
 }));
@@ -84,27 +88,44 @@ export function remoteCard(b: StoredBuild): LibraryCard {
   };
 }
 
-/** Local cards plus the engine's shared library; a build in both shows once, with the local card. */
-export function mergeCards(local: LibraryCard[], remote: StoredBuild[]): LibraryCard[] {
+/** Local cards plus the engine's shared library; a build in both shows once, with the local card. A build
+ *  hidden here or on the engine (`hiddenIds`) is left out. */
+export function mergeCards(local: LibraryCard[], remote: StoredBuild[], hiddenIds: ReadonlySet<string> = new Set()): LibraryCard[] {
   const have = new Map(local.map((c) => [c.build_id, c]));
-  const out = local.map((c) => {
+  const out = local.filter((c) => !c.hidden && !hiddenIds.has(c.build_id)).map((c) => {
     const r = remote.find((x) => x.build_id === c.build_id);
     return r ? { ...c, remote: true, thumb: c.thumb ?? (r.hero_url ? serverUrl(r.hero_url) : null), shot: r.shot_url ? serverUrl(r.shot_url) : null } : c;
   });
-  for (const r of remote) if (!have.has(r.build_id)) out.push(remoteCard(r));
+  for (const r of remote) if (!have.has(r.build_id) && !hiddenIds.has(r.build_id)) out.push(remoteCard(r));
+  return out.sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+/** Builds hidden on the engine; they come back with restoreEntry. */
+async function fetchHidden(): Promise<StoredBuild[]> {
+  const res = await getRest().get<{ builds: StoredBuild[] }>(paths.libraryHidden());
+  // an engine from before hiding ignores ?hidden=1 and lists everything: only stamped rows count
+  return res.ok && Array.isArray(res.body.builds) ? res.body.builds.filter((b) => b.hidden_at) : [];
+}
+
+/** The hidden list: engine rows hidden there, plus cards hidden in this browser only. */
+export function hiddenCards(local: LibraryCard[], remoteHidden: StoredBuild[]): LibraryCard[] {
+  const out: LibraryCard[] = remoteHidden.map((r) => ({ ...(local.find((c) => c.build_id === r.build_id) ?? remoteCard(r)), hidden: true }));
+  for (const c of local) if (c.hidden && !out.some((o) => o.build_id === c.build_id)) out.push(c);
   return out.sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
 /** Reloads the list, newest first: this browser's builds and the engine's shared library. */
 export async function refreshLibrary(): Promise<void> {
-  const remote = await fetchLibrary().catch(() => []);
+  const [listed, remoteHidden] = await Promise.all([fetchLibrary().catch(() => []), fetchHidden().catch(() => [])]);
+  const remote = listed.filter((b) => !b.hidden_at);
+  const hiddenIds = new Set(remoteHidden.map((r) => r.build_id));
   try {
     const d = await db();
     const cards = await done(d.transaction(CARDS).objectStore(CARDS).getAll() as IDBRequest<LibraryCard[]>);
-    useLibrary.setState({ cards: mergeCards(cards, remote), ready: true, unavailable: false });
+    useLibrary.setState({ cards: mergeCards(cards, remote, hiddenIds), hidden: hiddenCards(cards, remoteHidden), ready: true, unavailable: false });
   } catch {
     // private window or storage blocked: only the engine's shared builds are listed
-    useLibrary.setState({ cards: mergeCards([], remote), ready: true, unavailable: remote.length === 0 });
+    useLibrary.setState({ cards: mergeCards([], remote, hiddenIds), hidden: hiddenCards([], remoteHidden), ready: true, unavailable: remote.length === 0 });
   }
 }
 
@@ -147,21 +168,34 @@ export async function loadEntry(buildId: string): Promise<LibraryEntry | null> {
   return card && saved ? { card, ...saved } : null;
 }
 
-/** Removes a build from this browser and from the engine's shared library (the engine's caches stay). */
-export async function deleteEntry(buildId: string): Promise<void> {
-  await deleteLibraryBuild(buildId);
+/** Marks this browser's copy hidden (or shown again); the saved build itself is never removed. */
+async function markLocal(buildId: string, hidden: boolean): Promise<void> {
   try {
     const d = await db();
-    const tx = d.transaction([CARDS, BUILDS], "readwrite");
-    tx.objectStore(CARDS).delete(buildId);
-    tx.objectStore(BUILDS).delete(buildId);
+    const tx = d.transaction(CARDS, "readwrite");
+    const store = tx.objectStore(CARDS);
+    const card = await done(store.get(buildId) as IDBRequest<LibraryCard | undefined>);
+    if (card) store.put({ ...card, hidden });
     await new Promise<void>((resolve) => {
       tx.oncomplete = () => resolve();
       tx.onerror = () => resolve();
     });
   } catch {
-    // storage blocked: nothing local to remove
+    // storage blocked: nothing local to mark
   }
+}
+
+/** Deletes a build from the library's view, here and on the engine. Soft: nothing is erased, restoreEntry undoes it. */
+export async function deleteEntry(buildId: string): Promise<void> {
+  await deleteLibraryBuild(buildId);
+  await markLocal(buildId, true);
+  await refreshLibrary();
+}
+
+/** Brings a deleted build back, here and on the engine. */
+export async function restoreEntry(buildId: string): Promise<void> {
+  await getRest().request("POST", paths.libraryRestore(buildId));
+  await markLocal(buildId, false);
   await refreshLibrary();
 }
 
