@@ -523,7 +523,7 @@ function Tests(props: { id: string; data: SimViewData; setData: (v: SimViewData)
 }
 
 function badge(s: SimTest["status"]): string {
-  return s === "pass" ? "PASS" : s === "fail" ? "FAIL" : s === "warn" ? "WARN" : s === "skip" ? "SKIP" : s === "unavailable" ? "N/A" : "—";
+  return s === "pass" ? "PASS" : s === "fail" ? "FAIL" : s === "warn" ? "WARN" : s === "skip" ? "SKIP" : s === "unavailable" ? "N/A" : "-";
 }
 
 function TestDetail(props: { t: SimTest }) {
