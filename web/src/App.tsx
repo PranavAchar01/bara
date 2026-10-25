@@ -1,37 +1,29 @@
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { useApp } from "./state/store";
-import { ConnectionBanner, EngineNotice, FileHeader, TopBar } from "./components/TopBar";
-import { ExampleChips, PromptBar } from "./components/PromptBar";
-import { BuildDialog } from "./components/BuildDialog";
+import { ConnectionBanner, EngineNotice, TopBar } from "./components/TopBar";
+import { useBuildDialog } from "./components/buildDialogStore";
 import { useRouteSync } from "./pages/routes";
-import { BaraBot } from "./bot/BaraBot";
-import { StepPlayer } from "./components/LeftColumn";
-import { BuildProgress, EditStatus, EventLog, FailureCard, LatencyHUD, Toast, WarningBanner } from "./components/Status";
-import { PartsList, RightColumn } from "./components/RightColumn";
-import { AddPartPicker, ConnectDialog, PartInspector, ResizePanel, SwapDrawer } from "./components/Overlays";
-import { FocusCard } from "./components/FocusCard";
-import { SaysLine, SelectionBar } from "./components/SelectionBar";
-import { Icon } from "./ui/common";
+import { EventLog, Toast } from "./components/Status";
 import { bindBuildVoice, bindVoiceKeys } from "./voice/voice";
-import { LibraryPage } from "./components/Library";
-import { LandingHero, LandingSections } from "./components/Landing";
+import { Landing } from "./components/Landing";
 import { Handoff, useHandoffRunning } from "./components/Handoff";
 import { startAutosave } from "./library/autosave";
-import { Viewport3D } from "./three/Viewport3D";
-import { BotLab } from "./bot/BotLab";
-import { CanvasTabs } from "./components/CanvasTabs";
 import { startCanvasPersist } from "./state/canvases";
-import { ProjectPanel } from "./project/ProjectPanel";
 import { startLinkPruning } from "./project/project";
 import { startAutoShots } from "./library/shots";
-import { AgentStage } from "./bot/AgentStage";
-import { ThoughtTrace } from "./bot/ThoughtTrace";
-import { Explainer } from "./bot/Explainer";
-import { CandidateFlyby } from "./bot/CandidateFlyby";
-import { SimView } from "./sim/SimView";
 import { useSimPanel } from "./sim/simPanelStore";
-import { ShotPage } from "./components/ShotPage";
 import { SHOT_ID } from "./three/shot";
+
+// The landing paints with only what it shows. The workspace (the 3D canvas and its panels), the Build
+// pop-up, the Library page, the simulator and the dev pages load on their own; the landing fetches the
+// workspace once it has gone idle, so pressing Build never waits on it.
+const loadWorkspace = () => import("./Workspace");
+const Workspace = lazy(loadWorkspace);
+const BuildDialog = lazy(() => import("./components/BuildDialog"));
+const LibraryPage = lazy(() => import("./components/Library").then((m) => ({ default: m.LibraryPage })));
+const SimView = lazy(() => import("./sim/SimView").then((m) => ({ default: m.SimView })));
+const BotLab = lazy(() => import("./bot/BotLab").then((m) => ({ default: m.BotLab })));
+const ShotPage = lazy(() => import("./components/ShotPage").then((m) => ({ default: m.ShotPage })));
 
 function useKeys() {
   useEffect(() => {
@@ -65,12 +57,12 @@ function useKeys() {
 }
 
 function Home() {
-  return (
-    <main className="home landing">
-      <LandingHero />
-      <LandingSections />
-    </main>
-  );
+  useEffect(() => {
+    const idle = window.requestIdleCallback ?? ((f: () => void) => window.setTimeout(f, 1500));
+    const h = idle(() => void loadWorkspace().then(() => import("./components/BuildDialog")), { timeout: 4000 });
+    return () => (window.cancelIdleCallback ?? window.clearTimeout)(h);
+  }, []);
+  return <Landing />;
 }
 
 function Drafts() {
@@ -81,129 +73,11 @@ function Drafts() {
   );
 }
 
-function RightOverlay() {
-  const overlay = useApp((s) => s.overlay);
-  const selection = useApp((s) => s.selection);
-  const inspectPartId = useApp((s) => s.inspectPartId);
-  const focusKey = useApp((s) => s.focusKey);
-  if (overlay === "focus" && focusKey) return <FocusCard />;
-  if (overlay === "inspector" && (selection || inspectPartId)) return <PartInspector />;
-  if (overlay === "swap" && selection) return <SwapDrawer />;
-  if (overlay === "resize") return <ResizePanel />;
-  return null;
-}
-
-/** The details panel opens when asked for, or when an action needs it (swap, details, resize). */
-function useDetailsOpen(): boolean {
-  return useApp((s) => s.panels.details || s.overlay === "swap" || s.overlay === "inspector" || s.overlay === "resize");
-}
-
-function closeDetails() {
-  useApp.setState((s) => ({
-    panels: { ...s.panels, details: false },
-    overlay: s.overlay === "focus" ? "focus" : null,
-  }));
-}
-
-/** A canvas with no build yet (or one still being fetched after a reload): Bara asks what it should be. */
-function EmptyCanvas() {
-  const restoring = useApp((s) => s.canvasRestoring.includes(s.activeCanvas));
-  const starting = useApp((s) => s.pendingStart?.prompt ?? null);
-  return (
-    <div className="canvas-empty">
-      {restoring ? (
-        <span className="canvas-loading" aria-label="Loading this canvas's build again">
-          <i />
-          <i />
-        </span>
-      ) : starting ? (
-        <div className="canvas-empty-inner canvas-starting" role="status">
-          <BaraBot size={72} mood="thinking" />
-          <h2>{starting}</h2>
-          <p className="muted">Starting the build…</p>
-        </div>
-      ) : (
-        <div className="canvas-empty-inner">
-          <span className="empty-eyes" aria-hidden>
-            <i />
-            <i />
-          </span>
-          <h2>What should this one be?</h2>
-          <ExampleChips />
-        </div>
-      )}
-    </div>
-  );
-}
-
-/**
- * The workspace, canvas first: the device fills the window under a thin strip of tabs and tools; the
- * prompt waits at the bottom with the selection pill above it. The parts list and the details are side
- * panels over the canvas, closed until asked for (WorkTools) or until an action needs one.
- */
-function Workspace() {
-  const overlay = useApp((s) => s.overlay);
-  const empty = useApp((s) => s.build === null);
-  const layers = useApp((s) => s.panels.layers);
-  const details = useDetailsOpen();
-  return (
-    <main className="workspace canvas-first">
-      <section className="centre">
-        <CanvasTabs />
-        {empty ? (
-          <EmptyCanvas />
-        ) : (
-          <>
-            <Viewport3D />
-            <ProjectPanel />
-            <div className="centre-top">
-              <BuildProgress />
-              <WarningBanner />
-            </div>
-            <LatencyHUD />
-            <div className="centre-mid">
-              <FailureCard />
-            </div>
-          </>
-        )}
-        <div className="centre-bottom">
-          <SaysLine />
-          <SelectionBar />
-          <EditStatus />
-          <PromptBar docked autoFocus={empty} />
-        </div>
-      </section>
-      {layers && !empty && (
-        <aside className="float-panel float-left leftcol" aria-label="Parts">
-          <FileHeader />
-          <StepPlayer />
-          <PartsList />
-        </aside>
-      )}
-      {details && !empty && (
-        <aside className="float-panel float-right rightcol-wrap" aria-label="Details">
-          <button type="button" className="float-close" onClick={closeDetails} aria-label="Close details" title="Close (Esc)">
-            <Icon name="x" />
-          </button>
-          <RightColumn />
-          <RightOverlay />
-        </aside>
-      )}
-      {overlay === "connect" && <ConnectDialog />}
-      {overlay === "addpart" && <AddPartPicker />}
-      <AgentStage />
-      <ThoughtTrace />
-      <CandidateFlyby />
-      <Explainer />
-    </main>
-  );
-}
-
 const BOTLAB = new URLSearchParams(window.location.search).get("botlab") === "1";
 
 export function App() {
-  if (BOTLAB) return <BotLab />;
-  if (SHOT_ID) return <ShotPage buildId={SHOT_ID} />;
+  if (BOTLAB || SHOT_ID)
+    return <Suspense fallback={null}>{BOTLAB ? <BotLab /> : <ShotPage buildId={SHOT_ID ?? ""} />}</Suspense>;
   return <Main />;
 }
 
@@ -219,17 +93,18 @@ function Main() {
   const screen = useApp((s) => s.screen);
   const simOpen = useSimPanel((s) => s.open) && screen === "workspace";
   const handing = useHandoffRunning();
+  const dialog = useBuildDialog((s) => s.open);
   return (
     <div className={`app ${handing ? "ho-run" : ""} ${simOpen ? "sim-on" : ""}`}>
       {screen !== "workspace" && <TopBar />}
       <EngineNotice />
       <ConnectionBanner />
-      {screen === "home" ? <Home /> : screen === "drafts" ? <Drafts /> : <Workspace />}
+      <Suspense fallback={<main className="home" aria-busy="true" />}>{screen === "home" ? <Home /> : screen === "drafts" ? <Drafts /> : <Workspace />}</Suspense>
       <EventLog />
       <Toast />
-      <BuildDialog />
+      <Suspense fallback={null}>{dialog && <BuildDialog />}</Suspense>
       <Handoff screen={screen} />
-      {simOpen && <SimView />}
+      <Suspense fallback={null}>{simOpen && <SimView />}</Suspense>
     </div>
   );
 }

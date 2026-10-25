@@ -14,7 +14,7 @@ import { deleteEntry, loadEntry, restoreEntry, useLibrary, type LibraryCard } fr
 import { loadGallery, reloadGallery, useGallery, type GalleryItem } from "../library/gallery";
 import { canFinish, cardSubline, finishBuild } from "../library/finish";
 import { BuildStill } from "./BuildScene";
-import { openBuildDialog } from "./BuildDialog";
+import { openBuildDialog } from "./buildDialogStore";
 import { openScene } from "../project/scenes";
 import { OpenSource } from "./OpenSource";
 import "../styles/library.css";

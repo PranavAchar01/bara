@@ -7,7 +7,7 @@ import { create } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import { useApp, type AppState } from "../state/store";
 import { canvasLabel, canvasState } from "../state/canvases";
-import { fetchPart } from "../components/Overlays";
+import { fetchPart } from "../net/parts";
 import type { Build, Part } from "../spec/types";
 import { awaitingLink } from "./awaiting";
 import { makeLink, portsOf, suggestLinks, type DevicePort, type ProjectLink } from "./links";

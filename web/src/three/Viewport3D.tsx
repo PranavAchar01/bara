@@ -14,7 +14,7 @@ import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeom
 import { focusPart, pickPart, select, setView, useApp, type ViewPreset } from "../state/store";
 import { switchCanvas } from "../state/canvases";
 import { applyEdit } from "../net/client";
-import { fetchPart } from "../components/Overlays";
+import { fetchPart } from "../net/parts";
 import type { BBox, Board, Build, BuildPart, Enclosure, Layout } from "../spec/types";
 import { failingByInstance } from "../ui/format";
 import { groupPieces, modelAsset, onModelsChanged, preloadModels, useModel, useModelsLoading, type LoadedModel, type MeshGroup } from "./assets";

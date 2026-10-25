@@ -51,3 +51,13 @@
 .os-3d-hint { opacity: 0.8; }
 .os-card { animation: lib-rise 480ms cubic-bezier(0.22, 1, 0.36, 1) both; }
 @media (prefers-reduced-motion: reduce) { .os-card { animation: none; } }
+/* the board's picture while its 3D view loads */
+.os-3d-wait {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 11;
+  object-fit: contain;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  opacity: 0.55;
+}

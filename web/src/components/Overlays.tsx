@@ -7,6 +7,7 @@ import type { Alternatives, BuildPart, Color, EditOp, Part, PartCard, PartsPage,
 import { Badge, Chip, Empty, Icon, ProvenanceBadge, Skeleton } from "../ui/common";
 import { checkTone, fmtValue, known, vlabel } from "../ui/format";
 import { AskBot } from "../bot/AskBot";
+import { fetchPart } from "../net/parts";
 
 type Load<T> = { state: "loading" } | { state: "ok"; data: T } | { state: "error"; message: string };
 
@@ -34,17 +35,6 @@ function useRest<T>(path: string | null, pick: (body: unknown) => T): Load<T> | 
   return res;
 }
 
-const partCache = new Map<string, Promise<Part | null>>();
-export function fetchPart(partId: string): Promise<Part | null> {
-  let p = partCache.get(partId);
-  if (!p) {
-    p = getRest()
-      .get<{ part: Part }>(paths.part(partId))
-      .then((r) => (r.ok ? ((r.body as { part?: Part }).part ?? null) : null));
-    partCache.set(partId, p);
-  }
-  return p;
-}
 
 function usePart(partId: string | null): Part | null | "loading" {
   const [part, setPart] = useState<Part | null | "loading">(partId ? "loading" : null);

@@ -8,7 +8,7 @@ import type { ConnStatus } from "../net/connection";
 import { SimulateButton } from "../sim/SimulateButton";
 import { useLibrary } from "../library/library";
 import { BaraMark } from "./Handoff";
-import { openBuildDialog } from "./BuildDialog";
+import { openBuildDialog } from "./buildDialogStore";
 import { useCombinedTitle } from "../project/scenes";
 
 const CONN_LABEL: Record<ConnStatus, string> = {
@@ -85,7 +85,8 @@ export function TopBar() {
 
 const NAV: { id: string; label: string }[] = [
   { id: "how", label: "How it works" },
-  { id: "faq", label: "FAQ" },
+  { id: "library", label: "Live library" },
+  { id: "try", label: "Try it" },
 ];
 
 /** Anchor links to the landing's sections; the page scrolls inside its own container. */

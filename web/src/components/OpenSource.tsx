@@ -3,9 +3,10 @@
 // made it, which commit, which licence, both linked: the licences ask for that), what it is made of, and
 // a one-line "what is this part" for every part, taken from the board's own part descriptions, beside an
 // interactive 3D view of the board itself (LibraryBoard3D) where picking a part lights it.
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import "../styles/opensource.css";
-import { LibraryBoard3D } from "./LibraryBoard3D";
+// the 3D view (three.js) loads when a board is opened, not with the page
+const LibraryBoard3D = lazy(() => import("./LibraryBoard3D").then((m) => ({ default: m.LibraryBoard3D })));
 import { capital, filterBoards, loadOpenSource, loadParts, scrubMakers, thumbUrl, useOpenSource, type OsBoard, type OsPart, type OsSort } from "../library/openSource";
 
 const FIRST = 8;
@@ -125,7 +126,9 @@ function BoardDetail({ b, onClose }: { b: OsBoard; onClose: () => void }) {
         </header>
         <div className="os-d-body">
           <div className="os-d-left">
-            <LibraryBoard3D slug={b.slug} title={scrubMakers(b.title)} refs={refs} selected={sel} onPick={setSel} poster={b.thumb ? thumbUrl(b) : undefined} />
+            <Suspense fallback={b.thumb ? <img className="os-3d-wait" src={thumbUrl(b)} alt="" /> : null}>
+              <LibraryBoard3D slug={b.slug} title={scrubMakers(b.title)} refs={refs} selected={sel} onPick={setSel} poster={b.thumb ? thumbUrl(b) : undefined} />
+            </Suspense>
             {b.description && <p className="os-desc">{capital(scrubMakers(b.description))}</p>}
             <ul className="os-facts">
               <li>{b.parts} parts</li>

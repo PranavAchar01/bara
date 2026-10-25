@@ -24,7 +24,6 @@ import { Connection, type SocketLike } from "./connection";
 import { FakeSocket, MockHub } from "./fakeSocket";
 import { readMode, readStoredKey, serverUrl, setAccessToken, setServer, socketUrl, splitKey, storeKey, type Mode } from "./mode";
 import { discoverEngine } from "./engine";
-import { DefaultLoadingManager } from "three";
 import { RestClient, httpFetcher, stubFetcher, paths } from "./rest";
 import { linkWhenBuilt } from "../project/awaiting";
 import { loadFixtures } from "../spec/fixtures";
@@ -198,7 +197,8 @@ export async function startClient(): Promise<Mode> {
   } else {
     rest = new RestClient(httpFetcher(mode.server));
     // GLB loaders resolve /assets/... against the page; send them to the remote server instead.
-    if (mode.server || readStoredKey()) DefaultLoadingManager.setURLModifier((u) => serverUrl(u));
+    // three is loaded on its own (the landing does not need it), and before any loader can run
+    if (mode.server || readStoredKey()) void import("three").then(({ DefaultLoadingManager }) => DefaultLoadingManager.setURLModifier((u) => serverUrl(u)));
     factory = (url) => new WebSocket(url) as unknown as SocketLike;
   }
   conn = new Connection({

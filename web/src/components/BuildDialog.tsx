@@ -2,17 +2,12 @@
 // and Build. Sending starts the build on the Build page (a fresh canvas if one is already in use).
 // Holding Space anywhere on the landing opens it, so what is said lands in its prompt.
 import { useEffect, useRef } from "react";
-import { create } from "zustand";
 import { ExampleChips, fillPrompt, PromptBar } from "./PromptBar";
 import { Icon } from "../ui/common";
 import { armHandoff } from "./Handoff";
+import { closeBuildDialog as close, useBuildDialog } from "./buildDialogStore";
 
-export const useBuildDialog = create<{ open: boolean; seed: string | null }>(() => ({ open: false, seed: null }));
-/** Opens the dialog; with a seed, its prompt starts filled in (an example, or a gallery build to make again). */
-export const openBuildDialog = (seed: string | null = null) => useBuildDialog.setState({ open: true, seed });
-const close = () => useBuildDialog.setState({ open: false, seed: null });
-
-export function BuildDialog() {
+export default function BuildDialog() {
   const open = useBuildDialog((s) => s.open);
   const seed = useBuildDialog((s) => s.seed);
   const card = useRef<HTMLDivElement>(null);
