@@ -72,7 +72,9 @@ function Terminal() {
   useSim((s) => s.version);
   const rt = useSim((s) => s.runtime);
   const source = useSim((s) => s.map?.source);
-  const text = rt?.terminal.text ?? "";
+  // play mode runs the real firmware remotely: what it typed comes from there, not the local runtime
+  const typed = useSim((s) => s.typed);
+  const text = typed || rt?.terminal.text || "";
   const lines = text.split("\n");
   return (
     <div className="sim-terminal" role="log" aria-label="Terminal">

@@ -106,6 +106,7 @@ function Simulator(props: { build: Build }) {
       typedAll.current = "";
       setLines([]);
       setTyped("");
+      useSim.setState({ typed: "" });
     }
     const fresh: SimEvent[] = s.events.filter((e) => e.seq > seq.current);
     seq.current = Math.max(seq.current, s.seq);
@@ -117,6 +118,7 @@ function Simulator(props: { build: Build }) {
     if (fresh.some((e) => e.type === "typed")) {
       typedAll.current = typedText(fresh, typedAll.current);
       setTyped(typedAll.current);
+      useSim.setState({ typed: typedAll.current });
       subs.current.forEach((f) => f());
     }
     setLines((prev) => {

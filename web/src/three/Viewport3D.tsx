@@ -671,6 +671,9 @@ function CasePieceNode(props: {
             geometry={g}
             material={material}
             onClick={(e) => {
+              // A see-through shell lets the click reach the part you can see inside it (a key, the
+              // board, the controller): only a click on bare case picks the case.
+              if (material.transparent && material.opacity < 0.5 && throughShell(e, ref.current)) return;
               if (useApp.getState().explode > 0.5 && !useSim.getState().active) {
                 e.stopPropagation();
                 pickPart(props.focusKey);
@@ -740,6 +743,17 @@ function EnclosureNode(props: { enc: Enclosure; theme: Theme; selected: boolean;
       ))}
     </>
   );
+}
+
+/** True when the click also hits a part of the build behind this shell (not the shell itself). */
+function throughShell(e: ThreeEvent<MouseEvent>, shell: THREE.Object3D | null): boolean {
+  const root = stage.root;
+  if (!root || !shell) return false;
+  const under = (o: THREE.Object3D | null, owner: THREE.Object3D) => {
+    for (let x = o; x; x = x.parent) if (x === owner) return true;
+    return false;
+  };
+  return e.intersections.some((h) => h.distance > e.distance && h.object.visible && (h.object as THREE.Mesh).isMesh && under(h.object, root) && !under(h.object, shell));
 }
 
 /** Board GLB from the board stage (kicad-cli export): drawn with KiCad's own materials. */
@@ -1055,20 +1069,24 @@ const SIM_EDGE_PX = 32;
  * The part of the canvas the device may use once play mode has settled: the canvas minus the play
  * panel on the right, the top bar and the outputs dock. Null when the canvas is not on the page.
  */
-function simFreeArea(cam: THREE.PerspectiveCamera): { w: number; canvasH: number; freeH: number; top: number; bottom: number } | null {
+function simFreeArea(cam: THREE.PerspectiveCamera): { w: number; canvasW: number; left: number; canvasH: number; freeH: number; top: number; bottom: number } | null {
   const canvas = document.querySelector<HTMLElement>(".viewport canvas");
   if (!canvas) return null;
   const r = canvas.getBoundingClientRect();
   const narrow = window.innerWidth <= 860;
-  const panelW = narrow ? 0 : Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--play-w")) || 340;
-  const w = window.innerWidth - panelW - Math.max(0, r.left);
+  const panel = narrow ? null : document.querySelector<HTMLElement>(".play-panel")?.getBoundingClientRect();
+  const panelW = narrow ? 0 : panel && panel.width > 0 ? window.innerWidth - panel.left : Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--play-w")) || 340;
+  const w = Math.min(r.right, window.innerWidth - panelW) - Math.max(0, r.left);
   const canvasH = r.height;
   const dock = document.querySelector<HTMLElement>(".play-dock")?.offsetHeight ?? SIM_DOCK_PX;
-  const top = Math.max(0, SIM_TOP_PX - Math.max(0, r.top));
+  // the terminal sits over the top of the canvas: the device starts below it, never under it
+  const term = document.querySelector<HTMLElement>(".sim-terminal")?.getBoundingClientRect();
+  const termBottom = term && term.height > 0 ? term.bottom - r.top + SIM_EDGE_PX / 2 : 0;
+  const top = Math.max(0, SIM_TOP_PX - Math.max(0, r.top), termBottom);
   const bottom = dock + SIM_EDGE_PX + (narrow ? window.innerHeight * 0.46 : 0);
   const freeH = canvasH - top - bottom;
   if (w < 80 || freeH < 80 || !Number.isFinite(cam.fov)) return null;
-  return { w, canvasH, freeH, top, bottom };
+  return { w, canvasW: r.width, left: Math.max(0, -r.left), canvasH, freeH, top, bottom };
 }
 
 /**
@@ -1104,7 +1122,18 @@ function framePose(kind: FrameKind, cam: THREE.PerspectiveCamera, predictExplode
     const virt = cam.clone();
     virt.fov = (2 * Math.atan(tanV)) / DEG;
     virt.aspect = free.w / free.freeH;
-    return fitPose(box, dir, virt, 1, SIM_FILL, (free.bottom - free.top) / 2 / free.freeH);
+    const fit = fitPose(box, dir, virt, 1, SIM_FILL, (free.bottom - free.top) / 2 / free.freeH);
+    // and centre it across the free area, not the whole canvas (the play panel covers the right of it)
+    const shiftX = (free.canvasW / 2 - (free.left + free.w / 2)) / free.canvasW;
+    if (Math.abs(shiftX) > 1e-3) {
+      const right = new THREE.Vector3().crossVectors(dir.clone().negate(), cam.up).normalize();
+      if (right.lengthSq() < 1e-6) right.set(1, 0, 0);
+      const tanH = Math.tan((cam.fov * DEG) / 2) * cam.aspect;
+      const d = right.multiplyScalar(2 * tanH * fit.dist * shiftX);
+      fit.target.add(d);
+      fit.pos.add(d);
+    }
+    return fit;
   }
   if (kind === "hero" || kind === "iso" || kind === "scene") {
     return fitPose(box, sceneDir() ?? HERO_DIR.clone().normalize(), cam, 1, sceneFill(box), 0.05);
@@ -1321,6 +1350,28 @@ function CameraRig() {
       savedCam.current = null;
       anim.current = { fromP: cam.position.clone(), fromT: ctl?.target.clone() ?? new THREE.Vector3(), toP: back.pos, toT: back.target, t: 0 };
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [simActive]);
+  useEffect(() => {
+    // While playing, the play panel, the terminal and the outputs dock arrive and resize after the
+    // glide starts (the firmware boots first): re-fit whenever that layout changes, so the device
+    // always sits in the free area and never under the terminal or the panel.
+    if (!simActive) return;
+    const sig = () => {
+      const r = (s: string) => {
+        const b = document.querySelector<HTMLElement>(s)?.getBoundingClientRect();
+        return b ? `${Math.round(b.left)},${Math.round(b.top)},${Math.round(b.width)},${Math.round(b.height)}` : "-";
+      };
+      return `${window.innerWidth}x${window.innerHeight}|${r(".viewport canvas")}|${r(".play-panel")}|${r(".sim-terminal")}|${r(".play-dock")}`;
+    };
+    let last = sig();
+    const id = window.setInterval(() => {
+      const now = sig();
+      if (now === last) return;
+      last = now;
+      if (!userMoved.current) start("sim");
+    }, 250);
+    return () => window.clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [simActive]);
   useEffect(() => {

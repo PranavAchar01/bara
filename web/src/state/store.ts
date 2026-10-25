@@ -197,7 +197,14 @@ export function pushLog(entry: Omit<LogEntry, "id" | "t">): void {
   });
 }
 
+/** True while the device is being played (simulation): a click presses a control, nothing else. */
+let playing: () => boolean = () => false;
+export function setPlayGuard(f: () => boolean): void {
+  playing = f;
+}
+
 export function select(instanceId: string | null): void {
+  if (instanceId && playing()) return;
   useApp.setState((s) => ({
     selection: instanceId,
     inspectPartId: null,
@@ -207,6 +214,7 @@ export function select(instanceId: string | null): void {
 
 /** Pulls one part out into focus (null puts it back); the right column shows the agent card. */
 export function focusPart(key: string | null): void {
+  if (key && playing()) return;
   const st = useApp.getState().build?.status;
   if (key && (st === "running" || st === "awaiting_input")) {
     // parts are still moving into place; pulling one out now left a half-applied layout
@@ -222,13 +230,21 @@ export function focusPart(key: string | null): void {
 }
 
 /**
- * A click on a part. In the exploded view a second click on the picked part puts it back; anywhere
- * else a click pulls the part out.
+ * A click on a part. In the exploded view a click lifts the part out and a second click puts it
+ * back. On the assembled device a plain click only selects it (outline and the action pill); pulling
+ * it out of the build is the pill's own action, so nothing comes apart by accident. While playing, a
+ * click presses the control and does nothing here.
  */
 export function pickPart(key: string): void {
+  if (playing()) return;
   const s = useApp.getState();
-  if (s.explode > 0.5 && s.focusKey === key) focusPart(null);
-  else focusPart(key);
+  if (s.explode > 0.5) {
+    if (s.focusKey === key) focusPart(null);
+    else focusPart(key);
+    return;
+  }
+  // already looking at one part pulled out: a click on another swaps which one
+  if (s.focusKey && s.focusKey !== key) focusPart(key);
 }
 
 export function setView(preset: ViewPreset): void {
