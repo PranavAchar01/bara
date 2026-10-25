@@ -19,11 +19,11 @@ import type { BBox, Board, Build, BuildPart, Enclosure, Layout } from "../spec/t
 import { failingByInstance } from "../ui/format";
 import { groupPieces, modelAsset, onModelsChanged, preloadModels, useModel, type LoadedModel, type MeshGroup } from "./assets";
 import { placeholderBox, type Box } from "./bbox";
-import { boardMatrix, matchComponents, type BoardCandidate } from "./boardgeom";
 import { LAYER_RANK, explodeZ, isKeycapPart, layerGap, layerOf, partLabel, type LayerId, type PartLabel } from "./explode";
 import { elementPoses, type ElementPose } from "./layout";
 import { LabelOverlay, LabelProjector, labelOpacity } from "./labels";
 import { FocusDriver, nearFocused } from "./focus";
+import { caseMaterial, useCasePreview } from "./caseFinish";
 import { defaultColor, ghost, placeholderMaterial, presetFor, presetMaterial, tinted, usesPreset } from "./materials";
 import { registerAnchor, stage, stageBox } from "./stage";
 import { StudioEnvironment, StudioFloor, studioPalette, type StudioPalette } from "./studio";
@@ -511,6 +511,8 @@ function CasePieceNode(props: {
   piece: CasePiece;
   enc: Enclosure;
   material: THREE.MeshStandardMaterial;
+  /** The user chose a finish: show the real material assembled, not the ghost shell. */
+  real: boolean;
   edge: string | null;
   anchorKey: string | null;
   focusKey: string;
@@ -532,7 +534,9 @@ function CasePieceNode(props: {
   }, [piece, pos, rot]);
   const ref = useLayerGroup(piece.lid ? "lid" : "case", props.anchorKey, anchorLocal, props.focusKey);
   // Assembled, every case piece is a translucent shell with its edges drawn, so
-  // the board inside stays in view; pieces turn solid as the explode opens.
+  // the board inside stays in view; pieces turn solid as the explode opens. A
+  // finish the user picked is shown as it is instead: see-through finishes pass
+  // light (transmission) and show the board for real, opaque ones are solid.
   const material = useMemo(() => {
     const m = props.material.clone();
     m.transparent = true;
@@ -546,12 +550,13 @@ function CasePieceNode(props: {
   useEffect(() => () => edgeMat.dispose(), [edgeMat]);
   const base = props.material.opacity;
   const floor = piece.lid ? 0.16 : 0.24;
+  const real = props.real;
   useFrame(() => {
-    const k = Math.min(1, stage.explode / 0.6);
+    const k = real ? 1 : Math.min(1, stage.explode / 0.6);
     const o = (floor + (1 - floor) * k) * base;
     material.opacity = o;
     // Creases stay drawn when pulled apart, like the outlines the library parts carry in their own geometry.
-    edgeMat.opacity = 0.3 + 0.25 * k;
+    edgeMat.opacity = real ? 0.12 : 0.3 + 0.25 * k;
     const solid = k >= 0.999 && base >= 0.999;
     if (material.depthWrite !== solid) {
       material.depthWrite = solid;
@@ -595,7 +600,8 @@ function EnclosureNode(props: { enc: Enclosure; theme: Theme; selected: boolean;
   const size = enc.outer_size_mm;
   const loaded = model.status === "ready" && model.model.groups.length > 0 ? model.model : null;
   const pending = enc.status === "pending";
-  const hex = caseHex(enc);
+  const preview = useCasePreview((s) => s.byId[enc.enclosure_id]);
+  const hex = preview?.hex ?? caseHex(enc);
   const pieces = useMemo<CasePiece[]>(() => {
     if (loaded) return casePieces(loaded);
     if (!size || size.length < 3) return [];
@@ -605,11 +611,12 @@ function EnclosureNode(props: { enc: Enclosure; theme: Theme; selected: boolean;
   useEffect(() => () => {
     if (!loaded) for (const p of pieces) for (const g of p.geoms) g.dispose();
   }, [loaded, pieces]);
+  const finish = preview ? preview.finish : enc.color?.finish;
   const material = useMemo(() => {
-    const base = presetMaterial("case", hex);
+    const base = caseMaterial(hex, finish);
     if (pending) return ghost(base, 0.35);
     return loaded ? base : ghost(base, 0.6);
-  }, [hex, loaded, pending]);
+  }, [hex, finish, loaded, pending]);
   if (enc.kind === "none" || !pieces.length) return null;
   const edge = props.failing ? theme.fail : props.selected ? theme.accent : null;
   const onClick = (e: ThreeEvent<MouseEvent>) => {
@@ -625,6 +632,7 @@ function EnclosureNode(props: { enc: Enclosure; theme: Theme; selected: boolean;
           piece={p}
           enc={enc}
           material={material}
+          real={!!finish}
           edge={edge}
           onClick={onClick}
           anchorKey={props.labelled ? (p.lid && pieces.length > 1 ? "e:case_top" : "e:case") : null}
@@ -640,6 +648,63 @@ function boardModelUrl(board: Board): string | null {
   return modelAsset(board.assets, false)?.url ?? null;
 }
 
+/** A part the board GLB may already show: its layer and element origins in build space. */
+interface BoardCandidate {
+  instanceId: string;
+  layer: LayerId;
+  points: THREE.Vector3[];
+}
+
+function boardMatrix(board: Board): THREE.Matrix4 {
+  const pos = board.position_mm ?? [0, 0, 0];
+  const rot = board.rotation_deg ?? [0, 0, 0];
+  return new THREE.Matrix4().compose(
+    new THREE.Vector3(pos[0], pos[1], pos[2]),
+    new THREE.Quaternion().setFromEuler(new THREE.Euler(rot[0] * DEG, rot[1] * DEG, rot[2] * DEG, "XYZ")),
+    new THREE.Vector3(1, 1, 1),
+  );
+}
+
+/**
+ * The routed board GLB is the assembly: kicad-cli exports every footprint's
+ * model (switches, MCU, display, encoder) in place. Each small component
+ * whose footprint holds a part's origin is that part; the part then draws no
+ * mesh of its own, and the component lifts with the part's layer when the
+ * view explodes. The largest component is the bare board.
+ */
+function matchComponents(loaded: LoadedModel, board: Board, candidates: BoardCandidate[]) {
+  const m = boardMatrix(board);
+  const whole = loaded.bbox.clone().applyMatrix4(m);
+  const boardArea = (whole.max.x - whole.min.x) * (whole.max.y - whole.min.y);
+  const owner = new Map<number, BoardCandidate>();
+  let substrate = -1;
+  let biggest = 0;
+  loaded.components.forEach((c, i) => {
+    if (c.bbox.isEmpty()) return;
+    const b = c.bbox.clone().applyMatrix4(m);
+    const area = (b.max.x - b.min.x) * (b.max.y - b.min.y);
+    if (area > biggest) {
+      biggest = area;
+      substrate = i;
+    }
+    if (area > boardArea * 0.25) return;
+    const centre = b.getCenter(new THREE.Vector3());
+    let best: BoardCandidate | null = null;
+    let bestD = Infinity;
+    for (const cand of candidates)
+      for (const p of cand.points) {
+        if (p.x < b.min.x - 0.5 || p.x > b.max.x + 0.5 || p.y < b.min.y - 0.5 || p.y > b.max.y + 0.5) continue;
+        if (p.z < b.min.z - 2.5 || p.z > b.max.z + 2.5) continue;
+        const d = Math.hypot(p.x - centre.x, p.y - centre.y);
+        if (d < bestD) {
+          bestD = d;
+          best = cand;
+        }
+      }
+    if (best) owner.set(i, best);
+  });
+  return { owner, substrate };
+}
 
 function BoardPiece(props: {
   groups: MeshGroup[];
