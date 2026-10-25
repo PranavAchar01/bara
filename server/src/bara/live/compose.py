@@ -50,6 +50,8 @@ log = logging.getLogger(__name__)
 Emit = Callable[..., dict[str, Any]]
 
 MAX_SURVIVORS = 8
+# function ids that name no electrical job: the block is housing material, made by the case
+NON_ELECTRICAL = frozenset({"other", "mech.enclosure"})
 ASSETS_DIR = SERVER / "data" / "assets"
 HALF_GAP_MM = 40.0  # inner-edge gap between split halves in the first placement guess
 
@@ -581,7 +583,17 @@ class Composer:
 
     def filters_for(self, slot: Slot, cands: list[dict[str, Any]]) -> list[Filter]:
         filters: list[Filter] = []
-        present = {k for p in cands for k in (p.get("facets") or {})}
+        # a device requirement describes the parts whose own function this slot is: a speaker
+        # slot offered an audio MCU (a speaker only as a side function) takes no radio filter
+        own = [
+            p
+            for p in cands
+            if any(
+                f.get("primary") and f.get("function_id") == slot.function_id
+                for f in p.get("functions") or []
+            )
+        ] or cands
+        present = {k for p in own for k in (p.get("facets") or {})}
         # 1. requirements from the spec, where the slot's parts carry that facet
         for req in self.spec.get("hard_requirements", []) + self.spec.get("soft_requirements", []):
             facet, op, value = req["facet"], req["op"], req["value"]
@@ -1197,9 +1209,9 @@ class Composer:
                 stage="compose",
             )
             idx, method, reason, model, notes = await self.pick(slot, ranked)
-            if method == "model_none":
-                # nothing in the catalog is the named part: look further (KiCad, LCSC) before
-                # settling for the closest catalog part
+            if method == "model_none" or (method == "none" and slot.need is not None):
+                # nothing in the catalog is the named part, or none passes the filters: look
+                # further (KiCad, LCSC) before settling for the closest catalog part
                 had = len(self.extra.get(slot.slot_id, []))
                 await self.resolve_missing(slot, emit)
                 new = self.extra.get(slot.slot_id, [])[had:]
@@ -1226,8 +1238,14 @@ class Composer:
                     },
                     stage="compose",
                 )
-            if idx is None and slot.need is not None and slot.need.mechanical:
-                # caps, levers and wells the case geometry grows from the form's anchors
+            if (
+                idx is None
+                and slot.need is not None
+                and (slot.need.mechanical or slot.function_id in NON_ELECTRICAL)
+            ):
+                # caps, levers and wells the case geometry grows from the form's anchors; a
+                # block with no electrical function (a lens, a window, a gasket) is the
+                # case's own material, not something an electronics library sells
                 slot.state, slot.covered_by = "none", "case"
                 reason = f"{slot.label}: made by the case, not a catalog part."
             elif idx is None:
