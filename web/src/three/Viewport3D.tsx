@@ -33,6 +33,7 @@ import { defaultColor, finishMaterial, ghost, placeholderMaterial, presetFor, pr
 import { focusAmount, registerAnchor, stage, stageBox } from "./stage";
 import { StudioEnvironment, StudioFloor, studioPalette, type StudioPalette } from "./studio";
 import { DemandDriver, StudioPost, postEnabled } from "./post";
+import { SHOT_ID } from "./shot";
 import { BoardPlaceholder, BoardStatus, FootprintHover, footprintBoxes } from "./board";
 import { AgentTargetProbe, partWorldBox, registerPart } from "./agentTargets";
 import { agentPose, easeOut } from "./agentCam";
@@ -119,6 +120,35 @@ function boxGeometry(box: Box): THREE.BufferGeometry {
   const r = Math.min(2, Math.min(sx, sy, sz) * 0.2);
   const g = r > 0.15 ? new RoundedBoxGeometry(sx, sy, sz, 2, r) : new THREE.BoxGeometry(sx, sy, sz);
   g.translate((box.min[0] + box.max[0]) / 2, (box.min[1] + box.max[1]) / 2, (box.min[2] + box.max[2]) / 2);
+  return g;
+}
+
+/** Stand-in for a keycap without a model: a rounded cap that narrows toward its top, filling the box. */
+function keycapGeometry(box: Box): THREE.BufferGeometry {
+  const sx = Math.max(1, box.max[0] - box.min[0] - 0.6);
+  const sy = Math.max(1, box.max[1] - box.min[1] - 0.6);
+  const sz = Math.max(1, box.max[2] - box.min[2]);
+  const g = new RoundedBoxGeometry(sx, sy, sz, 3, Math.min(1.2, sz * 0.2, Math.min(sx, sy) * 0.12));
+  // taper: the top face is about 3/4 of the skirt, like a DSA or OEM cap
+  const pos = g.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const t = (pos.getZ(i) + sz / 2) / sz;
+    const k = 1 - 0.24 * t;
+    const inset = Math.min(sx, sy) * 0.06 * t;
+    pos.setXYZ(i, pos.getX(i) * k, pos.getY(i) * k - inset, pos.getZ(i));
+  }
+  g.computeVertexNormals();
+  g.translate((box.min[0] + box.max[0]) / 2, (box.min[1] + box.max[1]) / 2, (box.min[2] + box.max[2]) / 2);
+  return g;
+}
+
+/** Stand-in for a knob without a model: a turned metal cylinder with a softened top edge. */
+function knobGeometry(box: Box): THREE.BufferGeometry {
+  const d = Math.max(2, Math.min(box.max[0] - box.min[0], box.max[1] - box.min[1]));
+  const h = Math.max(2, box.max[2] - box.min[2]);
+  const g = new THREE.CylinderGeometry(d * 0.47, d / 2, h, 64, 1);
+  g.rotateX(Math.PI / 2);
+  g.translate((box.min[0] + box.max[0]) / 2, (box.min[1] + box.max[1]) / 2, box.min[2] + h / 2);
   return g;
 }
 
@@ -342,7 +372,21 @@ function PartNode(props: PartNodeProps) {
   const missing = !loaded;
   const color = defaultColor(part);
   const preset = presetFor(part);
-  const placeholderGeom = useMemo(() => (loaded ? null : preset === "glossy" ? sphereGeometry(box) : boxGeometry(box)), [loaded, box, preset]);
+  // keycaps and knobs keep their shape without a model: a board missing them reads as unfinished
+  const standIn = preset === "keycap" || (preset === "metal" && /\bknob\b|^knob:/.test(`${part.part_id} ${part.card.display_name}`.toLowerCase()));
+  const placeholderGeom = useMemo(
+    () =>
+      loaded
+        ? null
+        : preset === "glossy"
+          ? sphereGeometry(box)
+          : standIn
+            ? preset === "keycap"
+              ? keycapGeometry(box)
+              : knobGeometry(box)
+            : boxGeometry(box),
+    [loaded, box, preset, standIn],
+  );
   useEffect(() => () => placeholderGeom?.dispose(), [placeholderGeom]);
   const groups = useMemo<MeshGroup[]>(() => {
     if (loaded) {
@@ -363,10 +407,12 @@ function PartNode(props: PartNodeProps) {
       }
       return loaded.groups;
     }
-    // No model: a faint neutral shell with its edges drawn, labelled, so it never reads as the part.
-    return placeholderGeom ? [{ geometry: placeholderGeom, material: placeholderMaterial(), weight: 0 }] : [];
-  }, [loaded, part.color?.hex, part.finish, preset, color, placeholderGeom]);
-  const placeholderEdges = useMemo(() => (placeholderGeom ? new THREE.EdgesGeometry(placeholderGeom, 25) : null), [placeholderGeom]);
+    // No model: a keycap or knob is still drawn solid in its colour and preset;
+    // anything else is a faint neutral shell with its edges drawn, labelled, so it never reads as the part.
+    if (!placeholderGeom) return [];
+    return [{ geometry: placeholderGeom, material: standIn ? presetMaterial(preset, color) : placeholderMaterial(), weight: 0 }];
+  }, [loaded, part.color?.hex, part.finish, preset, color, placeholderGeom, standIn]);
+  const placeholderEdges = useMemo(() => (placeholderGeom && !standIn ? new THREE.EdgesGeometry(placeholderGeom, 25) : null), [placeholderGeom, standIn]);
   useEffect(() => () => placeholderEdges?.dispose(), [placeholderEdges]);
   const assembled = useApp((s) => s.explode < 0.8);
   const provisionalGroups = useMemo(
@@ -1811,7 +1857,7 @@ function SceneContents(props: {
   return (
     <>
       <StudioEnvironment palette={props.palette} post={props.post} />
-      {preset !== "bottom" && <StudioFloor palette={props.palette} revision={revision} grid={!simOn} />}
+      {preset !== "bottom" && <StudioFloor palette={props.palette} revision={revision} grid={!simOn && !SHOT_ID} />}
       <ExplodeDriver />
       <LayerMeasure />
       <HoverDriver />
@@ -1869,7 +1915,7 @@ function SceneContents(props: {
       <FitCheck onResult={props.onFit} />
       {props.post && <StudioPost dark={false} />}
       {/* View cube, top left. Build space is Z up: +Y is the back face, -Y the front. */}
-      {!simOn && (
+      {!simOn && !SHOT_ID && (
         <GizmoHelper alignment="top-left" margin={[64, 64]} renderPriority={2}>
           <GizmoViewcube faces={["Right", "Left", "Back", "Front", "Top", "Bottom"]} color="#F4F5F7" textColor="#5B6470" strokeColor="#B9C0C8" hoverColor="#CFE3F7" opacity={1} />
         </GizmoHelper>

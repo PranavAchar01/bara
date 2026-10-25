@@ -12,6 +12,7 @@ import * as THREE from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { onModelsChanged } from "./assets";
 import { stage, stageBox } from "./stage";
+import { SHOT_ID } from "./shot";
 
 export interface StudioPalette {
   background: string;
@@ -56,7 +57,8 @@ export function StudioEnvironment(props: { palette: StudioPalette; post: boolean
     };
   }, [gl, scene, post]);
   useEffect(() => {
-    scene.background = new THREE.Color(props.palette.background);
+    // a product shot keeps the canvas transparent around the device
+    scene.background = SHOT_ID ? null : new THREE.Color(props.palette.background);
   }, [scene, props.palette.background]);
   const key = useMemo(() => {
     const l = new THREE.DirectionalLight(0xffffff, 1.1);

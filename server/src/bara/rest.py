@@ -264,6 +264,17 @@ def build_router(svc: Services) -> APIRouter:
             raise ApiError("E_NOT_FOUND", f"No stored build {build_id}.")
         return body(entry)
 
+    @api.put("/v1/library/{build_id}/shot")
+    async def library_shot(build_id: str, request: Request) -> JSONResponse:
+        """The product shot of a stored build (a WebP body), drawn by the browser that built it."""
+        if not BUILD_ID_RE.fullmatch(build_id) or svc.engine.library.get(build_id) is None:
+            raise ApiError("E_NOT_FOUND", f"No stored build {build_id}.")
+        try:
+            url = svc.engine.library.save_shot(build_id, await request.body())
+        except ValueError as exc:
+            raise ApiError("E_BAD_MESSAGE", "Send the shot as a WebP image up to 4 MB.") from exc
+        return body({"shot_url": url})
+
     @api.delete("/v1/library/{build_id}")
     def library_delete(build_id: str) -> JSONResponse:
         if not BUILD_ID_RE.fullmatch(build_id) or not svc.engine.library.delete(build_id):

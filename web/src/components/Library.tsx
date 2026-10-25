@@ -1,13 +1,14 @@
 // The Library page (/library): finished builds from the engine (the gallery, one per kind of device,
 // every check held) with its own Build button, then this browser's drafts in Bara's own language: a small
 // Bara keeps the shelf, the newest draft sits large on a gridded plate like the hero's, and the rest stand
-// on a shelf by day. A draft with no picture gets a blueprint drawn from what was asked for. Click to
-// reopen; × (twice) to remove a draft; type to filter.
+// on a shelf by day. Every tile shows the build's finished product alone, rendered (library/shots.ts,
+// scripts/render-shots.mjs); one not rendered yet falls back to a drawing of its parts or, for a draft, a
+// blueprint drawn from what was asked for. Click to reopen; × (twice) to remove a draft; type to filter.
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { openLibraryBuild, openSaved } from "../net/client";
 import { showToast, useApp } from "../state/store";
 import { Icon } from "../ui/common";
-import { deleteEntry, isFlat, loadEntry, useLibrary, type LibraryCard } from "../library/library";
+import { deleteEntry, loadEntry, useLibrary, type LibraryCard } from "../library/library";
 import { loadGallery, useGallery, type GalleryItem } from "../library/gallery";
 import { BuildStill } from "./BuildScene";
 import { openBuildDialog } from "./BuildDialog";
@@ -116,20 +117,11 @@ function Blueprint(props: { prompt: string }) {
   );
 }
 
-/** The picture of a build: its canvas snapshot, or a blueprint drawn from the request. */
+/** The picture of a build: the rendered product alone (scripts/render-shots.mjs), or a blueprint drawn from the
+ *  request until it has one. Never the workspace snapshot: that one stands on the studio floor and grid. */
 function Picture(props: { card: LibraryCard }) {
   const [broken, setBroken] = useState(false);
-  if (props.card.thumb && !broken)
-    return (
-      <img
-        src={props.card.thumb}
-        alt=""
-        loading="lazy"
-        onError={() => setBroken(true)}
-        // an empty snapshot (taken before the model drew) gets the blueprint instead
-        onLoad={(e) => isFlat(e.currentTarget, e.currentTarget.naturalWidth, e.currentTarget.naturalHeight) && setBroken(true)}
-      />
-    );
+  if (props.card.shot && !broken) return <img className="lib-shot" src={props.card.shot} alt="" loading="lazy" onError={() => setBroken(true)} />;
   return <Blueprint prompt={props.card.prompt} />;
 }
 
@@ -343,6 +335,15 @@ export function Library() {
   );
 }
 
+/** A finished build's picture: its rendered product alone; the drawing from its own data only when no shot exists yet. */
+function GalleryPicture(props: { item: GalleryItem }) {
+  const { item } = props;
+  const [broken, setBroken] = useState(false);
+  if (item.shot && !broken) return <img className="lib-shot" src={item.shot} alt="" loading="lazy" onError={() => setBroken(true)} />;
+  if (item.preview) return <BuildStill build={item.preview} className="gal-still" />;
+  return item.thumb ? <img src={item.thumb} alt="" loading="lazy" /> : null;
+}
+
 export function GalleryCard(props: { item: GalleryItem }) {
   const { item } = props;
   const [opening, setOpening] = useState(false);
@@ -360,7 +361,7 @@ export function GalleryCard(props: { item: GalleryItem }) {
     <li className={`gal-card ${opening ? "opening" : ""}`}>
       <button type="button" className="gal-open" onClick={() => void open()} aria-label={`Open the ${item.title.toLowerCase()} build`}>
         <span className="gal-thumb">
-          {item.thumb ? <img src={item.thumb} alt="" loading="lazy" /> : item.preview ? <BuildStill build={item.preview} className="gal-still" /> : null}
+          <GalleryPicture item={item} />
         </span>
         <span className="gal-meta">
           <span className="gal-title">{item.title}</span>

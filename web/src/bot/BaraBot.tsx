@@ -568,7 +568,7 @@ function ThoughtBubble(props: { on: boolean; icons: ThoughtIcon[] }) {
 function SpeechBubble(props: { on: boolean; text: string }) {
   return (
     <span className={`bb-speech ${props.on && props.text ? "on" : ""}`} role="status" aria-live="polite">
-      {props.text}
+      <span className="bb-speech-text">{props.text}</span>
     </span>
   );
 }

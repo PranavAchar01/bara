@@ -179,7 +179,7 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean; fresh?
                 : disabled
                   ? "Waiting for the server"
                   : focusOpen
-                    ? `Ask about ${focusName ? `the ${focusName}` : "this part"}, or hold Space to talk`
+                    ? `Ask about ${focusName ? `the ${focusName}` : "this part"}`
                     : props.docked
                     ? "Describe another device, or hold Space to talk"
                     : (props.placeholder ?? "Describe the device you want, or hold Space to talk")
@@ -193,6 +193,25 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean; fresh?
         onBlur={() => setFocused(false)}
         disabled={disabled}
       />
+      {/* the way in to talking, for anyone who hasn't found Space yet: tap it (or Space) to talk
+          hands-free, hold Space to talk while held. The ring grows with the voice. */}
+      <button
+        type="button"
+        className={`talk-key ${listening ? "on" : ""}`}
+        // keep focus where it was, so a later Space press talks instead of pressing this button again
+        onPointerDown={(e) => e.preventDefault()}
+        onClick={() => (listening ? stopListening() : void startListening("auto"))}
+        disabled={disabled}
+        title={listening ? "Send now (Space)" : "Talk: tap Space and speak, or hold Space while you talk"}
+        aria-label={listening ? "Send what you said" : "Talk to Bara"}
+        aria-pressed={listening}
+      >
+        <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden>
+          <rect x="7" y="2.5" width="6" height="10" rx="3" />
+          <path d="M4.5 9.5a5.5 5.5 0 0 0 11 0M10 15v2.5" />
+        </svg>
+        <kbd>Space</kbd>
+      </button>
       <button
         type="button"
         className={`icon-btn voice-toggle ${replies ? "on" : ""}`}

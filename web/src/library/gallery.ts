@@ -40,7 +40,9 @@ export interface GalleryItem {
   build_id: string;
   title: string;
   prompt: string;
-  /** The engine's rendered hero picture, when it made one. */
+  /** The build's rendered product alone on transparency (the main picture), when it has been shot. */
+  shot: string | null;
+  /** The engine's hero picture, when it made one. */
   thumb: string | null;
   /** Otherwise a drawing of the board and case from the build's own data. */
   preview: ReplayBuild | null;
@@ -62,7 +64,7 @@ export function candidatesByKind(builds: StoredBuild[]): StoredBuild[][] {
   }
   const t = (b: StoredBuild) => (b.created_at ? Date.parse(b.created_at) || 0 : 0);
   return [...groups.values()]
-    .map((g) => g.sort((a, b) => Number(!!b.hero_url) - Number(!!a.hero_url) || t(b) - t(a)))
+    .map((g) => g.sort((a, b) => Number(!!b.shot_url) - Number(!!a.shot_url) || Number(!!b.hero_url) - Number(!!a.hero_url) || t(b) - t(a)))
     .sort((a, b) => t(b[0]) - t(a[0]));
 }
 
@@ -97,7 +99,7 @@ async function verdict(b: StoredBuild): Promise<Verdict | null> {
   const res = await getRest().get<{ events: { type: string; payload: unknown }[] }>(paths.libraryBuild(b.build_id));
   if (!res.ok || !Array.isArray(res.body.events)) return null;
   const d = distillEvents(b.build_id, b.prompt, b.device ?? "", res.body.events);
-  const v: Verdict = { ok: d.failed === 0, checks: d.checks, preview: b.hero_url ? null : d };
+  const v: Verdict = { ok: d.failed === 0, checks: d.checks, preview: b.hero_url || b.shot_url ? null : d };
   remember(b.build_id, v);
   return v;
 }
@@ -114,7 +116,7 @@ export async function pickGallery(builds: StoredBuild[], judge: (b: StoredBuild)
       const v = await judge(b).catch(() => null);
       if (!v?.ok) continue;
       const title = capital(scrubBrands(b.device || deviceKind(b)));
-      out.push({ build_id: b.build_id, title, prompt: capital(scrubBrands(b.prompt)), thumb: b.hero_url ? serverUrl(b.hero_url) : null, preview: v.preview, checks: v.checks });
+      out.push({ build_id: b.build_id, title, prompt: capital(scrubBrands(b.prompt)), shot: b.shot_url ? serverUrl(b.shot_url) : null, thumb: b.hero_url ? serverUrl(b.hero_url) : null, preview: v.preview, checks: v.checks });
       break;
     }
   }
@@ -125,7 +127,7 @@ export async function pickGallery(builds: StoredBuild[], judge: (b: StoredBuild)
 export function offlineGallery(): GalleryItem[] {
   return (landing as ReplayBuild[])
     .filter((b) => b.failed === 0)
-    .map((b) => ({ build_id: b.id, title: b.name, prompt: capital(b.prompt), thumb: null, preview: b, checks: b.checks, offline: true }));
+    .map((b) => ({ build_id: b.id, title: b.name, prompt: capital(b.prompt), shot: null, thumb: null, preview: b, checks: b.checks, offline: true }));
 }
 
 export const useGallery = create<{ items: GalleryItem[]; ready: boolean }>(() => ({ items: [], ready: false }));

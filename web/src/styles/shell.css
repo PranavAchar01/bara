@@ -779,6 +779,65 @@
     height: 10px;
   }
 }
+/* Talk: a mic and the Space keycap, the same kbd chip the focus card and Put back use. Listening,
+   it fills ink and a ring grows with the voice (--mic-level, set by voice/voice.ts). */
+.talk-key {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 7px 0 10px;
+  border: 0;
+  border-radius: 17px;
+  background: none;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease, box-shadow 60ms linear;
+}
+.talk-key svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+.talk-key svg rect {
+  fill: currentColor;
+  stroke: none;
+}
+.talk-key kbd {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1;
+  padding: 3px 6px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  color: var(--text-2);
+  background: var(--paper);
+}
+.talk-key:hover:not(:disabled) {
+  background: var(--paper-2);
+  color: var(--ink);
+}
+.talk-key:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.talk-key:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.talk-key.on {
+  background: var(--ink);
+  color: var(--paper);
+  box-shadow: 0 0 0 calc(2px + var(--mic-level, 0) * 8px) color-mix(in srgb, var(--ink) 18%, transparent);
+}
+.talk-key.on kbd {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--paper) 45%, transparent);
+  color: var(--paper);
+}
 .voice-toggle {
   flex: none;
   display: inline-flex;
@@ -968,13 +1027,19 @@
   outline: none;
 }
 
-/* the gridded backdrop every picture stands on, like the hero plate's */
+/* every picture stands on clean paper under a soft light: the product, nothing else around it */
 .lib-latest-pic,
 .lib-pic {
   background:
-    linear-gradient(var(--line) 1px, transparent 1px) 0 0 / 22px 22px,
-    linear-gradient(90deg, var(--line) 1px, transparent 1px) 0 0 / 22px 22px,
+    radial-gradient(70% 60% at 50% 42%, var(--paper) 0%, transparent 70%),
     var(--paper-2);
+}
+/* the rendered product keeps its own shape: contained, never cropped */
+.lib-latest-pic img.lib-shot,
+.lib-pic img.lib-shot {
+  object-fit: contain;
+  padding: 6%;
+  filter: drop-shadow(0 22px 24px rgb(20 28 40 / 0.16)) drop-shadow(0 2px 3px rgb(20 28 40 / 0.1));
 }
 .lib-latest-pic img,
 .lib-pic img {
@@ -1963,6 +2028,18 @@
 .gal-still {
   padding: 12px;
 }
+/* the rendered product keeps its own shape on clean paper, like the draft tiles */
+.gal-thumb:has(img.lib-shot) {
+  background:
+    radial-gradient(70% 60% at 50% 42%, var(--paper) 0%, transparent 70%),
+    var(--paper-2);
+}
+.gal-thumb img.lib-shot {
+  object-fit: contain;
+  object-position: center;
+  padding: 6%;
+  filter: drop-shadow(0 18px 20px rgb(20 28 40 / 0.16)) drop-shadow(0 2px 3px rgb(20 28 40 / 0.1));
+}
 .gal-meta {
   display: flex;
   flex-direction: column;
@@ -2285,15 +2362,13 @@
 .ai-mic:hover:not(:disabled) {
   border-color: var(--ink);
 }
+/* the ring grows with the voice (--mic-level, 0 to 1, set by voice/voice.ts), so a dead mic is plain to see */
 .ai-mic.on {
   border-color: var(--accent);
   background: var(--accent);
   color: #fff;
-  animation: ai-mic 1.2s ease-in-out infinite;
-}
-@keyframes ai-mic {
-  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent); }
-  50% { box-shadow: 0 0 0 8px color-mix(in srgb, var(--accent) 0%, transparent); }
+  box-shadow: 0 0 0 calc(3px + var(--mic-level, 0) * 12px) color-mix(in srgb, var(--accent) 28%, transparent);
+  transition: box-shadow 60ms linear, background 160ms ease, color 160ms ease;
 }
 .ai-send {
   border: 0;
@@ -3112,3 +3187,13 @@
 /* the speaker toggle shows only while spoken replies are on, or when the bar is hovered or focused */
 .promptbar .voice-toggle:not(.on) { opacity: 0; transition: opacity 0.15s; }
 .promptbar:hover .voice-toggle, .promptbar:focus-within .voice-toggle { opacity: 1; }
+
+/* Product-shot page (ShotPage.tsx): the canvas alone, the page around it transparent. */
+.shot-page,
+.shot-page body {
+  background: transparent;
+}
+.shot-stage {
+  position: fixed;
+  inset: 0;
+}

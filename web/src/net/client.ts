@@ -404,6 +404,8 @@ export interface StoredBuild {
   created_at: string | null;
   status: "done" | "failed";
   hero_url: string | null;
+  /** The finished device alone, rendered by scripts/render-shots.mjs; null until it has been. */
+  shot_url?: string | null;
 }
 
 /** Stored builds, newest first. Mock mode and an engine without a library both give an empty list. */
