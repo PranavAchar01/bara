@@ -456,6 +456,14 @@ def _tint(text: str) -> str:
     return ""
 
 
+# parts a finger never presses: a control's cap is never set over a card slot, a cable socket or
+# a speaker, however close the anchor lands (a handheld's A button over its microSD slot)
+NOT_PRESSED = re.compile(
+    r"micro_?sd|\bsd\b|card|conn[:_]|jst|header|socket|speaker|buzzer|piezo|\bmic\b|microphone"
+)
+PRESSED_KINDS = ("button", "dpad", "knob", "wheel", "stick", "shoulder")
+
+
 def sites_from_anchors(
     anchors: list[dict[str, Any]], feats: list[Any], board_top: float = 0.0, y_down: bool = True
 ) -> list[Site]:
@@ -499,6 +507,8 @@ def sites_from_anchors(
                     continue
                 if (kind == "screen") != (f.role == "screen"):
                     continue  # a window opens over a panel, a button over a button
+                if kind in PRESSED_KINDS and NOT_PRESSED.search(f"{f.lib_id} {f.ref}".lower()):
+                    continue
                 # a panel's own centre can sit well off the anchor while the anchor is still over
                 # its glass: anywhere within half its diagonal claims it
                 reach = max(best, 0.5 * math.hypot(f.w, f.d)) if kind == "screen" else best

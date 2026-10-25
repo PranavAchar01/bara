@@ -93,6 +93,34 @@ def test_case_anchors_follow_the_board_record_frame() -> None:
     assert sites_from_anchors(screen, [], y_down=True)[0].y == -33
 
 
+def test_a_button_cap_never_lands_on_a_card_slot() -> None:
+    """A handheld's A button anchor landed beside its microSD slot, claimed it, and the case cut
+    an 18 mm cap over the slot with the card's board showing through. Slots, sockets and
+    speakers are never pressed: the cap goes to the switch."""
+    from bara.geometry.case import Feature
+    from bara.geometry.shell import sites_from_anchors
+
+    sd = Feature(
+        ref="u_microsdslo",
+        role="other",
+        x=0,
+        y=-102,
+        rot_deg=0,
+        side="top",
+        height=2,
+        w=18,
+        d=15,
+        lib_id="conn:microsd_hirose_dm3at",
+        touch=True,
+    )
+    sw = Feature(ref="u_actionbutt[1]", role="other", x=14, y=-104, rot_deg=0, side="top",
+                 height=5, w=6, d=6, lib_id="btn:tact_6mm_tht", touch=True)  # fmt: skip
+    a = [{"name": "A button", "mount": "front", "pattern": "single", "centre": [3, -102],
+          "count": 1}]  # fmt: skip
+    site = sites_from_anchors(a, [sd, sw], y_down=False)[0]
+    assert site.ref != "u_microsdslo"
+
+
 def test_a_speaker_gets_sound_slots_and_a_named_led_stays_a_light() -> None:
     from bara.geometry.shell import classify
 
