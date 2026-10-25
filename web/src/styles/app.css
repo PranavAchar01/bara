@@ -109,6 +109,15 @@ mark {
   font-size: 21px;
   letter-spacing: -0.01em;
 }
+/* the maker, small beside the name, wherever there's room for it */
+.brand-by {
+  margin: 4px 0 0 -2px;
+  color: var(--text-2);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
 .topbar-build {
   display: flex;
   align-items: center;
@@ -159,6 +168,9 @@ mark {
   }
   .topbar .brand {
     white-space: nowrap;
+  }
+  .topbar .brand-by {
+    display: none;
   }
   .topbar-right {
     gap: 8px;

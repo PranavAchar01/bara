@@ -329,6 +329,7 @@ export function LandingSections() {
         <span className="ld-foot-brand">
           <BaraMark className="brand-mark" />
           Bara
+          <span className="brand-by">by Tangible Parts</span>
         </span>
         <button type="button" className="ld-foot-link" onClick={() => useApp.setState({ screen: "drafts" })}>
           Library
