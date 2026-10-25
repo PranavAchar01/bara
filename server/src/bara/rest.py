@@ -232,8 +232,6 @@ def build_router(svc: Services) -> APIRouter:
             201,
         )
 
-    words = intent.part_words(cat, svc.router.keywords.get("function_words", {}))
-
     @api.post("/v1/intent")
     async def prompt_intent(request: Request) -> JSONResponse:
         """Over an open build: does the prompt add a device beside it, change it, or start over."""
@@ -244,7 +242,16 @@ def build_router(svc: Services) -> APIRouter:
         prompt = data.get("prompt")
         if not isinstance(prompt, str) or not prompt.strip():
             raise ApiError("E_BAD_MESSAGE", "Send prompt.")
-        return body(intent.classify(prompt, bool(data.get("has_build")), words))
+        names = data.get("part_names")
+        build_prompt = data.get("build_prompt")
+        return body(
+            await intent.classify(
+                prompt,
+                bool(data.get("has_build")),
+                build_prompt if isinstance(build_prompt, str) else "",
+                [n for n in names if isinstance(n, str)] if isinstance(names, list) else None,
+            )
+        )
 
     @api.get("/v1/library")
     def library_list() -> JSONResponse:

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LAYER_RANK, explodeZ, humanGroupName, layerGap, layerOf } from "./explode";
+import { LAYER_RANK, explodeZ, humanGroupName, layerGap, layerOf, layerOffsets } from "./explode";
 import type { BuildPart } from "../spec/types";
 
 const part = (part_id: string, kind: string, primary_function: string, display_name = part_id): Pick<BuildPart, "part_id" | "card" | "label"> => ({
@@ -50,5 +50,29 @@ describe("role names", () => {
   it("keeps a slide power switch off the key switch layer", () => {
     expect(layerOf(part("sw:power_msk12c02", "component", "power.switch"))).toBe("board_parts");
     expect(layerOf(part("sw:kailh_choc_red", "component", "input.key"))).toBe("switches");
+  });
+});
+
+describe("layerOffsets", () => {
+  it("stacks layers with clearance between the top of one and the bottom of the next", () => {
+    const ext: Record<"case" | "pcb" | "switches" | "keycaps", [number, number]> = { case: [0, 12], pcb: [2, 4], switches: [3, 20], keycaps: [14, 24] };
+    const off = layerOffsets(ext, 6);
+    expect(off.case).toBe(0);
+    // each layer's lifted bottom clears the lifted top of everything below it
+    let top = -Infinity;
+    for (const l of ["case", "pcb", "switches", "keycaps"] as const) {
+      expect(ext[l][0] + off[l]!).toBeGreaterThanOrEqual(top + (top === -Infinity ? 0 : 6) - 1e-9);
+      top = Math.max(top, ext[l][1] + off[l]!);
+    }
+  });
+  it("never moves a layer below the one under it, and skips layers it has no extent for", () => {
+    const off = layerOffsets({ pcb: [0, 2], plate: [50, 52], switches: [51, 60] }, 5);
+    expect(off.plate).toBeGreaterThanOrEqual(off.pcb!);
+    expect(off.switches).toBeGreaterThanOrEqual(off.plate!);
+    expect("case" in off).toBe(false);
+  });
+  it("keeps keycaps over their switches: only z changes, and they clear the switch tops", () => {
+    const off = layerOffsets({ switches: [0, 18], keycaps: [10, 22] }, 8);
+    expect(10 + off.keycaps!).toBeGreaterThanOrEqual(18 + off.switches! + 8);
   });
 });

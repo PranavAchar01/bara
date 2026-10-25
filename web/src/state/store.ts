@@ -215,6 +215,16 @@ export function focusPart(key: string | null): void {
   );
 }
 
+/**
+ * A click on a part. In the exploded view a second click on the picked part puts it back; anywhere
+ * else a click pulls the part out.
+ */
+export function pickPart(key: string): void {
+  const s = useApp.getState();
+  if (s.explode > 0.5 && s.focusKey === key) focusPart(null);
+  else focusPart(key);
+}
+
 export function setView(preset: ViewPreset): void {
   // a new view is a new look at the whole build: put a focused part back first
   if (useApp.getState().focusKey) focusPart(null);

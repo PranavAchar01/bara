@@ -9,7 +9,8 @@ import { useApp, type AppState } from "../state/store";
 import { canvasLabel, canvasState } from "../state/canvases";
 import { fetchPart } from "../components/Overlays";
 import type { Build, Part } from "../spec/types";
-import { portsOf, type DevicePort, type ProjectLink } from "./links";
+import { awaitingLink } from "./awaiting";
+import { makeLink, portsOf, suggestLinks, type DevicePort, type ProjectLink } from "./links";
 
 const KEY = "bara.project.links";
 
@@ -107,4 +108,31 @@ export function useProjectPorts(devices: ProjectDevice[]): DevicePort[] {
     };
   }, [ids, parts]);
   return useMemo(() => devices.flatMap((d) => portsOf(d.canvasId, d.build, parts)), [devices, parts]);
+}
+
+/**
+ * Links a requested companion to the device it was built for, with the best matching pair of
+ * ports, as soon as both are built. Renders nothing; mounted once with the scene.
+ */
+export function AutoLinker(): null {
+  const devices = useProjectDevices();
+  const ports = useProjectPorts(devices);
+  const links = useProject((s) => s.links);
+  useEffect(() => {
+    if (!awaitingLink.size) return;
+    const built = new Set(devices.filter((d) => d.build?.status === "done").map((d) => d.canvasId));
+    for (const id of [...awaitingLink]) {
+      if (!devices.some((d) => d.canvasId === id)) awaitingLink.delete(id);
+    }
+    const ready = [...awaitingLink].filter((id) => built.has(id));
+    if (!ready.length) return;
+    const only = ports.filter((p) => built.has(p.canvasId));
+    for (const s of suggestLinks(only, links)) {
+      if (!ready.includes(s.a.canvasId) && !ready.includes(s.b.canvasId)) continue;
+      addLink(makeLink(s.a, s.b, s.fit));
+    }
+    // a device with no compatible port stays unlinked: the panel still offers it by hand
+    for (const id of ready) awaitingLink.delete(id);
+  }, [devices, ports, links]);
+  return null;
 }
