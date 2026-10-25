@@ -126,6 +126,18 @@ def wrong_size(part: dict[str, Any], want_in: float | None) -> bool:
     return bool(want_in and have_in and abs(have_in - want_in) / want_in > SCREEN_TOLERANCE)
 
 
+def _function_names(part: dict[str, Any], facet: str, op: str, value: Any) -> bool:
+    """A part with no value for a typed facet whose own primary function names it: a
+    seven-segment digit from the KiCad library is display_type seven_segment by what it is."""
+    if op != "eq" or (part.get("facets") or {}).get(facet) is not None:
+        return False
+    kind = facet.removesuffix("_type")
+    return any(
+        f.get("primary") and f.get("function_id") == f"{kind}.{value}"
+        for f in part.get("functions") or []
+    )
+
+
 def is_chip(part: dict[str, Any]) -> bool:
     """A part whose datasheet category or package says it is an IC, whatever it was tagged."""
     package = str((part.get("facets") or {}).get("package") or "")
@@ -679,9 +691,26 @@ class Composer:
                     value,
                     "requirement",
                     req.get("label") or f"{facet} {value}",
-                    lambda p, f=facet, o=op_, v=value: facet_match(p, f, o, v),
+                    lambda p, f=facet, o=op_, v=value: (
+                        facet_match(p, f, o, v) or _function_names(p, f, o, v)
+                    ),
                     req_id=req["req_id"],
                     relaxable=soft,
+                )
+            )
+        # 1a. a screen slot takes glass: a driver chip or ribbon connector tagged with the
+        # display's function is what the panel plugs into, not the panel
+        if slot.function_id.startswith("display.") and slot.function_id not in (
+            "display.indicator_led",
+        ):
+            filters.append(
+                Filter(
+                    "kind",
+                    "eq",
+                    "panel",
+                    "requirement",
+                    "A panel, not its driver chip",
+                    lambda p: not (is_chip(p) or not_a_panel(p)),
                 )
             )
         # 1b. spec numbers: battery size from the mass target and battery life
@@ -1411,7 +1440,34 @@ class Composer:
                         stage="compose",
                     )
             progress(f"{step} of {n_slots} slots decided", step / max(1, n_slots))
+        self.cover_generic(emit)
         return self.result
+
+    def cover_generic(self, emit: Emit) -> None:
+        """A generic slot the brief implied (a display) that found nothing is the same block as a
+        named slot of that function decided after it (the 1.3 in segment display the device
+        concept asked for): one part, not a missing one."""
+        for slot in self.slots:
+            if slot.need is not None or slot.chosen is not None or slot.covered_by:
+                continue
+            if slot.criticality == "optional":
+                continue
+            other = next(
+                (
+                    o
+                    for o in self.slots
+                    if o is not slot
+                    and o.chosen is not None
+                    and not o.covered_by
+                    and (
+                        o.function_id == slot.function_id
+                        or slot.function_id in part_functions(o.chosen)
+                    )
+                ),
+                None,
+            )
+            if other is not None:
+                self.mark_covered(slot, other, self.slots.index(slot) + 1, emit)
 
     async def vet(self, slot: Slot, parts: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Parts that meet the block's key numbers (size, connector standard, rating). The ones
@@ -1425,6 +1481,8 @@ class Composer:
             chips = [p for p in parts if is_chip(p) or not_a_panel(p) or wrong_size(p, want_in)]
             for p in chips:  # a driver chip, ribbon connector or other-size glass is not it
                 self.resolver.rejected.add(p["part_id"])
+                if not (is_chip(p) or not_a_panel(p)):  # real glass of another size: close
+                    self.near_miss.setdefault(slot.slot_id, []).append(p)
             parts = [p for p in parts if p not in chips]
         need = slot.need
         if need is None or not need.requirement or not parts:
@@ -1589,10 +1647,16 @@ class Composer:
                 for p in self.source.query(function=slot.function_id, limit=500)
                 if p["part_id"] not in self.resolver.rejected
             ]
-            kept = await self.vet(slot, pool)
-            if not kept:
+            part = None
+            for i in range(0, min(len(pool), 48), 12):  # only parts the spec check saw
+                batch = pool[i : i + 12]
+                kept = [p for p in await self.vet(slot, batch) if p in batch]
+                if kept:
+                    part = kept[0]
+                    break
+            if part is None:
                 return
-            part, via = kept[0], "the catalog, by function"
+            via = "the catalog, by function"
         self.extra.setdefault(slot.slot_id, []).append(part)
         emit(
             "warning",
