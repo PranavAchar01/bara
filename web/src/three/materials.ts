@@ -1,7 +1,7 @@
 // Studio material presets (render recipe 2.5). One shared instance per
 // preset + colour, so 100 parts compile a handful of shader variants.
 import * as THREE from "three";
-import type { BuildPart, Finish } from "../spec/types";
+import type { BuildPart, PartFinish } from "../spec/types";
 import { layerOf } from "./explode";
 
 export type Preset = "keycap" | "case" | "pcb" | "switch" | "module" | "metal" | "glossy" | "battery" | "plastic";
@@ -139,7 +139,7 @@ export function placeholderMaterial(): THREE.MeshStandardMaterial {
 const finishCache = new Map<string, THREE.MeshPhysicalMaterial>();
 
 /** The finishing pass's surface for a part, one shared instance per distinct finish. */
-export function finishMaterial(f: Finish): THREE.MeshPhysicalMaterial {
+export function finishMaterial(f: PartFinish): THREE.MeshPhysicalMaterial {
   const key = JSON.stringify(f);
   let m = finishCache.get(key);
   if (!m) {
@@ -162,6 +162,6 @@ export function finishMaterial(f: Finish): THREE.MeshPhysicalMaterial {
 
 /** Controls and displays wear the finish palette; boards, metal and connectors keep the
  * library model's own materials, which are already real. */
-export function wearsFinish(f: Finish | null | undefined): f is Finish {
+export function wearsFinish(f: PartFinish | null | undefined): f is PartFinish {
   return !!f && (f.role === "control" || f.role === "display");
 }

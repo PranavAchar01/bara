@@ -16,10 +16,20 @@ export interface BBox {
 }
 
 export type Material = Open<"plastic" | "metal" | "pcb" | "rubber" | "glass" | "fabric" | "wood" | "unknown">;
+export type FinishPreset = Open<"matte" | "satin" | "gloss" | "silk" | "frosted" | "clear" | "smoke" | "metal" | "unknown">;
+/** How a surface is made beyond its colour; cases use it, including see-through finishes. */
+export interface Finish {
+  preset: FinishPreset;
+  /** See-through finishes: 0 opaque to 1 fully clear. */
+  clarity?: number;
+  /** 0 polished to 1 fully frosted. */
+  frost?: number;
+}
 export interface Color {
   hex: string;
   material?: Material;
   node?: string | null;
+  finish?: Finish;
 }
 
 export const STAGE_IDS = ["classify", "reuse", "compose", "place", "enclose", "board", "firmware", "render"] as const;
@@ -308,7 +318,7 @@ export interface Layout {
 
 export type ObjStatus = Open<"ok" | "warning" | "failed" | "unknown">;
 /** Finishing pass: the colour and surface the engine chose for a part, case or board. */
-export interface Finish {
+export interface PartFinish {
   role: Open<"case" | "control" | "display" | "pcb" | "metal" | "connector" | "other">;
   color: string;
   opacity?: number;
@@ -321,7 +331,7 @@ export interface Finish {
 }
 
 export interface BuildPart {
-  finish?: Finish | null;
+  finish?: PartFinish | null;
   instance_id: string;
   part_id: string;
   slot_id?: string | null;

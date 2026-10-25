@@ -134,8 +134,21 @@ def test_live_recolor_edit(monkeypatch: pytest.MonkeyPatch) -> None:
                 "edit.apply",
                 {
                     "build_id": build_id,
-                    "ops": [{"op": "recolor", "enclosure_id": eid, "color": {"hex": "#FF7F00"}}],
+                    "ops": [
+                        {
+                            "op": "recolor",
+                            "enclosure_id": eid,
+                            # a see-through finish rides on the colour (SPEC common Color)
+                            "color": {
+                                "hex": "#7FB5E6",
+                                "material": "plastic",
+                                "finish": {"preset": "frosted", "clarity": 0.85, "frost": 0.7},
+                            },
+                        }
+                    ],
                 },
             )
             got = ws.until(lambda m: m["type"] in ("edit.applied", "edit.rejected", "error"))
     assert got[-1]["type"] == "edit.applied", got[-1]["payload"]
+    updated = [m for m in got if m["type"] == "enclosure.updated"]
+    assert updated[-1]["payload"]["enclosure"]["color"]["finish"]["preset"] == "frosted"

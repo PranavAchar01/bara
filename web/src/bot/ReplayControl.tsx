@@ -1,4 +1,4 @@
-// Replay button for a finished build: Replay / Stop, a speed picker, a thin progress bar.
+// Replay button for a finished build: Replay / Stop, a speed toggle, a thin progress bar.
 // "R" toggles it when focus is not in a text field.
 import { useEffect } from "react";
 import { useApp } from "../state/store";
@@ -59,21 +59,18 @@ export function ReplayControl() {
           <PlayIcon /> {loading ? "Loading" : "Replay"}
         </button>
       )}
-      <div className="replay-speed" role="radiogroup" aria-label="Replay speed">
-        {SPEEDS.map((s) => (
-          <button
-            key={s}
-            type="button"
-            role="radio"
-            aria-checked={speed === s}
-            className={speed === s ? "active" : undefined}
-            disabled={replaying}
-            onClick={() => setReplaySpeed(s)}
-            title={`${s}× speed`}
-          >
-            {speedLabel(s)}
-          </button>
-        ))}
+      {/* One button cycles the speed instead of four side by side */}
+      <div className="replay-speed">
+        <button
+          type="button"
+          className="active"
+          disabled={replaying}
+          onClick={() => setReplaySpeed(SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length])}
+          title="Replay speed, click to change"
+          aria-label={`Replay speed ${speed}×`}
+        >
+          {speedLabel(speed)}
+        </button>
       </div>
       {replaying && (
         <div

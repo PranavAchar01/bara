@@ -27,17 +27,23 @@ function envelope(e: EventLike): Envelope {
   }
 }
 
-/** Minimum time on each action. Long enough to read the chip, short enough to keep up. */
+/** Minimum time on each action. The bot moves only for major steps, so it lingers on each one. */
 export const DWELL_MS: Record<AgentAction, number> = {
-  look: 600,
-  scan: 1200,
-  pick: 800,
-  drop: 700,
-  trace: 1200,
-  type: 1400,
-  check: 600,
-  cheer: 1800,
+  look: 1600,
+  scan: 2000,
+  pick: 1800,
+  drop: 2200,
+  trace: 2400,
+  type: 2400,
+  check: 1600,
+  cheer: 2400,
 };
+
+/** Kinds of part the bot flies to as they land: the ones a person would point at. Plates, PCBs, caps and cables are not. */
+const MAJOR_KINDS = new Set(["module", "component"]);
+
+/** Ids for steps worth one visit per build, however many events repeat them (AgentStage plays each once). */
+export const once = (what: string) => `once:${what}`;
 
 /** What each build stage is called when the server sends no label, and which panel follows it. */
 const STAGES: Record<string, { label: string; open?: Beat["open"] }> = {
@@ -140,15 +146,16 @@ export function beatsFor(e: EventLike, build: Build | null): Beat[] {
   const tag = (fallback?: string | null) => `${e.type}:${env.seq ?? fallback ?? "0"}`;
 
   switch (e.type) {
+    // Stage changes, candidate rounds, decisions, placement and each wire are minor: the
+    // fly-by and the panels show them. The bot moves for the design, major parts, the
+    // case, the board, the firmware and the finish.
     case "spec.ready":
-      return [beat(tag(), dom("prompt"), "scan", "Reading your request")];
-
-    case "stage.started": {
-      const stage = str(p.stage) ?? "unknown";
-      const known = STAGES[stage];
-      const label = str(p.label) ?? known?.label ?? "Working on it";
-      return [beat(tag(stage), dom(`stage:${stage}`), "look", label, known?.open ? { open: known.open } : undefined)];
-    }
+    case "stage.started":
+    case "candidates.ready":
+    case "decision.made":
+    case "placement.updated":
+    case "connection.added":
+      return [];
 
     case "reuse.decided": {
       const design = p.design as { name?: string } | null | undefined;
@@ -160,62 +167,29 @@ export function beatsFor(e: EventLike, build: Build | null): Beat[] {
       return [beat(tag(), dom("viewport"), "scan", label)];
     }
 
-    case "candidates.ready": {
-      const survivors = (p.survivors as unknown[] | undefined) ?? [];
-      // survivors is a short list; count_after is how many really made it through the filters.
-      const n = typeof p.count_after === "number" ? p.count_after : survivors.length;
-      const label = n === 0 ? "Nothing fits here" : n === 1 ? "One option left" : `Comparing ${n} options`;
-      return [beat(tag(str(p.slot_id)), dom("tab:build"), "scan", label)];
-    }
-
-    case "decision.made": {
-      const d = p.decision as { decision_id?: string; slot_id?: string; chosen_part_id?: string | null } | undefined;
-      if (!d?.decision_id) return [];
-      // The decision lands before its parts do, so the part may not be on the build yet.
-      const chosen = d.chosen_part_id ? build?.parts.find((x) => x.part_id === d.chosen_part_id) : undefined;
-      const slot = build?.slots.find((s) => s.slot_id === d.slot_id);
-      const name = str(chosen?.card?.display_name);
-      const label = name ? `Chose ${name}` : slot?.label ? `Picking the ${slot.label}` : "Making a choice";
-      return [beat(tag(d.decision_id), dom(`decision:${d.decision_id}`), "pick", label)];
-    }
-
     case "part.added": {
       const bp = p.part as BuildPart | undefined;
-      if (!bp?.instance_id) return [];
+      if (!bp?.instance_id || !MAJOR_KINDS.has(String(bp.card?.kind))) return [];
+      // One visit per slot: the second half of a split, or a second copy, is not news.
+      if (bp.slot_id && build?.parts.find((x) => x.slot_id === bp.slot_id && x.instance_id !== bp.instance_id)) return [];
       return [beat(tag(bp.instance_id), part(bp.instance_id), "drop", `Placing ${nameOf(bp) ?? "a part"}`)];
     }
 
-    case "placement.updated":
-      return [beat(tag(), dom("viewport"), "scan", "Arranging parts")];
-
-    case "connection.added": {
-      const c = p.connection as { connection_id?: string; from?: { instance_id?: string }; to?: { instance_id?: string } } | undefined;
-      const from = c?.from?.instance_id;
-      if (!from) return [];
-      const to = c?.to?.instance_id;
-      // Short names on both ends so the arrow fits on the chip.
-      const short = (id: string | undefined) => clip(nameOf(build?.parts.find((x) => x.instance_id === id)) ?? id ?? "?", 10);
-      return [
-        beat(tag(c?.connection_id), part(from), "trace", `Wiring ${short(from)} → ${short(to)}`, {
-          open: { rightTab: "code", codeTab: "connections" },
-        }),
-      ];
-    }
 
     case "enclosure.updated":
-      return [beat(tag(), dom("viewport"), "scan", "Shaping the case")];
+      return [beat(once("case"), dom("viewport"), "scan", "Shaping the case", { open: STAGES.enclose.open })];
 
     case "board.updated":
-      return [beat(tag(), dom("viewport"), "trace", "Routing the board", { open: { rightTab: "code", codeTab: "board" } })];
+      return [beat(once("board"), dom("viewport"), "trace", "Routing the board", { open: STAGES.board.open })];
 
     case "firmware.progress":
     case "firmware.ready":
-      return [beat(tag(), dom("codetab:firmware"), "type", "Writing firmware")];
+      return [beat(once("firmware"), dom("codetab:firmware"), "type", "Writing firmware", { open: STAGES.firmware.open })];
 
     case "check.result": {
       const results = (p.results as CheckResult[] | undefined) ?? [];
-      // At most two per event: failures first, then whatever else is worth a tick.
-      const picked = [...results.filter((r) => r.status === "fail"), ...results.filter((r) => r.status !== "fail")].slice(0, 2);
+      // Only a real failure is worth a trip; passing checks and info notes (an empty optional slot) show in the panel.
+      const picked = results.filter((r) => r.status === "fail" && (r.severity === "error" || r.severity === "critical")).slice(0, 1);
       return picked.map((r, i) => {
         const inst = instanceOf(r.subjects);
         const bad = r.status === "fail";
@@ -224,11 +198,9 @@ export function beatsFor(e: EventLike, build: Build | null): Beat[] {
       });
     }
 
-    case "warning": {
-      const w = p.warning as { warning_id?: string; message?: string; subjects?: Subject[] } | undefined;
-      const inst = instanceOf(w?.subjects);
-      return [beat(tag(w?.warning_id), inst ? part(inst) : dom("viewport"), "look", str(w?.message) ?? "Heads up", { bad: true })];
-    }
+    // Warnings already show as banners over the canvas; the bot does not chase them.
+    case "warning":
+      return [];
 
     case "edit.applied": {
       const ops = (p.ops as EditOp[] | undefined) ?? [];
@@ -265,15 +237,15 @@ const sameTarget = (a: AgentTarget, b: AgentTarget) =>
   a.kind === b.kind && (a.kind === "part" ? a.id === (b as typeof a).id : a.key === (b as typeof a).key);
 
 /** Longest the queue gets before glances are dropped. The player speeds up as it fills (paceFor). */
-export const QUEUE_MAX = 10;
+export const QUEUE_MAX = 6;
 
 /**
  * How long to spend on a beat given how many are still waiting: full dwell
- * when the queue is short, down to 35% when it is long, so the bot keeps up
+ * when the queue is short, down to 60% when it is long, so the bot keeps up
  * with a fast build instead of dropping its steps.
  */
 export function paceFor(b: Pick<Beat, "dwellMs">, waiting: number): number {
-  return Math.round(b.dwellMs * Math.min(1, Math.max(0.35, 3 / Math.max(1, waiting))));
+  return Math.round(b.dwellMs * Math.min(1, Math.max(0.6, 3 / Math.max(1, waiting))));
 }
 
 /** Append incoming beats to the queue, keeping it short so the bot never lags far behind the build. */

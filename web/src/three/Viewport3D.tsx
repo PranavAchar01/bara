@@ -24,6 +24,8 @@ import { LAYER_RANK, explodeZ, isKeycapPart, layerGap, layerOf, partLabel, type 
 import { elementPoses, type ElementPose } from "./layout";
 import { LabelOverlay, LabelProjector, labelOpacity } from "./labels";
 import { FocusDriver, nearFocused } from "./focus";
+import { ProjectLinkLines } from "./projectLinks";
+import { caseMaterial, useCasePreview } from "./caseFinish";
 import { defaultColor, finishMaterial, ghost, placeholderMaterial, presetFor, presetMaterial, tinted, usesPreset, wearsFinish } from "./materials";
 import { registerAnchor, stage, stageBox } from "./stage";
 import { StudioEnvironment, StudioFloor, studioPalette, type StudioPalette } from "./studio";
@@ -517,6 +519,8 @@ function CasePieceNode(props: {
   piece: CasePiece;
   enc: Enclosure;
   material: THREE.MeshStandardMaterial;
+  /** The user chose a finish: show the real material assembled, not the ghost shell. */
+  real: boolean;
   edge: string | null;
   anchorKey: string | null;
   focusKey: string;
@@ -538,7 +542,9 @@ function CasePieceNode(props: {
   }, [piece, pos, rot]);
   const ref = useLayerGroup(piece.lid ? "lid" : "case", props.anchorKey, anchorLocal, props.focusKey);
   // Assembled, every case piece is a translucent shell with its edges drawn, so
-  // the board inside stays in view; pieces turn solid as the explode opens.
+  // the board inside stays in view; pieces turn solid as the explode opens. A
+  // finish the user picked is shown as it is instead: see-through finishes pass
+  // light (transmission) and show the board for real, opaque ones are solid.
   const material = useMemo(() => {
     const m = props.material.clone();
     m.transparent = true;
@@ -552,13 +558,14 @@ function CasePieceNode(props: {
   useEffect(() => () => edgeMat.dispose(), [edgeMat]);
   const base = props.material.opacity;
   const floor = piece.lid ? 0.16 : 0.24;
+  const real = props.real;
   useFrame(() => {
-    const k = Math.min(1, stage.explode / 0.6);
-    // Clear plastic: a little denser when pulled apart so the shape shows, never opaque.
-    const o = (floor + (CLEAR_MAX - floor) * k) * base;
+    const k = real ? 1 : Math.min(1, stage.explode / 0.6);
+    // A chosen real material carries its own opacity; otherwise clear plastic, a little denser when pulled apart, never opaque.
+    const o = real ? base : (floor + (CLEAR_MAX - floor) * k) * base;
     material.opacity = o;
     // Creases stay drawn when pulled apart, like the outlines the library parts carry in their own geometry.
-    edgeMat.opacity = 0.3 + 0.25 * k;
+    edgeMat.opacity = real ? 0.12 : 0.3 + 0.25 * k;
     const solid = k >= 0.999 && base >= 0.999;
     if (material.depthWrite !== solid) {
       material.depthWrite = solid;
@@ -602,7 +609,8 @@ function EnclosureNode(props: { enc: Enclosure; theme: Theme; selected: boolean;
   const size = enc.outer_size_mm;
   const loaded = model.status === "ready" && model.model.groups.length > 0 ? model.model : null;
   const pending = enc.status === "pending";
-  const hex = caseHex(enc);
+  const preview = useCasePreview((s) => s.byId[enc.enclosure_id]);
+  const hex = preview?.hex ?? caseHex(enc);
   const pieces = useMemo<CasePiece[]>(() => {
     if (loaded) return casePieces(loaded);
     if (!size || size.length < 3) return [];
@@ -612,11 +620,12 @@ function EnclosureNode(props: { enc: Enclosure; theme: Theme; selected: boolean;
   useEffect(() => () => {
     if (!loaded) for (const p of pieces) for (const g of p.geoms) g.dispose();
   }, [loaded, pieces]);
+  const finish = preview ? preview.finish : enc.color?.finish;
   const material = useMemo(() => {
-    const base = presetMaterial("case", hex);
+    const base = caseMaterial(hex, finish);
     if (pending) return ghost(base, 0.35);
     return loaded ? base : ghost(base, 0.6);
-  }, [hex, loaded, pending]);
+  }, [hex, finish, loaded, pending]);
   if (enc.kind === "none" || !pieces.length) return null;
   const edge = props.failing ? theme.fail : props.selected ? theme.accent : null;
   const onClick = (e: ThreeEvent<MouseEvent>) => {
@@ -632,6 +641,7 @@ function EnclosureNode(props: { enc: Enclosure; theme: Theme; selected: boolean;
           piece={p}
           enc={enc}
           material={material}
+          real={!!finish}
           edge={edge}
           onClick={onClick}
           anchorKey={props.labelled ? (p.lid && pieces.length > 1 ? "e:case_top" : "e:case") : null}
@@ -1497,12 +1507,15 @@ function CompanionRow() {
   useEffect(() => {
     stage.settleVersion++;
   }, [slots, away]);
+  // The open device sits at its own origin; links run between it and the companions.
+  const linkSlots = useMemo(() => [{ id: activeId, build: active, offset: new THREE.Vector3() }, ...slots], [activeId, active, slots]);
   return (
     <group ref={ref}>
       {!away &&
         slots.map((sl) =>
           sl.build ? <CompanionDevice key={sl.id} canvasId={sl.id} build={sl.build} offset={sl.offset} name={shortName(names[ids.indexOf(sl.id)])} /> : null,
         )}
+      {!away && <ProjectLinkLines slots={linkSlots} />}
     </group>
   );
 }
