@@ -114,7 +114,7 @@ def palette_for(prompt: str, colours: list[dict[str, Any]] | None) -> dict[str, 
 
 def role(fn: str, kind: str) -> str:
     """The finish role of a part from its function id and catalog kind."""
-    if fn.startswith("display.") and fn not in ("display.led", "display.seven_segment"):
+    if fn.startswith("display.") and fn not in ("display.led", "display.indicator_led", "display.seven_segment"):
         return "display"
     if fn.startswith(("input.", "mech.keycap", "mech.knob")) or fn in ("power.switch",):
         return "control"

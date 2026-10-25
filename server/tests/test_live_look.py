@@ -124,3 +124,37 @@ def test_bom_rows_links_and_case_file() -> None:
     text = bom.bom_csv(_build(), lookup)
     parsed = list(csv.DictReader(io.StringIO(text)))
     assert text.startswith("part_id,") and len(parsed) == len(rows)
+
+
+def test_generic_names_from_function_not_maker() -> None:
+    from bara import naming
+
+    sw = {
+        "display_name": "Cherry MX2A Brown",
+        "functions": [{"function_id": "input.key", "primary": True}],
+        "key_specs": [{"label": "Family", "value": "MX"}, {"label": "Type", "value": "tactile"}],
+    }
+    naming.neutral(sw)
+    assert sw["display_name"] == "Tactile key switch"
+    assert [s["label"] for s in sw["key_specs"]] == ["Type"]
+    mcu = {
+        "display_name": "Seeed XIAO nRF52840",
+        "kind": "module",
+        "functions": [
+            {"function_id": "compute.mcu", "primary": True},
+            {"function_id": "comms.ble"},
+        ],
+    }
+    assert naming.generic_name(mcu) == "Wireless controller board"
+    stab = {
+        "display_name": "Cherry MX stabilizer 2u",
+        "functions": [{"function_id": "mech.stabilizer"}],
+    }
+    assert naming.generic_name(stab) == "2u stabilizer"
+    enc = {
+        "display_name": "Alps EC11E rotary encoder",
+        "functions": [{"function_id": "input.rotary_encoder"}],
+    }
+    assert naming.generic_name(enc) == "Rotary encoder"
+    odd = {"display_name": "Acme SoilPro", "functions": [{"function_id": "sense.soil_moisture"}]}
+    assert naming.generic_name(odd) == "Soil moisture sensor"
