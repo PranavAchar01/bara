@@ -118,6 +118,53 @@ interface Seen {
 }
 const seen = new Map<string, Seen>();
 
+/** Vertical room one two-line label needs in the column. */
+const LABEL_GAP = 40;
+
+/**
+ * Label heights for anchors at `ys` (sorted top to bottom): each label sits level with its anchor
+ * where it can, so leader lines run nearly flat and do not cross, and is pushed apart just enough
+ * to keep `gap` between rows inside [top, bottom]. A crowded column shrinks the gap to fit.
+ */
+export function spreadLabels(ys: number[], top: number, bottom: number, gap: number): number[] {
+  const n = ys.length;
+  if (!n) return [];
+  const g = n > 1 ? Math.min(gap, Math.max(0, bottom - top) / (n - 1)) : 0;
+  const out = ys.map((y) => Math.min(Math.max(y, top), bottom));
+  for (let i = 1; i < n; i++) out[i] = Math.max(out[i], out[i - 1] + g);
+  out[n - 1] = Math.min(out[n - 1], bottom);
+  for (let i = n - 2; i >= 0; i--) out[i] = Math.min(out[i], out[i + 1] - g);
+  out[0] = Math.max(out[0], top);
+  for (let i = 1; i < n; i++) out[i] = Math.max(out[i], out[i - 1] + g);
+  return out;
+}
+
+function crosses(ax: number, ay: number, by: number, cx: number, cy: number, dy: number, col: number): boolean {
+  // segment (ax,ay)->(col,by) against (cx,cy)->(col,dy)
+  const side = (px: number, py: number, qx: number, qy: number, rx: number, ry: number) => Math.sign((qx - px) * (ry - py) - (qy - py) * (rx - px));
+  return side(ax, ay, col, by, cx, cy) !== side(ax, ay, col, by, col, dy) && side(cx, cy, col, dy, ax, ay) !== side(cx, cy, col, dy, col, by);
+}
+
+/**
+ * Reorders anchors over the fixed label slots `ys` (in place) so neighbouring leader lines to the
+ * column at `col` stop crossing: adjacent pairs that cross swap slots, a few passes over the list.
+ */
+export function untangle<P extends { x: number; y: number }>(pts: P[], ys: number[], col: number): void {
+  for (let pass = 0; pass < pts.length; pass++) {
+    let swapped = false;
+    for (let i = 0; i + 1 < pts.length; i++) {
+      const a = pts[i];
+      const b = pts[i + 1];
+      if (crosses(a.x, a.y, ys[i], b.x, b.y, ys[i + 1], col)) {
+        pts[i] = b;
+        pts[i + 1] = a;
+        swapped = true;
+      }
+    }
+    if (!swapped) return;
+  }
+}
+
 const FADE_S = 0.18;
 const HIDE_AFTER_S = 0.15;
 const CHECK_EVERY_S = 0.12;
@@ -232,13 +279,18 @@ export function LabelProjector() {
     const top = Math.max(16, h * 0.27);
     const bottom = Math.min(h - 40, h - 150);
     const n = pts.length;
-    const step = n > 1 ? Math.min(54, (bottom - top) / (n - 1)) : 0;
-    const mid = pts.length ? pts.reduce((s, p) => s + p.y, 0) / n : h / 2;
-    const start = Math.min(Math.max(top, mid - (step * (n - 1)) / 2), Math.max(top, bottom - step * (n - 1)));
+    const ys = spreadLabels(
+      pts.map((p) => p.y),
+      top,
+      bottom,
+      LABEL_GAP,
+    );
+    const last = n ? ys[n - 1] : top;
+    untangle(pts, ys, colX);
     pts.forEach((p, i) => {
       const s = slots.get(p.key);
       if (!s) return;
-      const y = start + i * step;
+      const y = ys[i];
       if (s.row) {
         s.row.style.transform = `translate(${colX + 8}px, ${y - 9}px)`;
         s.row.style.maxWidth = `${Math.max(120, w - colX - 20)}px`;
@@ -259,7 +311,7 @@ export function LabelProjector() {
       if (behindEl.style.visibility !== v) behindEl.style.visibility = v;
       if (v === "visible") {
         behindEl.textContent = `+${behind} behind other parts, turn the model to see ${behind === 1 ? "it" : "them"}`;
-        behindEl.style.transform = `translate(${colX + 8}px, ${start + n * step + 6}px)`;
+        behindEl.style.transform = `translate(${colX + 8}px, ${last + LABEL_GAP * 0.7}px)`;
       }
     }
   });
