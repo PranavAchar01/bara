@@ -300,3 +300,8 @@ Web: bara-merge agent merges Nithin's figma-design-in-code / agent-board-3d / fi
 - Calculator now has calculator parts: 22 tactile keys, segment-LCD driver, 8-digit LCD glass, zebra connector. No keyboard pipeline.
 - Worst gap: identity.reads_as_device fails 4/6 (generic slab cases). Sent to bara-engine (owns form.py). render.models boxes on 3 parts.
 - Merged + pushed: Nithin's multi-device/case-materials (3d77a7e), bara-canvas 6589e5a, bara-agent 7b90f93..d35dc1e, top bar labels.
+
+## 2026-10-24 20:15 PT
+- Pushed f8c1e87 (sim stage: no grid, ~88% fill, long axis across, Reset/Boot always, per-stick hitboxes) and engine fixes 4b8552a, 9e19ebb, ad8abc9 (tall-part swap, thickness swap, IndexError in re-narrowed slot pick that crashed the thermometer). test_fit_swap 5/5.
+- bara-general done: 4/7 of its invented devices pass. Remaining failures (parts under the case face, thermometer crash) went to bara-engine. Look gaps went to bara-look: display overlapping keys, knob drawn as a joystick, tail light with no lens, open pockets, stretched joystick shell.
+- Engine restarted. Held-out eval heldout-2015 running: fan controller, key finder, pill box from the pool, plus meat thermometer and step counter.
