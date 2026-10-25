@@ -60,6 +60,9 @@ Rules:
 - Controls with different roles are different blocks: a direction pad, action buttons and
   menu buttons each get their own block with their own count, never merged into one switch
   block. Count every control the person uses in the use case.
+- A display is ONE block, however many readings it shows: a clock's time and temperature
+  share one display that alternates between them (a 4-digit module for HH:MM), never one
+  module per reading. List a separate display only when the product has two screens.
 - Every block must serve a function the product's brief implies. Do not add parts the product
   does not have.
 - A companion device sold with the product (a USB receiver dongle, a charging dock, a remote,
