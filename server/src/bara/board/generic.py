@@ -120,6 +120,16 @@ def _footprint(record: dict[str, Any]) -> FootprintInfo | None:
         return None
 
 
+def board_footprint_mm(record: dict[str, Any]) -> tuple[float, float] | None:
+    """The courtyard a part takes on the board, or None when it has no footprint and so sits
+    off the board, wired (a pouch cell, a module on a cable)."""
+    fp = _footprint(record)
+    if fp is None:
+        return None
+    x0, y0, x1, y1 = fp.courtyard
+    return (x1 - x0, y1 - y0)
+
+
 def gpio_pins(record: dict[str, Any]) -> int | None:
     """GPIO pins a controller part has, read from the same pin map the board planner wires."""
     fp = _footprint(record)
@@ -144,6 +154,15 @@ def footprint_name(ref: str) -> str:
     return ref.split(":", 1)[1]
 
 
+def _symbol_id(record: dict[str, Any]) -> str:
+    """The KiCad symbol a catalog record names ("Lib:Symbol"), or ""."""
+    lib_id = str(record.get("lib_id") or "")
+    pid = str(record.get("part_id") or "")
+    if not lib_id and pid.startswith("kicadgen:kicad:sym:"):  # a generated part names its symbol
+        lib_id = pid.removeprefix("kicadgen:kicad:sym:")
+    return lib_id if ":" in lib_id else ""
+
+
 def _pins_for(record: dict[str, Any], fp: FootprintInfo) -> dict[str, str]:
     """Pad -> pin name: the catalog record, else the registry map, else the KiCad symbol."""
     if isinstance(record.get("pins"), dict):  # a bare name list has no pad numbers: use the symbol
@@ -153,11 +172,8 @@ def _pins_for(record: dict[str, Any], fp: FootprintInfo) -> dict[str, str]:
         if "symbol" in reg:
             return dict(symbol_pins(*reg["symbol"]))
         return dict(reg["pins"])
-    lib_id = str(record.get("lib_id") or "")
-    pid = str(record.get("part_id") or "")
-    if not lib_id and pid.startswith("kicadgen:kicad:sym:"):  # a generated part names its symbol
-        lib_id = pid.removeprefix("kicadgen:kicad:sym:")
-    if ":" in lib_id:
+    lib_id = _symbol_id(record)
+    if lib_id:
         lib, sym = lib_id.split(":", 1)
         try:
             return dict(symbol_pins("kicad", f"{lib}.kicad_sym", sym))
@@ -228,12 +244,13 @@ def plan_device_board(
                 0.0,
                 0.0,
                 "top",
-                label=str(record.get("display_name") or part.get("label") or fp.name)[:60],
+                label=_label(part, record, fp.name),
                 height_mm=_height(record),
                 meta={"instance_id": part["instance_id"], "pins": _pins_for(record, fp)},
                 model_override=_model_for(fp),
             )
             it.meta["slot_id"] = part.get("slot_id")
+            it.meta["symbol"] = _symbol_id(record)  # the schematic draws this symbol
             it.meta["touch"] = part.get("slot_id") in touch_slots
             it.meta["module"] = record.get("kind") == "module"
             # an optical tracking sensor reads the desk, so it sits on the board's underside
@@ -280,6 +297,7 @@ def plan_device_board(
         blocked.append(it.footprint_poly())
     seat = _anchor_targets(pf, off_board, 1.0) if pf and off_board else {}
     held: dict[str, list[Polygon]] = {"top": [], "bottom": []}  # envelopes already taken
+    crowded: list[Item] = []  # off-board parts with no spot clear of the others
     for it in sorted(off_board, key=lambda o: -(o.size_mm[0] * o.size_mm[1] if o.size_mm else 0)):
         it.side = "bottom"
         cx, cy = _centre(blocked) if fitted is None else (fitted.centroid.x, fitted.centroid.y)
@@ -290,8 +308,11 @@ def plan_device_board(
         it.x, it.y = cx, cy
         # every off-board part (module or cell) moves clear of the parts on its side: a cell
         # left at the centre sat over a mouse's downward-facing sensor
-        _clear_of(it, held, on_board, fitted, spot is not None)
+        if not _clear_of(it, held, on_board, fitted, spot is not None):
+            crowded.append(it)
         held[it.side].append(it.footprint_poly())
+    if fitted is not None and pf and (pf.get("fit_report") or {}).get("ok"):
+        _off_board_fit(off_board, fitted, pf, log, crowded)
 
     # controller GPIO for every peripheral signal, nearest pad first
     if mcu is not None:
@@ -528,13 +549,21 @@ def _bbox_mm(record: dict[str, Any]) -> tuple[float, float, float] | None:
     return (w, h, t) if min(w, h) > 0 else None
 
 
+def _label(part: dict[str, Any], record: dict[str, Any], default: str) -> str:
+    """What a footprint is called on the board and in the schematic: the part's card name (a
+    plain "Key switch"), never the library record's maker and series."""
+    card = part.get("card") or {}
+    return str(card.get("display_name") or part.get("label") or record.get("display_name")
+               or default)[:60]  # fmt: skip
+
+
 def _module_cell(part: dict[str, Any], record: dict[str, Any], ref: str, touch: set[str]) -> Item:
     """A module with its own envelope (panel, power supply, driver board): placed on the form,
     not packed on the PCB; a connector on the main board carries its supply."""
     w, h, t = _bbox_mm(record) or (1.0, 1.0, 1.0)
     return Item(
         ref, "module", None, 0, 0, 0, "bottom",
-        label=str(record.get("display_name") or part.get("label") or "module")[:60],
+        label=_label(part, record, "module"),
         on_pcb=False, size_mm=(w, h), height_mm=t,
         meta={
             "instance_id": part["instance_id"],
@@ -560,7 +589,7 @@ def _battery_cell(part: dict[str, Any], record: dict[str, Any], ref: str) -> Ite
         0,
         0,
         "bottom",
-        label=str(record.get("display_name") or R.BATTERY_CELL["label"])[:60],
+        label=_label(part, record, R.BATTERY_CELL["label"]),
         on_pcb=False,
         size_mm=(float(w), float(h)),
         height_mm=float(t),
@@ -615,7 +644,7 @@ def _clear_of(
     on_board: list[Item],
     region: Polygon | None,
     anchored: bool,
-) -> None:
+) -> bool:
     """Move an off-board part to the nearest spot where its envelope overlaps no other module
     and no board part on that side. Only an unanchored part may change sides: one anchored to
     a face (a thumbstick on the front) moves along that face, never through the board."""
@@ -652,6 +681,7 @@ def _clear_of(
                 break
     if best is not None:
         it.x, it.y, it.side = x0 + best[1], y0 + best[2], best[3]
+    return best is not None
 
 
 def _best_spot(
@@ -734,6 +764,8 @@ def _outline(placed: list[Item]) -> Polygon:
 FORM_INSET_MM = 3.5  # case wall + clearance: the board edge sits this far inside the silhouette
 FORM_GRID_POINTS = 24000
 FORM_TRIES = 6000
+OFF_BOARD_SLACK_MM = 1.0  # the tray clearance a wired part may use past the board edge
+TOUCH_MARGIN_MM = 1.5  # a touched part's opening grows past its footprint (case TOUCH_MIN_MM)
 
 
 def form_region(pf: dict[str, Any], scale: float) -> Polygon:
@@ -852,12 +884,19 @@ def _attempt(
             it.rot = rot0 + turn
             it.x = it.y = 0.0
             base = it.footprint_poly()
+            # a touched part keeps its whole footprint, keep-out included, a finger's margin
+            # inside the outline: the case opening over it must not cut the wall
+            body = (
+                base.buffer(TOUCH_MARGIN_MM, join_style="mitre")
+                if it.meta.get("touch")
+                else it.body_poly()
+            )
             c0 = base.centroid
             shade = _shadow(it)
             for i in idx:
                 dx, dy = float(cand[i, 0] - c0.x), float(cand[i, 1] - c0.y)
                 poly = affinity.translate(base, dx, dy)
-                if not fit.contains(poly):
+                if not fit.contains(affinity.translate(body, dx, dy)):
                     continue
                 under = affinity.translate(shade, dx, dy) if shade is not None else None
                 if taken[side] is not None and taken[side].distance(poly) < gap:
@@ -907,8 +946,10 @@ def _screen_along(it: Item, region: Polygon) -> None:
 def _face_the_rim(it: Item, region: Polygon, target: tuple[float, float]) -> tuple[float, float]:
     """A part a cable plugs into goes to the rim point nearest its target, turned so its mouth
     faces out. The mouth is the side the body extends past its pads (the courtyard centre lies
-    toward it), which holds for receptacles and jacks alike."""
+    toward it), which holds for receptacles and jacks alike. A module with an antenna keep-out
+    turns that keep-out outward instead, so the antenna sits at the board edge."""
     rim = region.exterior
+    keep = it.keepout_poly() is not None
     d = rim.project(Point(target))
     p = rim.interpolate(d)
     a, b = rim.interpolate(d - 0.5), rim.interpolate(d + 0.5)
@@ -917,12 +958,58 @@ def _face_the_rim(it: Item, region: Polygon, target: tuple[float, float]) -> tup
     best = (-math.inf, it.rot)
     for rot in (0.0, 90.0, 180.0, 270.0):
         it.rot = rot
-        body = it.world(it.local_poly()).centroid
+        keepout = it.keepout_poly() if keep else None
+        body = keepout.centroid if keepout is not None else it.world(it.local_poly()).centroid
         pads = it.world(it.local_poly("pads")).centroid
         score = (body.x - pads.x) * n[0] + (body.y - pads.y) * n[1]
         best = max(best, (score, rot))
     it.rot = best[1]
     return (p.x, p.y)
+
+
+def _off_board_fit(
+    off_board: list[Item],
+    fitted: Polygon,
+    pf: dict[str, Any],
+    log: list[str],
+    crowded: list[Item] | None = None,
+) -> None:
+    """A wired part off the board (a cell, a module) still lives inside the product, under or
+    over the board: one larger than the outline either way round, or with no spot clear of the
+    parts on both faces, does not fit, and is reported the way a footprint with no free spot
+    is (compose swaps it for a smaller part, or the form is redrawn)."""
+    room = prepared.prep(fitted.buffer(OFF_BOARD_SLACK_MM, join_style="mitre"))
+    for it in off_board:
+        if it.size_mm is None:
+            continue
+        w, h = it.size_mm
+        x0, y0, x1, y1 = fitted.bounds
+        packed = any(c is it for c in crowded or [])
+        if not packed and ((w <= x1 - x0 and h <= y1 - y0) or (h <= x1 - x0 and w <= y1 - y0)):
+            if room.contains(it.footprint_poly()):
+                continue
+            rot = it.rot
+            it.rot = rot + 90.0
+            if room.contains(it.footprint_poly()):
+                continue
+            it.rot = rot
+        pf["fit_report"]["ok"] = False
+        pf["fit_report"]["stuck"] = {
+            "instance_id": it.meta.get("instance_id"),
+            "part": it.label or it.ref,
+            "mm": [round(w, 1), round(h, 1)],
+            "mm2": round(w * h),
+        }
+        why = (
+            "has no spot clear of the board parts on either face of the"
+            if packed
+            else "is larger than the"
+        )
+        log.append(
+            f"FORM_OVERFLOW: {it.label or it.ref} {w:.1f}x{h:.1f} mm, wired off the board, {why} "
+            f"{x1 - x0:.1f} x {y1 - y0:.1f} mm product outline; the product is never scaled to fit"
+        )
+        return
 
 
 def place_in_form(
@@ -947,7 +1034,7 @@ def place_in_form(
     gaps: dict[int, float] = {}
     rim: dict[int, tuple[float, float]] = {}
     for it in on_board:
-        if it.role in CABLE_ROLES and it.fp is not None:
+        if (it.role in CABLE_ROLES or it.keepout_poly() is not None) and it.fp is not None:
             t = anchored.get(id(it))
             rim[id(it)] = _face_the_rim(it, region, (t[0], t[1]) if t else hub)
     first: list[Item] = [it for it in on_board if id(it) in anchored or id(it) in rim]
@@ -995,6 +1082,13 @@ def place_in_form(
         ],
         "widest_mm": round(max(_extent(widest)), 1) if widest is not None else 0.0,
     }
+    if stuck is not None:  # the part with no free spot: compose may swap it for a smaller one
+        pf["fit_report"]["stuck"] = {
+            "instance_id": stuck.meta.get("instance_id"),
+            "part": stuck.label or stuck.ref,
+            "mm": [round(v, 1) for v in _extent(stuck)],
+            "mm2": round(_area(stuck)),
+        }
     if stuck is not None:
         r = pf["fit_report"]
         log.append(

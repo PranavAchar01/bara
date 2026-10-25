@@ -1,9 +1,13 @@
-// Your builds, on the Library page (Figma 21): every build made in this browser, newest first,
-// with its canvas snapshot. Click to reopen; × (twice) to remove; type to filter.
+// The Library page (/library): finished builds from the engine (the gallery, one per kind of
+// device, every check held) with its own Build button, then this browser's drafts, newest first,
+// with their canvas snapshots. Click to reopen; × (twice) to remove a draft; type to filter.
 import { useEffect, useMemo, useState } from "react";
 import { openLibraryBuild, openSaved } from "../net/client";
 import { showToast } from "../state/store";
 import { deleteEntry, loadEntry, useLibrary, type LibraryCard } from "../library/library";
+import { loadGallery, useGallery, type GalleryItem } from "../library/gallery";
+import { BuildStill } from "./BuildScene";
+import { openBuildDialog } from "./BuildDialog";
 
 const DAY = 86_400_000;
 
@@ -86,7 +90,7 @@ export function Library() {
   const ready = useLibrary((s) => s.ready);
   const unavailable = useLibrary((s) => s.unavailable);
   const [q, setQ] = useState("");
-  // "2 min ago" is worked out when the list changes, which is when Home is looked at
+  // "2 min ago" is worked out when the list changes, which is when the page is looked at
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => setNow(Date.now()), [cards]);
   const shown = useMemo(() => {
@@ -98,11 +102,11 @@ export function Library() {
     <section className="library" aria-labelledby="lib-h">
       <header className="lib-head">
         <div>
-          <h2 id="lib-h">Your builds</h2>
           <span className="lib-kicker">{cards.length ? `${cards.length} saved in this browser · pick one back up` : "Every build you make is saved here"}</span>
+          <h2 id="lib-h">Your drafts</h2>
         </div>
         {cards.length > 3 && (
-          <input className="lib-search" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search your builds" aria-label="Search your builds" />
+          <input className="lib-search" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search your drafts" aria-label="Search your drafts" />
         )}
       </header>
       {cards.length === 0 ? (
@@ -122,5 +126,62 @@ export function Library() {
       )}
       {cards.length > 0 && <p className="lib-note">Finished builds are kept on the engine, so everyone who opens this site sees them; deleting one removes it for everyone. A build opens right away; changing it works while the engine still has it.</p>}
     </section>
+  );
+}
+
+function GalleryCard(props: { item: GalleryItem }) {
+  const { item } = props;
+  const [opening, setOpening] = useState(false);
+  const open = async () => {
+    // a bundled replay (engine library out of reach) is offered as a prompt to build again
+    if (item.offline) {
+      openBuildDialog(item.prompt.charAt(0).toLowerCase() + item.prompt.slice(1));
+      return;
+    }
+    setOpening(true);
+    await openLibraryBuild(item.build_id);
+    setOpening(false);
+  };
+  return (
+    <li className={`gal-card ${opening ? "opening" : ""}`}>
+      <button type="button" className="gal-open" onClick={() => void open()} aria-label={`Open the ${item.title.toLowerCase()} build`}>
+        <span className="gal-thumb">
+          {item.thumb ? <img src={item.thumb} alt="" loading="lazy" /> : item.preview ? <BuildStill build={item.preview} className="gal-still" /> : null}
+        </span>
+        <span className="gal-meta">
+          <span className="gal-title">{item.title}</span>
+          <span className="gal-sub">{item.checks} checks passed</span>
+        </span>
+      </button>
+    </li>
+  );
+}
+
+/** Library page: the finished builds (library/gallery.ts picks them) under a Build button, then the drafts. */
+export function LibraryPage() {
+  const items = useGallery((s) => s.items);
+  const ready = useGallery((s) => s.ready);
+  const drafts = useLibrary((s) => s.cards.length);
+  useEffect(() => void loadGallery(), []);
+  return (
+    <div className="libpage">
+      <header className="libpage-head">
+        <div>
+          <h1>Library</h1>
+          <p className="muted">Finished builds. Every check held. Open one to look inside, or start your own.</p>
+        </div>
+        <button type="button" className="btn primary libpage-build" onClick={() => openBuildDialog()} aria-haspopup="dialog">
+          Build
+        </button>
+      </header>
+      <section className="gallery" aria-label="Finished builds">
+        <ul className="gal-grid">
+          {ready
+            ? items.map((it) => <GalleryCard key={it.build_id} item={it} />)
+            : [0, 1, 2, 3, 4, 5].map((i) => <li key={i} className="gal-card is-loading" aria-hidden />)}
+        </ul>
+      </section>
+      {drafts > 0 && <Library />}
+    </div>
   );
 }
