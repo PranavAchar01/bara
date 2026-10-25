@@ -35,7 +35,10 @@ describe("bot mood", () => {
   });
 
   it("says one short line about an event", () => {
-    expect(speechFor(ev("part.added", { part: { card: { display_name: "Cherry MX2A Brown" } } }))).toBe("Got Cherry MX2A Brown");
+    const got = speechFor(ev("part.added", { part: { card: { display_name: "Cherry MX2A Brown" } } }));
+    expect(got).toMatch(/^(Got|Ooh, got|Okay, nice\.) Cherry MX2A Brown$/);
+    // the same part is always said the same way, so a repeat plays from memory
+    expect(speechFor(ev("part.added", { part: { card: { display_name: "Cherry MX2A Brown" } } }))).toBe(got);
     expect(speechFor(ev("build.done", { summary: { instance_count: 76 } }))).toBe("Done! 76 parts, all placed");
     const long = speechFor(ev("stage.started", { label: "x".repeat(200) }));
     expect(long?.length).toBeLessThanOrEqual(60);

@@ -114,35 +114,57 @@ export function emoteFor(e: EventLike): Emote | null {
 const SPEECH_MAX = 60;
 const short = (s: string) => (s.length > SPEECH_MAX ? s.slice(0, SPEECH_MAX - 1).trimEnd() + "…" : s);
 
-/** One line the bot says about an event (SPEC UI: under 60 characters), or null. */
+/** The same wording for the same thing (a line said again plays from memory), but not the same
+ *  wording for everything, so it sounds like someone talking rather than a status readout. */
+function pick(options: string[], seed: string): string {
+  let h = 0;
+  for (const c of seed) h = (h * 31 + c.charCodeAt(0)) | 0;
+  return options[Math.abs(h) % options.length];
+}
+
+/** The tone a line is said in: the voice is upbeat for a hello, curious while building, delighted
+ *  when it works and kind when it doesn't. */
+export type SpeechMood = "greeting" | "progress" | "question" | "success" | "failure" | "reply";
+
+export function speechMoodFor(type: string): SpeechMood {
+  if (type === "build.done") return "success";
+  if (type === "build.failed" || type === "check.result") return "failure";
+  if (type === "clarify.request") return "question";
+  return "progress";
+}
+
+/** One line the bot says about an event (SPEC UI: under 60 characters), or null. Written the way a
+ *  person at the bench would say it: contractions, a little reaction first. */
 export function speechFor(e: EventLike): string | null {
   const p = payload(e);
   switch (e.type) {
     case "stage.started": {
       const label = typeof p.label === "string" ? p.label : null;
-      return label ? short(label) : null;
+      if (!label) return null;
+      const said = label.charAt(0).toLowerCase() + label.slice(1);
+      return short(pick([label, `Okay, ${said}`, `Alright, ${said}`], label));
     }
     case "part.added": {
       const part = p.part as { label?: string; card?: { display_name?: string } } | undefined;
       const name = part?.label ?? part?.card?.display_name;
-      return name ? short(`Got ${name}`) : null;
+      return name ? short(pick([`Got ${name}`, `Ooh, got ${name}`, `Okay, nice. ${name}`], name)) : null;
     }
     case "reuse.decided":
-      return "Found an open design to start from";
+      return "Ooh, found an open design to start from";
     case "clarify.request":
       return typeof p.question === "string" ? short(p.question) : "Quick question for you";
     case "build.done": {
       const s = p.summary as { instance_count?: number } | undefined;
-      return s?.instance_count ? short(`Done! ${s.instance_count} parts, all placed`) : "Done!";
+      return s?.instance_count ? short(`Done! ${s.instance_count} parts, all placed`) : "Done! Take a look";
     }
     case "build.failed": {
       const err = p.error as { message?: string } | undefined;
-      return short(err?.message ? `Hmm. ${err.message}` : "That one didn't work");
+      return short(err?.message ? `Hmm. ${err.message}` : "Ah, that one didn't work");
     }
     case "check.result": {
       const results = (p.results as { status?: string; message?: string }[] | undefined) ?? [];
       const bad = results.find((r) => r.status === "fail");
-      return bad?.message ? short(`Uh oh: ${bad.message}`) : null;
+      return bad?.message ? short(`Uh oh, ${bad.message}`) : null;
     }
     default:
       return null;

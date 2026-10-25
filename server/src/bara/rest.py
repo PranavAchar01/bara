@@ -3,6 +3,7 @@ ErrorResponse."""
 
 from __future__ import annotations
 
+import asyncio
 import io
 import json
 import re
@@ -379,9 +380,15 @@ def build_router(svc: Services) -> APIRouter:
     def _voice_key(request: Request) -> str | None:
         return voice.session_key(request.query_params.get("sid"))
 
+    _warming: set[asyncio.Task] = set()
+
     @api.get("/v1/voice")
-    def voice_info(request: Request) -> JSONResponse:
-        """Whether Bara can speak and listen here, and with which voice."""
+    async def voice_info(request: Request) -> JSONResponse:
+        """Whether Bara can speak and listen here, and with which voice. A page asks this as it
+        opens, so the voice line is opened now, ahead of the first thing Bara says."""
+        task = asyncio.create_task(voice.warm(_voice_key(request)))
+        _warming.add(task)
+        task.add_done_callback(_warming.discard)
         return body(voice.settings(_voice_key(request)))
 
     @api.post("/v1/voice/key")
@@ -397,17 +404,20 @@ def build_router(svc: Services) -> APIRouter:
 
     @api.get("/v1/tts")
     async def tts(request: Request) -> Response:
-        """Streams Bara saying `text` (GET, so an <audio> element can play it as it arrives)."""
+        """Streams Bara saying `text` as raw 24 kHz 16-bit PCM, sent as it is made, so the page
+        plays the first words while the rest are still coming. `mood` (greeting, progress,
+        question, success, failure, reply) sets the tone it is said in."""
         text = (request.query_params.get("text") or "").strip()
         if not text:
             raise ApiError("E_BAD_MESSAGE", "Send text.")
+        mood = request.query_params.get("mood")
         try:
-            client, resp = await voice.open_speech(text, _voice_key(request))
-        except RuntimeError as exc:
-            raise ApiError("E_LLM_UNAVAILABLE", f"No voice: {exc}") from exc
+            speech = await voice.open_speech(text, _voice_key(request), mood)
+        except Exception as exc:
+            raise ApiError("E_LLM_UNAVAILABLE", f"No voice: {type(exc).__name__}") from exc
         return StreamingResponse(
-            voice.relay(client, resp),
-            media_type="audio/mpeg",
+            voice.relay(speech),
+            media_type=speech.media_type,
             headers={"cache-control": "no-store"},
         )
 

@@ -93,6 +93,7 @@ dependencies = [
     { name = "shapely" },
     { name = "unicorn" },
     { name = "uvicorn", extra = ["standard"] },
+    { name = "websockets" },
     { name = "ziglang" },
 ]
 
@@ -115,6 +116,7 @@ requires-dist = [
     { name = "shapely", specifier = ">=2.2.0" },
     { name = "unicorn", specifier = ">=2.1" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
+    { name = "websockets", specifier = ">=13" },
     { name = "ziglang", specifier = ">=0.15" },
 ]
 

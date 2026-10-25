@@ -98,6 +98,7 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean; fresh?
   const listening = useVoice((s) => s.listening);
   const heard = useVoice((s) => s.heard);
   const transcribing = useVoice((s) => s.transcribing);
+  const thinking = useVoice((s) => s.thinking);
   const caption = useVoice((s) => s.caption);
   const replies = useVoice((s) => s.replies);
   const voiceError = useVoice((s) => s.error);
@@ -176,7 +177,7 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean; fresh?
           typingNonce={keys}
           bubbles={bubbles || !!say}
           say={say}
-          mood={listening ? "listening" : transcribing ? "thinking" : undefined}
+          mood={listening ? "listening" : transcribing || thinking ? "thinking" : undefined}
           className={away ? "prompt-bot is-away" : "prompt-bot"}
         />
       </button>
