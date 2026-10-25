@@ -17,7 +17,7 @@ import { applyEdit } from "../net/client";
 import { fetchPart } from "../components/Overlays";
 import type { BBox, Board, Build, BuildPart, Enclosure, Layout } from "../spec/types";
 import { failingByInstance } from "../ui/format";
-import { groupPieces, modelAsset, onModelsChanged, preloadModels, useModel, type LoadedModel, type MeshGroup } from "./assets";
+import { groupPieces, modelAsset, onModelsChanged, preloadModels, useModel, useModelsLoading, type LoadedModel, type MeshGroup } from "./assets";
 import { placeholderBox, type Box } from "./bbox";
 import { boardMatrix, matchComponents, type BoardCandidate } from "./boardgeom";
 import { LAYER_RANK, explodeZ, isKeycapPart, layerGap, layerOf, layerOffsets, partLabel, type LayerExtent, type LayerId, type PartLabel } from "./explode";
@@ -34,6 +34,8 @@ import { focusAmount, registerAnchor, stage, stageBox } from "./stage";
 import { StudioEnvironment, StudioFloor, studioPalette, type StudioPalette } from "./studio";
 import { DemandDriver, StudioPost, postEnabled } from "./post";
 import { SHOT_ID } from "./shot";
+import { Glyph } from "../ui/glyphs";
+import { Icon } from "../ui/common";
 import { BoardPlaceholder, BoardStatus, FootprintHover, footprintBoxes } from "./board";
 import { AgentTargetProbe, partWorldBox, registerPart } from "./agentTargets";
 import { agentPose, easeOut } from "./agentCam";
@@ -151,6 +153,11 @@ function knobGeometry(box: Box): THREE.BufferGeometry {
   g.rotateX(Math.PI / 2);
   g.translate((box.min[0] + box.max[0]) / 2, (box.min[1] + box.max[1]) / 2, box.min[2] + h / 2);
   return g;
+}
+
+/** Parts drawn as their shape when they have no model: keycaps and knobs (a board without them reads as unfinished). */
+function hasStandIn(part: BuildPart, preset: ReturnType<typeof presetFor>): boolean {
+  return preset === "keycap" || (preset === "metal" && /\bknob\b|^knob:/.test(`${part.part_id} ${part.card.display_name}`.toLowerCase()));
 }
 
 /** Placeholder for a ball (trackball without a model): a sphere filling the box. */
@@ -374,7 +381,7 @@ function PartNode(props: PartNodeProps) {
   const color = defaultColor(part);
   const preset = presetFor(part);
   // keycaps and knobs keep their shape without a model: a board missing them reads as unfinished
-  const standIn = preset === "keycap" || (preset === "metal" && /\bknob\b|^knob:/.test(`${part.part_id} ${part.card.display_name}`.toLowerCase()));
+  const standIn = hasStandIn(part, preset);
   const placeholderGeom = useMemo(
     () =>
       loaded
@@ -1589,15 +1596,23 @@ function CompanionPart(props: { part: BuildPart; build: Build; pick: CompanionPi
   const loaded = model.status === "ready" && model.model.groups.length > 0 ? model.model : null;
   const preset = presetFor(part);
   const color = defaultColor(part);
+  const catalog = useCatalogBbox(part.part_id);
+  // a device beside this one keeps its keycaps and knobs too, drawn as their shape when there is no model
+  const standIn = useMemo(() => {
+    if (loaded || !hasStandIn(part, preset)) return null;
+    const box = placeholderBox(part, { layouts: build.layouts ?? [], boards: build.boards ?? [], parts: build.parts, catalogBbox: catalog });
+    return preset === "keycap" ? keycapGeometry(box) : knobGeometry(box);
+  }, [loaded, part, preset, build, catalog]);
+  useEffect(() => () => standIn?.dispose(), [standIn]);
   const groups = useMemo<MeshGroup[]>(() => {
-    if (!loaded) return [];
+    if (!loaded) return standIn ? [{ geometry: standIn, material: presetMaterial(preset, color), weight: 0 }] : [];
     if (usesPreset(preset)) {
       const mat = presetMaterial(preset, color);
       return loaded.groups.map((g) => ({ ...g, material: mat }));
     }
     if (loaded.groups.length === 1 && part.color?.hex && !loaded.groups[0].material.map) return [{ ...loaded.groups[0], material: tinted(loaded.groups[0].material, part.color.hex) }];
     return loaded.groups;
-  }, [loaded, preset, color, part.color?.hex]);
+  }, [loaded, preset, color, part.color?.hex, standIn]);
   const matrices = useMemo(() => poses.map((p) => elementMatrix(p)), [poses]);
   if (!groups.length) return null;
   return <InstancedGroups groups={groups} matrices={matrices} onClick={props.pick.onClick} onHover={props.pick.onHover} />;
@@ -1854,6 +1869,8 @@ function SceneContents(props: {
   const showCase = toggles.case && !boardOnly;
   const showBoard = toggles.board || boardOnly;
   const simOn = useSim((s) => s.active);
+  // with a part pulled out, its shelf of the rest takes the top left: the view cube steps away
+  const focusing = useApp((s) => s.focusKey !== null);
   const revision = `${build?.build_id ?? ""}:${build?.revision ?? 0}:${parts.length}:${showCase}:${showBoard}:${toggles.keycaps}:${covered.size}`;
   return (
     <>
@@ -1916,7 +1933,7 @@ function SceneContents(props: {
       <FitCheck onResult={props.onFit} />
       {props.post && <StudioPost dark={false} />}
       {/* View cube, top left. Build space is Z up: +Y is the back face, -Y the front. */}
-      {!simOn && !SHOT_ID && (
+      {!simOn && !SHOT_ID && !focusing && (
         <GizmoHelper alignment="top-left" margin={[64, 64]} renderPriority={2}>
           <GizmoViewcube faces={["Right", "Left", "Back", "Front", "Top", "Bottom"]} color="#F4F5F7" textColor="#5B6470" strokeColor="#B9C0C8" hoverColor="#CFE3F7" opacity={1} />
         </GizmoHelper>
@@ -1930,6 +1947,7 @@ export function Viewport3D() {
   const hasParts = useApp((s) => (s.build?.parts.length ?? 0) + (s.build?.boards?.length ?? 0) > 0);
   const status = useApp((s) => s.build?.status);
   const missingCount = useApp((s) => (s.build?.parts ?? []).filter((p) => !modelAsset(p.assets, p.quantity > 1)).length);
+  const modelsLoading = useModelsLoading();
   const build = useApp((s) => s.build);
   const rows = useMemo(() => labelRows(build), [build]);
   const theme = useTheme();
@@ -1993,10 +2011,12 @@ export function Viewport3D() {
           </span>
         </div>
       )}
-      {hasParts && missingCount > 0 && !simOn && (
-        <div className="vp-note small" title="These parts have no 3D model on the server, so they are drawn as boxes sized from the catalog.">
-          {missingCount} of the parts drawn as boxes (no model)
-        </div>
+      {/* a stored build reopened: its models are still on their way */}
+      {status === "done" && modelsLoading && (
+        <span className="canvas-loading" role="status" aria-label="Loading the model" title={missingCount ? `${missingCount} parts have no model and are drawn as shapes` : undefined}>
+          <i />
+          <i />
+        </span>
       )}
       <SimOverlay />
       <ViewportToolbar gizmoMode={gizmoMode} setGizmoMode={setGizmoMode} boardOnly={boardOnly} setBoardOnly={setBoardOnly} compact={compact} />
@@ -2047,6 +2067,8 @@ function ViewportToolbar(props: {
   );
   const setPreset = (p: ViewPreset) => setView(p);
   const toggle = (k: keyof typeof toggles) => useApp.setState((s) => ({ toggles: { ...s.toggles, [k]: !s.toggles[k] } }));
+  // folded into one small button until wanted: the canvas is the device, not a control panel
+  const [open, setOpen] = useState(false);
   if (simOn) {
     return (
       <div className="vp-toolbar" role="toolbar" aria-label="Simulation" style={props.compact ? { ...TOOLBAR_FIT, gap: 4, padding: "4px 6px" } : TOOLBAR_FIT}>
@@ -2058,8 +2080,18 @@ function ViewportToolbar(props: {
       </div>
     );
   }
+  if (!open) {
+    return (
+      <button type="button" className="vp-view-btn" onClick={() => setOpen(true)} title="View: explode, angles, what to show" aria-label="View options" aria-expanded={false}>
+        <Glyph name="view" />
+      </button>
+    );
+  }
   return (
     <div className="vp-toolbar" role="toolbar" aria-label="View" style={props.compact ? { ...TOOLBAR_FIT, gap: 4, padding: "4px 6px" } : TOOLBAR_FIT}>
+      <button type="button" className="btn ghost sm icon vp-fold" onClick={() => setOpen(false)} title="Fold the view options" aria-label="Fold the view options">
+        <Icon name="x" size={12} />
+      </button>
       <label className="vp-explode">
         {!props.compact && <span className="small">Explode</span>}
         <input style={props.compact ? { width: 56 } : undefined} type="range" min={0} max={1} step={0.01} value={explode} onChange={(e) => {

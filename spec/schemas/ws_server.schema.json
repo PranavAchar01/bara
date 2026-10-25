@@ -485,8 +485,14 @@
                 "resume_gap",
                 "resume",
                 "late_join",
+                "restore",
                 "unknown"
               ]
+            },
+            "restored_from": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "For reason restore: the revision the build was put back to."
             }
           }
         }

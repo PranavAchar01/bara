@@ -20,7 +20,7 @@ interface Exchange {
 
 let nextId = 0;
 
-async function loadOptions(buildId: string, inst: BuildPart): Promise<SwapOption[]> {
+export async function loadOptions(buildId: string, inst: BuildPart): Promise<SwapOption[]> {
   if (!inst.slot_id) return [];
   // Survivors of the last narrowing step for this slot, then the catalog's alternatives on top.
   const steps = useApp.getState().view.candidates[inst.slot_id] ?? [];

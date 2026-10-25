@@ -1,5 +1,6 @@
-// Canvas tabs above the 3D view: several builds open at once, one per tab. Click to switch,
-// double-click to rename, × to close, + for a new empty canvas.
+// The strip along the top of the canvas: Bara (home) and the live dot on the left, then one tab per
+// device (several builds open at once; click to switch, double-click to rename, × to close, + for a new
+// empty one), and the workspace tools on the right (WorkTools).
 import { useEffect, useRef, useState } from "react";
 import { useApp, type CanvasMeta } from "../state/store";
 import {
@@ -16,6 +17,8 @@ import { Icon } from "../ui/common";
 import "./canvasTabs.css";
 import { stopReplay } from "../bot/replay";
 import { ProjectButton } from "../project/ProjectPanel";
+import { ReplayControl } from "../bot/ReplayControl";
+import { WorkTools } from "./WorkTools";
 
 const STATUS_TITLE: Record<CanvasStatus, string> = {
   empty: "Empty",
@@ -31,8 +34,13 @@ const STATUS_TITLE: Record<CanvasStatus, string> = {
 export function CanvasTabs() {
   const canvases = useApp((s) => s.canvases);
   const active = useApp((s) => s.activeCanvas);
+  const conn = useApp((s) => s.conn);
   return (
     <nav className="canvas-tabs" aria-label="Canvases">
+      <button type="button" className="ct-home" onClick={() => useApp.setState({ screen: "home" })} title="Home">
+        Bara
+        <span className={`ct-conn ${conn === "open" ? "ok" : conn === "offline" ? "off" : "wait"}`} title={conn === "open" ? "Connected" : conn} aria-hidden />
+      </button>
       <div className="ct-list" role="tablist">
         {canvases.map((m) => (
           <CanvasTab
@@ -63,6 +71,9 @@ export function CanvasTabs() {
         </svg>
       </button>
       <ProjectButton />
+      <span className="ct-spacer" />
+      <ReplayControl />
+      <WorkTools />
     </nav>
   );
 }

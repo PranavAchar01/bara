@@ -27,14 +27,14 @@ a person holds or places on the desk next to the open device, is "companion".
 
 For "companion", write device_prompt: a complete build prompt for that new device alone, naming
 what it pairs with and how, e.g. "a wireless mouse that pairs over Bluetooth with a 75% keyboard,
-sized to sit beside it". Do not describe the open device's own parts. For "modify" and "new",
-device_prompt is the request unchanged."""
+sized to sit beside it". Do not describe the open device's own parts. For "modify", device is the
+part being added, if one is named. For "modify" and "new", device_prompt is the request unchanged."""
 
 SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
         "kind": {"type": "string", "enum": ["companion", "modify", "new"]},
-        "device": {"type": "string", "description": "short name of the new device, empty unless companion"},
+        "device": {"type": "string", "description": "short name of the new device (companion) or of the part being added (modify); empty otherwise"},
         "device_prompt": {"type": "string"},
     },
     "required": ["kind", "device", "device_prompt"],
@@ -66,4 +66,5 @@ async def classify(
     if kind == "companion":
         thing = str(data.get("device") or "").strip() or None
         return {"kind": "companion", "thing": thing, "prompt": device_prompt, "note": note}
-    return {"kind": kind, "thing": None, "prompt": text, "note": note}
+    thing = (str(data.get("device") or "").strip() or None) if kind == "modify" else None
+    return {"kind": kind, "thing": thing, "prompt": text, "note": note}

@@ -4,7 +4,6 @@ import { useApp } from "../state/store";
 import { paths } from "../net/rest";
 import { serverUrl, storeKey } from "../net/mode";
 import { Icon } from "../ui/common";
-import { ReplayControl } from "../bot/ReplayControl";
 import type { ConnStatus } from "../net/connection";
 import { SimulateButton } from "../sim/SimulateButton";
 import { useLibrary } from "../library/library";
@@ -166,7 +165,6 @@ export function FileHeader() {
         />
         {conn !== "open" && <span aria-live="polite">{CONN_LABEL[conn]}</span>}
         {(mock || hello?.mock) && <span className="status-pill">mock</span>}
-        <ReplayControl />
       </div>
     </header>
   );

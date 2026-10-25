@@ -127,13 +127,6 @@ export function FocusCard() {
     focusPart(order[(i + dir + order.length) % order.length]);
   };
 
-  // Spoken questions come here while a part is in focus.
-  useEffect(() => {
-    const onAsk = (e: Event) => void ask((e as CustomEvent<string>).detail);
-    window.addEventListener("bara:ask", onAsk);
-    return () => window.removeEventListener("bara:ask", onAsk);
-  });
-
   // A ask, S change, O something else, ← → next part. Typing in the ask field never triggers them.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

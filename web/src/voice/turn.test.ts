@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanTranscript, endOfTurnMs, pickOption } from "./turn";
+import { cleanTranscript, endOfTurnMs, isNoise, pickOption } from "./turn";
 
 describe("cleanTranscript", () => {
   it("drops fillers", () => {
@@ -46,5 +46,26 @@ describe("pickOption", () => {
   });
   it("leaves anything else as free text", () => {
     expect(pickOption("make it glow in the dark", options)).toBeNull();
+  });
+});
+
+describe("hardware words survive cleaning", () => {
+  it("keeps millimetres", () => {
+    expect(cleanTranscript("make the knob 12 mm wide")).toBe("Make the knob 12 mm wide");
+    expect(cleanTranscript("mmm a 3 mm plate")).toBe("A 3 mm plate");
+  });
+});
+
+describe("isNoise", () => {
+  it("drops what speech-to-text makes up from a cough", () => {
+    expect(isNoise("Thank you.", 200)).toBe(true);
+    expect(isNoise("Thanks for watching!", 400)).toBe(true);
+    expect(isNoise("", 2000)).toBe(true);
+  });
+  it("keeps real answers", () => {
+    expect(isNoise("Okay", 300)).toBe(false);
+    expect(isNoise("Yes", 250)).toBe(false);
+    expect(isNoise("Thank you", 1500)).toBe(false);
+    expect(isNoise("Build a keyboard", 900)).toBe(false);
   });
 });

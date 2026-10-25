@@ -4,8 +4,9 @@ import { focusKeyOf } from "../three/Viewport3D";
 import { setReplies, startListening, stopListening, useVoice } from "../voice/voice";
 import { BaraBot, botBubbles } from "../bot/BaraBot";
 import { toggleTrace, useTrace } from "../bot/traceState";
-import { cancelBuild, routePrompt, startBuild } from "../net/client";
+import { cancelBuild, startBuild } from "../net/client";
 import { addCanvas } from "../state/canvases";
+import { act } from "../bot/act";
 import { Icon } from "../ui/common";
 
 /** A press shorter than this on the docked bot is a tap. */
@@ -47,6 +48,7 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean; fresh?
   const away = useApp((s) => s.agentOut) && !!props.docked;
 
   const focusKey = useApp((s) => s.focusKey);
+  const done = useApp((s) => s.build?.status === "done");
   const focusName = useApp((s) => (s.focusKey ? (s.build?.parts.find((p) => focusKeyOf(s.build, p) === s.focusKey)?.card.display_name ?? null) : null));
   const inputRef = useRef<HTMLInputElement>(null);
   const traceOpen = useTrace((s) => s.open) && !!props.docked;
@@ -55,10 +57,10 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean; fresh?
   const hold = useRef(0);
   const submit = () => {
     if (disabled || pending || !text.trim()) return;
-    // with a part in focus the pill asks about it; it never throws the build away for a new one
+    // one prompt for everything: a change, a question, another device or a new one (bot/act.ts);
+    // from the landing's Build dialog it is always a new build
     if (props.fresh) startFreshBuild(text.slice(0, maxChars));
-    else if (focusKey) window.dispatchEvent(new CustomEvent("bara:ask", { detail: text.trim() }));
-    else void routePrompt(text.slice(0, maxChars));
+    else void act(text.slice(0, maxChars));
     setText("");
     props.onSent?.();
   };
@@ -74,8 +76,23 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean; fresh?
   }, []);
   useEffect(() => {
     const onFocusAsk = () => inputRef.current?.focus();
+    // a start written for you (the selection pill's Build around it): the cursor waits at its end
+    const onPrefill = (e: Event) => {
+      const t = (e as CustomEvent<string>).detail ?? "";
+      setText(t);
+      requestAnimationFrame(() => {
+        const el = inputRef.current;
+        if (!el) return;
+        el.focus();
+        el.setSelectionRange(t.length, t.length);
+      });
+    };
     window.addEventListener("bara:focus-ask", onFocusAsk);
-    return () => window.removeEventListener("bara:focus-ask", onFocusAsk);
+    window.addEventListener("bara:prefill", onPrefill);
+    return () => {
+      window.removeEventListener("bara:focus-ask", onFocusAsk);
+      window.removeEventListener("bara:prefill", onPrefill);
+    };
   }, []);
   const listening = useVoice((s) => s.listening);
   const heard = useVoice((s) => s.heard);
@@ -94,12 +111,17 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean; fresh?
       const t = (e as CustomEvent<string>).detail;
       if (!t || disabled || pending) return;
       if (fresh) startFreshBuild(t.slice(0, maxChars));
-      else void routePrompt(t.slice(0, maxChars));
+      else void act(t.slice(0, maxChars));
       setText("");
       onSent?.();
     };
+    // spoken lines arrive on either event (a part in focus or not); both go the same way
     window.addEventListener("bara:prompt", onPrompt);
-    return () => window.removeEventListener("bara:prompt", onPrompt);
+    window.addEventListener("bara:ask", onPrompt);
+    return () => {
+      window.removeEventListener("bara:prompt", onPrompt);
+      window.removeEventListener("bara:ask", onPrompt);
+    };
   }, [disabled, pending, maxChars, fresh, onSent]);
 
   return (
@@ -131,6 +153,12 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean; fresh?
             hold.current = 0;
             toggleTrace();
           } else stopListening();
+        }}
+        onPointerCancel={() => {
+          // a touch taken over by the browser (a scroll, a system gesture) never sends pointerup
+          window.clearTimeout(hold.current);
+          hold.current = 0;
+          if (listening) stopListening();
         }}
         onPointerLeave={() => {
           window.clearTimeout(hold.current);
@@ -179,7 +207,9 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean; fresh?
                 : disabled
                   ? "Waiting for the server"
                   : focusOpen
-                    ? `Ask about ${focusName ? `the ${focusName}` : "this part"}`
+                    ? `Change or ask about ${focusName ? `the ${focusName}` : "this part"}`
+                    : props.docked && done
+                    ? "Change it, or describe something new"
                     : props.docked
                     ? "Describe another device, or hold Space to talk"
                     : (props.placeholder ?? "Describe the device you want, or hold Space to talk")
