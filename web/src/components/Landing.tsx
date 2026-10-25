@@ -110,7 +110,7 @@ function LandingHero(props: { onOpen: (o: IntroOpen) => void; away: boolean }) {
   return (
     <section className="ld-hero" data-guide-section="hero">
       <div className="ld-plate">
-        <figure className="ld-bg" aria-label="A recording of Bara building a device, start to finish" data-say="That's me at work. A real build, recorded start to finish." data-at="0.42,0.42">
+        <figure className="ld-bg" aria-label="A recording of Bara building a device, start to finish" data-say="That's me at work. A real build, recorded start to finish." data-at="0.42,0.74">
           <DemoVideo />
         </figure>
         <div className="ld-stage">

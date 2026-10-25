@@ -1573,6 +1573,12 @@
   .ld-bg {
     left: 36%;
   }
+  /* closer in on the device, so the recorded app's own bars (prompt, Stop, undo, layers) fall outside the
+   * plate instead of showing cut through at its edges */
+  .demo-media {
+    transform: scale(1.3);
+    transform-origin: 49% 46%;
+  }
 }
 .mk-tab {
   padding: 4px 10px;
