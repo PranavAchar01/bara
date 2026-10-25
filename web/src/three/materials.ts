@@ -16,9 +16,9 @@ function make(preset: Preset, hex: string): THREE.MeshStandardMaterial {
       return new THREE.MeshPhysicalMaterial({ color, roughness: 0.62, metalness: 0, sheen: 0.15, sheenRoughness: 0.8, sheenColor: sheen, specularIntensity: 0.6 });
     }
     case "case": {
-      // Clear moulded plastic: the shell is always see-through, the colour only a faint tint,
+      // Clear moulded plastic: the shell is always see-through, its colour a translucent tint
       // so the board and parts inside read through it like a transparent handheld.
-      const tint = color.clone().lerp(new THREE.Color("#EEF3F7"), 0.85);
+      const tint = color.clone().lerp(new THREE.Color("#EEF3F7"), 0.5);
       return new THREE.MeshPhysicalMaterial({ color: tint, roughness: 0.08, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.05, specularIntensity: 1, transparent: true, opacity: 1, depthWrite: false });
     }
     case "pcb":
