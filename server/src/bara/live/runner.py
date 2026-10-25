@@ -21,8 +21,9 @@ from shapely.geometry import Polygon
 from bara.board.evaluate import evaluate as evaluate_board
 from bara.board.generic import board_footprint_mm
 from bara.live import adapters as A
-from bara.live import archetype, completeness, hero, open_designs, websearch
+from bara.live import archetype, completeness, hero, open_designs, retrieval, websearch
 from bara.live import blocks as blocks_mod
+from bara.live import concept as concept_mod
 from bara.live import finish as finish_mod
 from bara.live import form as form_mod
 from bara.live import identity as identity_mod
@@ -608,6 +609,7 @@ class LiveRunner:
                 "the mains side is the module's job.",
             )
         if res.brief["scope"] == "in_scope":
+            res.brief = await self.understand(run, prompt, res.brief, st)
             arch = archetype.apply(
                 prompt, res.brief, self.source, self.settings.data_dir / "archetypes.json"
             )
@@ -635,6 +637,42 @@ class LiveRunner:
         st.done()
         run.live_brief = res.brief  # type: ignore[attr-defined]
         return spec, res.brief
+
+    async def understand(
+        self, run: BuildRun, prompt: str, brief: dict[str, Any], st: _Stage
+    ) -> dict[str, Any]:
+        """Retrieve real references for this kind of device, then have the model write the
+        device concept from them: what it is, its form, layout and parts, and which build path
+        fits. The concept is a reading grounded in what was retrieved, never a fixed label."""
+        st.progress("Retrieving real products and open designs of this device", 0.5)
+        # a generic product class, never a brand or a model name the request may have typed
+        ret = await retrieval.gather(str(brief.get("device") or "") or _product_name(run, brief))
+        run.retrieval = ret  # type: ignore[attr-defined]
+        run.web_photos = ret.photos  # type: ignore[attr-defined]
+        run.web_sources = ret.photo_sources  # type: ignore[attr-defined]
+        st.progress("Working out what the device is from the references", 0.7)
+        concept, note = await concept_mod.derive(
+            prompt, self.catalog.function_ids(), self.catalog.device_classes(), brief, ret
+        )
+        run.device_concept = concept  # type: ignore[attr-defined]
+        log.info(
+            "device concept %s (%s; %s): %s",
+            run.build_id, note, "; ".join(ret.notes), json.dumps(concept, sort_keys=True),
+        )  # fmt: skip
+        if concept is None:
+            self._warn(
+                run, "classify", "w_concept", "llm_degraded", "warning",
+                f"No device concept ({note}); the brief's own reading picks the build path.",
+            )  # fmt: skip
+            return brief
+        path = "keyboard pipeline" if concept_mod.is_keyboard(concept) else "device path"
+        self._warn(
+            run, "classify", "w_concept", "assumption_made", "info",
+            f"Read as a {concept['device_name']} ({path}: {concept['build_path_reason']}) from "
+            f"{len(ret.designs)} open design(s), {len(ret.pages)} page(s), "
+            f"{len(ret.photos)} photo(s).",
+        )  # fmt: skip
+        return concept_mod.apply(brief, concept)
 
     def _log_brief(self, run: BuildRun, prompt: str, res: BriefResult) -> None:
         record = {"build_id": run.build_id, "prompt": prompt, "brief": res.brief,
@@ -734,7 +772,11 @@ class LiveRunner:
         blocks = getattr(run, "live_blocks", None)
         if plan is None and blocks is None:
             for _ in range(2):  # the diagram sets every part and quantity; one retry on failure
-                blocks, note = await blocks_mod.derive(run.prompt, self.catalog.function_ids())
+                blocks, note = await blocks_mod.derive(
+                    run.prompt,
+                    self.catalog.function_ids(),
+                    concept_mod.concept_text(getattr(run, "device_concept", None)),
+                )
                 if blocks is not None:
                     break
             if blocks is None:  # no silent defaults: guessed parts and counts are not a design
@@ -903,8 +945,9 @@ class LiveRunner:
             )
         photos = await self._photos(run)
         product, note = await form_mod.derive(
-            run.prompt, touches, previous if (repair or fit) else None, repair, fit, photos
-        )
+            run.prompt, touches, previous if (repair or fit) else None, repair, fit, photos,
+            concept=concept_mod.concept_text(getattr(run, "device_concept", None)),
+        )  # fmt: skip
         if repair and not fit and floor and product is not None and previous is not None:
             w, h, area = _extent(product)
             if w < 0.98 * floor[0] or h < 0.98 * floor[1] or area < 0.97 * floor[2]:

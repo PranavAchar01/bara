@@ -414,6 +414,7 @@ async def derive(
     critique: str = "",
     fit: dict | None = None,
     photos: list[bytes] | None = None,
+    concept: str = "",
 ) -> tuple[Form | None, str]:
     """Ask for the form, check it, and make one repair pass. A form that still fails keeps its
     problems on the object so the caller can fail loudly."""
@@ -435,6 +436,11 @@ async def derive(
             + fit_note(fit)
             + "\nEarlier silhouette: "
             + json.dumps([[round(x), round(y)] for x, y in previous.silhouette])
+        )
+    if concept:  # what the device is, written from retrieved references before any part
+        note += (
+            "\n" + concept + "\nDraw this product: its canonical orientation, proportions, "
+            "layout of the face and thickness come from the concept above."
         )
     if photos:
         note += (

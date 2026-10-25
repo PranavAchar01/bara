@@ -37,7 +37,9 @@ Rules:
   I/O its function implies (a pointing device needs its sensor, an audio device its codec or
   amplifier and transducer, a display device its driver or bridge and connector, a wireless
   product its radio), and the mechanical parts users touch.
-- List only parts that must be chosen and bought. Leave out: the enclosure, the PCB, cables,
+- List only parts that must be chosen and bought. Leave out: the enclosure and everything
+  that is made as part of it (display windows, lens covers, plates, weights, feet, bezels,
+  light pipes; the case stage makes those), the PCB, cables,
   fasteners, gaskets, standoffs, resistors/capacitors/inductors/diodes/crystals (support parts
   are added automatically), on-chip radios and antennas of a module you already list, and
   rigid flex details. compute.mcu means a programmable microcontroller module only; a dedicated
