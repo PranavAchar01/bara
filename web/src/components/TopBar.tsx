@@ -88,7 +88,7 @@ function DraftsButton() {
   );
 }
 
-/** Left panel header in the workspace (Figma file header): Builds / prompt, build id + status, connection · model. */
+/** Left panel header in the workspace (Figma file header): Builds / prompt, then a status dot and Replay. */
 export function FileHeader() {
   const conn = useApp((s) => s.conn);
   const hello = useApp((s) => s.hello);
@@ -114,31 +114,22 @@ export function FileHeader() {
           {build?.prompt ?? "New build"}
         </span>
       </div>
-      {build && (
-        <div className="file-meta">
-          <span className="mono">{build.build_id}</span>
-          <span className={`status-pill st-${String(status)}`}>{String(status).replace("_", " ")}</span>
-          {(mock || hello?.mock) && <span className="status-pill">mock</span>}
-        </div>
-      )}
-      <ReplayControl />
       <div className="file-meta">
-        <span className={`conn-dot tone-${CONN_TONE[conn]}`} aria-hidden />
-        <span aria-live="polite">{CONN_LABEL[conn]}</span>
-        {health?.llm?.model && (
-          <>
-            <span className="sep">·</span>
-            {switched ? (
-              <span className="file-model switched" title={`${why} Configured: ${health.llm.provider} ${health.llm.model}. ${fallback}`}>
-                <s>{health.llm.model}</s> → {usedName} <span className="file-why">backup</span>
-              </span>
-            ) : (
-              <span className="file-model" title={`${health.llm.provider} ${health.llm.model}. ${fallback}`}>
-                {health.llm.model}
-              </span>
-            )}
-          </>
-        )}
+        {/* One dot says it all: green connected, amber when the build fell back to another model, red offline. Details on hover. */}
+        <span
+          className={`conn-dot tone-${switched && conn === "open" ? "warn" : CONN_TONE[conn]}`}
+          role="img"
+          aria-label={CONN_LABEL[conn]}
+          title={[
+            `${CONN_LABEL[conn]}${build ? ` · ${build.build_id} · ${String(status).replace("_", " ")}` : ""}`,
+            health?.llm?.model ? (switched ? `${why} Used ${usedName} instead of ${health.llm.model}.` : `${health.llm.provider} ${health.llm.model}. ${fallback}`) : "",
+          ]
+            .filter(Boolean)
+            .join("\n")}
+        />
+        {conn !== "open" && <span aria-live="polite">{CONN_LABEL[conn]}</span>}
+        {(mock || hello?.mock) && <span className="status-pill">mock</span>}
+        <ReplayControl />
       </div>
     </header>
   );
