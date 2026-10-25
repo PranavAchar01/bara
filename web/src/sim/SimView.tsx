@@ -165,8 +165,11 @@ function Simulator(props: { build: Build }) {
     },
     [absorb],
   );
+  const ready = useRef(false);
+  ready.current = !!data?.snapshot && !busy;
   const act = useCallback<Act>(
     (input, action, value) => {
+      if (!ready.current) return; // the firmware is still building: nothing to press yet
       void call(() => sim.input(id, { id: input, action, value, since: seq.current }));
     },
     [id, call],
