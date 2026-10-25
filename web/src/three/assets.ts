@@ -220,6 +220,28 @@ function flatPaletteColor(tex: THREE.Texture, g: THREE.BufferGeometry): THREE.Co
   return first < 0 ? null : new THREE.Color().setHex(first, THREE.SRGBColorSpace);
 }
 
+const silkBodies = new WeakMap<THREE.Material, THREE.MeshStandardMaterial>();
+/** The silk material without its polygon offset, for white solids. */
+function bodyOfSilk(silk: THREE.MeshStandardMaterial): THREE.MeshStandardMaterial {
+  let m = silkBodies.get(silk);
+  if (!m) {
+    m = silk.clone();
+    m.polygonOffset = false;
+    m.userData.boardLayer = "body";
+    silkBodies.set(silk, m);
+  }
+  return m;
+}
+
+/** True for a flat sheet (printed legend or a courtyard line), under 0.2 mm thick along some axis. */
+function isSheet(g: THREE.BufferGeometry): boolean {
+  g.computeBoundingBox();
+  const b = g.boundingBox;
+  if (!b) return true;
+  const d = b.getSize(new THREE.Vector3());
+  return Math.min(d.x, d.y, d.z) < 0.2;
+}
+
 function studioMaterial(src: THREE.Material, board: boolean, palette: THREE.Color | null, factorsGiven: boolean): THREE.MeshStandardMaterial {
   let std = src as THREE.MeshStandardMaterial;
   if (palette) {
@@ -391,6 +413,9 @@ function convert(gltf: GLTF, board: boolean): LoadedModel {
         material = studioMaterial(mat, board, palette, factorsInFile(gltf, mat));
         matCache.set(key, material);
       }
+      // A white solid (a keycap) is a part, not the board's silk: the silk offset that lifts printed legend over
+      // the mask scales with slope, so on a sloped body it pulls facets through their neighbours as dashes.
+      if (board && material.userData.boardLayer === "silk" && !isSheet(g)) material = bodyOfSilk(material);
       const keepUv = !!material.map && !!g.attributes.uv;
       for (const name of Object.keys(g.attributes)) if (name !== "position" && name !== "normal" && !(keepUv && name === "uv")) g.deleteAttribute(name);
       if (!g.attributes.normal) g.computeVertexNormals();

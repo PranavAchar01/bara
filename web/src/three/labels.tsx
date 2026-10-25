@@ -6,6 +6,7 @@ import { useEffect, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { focusAmount, stage, stageBox } from "./stage";
+import { findAnchorPoint, type AnchorHit } from "./anchorPoint";
 import { focusPart, useApp } from "../state/store";
 
 export interface LabelRow {
@@ -114,7 +115,8 @@ interface Seen {
   visible: boolean;
   hiddenFor: number;
   alpha: number;
-  anchor: number;
+  /** Where the leader lands: a point on the part's own visible surface (local to the group it sits on). */
+  hit: AnchorHit | null;
 }
 const seen = new Map<string, Seen>();
 
@@ -201,7 +203,7 @@ function inView(point: THREE.Vector3, owner: THREE.Object3D | null, root: THREE.
   const dist = camPos.distanceTo(point);
   ray.set(camPos, tmp.copy(point).sub(camPos).normalize());
   ray.near = 0;
-  ray.far = dist * 0.995;
+  ray.far = Math.max(0, dist - 0.12);
   const hits = ray.intersectObject(root, true);
   for (const h of hits) {
     if (!(h.object as THREE.Mesh).isMesh || !h.object.visible) continue;
@@ -213,6 +215,21 @@ function inView(point: THREE.Vector3, owner: THREE.Object3D | null, root: THREE.
   return true;
 }
 
+/** True when another part is drawn behind the point, along the same view ray (only see-through shells let it show). */
+function overlapped(point: THREE.Vector3, owner: THREE.Object3D, root: THREE.Object3D): boolean {
+  const dist = camPos.distanceTo(point);
+  ray.set(camPos, tmp.copy(point).sub(camPos).normalize());
+  ray.near = dist * 1.002;
+  ray.far = Infinity;
+  for (const h of ray.intersectObject(root, true)) {
+    if (!(h.object as THREE.Mesh).isMesh || !h.object.visible || isUnder(h.object, owner)) continue;
+    const m = (h.object as THREE.Mesh).material as THREE.Material | THREE.Material[];
+    if (!Array.isArray(m) && m.transparent && m.opacity < 0.5) continue;
+    return true;
+  }
+  return false;
+}
+
 /**
  * Inside the Canvas: projects anchors and lays the label column out each frame. A label shows only
  * while its part is in view from the camera; turning the model brings hidden ones back.
@@ -220,6 +237,7 @@ function inView(point: THREE.Vector3, owner: THREE.Object3D | null, root: THREE.
 export function LabelProjector() {
   const { camera, size, invalidate } = useThree();
   const since = useRef(CHECK_EVERY_S);
+  const settled = useRef(-1);
   useFrame((_, dt) => {
     const el = overlayEl;
     if (!el) return;
@@ -235,9 +253,10 @@ export function LabelProjector() {
     // Occlusion is re-tested a few times a second while the view or the explode changes, not every frame.
     since.current += dt;
     const camMoved = !lastCam.equals(camera.matrixWorld);
-    const check = stage.root !== null && since.current >= CHECK_EVERY_S && (camMoved || stage.moving || seen.size === 0 || [...seen.values()].some((v) => v.hiddenFor > 0 && v.visible));
+    const check = stage.root !== null && since.current >= CHECK_EVERY_S && (camMoved || stage.moving || settled.current !== stage.settleVersion || seen.size === 0 || [...seen.values()].some((v) => v.hiddenFor > 0 && v.visible));
     if (check) {
       since.current = 0;
+      settled.current = stage.settleVersion;
       lastCam.copy(camera.matrixWorld);
       camera.getWorldPosition(camPos);
     }
@@ -249,30 +268,32 @@ export function LabelProjector() {
       const b = stageBox();
       if (b) midNdc = b.getCenter(tmp).project(camera).x;
     }
+    const ownersByKey = new Map<string, THREE.Object3D[]>();
+    if (check) {
+      for (const [g, k] of stage.focusGroups) {
+        if (!g.visible) continue;
+        const l = ownersByKey.get(k);
+        if (l) l.push(g);
+        else ownersByKey.set(k, [g]);
+      }
+    }
     for (const [key, list] of stage.anchors) {
       if (!list.length || !slots.has(key)) continue;
-      const st = seen.get(key) ?? { visible: true, hiddenFor: 0, alpha: 1, anchor: 0 };
+      const st = seen.get(key) ?? { visible: true, hiddenFor: 0, alpha: 1, hit: null };
       seen.set(key, st);
       if (check && stage.root) {
-        // the anchor in view furthest out from the model's middle wins: it is the one nearest the
-        // label column on that side, so its line crosses as little of the model as possible
-        let best = -1;
-        let bestX = -Infinity;
-        for (let i = 0; i < Math.min(list.length, 4); i++) {
-          const a = list[i];
-          const wp = a.world();
-          if (!inView(wp, a.owner?.() ?? null, stage.root)) continue;
-          const sx = Math.abs(tmp.copy(wp).project(camera).x - midNdc);
-          if (sx > bestX) {
-            bestX = sx;
-            best = i;
-          }
-        }
-        if (best >= 0) {
-          st.anchor = best;
+        const root = stage.root;
+        // The dot lands where the camera sees the part's own surface; a part with nothing in view
+        // (covered by another part) is left unlabelled and counted as behind, never pointed at
+        // through the part that hides it.
+        const owners = ownersByKey.get(key) ?? list.map((a) => a.owner?.() ?? null).filter((o): o is THREE.Object3D => !!o);
+        const hit = findAnchorPoint(owners, camera, (p, o) => inView(p, o, root), midNdc, st.hit, (p, o) => overlapped(p, o, root));
+        if (hit) {
+          st.hit = hit;
           st.hiddenFor = 0;
           st.visible = true;
         } else {
+          st.hit = null;
           st.hiddenFor += CHECK_EVERY_S;
           if (st.hiddenFor >= HIDE_AFTER_S) st.visible = false;
         }
@@ -281,8 +302,8 @@ export function LabelProjector() {
       st.alpha += Math.sign(target - st.alpha) * Math.min(Math.abs(target - st.alpha), dt / FADE_S);
       if (!st.visible) behind++;
       if (st.alpha <= 0.01) continue;
-      const anchor = list[Math.min(st.anchor, list.length - 1)];
-      tmp.copy(anchor.world()).project(camera);
+      if (!st.hit) continue;
+      tmp.copy(st.hit.owner.localToWorld(st.hit.local.clone())).project(camera);
       pts.push({ key, x: ((tmp.x + 1) / 2) * w, y: ((1 - tmp.y) / 2) * h, a: st.alpha });
     }
     for (const key of seen.keys()) if (!stage.anchors.has(key)) seen.delete(key);

@@ -83,6 +83,25 @@ export function layerOffsets(ext: Partial<Record<LayerId, LayerExtent>>, clearan
   return out;
 }
 
+/** Layers whose many small parts take staggered heights so each stands clear of its neighbours on screen. */
+const TIERED: LayerId[] = ["under", "board_parts", "top"];
+export const MAX_TIERS = 3;
+
+/**
+ * Height tier (0, 1, 2) of each part in a layer, by left-to-right order: neighbours land on different
+ * tiers, so small parts side by side on a board do not stack their dots and leader lines on one spot.
+ * Layers that are one thing (case, PCB, plate, keycaps) stay flat.
+ */
+export function tiersByX(layer: LayerId, items: { key: string; x: number }[]): Map<string, number> {
+  const out = new Map<string, number>();
+  if (!TIERED.includes(layer)) return out;
+  const sorted = [...items].sort((a, b) => a.x - b.x || a.key.localeCompare(b.key));
+  const n = Math.min(MAX_TIERS, sorted.length);
+  if (n < 2) return out;
+  sorted.forEach((it, i) => out.set(it.key, i % n));
+  return out;
+}
+
 const GROUP_NAME: Record<LayerId, string> = {
   case: "Case",
   under: "",

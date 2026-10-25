@@ -20,7 +20,8 @@ import { failingByInstance } from "../ui/format";
 import { groupPieces, modelAsset, onModelsChanged, preloadModels, useModel, useModelsLoading, type LoadedModel, type MeshGroup } from "./assets";
 import { placeholderBox, type Box } from "./bbox";
 import { boardMatrix, matchComponents, type BoardCandidate } from "./boardgeom";
-import { EXPLODE_MS, LAYER_RANK, easeInOutCubic, explodeZ, layerProgress, isKeycapPart, layerGap, layerOf, layerOffsets, partLabel, type LayerExtent, type LayerId, type PartLabel } from "./explode";
+import { partKeyAlong } from "./anchorPoint";
+import { EXPLODE_MS, LAYER_RANK, easeInOutCubic, explodeZ, layerProgress, isKeycapPart, layerGap, layerOf, layerOffsets, partLabel, tiersByX, isDrag, type LayerExtent, type LayerId, type PartLabel } from "./explode";
 import { elementPoses, type ElementPose } from "./layout";
 import { arrangeDevices, chooseCamera, deviceKind, layoutCamera, type Box as FloorBox, type DeviceKind } from "./arrange";
 import { LabelOverlay, LabelProjector } from "./labels";
@@ -205,6 +206,7 @@ function useLayerGroup(layer: LayerId, anchorKey: string | null, anchorLocal: TH
     const lifted = stage.layerZ?.[layer];
     const f = layerProgress(stage.explode, LAYER_RANK[layer], stage.rankTop, stage.stagger);
     let z = lifted !== undefined ? lifted * f : explodeZ(layer, stage.gap, f);
+    z += (stage.tier.get(g) ?? 0) * stage.tierStep * f;
     g.userData.restZ = z;
     // pick view: the picked part lifts a little out of its layer, every other part fades to a ghost;
     // otherwise the part under the pointer is tinted
@@ -1270,17 +1272,41 @@ function LayerMeasure() {
   useFrame(() => {
     if (++n.current % 12 !== 0 || stage.focusK > 0 || stage.pickK > 0.002) return;
     const ext: Partial<Record<LayerId, LayerExtent>> = {};
+    // parts of one layer take staggered heights by their left-to-right order (tiersByX)
+    const step = Math.max(4, stage.gap * 0.22);
+    const boxes = new Map<THREE.Group, THREE.Box3>();
+    const xs = new Map<LayerId, Map<string, number>>();
     for (const [g, layer] of stage.layerGroups) {
       if (!g.visible) continue;
-      g.updateMatrixWorld(true);
       const b = meshBox(g);
       if (b.isEmpty()) continue;
+      boxes.set(g, b);
+      const key = stage.focusGroups.get(g);
+      if (key) (xs.get(layer) ?? xs.set(layer, new Map()).get(layer)!).set(key, b.getCenter(new THREE.Vector3()).x);
+    }
+    const tiers = new Map<LayerId, Map<string, number>>();
+    for (const [layer, m] of xs) tiers.set(layer, tiersByX(layer, [...m].map(([key, x]) => ({ key, x }))));
+    let tierSig = `${step}`;
+    for (const [g, layer] of stage.layerGroups) {
+      const key = stage.focusGroups.get(g);
+      const t = key ? (tiers.get(layer)?.get(key) ?? 0) : 0;
+      if ((stage.tier.get(g) ?? 0) !== t) {
+        if (t) stage.tier.set(g, t);
+        else stage.tier.delete(g);
+        tierSig += "*";
+      }
+    }
+    stage.tierStep = step;
+    for (const [g, layer] of stage.layerGroups) {
+      const b = boxes.get(g);
+      if (!b) continue;
+      g.updateMatrixWorld(true);
       const dz = g.matrixWorld.elements[14];
       const cur = ext[layer];
-      ext[layer] = [Math.min(cur?.[0] ?? Infinity, b.min.z - dz), Math.max(cur?.[1] ?? -Infinity, b.max.z - dz)];
+      ext[layer] = [Math.min(cur?.[0] ?? Infinity, b.min.z - dz), Math.max(cur?.[1] ?? -Infinity, b.max.z - dz + (stage.tier.get(g) ?? 0) * step)];
     }
     const next = layerOffsets(ext, Math.max(6, stage.gap * 0.45));
-    const same = stage.layerZ && Object.keys(next).length === Object.keys(stage.layerZ).length && (Object.keys(next) as LayerId[]).every((l) => Math.abs((stage.layerZ?.[l] ?? NaN) - (next[l] ?? 0)) < 0.05);
+    const same = !tierSig.includes("*") && stage.layerZ && Object.keys(next).length === Object.keys(stage.layerZ).length && (Object.keys(next) as LayerId[]).every((l) => Math.abs((stage.layerZ?.[l] ?? NaN) - (next[l] ?? 0)) < 0.05);
     if (same) return;
     stage.layerZ = Object.keys(next).length ? next : null;
     stage.rankTop = Math.max(1, ...(Object.keys(next) as LayerId[]).map((l) => LAYER_RANK[l]));
@@ -1291,7 +1317,20 @@ function LayerMeasure() {
   return null;
 }
 
-/** The exploded view's hover: the part under the pointer (by focus key) is tinted. */
+function focusKeyOfObject(o: THREE.Object3D): { key: string; shell: boolean } | undefined {
+  for (let x: THREE.Object3D | null = o; x; x = x.parent) {
+    const layer = stage.layerGroups.get(x as THREE.Group);
+    const key = layer ? stage.focusGroups.get(x as THREE.Group) : undefined;
+    if (key) return { key, shell: layer === "case" || layer === "lid" };
+  }
+  return undefined;
+}
+
+/**
+ * The exploded view's hover (the part under the pointer is tinted and its label lit) and click
+ * pick. A click is also resolved here, by the same ray as the hover, so what lights up is what is
+ * picked even for a part a few pixels wide; a click the part meshes already took is left alone.
+ */
 function HoverDriver() {
   const { gl, camera, invalidate } = useThree();
   useEffect(() => {
@@ -1305,19 +1344,16 @@ function HoverDriver() {
       stage.hoverKey = key;
       invalidate();
     };
+    const keyAt = (e: PointerEvent | MouseEvent): string | null => {
+      if (!stage.root || useApp.getState().explode <= 0.5 || useSim.getState().active) return null;
+      const r = el.getBoundingClientRect();
+      ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+      ray.setFromCamera(ndc, camera);
+      return partKeyAlong(ray.intersectObject(stage.root, true), focusKeyOfObject);
+    };
     const run = () => {
       raf = 0;
-      if (!last || !stage.root || useApp.getState().explode <= 0.5 || useSim.getState().active) return set(null);
-      const r = el.getBoundingClientRect();
-      ndc.set(((last.clientX - r.left) / r.width) * 2 - 1, -((last.clientY - r.top) / r.height) * 2 + 1);
-      ray.setFromCamera(ndc, camera);
-      for (const hit of ray.intersectObject(stage.root, true)) {
-        for (let o: THREE.Object3D | null = hit.object; o; o = o.parent) {
-          const key = stage.layerGroups.has(o as THREE.Group) ? stage.focusGroups.get(o as THREE.Group) : undefined;
-          if (key) return set(key);
-        }
-      }
-      set(null);
+      set(last ? keyAt(last) : null);
     };
     const move = (e: PointerEvent) => {
       last = e;
@@ -1327,11 +1363,30 @@ function HoverDriver() {
       last = null;
       set(null);
     };
+    let down: { x: number; y: number; focus: string | null } | null = null;
+    const press = (e: PointerEvent) => {
+      down = { x: e.clientX, y: e.clientY, focus: useApp.getState().focusKey };
+    };
+    const click = (e: MouseEvent) => {
+      const d = down;
+      down = null;
+      if (!d || isDrag(e.clientX - d.x, e.clientY - d.y)) return;
+      const key = keyAt(e);
+      if (!key) return;
+      // the part meshes' own click handlers run first; only a click they left alone is picked here
+      window.setTimeout(() => {
+        if (useApp.getState().focusKey === d.focus && useApp.getState().explode > 0.5) pickPart(key);
+      }, 0);
+    };
     el.addEventListener("pointermove", move);
     el.addEventListener("pointerleave", leave);
+    el.addEventListener("pointerdown", press);
+    el.addEventListener("click", click);
     return () => {
       el.removeEventListener("pointermove", move);
       el.removeEventListener("pointerleave", leave);
+      el.removeEventListener("pointerdown", press);
+      el.removeEventListener("click", click);
       cancelAnimationFrame(raf);
       stage.hoverKey = null;
     };
@@ -2106,7 +2161,7 @@ function SceneContents(props: {
       if (hiddenPcbs.has(p.instance_id) || String(p.card.kind) === "pcb" || isKeycapPart(p) || usesPreset(presetFor(p))) continue;
       const layout = layouts.find((l) => l.layout_id === p.placement.layout_id);
       const points = elementPoses(p.placement, p.quantity, layout).map((e) => new THREE.Vector3(e.position[0], e.position[1], e.position[2]));
-      out.push({ instanceId: p.instance_id, layer: layerOf(p), points });
+      out.push({ instanceId: p.instance_id, partId: p.part_id, layer: layerOf(p), points });
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
