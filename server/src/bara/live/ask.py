@@ -53,11 +53,16 @@ async def ask_json(
     max_tokens: int = 4096,
     images: list[bytes] | None = None,
     fast: bool = False,
+    model: str | None = None,
+    effort: str = "high",
 ) -> tuple[dict[str, Any] | None, str]:
     """(data, note). data is None with a reason in note when no answer was usable. `fast` asks
-    the small model: for short checks and picks, not for the reasoning stages."""
-    model = model_name(fast)
-    cached = _cache_path(model, system, prompt, schema, images or [])
+    the small model: for short checks and picks, not for the reasoning stages. `model` names
+    another model outright (a labelling step that needs speed over depth)."""
+    model = model or model_name(fast)
+    cached = _cache_path(
+        model + ("" if effort == "high" else effort), system, prompt, schema, images or []
+    )
     try:
         return json.loads(cached.read_text()), "ok (cached)"
     except (OSError, ValueError):
@@ -92,7 +97,7 @@ async def ask_json(
                     system=system,
                     messages=[{"role": "user", "content": content}],
                     output_config={
-                        "effort": "high",
+                        "effort": effort,
                         "format": {"type": "json_schema", "schema": _for_anthropic(schema)},
                     },
                 ),

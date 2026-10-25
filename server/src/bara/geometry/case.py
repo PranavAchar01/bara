@@ -659,6 +659,14 @@ def enclose_report(
             site = shell.Site("port", -1, f.x, f.y, "edge", deg, f.w, f.d, f.rot_deg, ref=f.ref)
             site.z_hi = f.z_range(t)[1]
             sites.append(site)
+        panels = [f for f in feats if f.role == "screen" and f.side == "top"]
+        if panels:  # a window is opened over a real panel, never at a loose anchor beside it
+            sites = [s_ for s_ in sites if s_.kind != "screen" or s_.ref]
+        for f in panels:  # a panel no anchor claimed still gets its window, over the panel
+            if f.ref not in claimed_refs:
+                site = shell.Site("screen", -1, f.x, f.y, "front", 0.0, f.w, f.d, f.rot_deg)
+                site.ref, site.z_hi = f.ref, f.z_range(t)[1]
+                sites.append(site)
         for st in sites:
             if st.kind == "port":
                 st.normal_deg = shell.snap_axis(st.normal_deg, 20.0)
