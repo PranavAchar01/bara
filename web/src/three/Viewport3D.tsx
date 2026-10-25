@@ -488,6 +488,8 @@ function upCoverage(geoms: THREE.BufferGeometry[]): number {
 }
 
 /** A case piece: its geometries, and whether it is the lid that lifts off in the explode. */
+const CLEAR_MAX = 0.42;
+
 interface CasePiece {
   geoms: THREE.BufferGeometry[];
   lid: boolean;
@@ -548,7 +550,8 @@ function CasePieceNode(props: {
   const floor = piece.lid ? 0.16 : 0.24;
   useFrame(() => {
     const k = Math.min(1, stage.explode / 0.6);
-    const o = (floor + (1 - floor) * k) * base;
+    // Clear plastic: a little denser when pulled apart so the shape shows, never opaque.
+    const o = (floor + (CLEAR_MAX - floor) * k) * base;
     material.opacity = o;
     // Creases stay drawn when pulled apart, like the outlines the library parts carry in their own geometry.
     edgeMat.opacity = 0.3 + 0.25 * k;
@@ -1380,7 +1383,7 @@ function CompanionCase(props: { enc: Enclosure; pick: CompanionPick }) {
   const material = useMemo(() => {
     const m = presetMaterial("case", hex).clone();
     m.transparent = true;
-    m.opacity = 0.3;
+    m.opacity = 0.24;
     m.depthWrite = false;
     return m;
   }, [hex]);
