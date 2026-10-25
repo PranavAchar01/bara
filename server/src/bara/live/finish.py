@@ -74,6 +74,14 @@ def screen_glass() -> dict[str, Any]:
     )  # fmt: skip
 
 
+def lens(color: str) -> dict[str, Any]:
+    """A translucent lens over lights: tinted the colour it glows, lit from behind."""
+    return _finish(
+        "lens", "translucent lens", color, opacity=0.55, roughness=0.18, transmission=0.7,
+        ior=1.49, emissive=color, emissive_intensity=0.6,
+    )  # fmt: skip
+
+
 def control(color: str, name: str) -> dict[str, Any]:
     return _finish("control", name, color, roughness=0.45)
 
@@ -92,6 +100,12 @@ def pcb(color: str) -> dict[str, Any]:
 
 def other(name: str, color: str = "#2A2C30") -> dict[str, Any]:
     return _finish("other", name, color, roughness=0.6)
+
+
+def lens_color(asset: dict[str, Any], node: str) -> str:
+    """The colour the case stage gave the lens node, else a smoked lens."""
+    hx = str(((asset.get("node_colors") or {}).get(node)) or "")
+    return hx if HEX.match(hx) else "#3A3F46"
 
 
 def palette_for(prompt: str, colours: list[dict[str, Any]] | None) -> dict[str, str]:
@@ -182,6 +196,8 @@ def plan(build: dict[str, Any], colours: list[dict[str, Any]] | None = None) -> 
                     nodes[name] = caps
                 elif name.endswith("_glass"):
                     nodes[name] = screen_glass()
+                elif name.endswith("_lens"):
+                    nodes[name] = lens(lens_color(a, name))
                 elif name.endswith(("_tray", "_bezel")):
                     nodes[name] = case
         encs[enc["enclosure_id"]] = (case, nodes)

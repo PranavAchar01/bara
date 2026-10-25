@@ -1394,6 +1394,7 @@
             "pcb",
             "metal",
             "connector",
+            "lens",
             "other"
           ]
         },

@@ -56,6 +56,8 @@ Rules:
   when the request names one). Use those numbers for the silhouette's bounding box and for
   thickness_mm. Do not shrink the product to fit parts.
 - thickness_mm: maximum body thickness; edge_thickness_mm: thickness at the thinnest edge.
+  The silhouette and thickness are the body only: a stick, handle, lever or knob standing up
+  from the body is a control at an anchor, never folded into the outline or the thickness.
 - anchors: every touch slot gets one or more anchors; a slot made of several groups (listed
   after "groups") gets one anchor per group, and the anchors' counts add up to the slot's
   count. Each anchor says where its instances sit: mount front (on the
@@ -63,7 +65,8 @@ Rules:
   direction, 0 = +x, 90 = +y); a pattern (single, row, column, grid, diamond, ring) with its
   centre, pitch_mm between instances and cols for a grid; and what it is for. Place controls
   where a hand rests (thumbs on the front, fingers on the back or top edge), ports on an edge,
-  a screen filling its bay. Positions must be inside the silhouette.
+  a screen filling its bay. Positions must be inside the silhouette. Parts on one face never
+  share area: a display window sits clear of the key grid, each control clear of the others.
 - silhouette_description: two sentences a person could use to recognise the outline.
 - rest_pose: how the product sits in use. face_up when it lies on a surface or in a hand
   with that face toward the sky (phone, keyboard, remote, scale); upright when it stands with
@@ -372,6 +375,131 @@ def centre_on_origin(form: Form) -> None:
     move_features(form, 1.0, dx, dy)
 
 
+FACE_GAP_MM = 2.0  # clear space between two anchors' parts on one face
+SCREEN_LONG_MM = 20.0  # the board's rule: a screen this long lies along the body's long side
+DEFAULT_PART_MM = 10.0  # a slot with no chosen part yet: a finger-sized control
+
+
+def _part_box(form: Form, t: Touch | None) -> tuple[float, float]:
+    """Width and depth one instance takes on the face, turned the way the board will lay it."""
+    if t is None or not t.size_mm:
+        return DEFAULT_PART_MM, DEFAULT_PART_MM
+    w, d = (max(float(v), 1.0) for v in t.size_mm)
+    if t.function_id.startswith("display.") and max(w, d) >= SCREEN_LONG_MM:
+        x0, y0, x1, y1 = Polygon(form.silhouette).bounds
+        long, short = max(w, d), min(w, d)
+        return (long, short) if x1 - x0 >= y1 - y0 else (short, long)
+    if max(w, d) < 25.0:  # a small part may be turned either way when placed
+        return max(w, d), max(w, d)
+    return w, d
+
+
+def _anchor_box(a: dict[str, Any], size: tuple[float, float]) -> tuple[float, float, float, float]:
+    pts = expand(a, max(1, int(a.get("count") or 1)))
+    hw, hd = size[0] / 2, size[1] / 2
+    return (
+        min(p[0] for p in pts) - hw,
+        min(p[1] for p in pts) - hd,
+        max(p[0] for p in pts) + hw,
+        max(p[1] for p in pts) + hd,
+    )
+
+
+def _face_anchors(
+    form: Form, touches: list[Touch]
+) -> list[tuple[dict[str, Any], tuple[float, float]]]:
+    by_slot = {t.slot_id: t for t in touches}
+    return [
+        (a, _part_box(form, by_slot.get(a.get("slot_id"))))
+        for a in form.anchors
+        if a.get("mount") in ("front", "back") and a.get("centre") is not None
+    ]
+
+
+def _overlap(
+    b1: tuple[float, float, float, float], b2: tuple[float, float, float, float], gap: float
+) -> tuple[float, float]:
+    ox = min(b1[2], b2[2]) - max(b1[0], b2[0]) + gap
+    oy = min(b1[3], b2[3]) - max(b1[1], b2[1]) + gap
+    return ox, oy
+
+
+def separate(form: Form, touches: list[Touch], rounds: int = 60) -> None:
+    """Pull apart anchors whose parts would share area on the same face (a display window over
+    the top rows of a key grid). Each anchor moves as a rigid group, along the axis that frees
+    it soonest, and stays inside the silhouette; a pattern whose pitch is tighter than its part
+    is opened up to the part's size first. Whatever cannot be freed is left for validate()."""
+    poly = Polygon(form.silhouette)
+    if not poly.is_valid or poly.area <= 0:
+        return
+    items = _face_anchors(form, touches)
+    for a, size in items:
+        n = max(1, int(a.get("count") or 1))
+        if n > 1 and a.get("pattern") != "single":
+            a["pitch_mm"] = max(float(a.get("pitch_mm") or 0.0), max(size) + 1.0)
+    inner = poly.buffer(-1.0)
+
+    def inside(a: dict[str, Any], size: tuple[float, float]) -> bool:
+        bx0, by0, bx1, by1 = _anchor_box(a, size)
+        return all(
+            inner.contains(Point(p)) for p in ((bx0, by0), (bx1, by0), (bx1, by1), (bx0, by1))
+        )
+
+    def shift(a: dict[str, Any], size: tuple[float, float], dx: float, dy: float) -> float:
+        """Move by (dx, dy) as far as the silhouette allows; the fraction moved."""
+        was_inside = inside(a, size)
+        cx, cy = a["centre"]
+        for k in (1.0, 0.75, 0.5, 0.25):
+            a["centre"] = [cx + k * dx, cy + k * dy]
+            if inside(a, size) or not was_inside:
+                return k
+        a["centre"] = [cx, cy]
+        return 0.0
+
+    for _ in range(rounds):
+        moved = False
+        for i in range(len(items)):
+            for j in range(i + 1, len(items)):
+                (a, sa), (b, sb) = items[i], items[j]
+                if a["mount"] != b["mount"]:
+                    continue
+                ba, bb = _anchor_box(a, sa), _anchor_box(b, sb)
+                ox, oy = _overlap(ba, bb, FACE_GAP_MM)
+                if ox <= 0 or oy <= 0:
+                    continue
+                sy = 1.0 if (bb[1] + bb[3]) >= (ba[1] + ba[3]) else -1.0
+                sx = 1.0 if (bb[0] + bb[2]) >= (ba[0] + ba[2]) else -1.0
+                along_y = ((0.0, -sy * oy / 2), (0.0, sy * oy / 2))
+                along_x = ((-sx * ox / 2, 0.0), (sx * ox / 2, 0.0))
+                # the cheaper axis first; when the silhouette blocks both anchors on it, the other
+                for da, db in (along_y, along_x) if oy <= ox else (along_x, along_y):
+                    got = shift(a, sa, *da) + shift(b, sb, *db)
+                    if got > 0:
+                        moved = True
+                        break
+        if not moved:
+            break
+
+
+def face_overlaps(form: Form, touches: list[Touch]) -> list[str]:
+    """Anchors whose parts still share area on one face, as problems the model can act on."""
+    items = _face_anchors(form, touches)
+    out = []
+    for i in range(len(items)):
+        for j in range(i + 1, len(items)):
+            (a, sa), (b, sb) = items[i], items[j]
+            if a["mount"] != b["mount"]:
+                continue
+            ox, oy = _overlap(_anchor_box(a, sa), _anchor_box(b, sb), 0.0)
+            if ox > 0.5 and oy > 0.5:
+                out.append(
+                    f"anchors {a['name']} and {b['name']} overlap by {ox:.0f} x {oy:.0f} mm on "
+                    f"the {a['mount']} face: two controls, or a display window and a key grid, "
+                    f"cannot share area; move one or make room"
+                )
+    return out
+
+
 def validate(form: Form, touches: list[Touch]) -> list[str]:
     """Everything wrong with the form, as sentences the model can act on."""
     problems: list[str] = []
@@ -430,7 +558,14 @@ def validate(form: Form, touches: list[Touch]) -> list[str]:
                 problems.append(f"edge anchor {a['name']} is {near:.0f} mm from the rim")
         elif not all(inside.contains(Point(p)) for p in pts):
             problems.append(f"anchor {a['name']} has instances outside the silhouette")
+    problems.extend(face_overlaps(form, touches))
     problems.extend(feature_problems(form))
+    if form.rest_pose == "face_up" and form.thickness_mm > min(w, h) + 1e-6:
+        problems.append(
+            f"thickness {form.thickness_mm:g} mm is more than the silhouette's short side "
+            f"{min(w, h):.0f} mm: the silhouette and thickness are the body only; a stick, "
+            f"handle or knob standing on it is a control at an anchor, not part of the body"
+        )
     return problems
 
 
@@ -530,6 +665,51 @@ def fit_note(report: dict) -> str:
     )
 
 
+MAX_FIT_SCALE = 2.0
+
+
+def scaled_to_fit(form: Form, report: dict, touches: list[Touch]) -> Form | None:
+    """The form grown uniformly until the parts fit: twice the footprint area usable per side
+    and no side below the widest part plus margin. A free redraw at a new size used to stretch
+    the outline (a joystick base turned into a tall slab); scaling keeps the proportions, the
+    anchors' layout and their pitch. None when the growth needed is not plausible."""
+    poly = Polygon(form.silhouette)
+    x0, y0, x1, y1 = poly.bounds
+    short = max(min(x1 - x0, y1 - y0), 1e-6)
+    usable = max(float(report.get("usable_mm2") or 0.0), 1.0)
+    k_area = math.sqrt(2.0 * float(report.get("parts_mm2") or 0.0) / usable)
+    k_side = (float(report.get("widest_mm") or 0.0) + 8.0) / short
+    k = max(k_area, k_side, 1.1)
+    if k > MAX_FIT_SCALE or max(x1 - x0, y1 - y0) * k > MAX_SIDE_MM:
+        return None
+    ref = dict(form.reference)
+    for key in ("width_mm", "height_mm"):
+        if ref.get(key):
+            ref[key] = round(float(ref[key]) * k, 1)
+    anchors = []
+    for a in form.anchors:
+        b = dict(a)
+        b["centre"] = [a["centre"][0] * k, a["centre"][1] * k]
+        anchors.append(b)
+    grown = Form(
+        device_class=form.device_class,
+        silhouette=[(x * k, y * k) for x, y in form.silhouette],
+        thickness_mm=form.thickness_mm,
+        edge_thickness_mm=form.edge_thickness_mm,
+        anchors=anchors,
+        reference=ref,
+        description=form.description,
+        scale=form.scale * k,
+        rest_pose=form.rest_pose,
+        features=[{**f, "outline": list(f["outline"])} for f in form.features],
+    )
+    move_features(grown, k)
+    centre_on_origin(grown)
+    separate(grown, touches)
+    grown.problems = validate(grown, touches)
+    return None if grown.problems else grown
+
+
 async def derive(
     prompt: str,
     touches: list[Touch],
@@ -567,10 +747,15 @@ async def derive(
         )
     if photos:
         note += (
-            f"\nThe {len(photos)} attached image(s) are photos of real products found by a web "
-            "search for this request. Match their silhouette, proportions, corner shapes and "
-            "where each control sits; ignore anything in them that is not the product."
+            f"\nThe {len(photos)} attached image(s) are photos of devices of this kind found by a "
+            "generic web search, for visual reference only. Take the general silhouette, "
+            "proportions, corner shapes and where controls sit; never copy a brand's styling, "
+            "logo or colours, and ignore anything in them that is not the device."
         )
+    if fit and previous is not None and not fit.get("declared_mm"):
+        grown = scaled_to_fit(previous, fit, touches)
+        if grown is not None:  # the same product, larger: proportions and layout kept
+            return grown, ""
     form: Form | None = previous
     for attempt in (0, 1):
         data, why = await ask_json(
@@ -586,6 +771,7 @@ async def derive(
         if got is None:
             return form, why or "unreadable form"
         centre_on_origin(got)
+        separate(got, touches)
         got.problems = validate(got, touches)
         got.repaired = attempt == 1
         form = got

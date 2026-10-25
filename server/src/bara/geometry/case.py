@@ -804,6 +804,7 @@ def enclose_report(
     openings["wheels"] = site_feats.wheels
     openings["reached"] = sorted(r for r in site_feats.reached if r)
     keycaps = [f for f in feats if f.role == "keycap"]
+    hidden = shell.Features()
     for f in feats:
         z_lo, z_hi = f.z_range(t)
         if f.side == "bottom" or f.role in OWN_HOLE_ROLES:
@@ -851,13 +852,19 @@ def enclose_report(
         elif z_hi > seat - 0.01:
             # hidden, so it gets a blind pocket under the skin, not a hole a person sees
             c = 2 * H["part_opening_clearance_mm"]
-            pockets.append((_rect_cs(f.x, f.y, f.w + c, f.d + c, f.rot_deg), z_hi + c / 2))
+            if sculpt is not None:  # never through the sculpted top: a closed boss if too tall
+                clear = H["part_opening_clearance_mm"]
+                shell.hide_part(hidden, f.x, f.y, f.w, f.d, f.rot_deg, z_hi, sculpt, seat, clear)
+            else:
+                pockets.append((_rect_cs(f.x, f.y, f.w + c, f.d + c, f.rot_deg), z_hi + c / 2))
     for g in ball_geo:
         holes_cs.append(_circle_cs(g["x"], g["y"], g["r"] + H["ball_ring_clearance_mm"]))
     if sculpt is not None:
         bezel = sculpt.solid.trim_by_plane((0, 0, 1), seat)
         if site_feats.adds:
             bezel = bezel + _union(site_feats.adds)
+        if hidden.adds:  # bosses before any opening, so no window or hole is filled back in
+            bezel = bezel + _union(hidden.adds)
         zhole = float(sculpt.solid.bounding_box()[5]) + 1.0
         if site_feats.cuts:
             bezel = bezel - _union(site_feats.cuts)
@@ -877,6 +884,8 @@ def enclose_report(
 
     for cs, z_top in pockets:
         bezel = bezel - _prism(cs, seat - 1, z_top)
+    if hidden.cuts:
+        bezel = bezel - _union(hidden.cuts)
 
     # ---- USB openings through the wall (tray and bezel)
     cutouts: list[dict[str, Any]] = []
@@ -981,6 +990,7 @@ def enclose_report(
     bezel_w = bezel.transform(m34)
     caps_w = [c.transform(m34) for c in site_feats.caps]
     glass_w = [c.transform(m34) for c in site_feats.glass]
+    lens_w = [c.transform(m34) for c in site_feats.lenses]
     if tent > 0:
         up = xform[:3, :3] @ np.array([0, 0, 1.0])
         p0 = xform[:3, :3] @ np.array([0, 0, z_bot]) + xform[:3, 3]
@@ -995,6 +1005,7 @@ def enclose_report(
     bezel_w = bezel_w.translate((0, 0, lift))
     caps_w = [c.translate((0, 0, lift)) for c in caps_w]
     glass_w = [c.translate((0, 0, lift)) for c in glass_w]
+    lens_w = [c.translate((0, 0, lift)) for c in lens_w]
     xform[2, 3] += lift
     t_geo_ms = (time.perf_counter() - t_geo) * 1000
 
@@ -1011,7 +1022,7 @@ def enclose_report(
             "tent": tent,
             "side": side,
             "hand": HAND_SET,
-            "v": 4,  # 4: anchors read in the record's own frame, speaker grilles
+            "v": 5,  # 5: knobs, lens windows, pockets kept under the skin
             "frame": board.get("frame"),
             "anchors": brief.get("anchors"),
             "body": body,
@@ -1030,6 +1041,9 @@ def enclose_report(
         )
     if glass_w:
         parts_mesh.append(mesh_part(f"{eid}_glass", _union(glass_w), ident, GLASS_HEX, 0.12))
+    if lens_w:
+        lens_hex = site_feats.lens_tint or shell.LENS_SMOKE
+        parts_mesh.append(mesh_part(f"{eid}_lens", _union(lens_w), ident, lens_hex, 0.1))
     out_dir = enclosure_dir()
     out_dir.mkdir(parents=True, exist_ok=True)
     assets = []
@@ -1058,6 +1072,7 @@ def enclose_report(
         }
         if kind == "glb":
             ref["nodes"] = [p.name for p in parts_mesh]
+            ref["node_colors"] = {p.name: p.color_hex for p in parts_mesh}
         assets.append(ref)
     io_ms = (time.perf_counter() - t_io) * 1000
 

@@ -19,6 +19,7 @@ import manifold3d as mf
 import numpy as np
 import shapely
 from shapely.geometry import LineString, MultiPolygon, Point, Polygon
+from shapely.geometry.polygon import orient
 from shapely.ops import unary_union
 
 # ---------------------------------------------------------------- plan outline
@@ -382,7 +383,7 @@ KIND_WORDS: list[tuple[str, str]] = [
     ("port", r"usb|connector|charg|jack|socket|plug|cable|hdmi|ethernet|\bport"),
     # parts with no control surface: pocketed under the shell, nothing cut through it
     ("inner", r"sensor|\bimu\b|gyro|accelerometer|magnetometer|antenna|\bchip\b"),
-    ("light", r"\bleds?\b|indicator|status light|light ?pipe"),
+    ("light", r"\bleds?\b|indicator|status light|light ?pipe|\blights?\b|lamp|beam|glow"),
     ("grille", r"speaker|grille|buzzer|microphone|\bmic\b"),
     ("stick", r"stick|joy|analog|trackpoint"),
     ("dpad", r"d-?pad|directional|\bcross\b|arrow|navigation"),
@@ -402,6 +403,8 @@ def classify(anchor: dict[str, Any]) -> str:
         for kind, pat in KIND_WORDS:
             if kind == "inner" and pressed:
                 continue  # a touch or fingerprint sensor is still a surface the finger meets
+            if kind == "light" and re.search(r"button|switch|\bkeys?\b|press", text):
+                continue  # a light switch or a lit button is pressed, not looked through
             if re.search(pat, text):
                 return kind
     return "touch"
@@ -422,6 +425,28 @@ class Site:
     ref: str = ""
     pitch: float = 0.0
     z_hi: float = 0.0  # top of the part under it, board frame
+    lamp: bool = False  # a light meant to be seen from outside, not a small status dot
+    tint: str = ""  # lens colour named in the anchor's words, if any
+
+
+# a light the product exists to show (a lamp, beam, strip or ring of LEDs), as opposed to a
+# status dot: it gets a lens window in the case
+LAMP_WORDS = re.compile(
+    r"lamp|beam|flash|torch|illuminat|brake|tail|head ?light|strip|ring|array|glow|visib|"
+    r"bright|warning|signal|night|backlight|lantern|spot"
+)
+LENS_TINTS = {
+    "red": "#D8262E", "amber": "#F29A1D", "orange": "#F27A1D", "yellow": "#F2D21D",
+    "green": "#2EB872", "blue": "#2E7BD8", "white": "#EEF2F5", "warm": "#F7E3C0",
+}  # fmt: skip
+LENS_SMOKE = "#3A3F46"  # no colour named: a smoked lens reads as a window on any case
+
+
+def _tint(text: str) -> str:
+    for word, hx in LENS_TINTS.items():
+        if re.search(rf"\b{word}\b", text):
+            return hx
+    return ""
 
 
 def sites_from_anchors(
@@ -451,6 +476,8 @@ def sites_from_anchors(
                 normal_deg=sy * float(a.get("edge_normal_deg") or 0.0),
                 pitch=pitch,
                 round_window=bool(re.search(r"round|circular", text)),
+                lamp=kind == "light" and (n >= 3 or bool(LAMP_WORDS.search(text))),
+                tint=_tint(text),
             )
             near = None
             best = 30.0 if kind == "port" else max(6.0, 0.7 * pitch)
@@ -583,6 +610,8 @@ class Features:
     # parts a finger reaches some way other than straight down through the top: a side button,
     # a bumper bar over them, or a press through the stick or wheel above
     reached: set[str] = field(default_factory=set)
+    lenses: list[mf.Manifold] = field(default_factory=list)  # translucent windows over lights
+    lens_tint: str = ""
 
 
 def shoulder_lobes(sites: list[Site], plan: Polygon) -> list[Polygon]:
@@ -646,8 +675,7 @@ def build_features(
             out.claimed.add(s.ref)
         if s.w and s.d:  # a pocket the part's full footprint wide, hidden under the top surface;
             # every claimed part gets it, whatever the site builds (port, back, shoulder)
-            pocket = _rrect(s.x, s.y, s.w + 2 * clear, s.d + 2 * clear, s.rot, 0.8)
-            out.cuts.append(_prism(pocket, seat - 1.0, max(s.z_hi, seat) + clear))
+            hide_part(out, s.x, s.y, s.w, s.d, s.rot, s.z_hi, body, seat, clear)
         if s.kind == "shoulder" and s.mount == "edge":
             if s.group not in done_groups:
                 done_groups.add(s.group)
@@ -663,7 +691,11 @@ def build_features(
             if s.kind == "port":
                 _port(out, s, body, wall_mm, port_w, port_h, z_port)
             continue
-        if s.mount == "edge":
+        if s.mount == "edge" and s.kind == "light":
+            if s.group not in done_groups:
+                done_groups.add(s.group)
+                _edge_lens(out, [t for t in sites if t.group == s.group], body, wall_mm, clear)
+        elif s.mount == "edge":
             _edge_button(out, s, body, wall_mm, clear)
         elif s.kind == "screen":
             _screen(out, s, body, seat, zmax, clear)
@@ -674,17 +706,67 @@ def build_features(
             if not any(t is s for t in cross[s.group]):
                 _button(out, s, body, seat, zmax, clear)  # the slot's other switches (A/B, start)
         elif s.kind == "light":
-            _light(out, s, body, seat, zmax)
+            if s.lamp:
+                if s.group not in done_groups:
+                    done_groups.add(s.group)
+                    _lens(out, [t for t in sites if t.group == s.group], body, seat, zmax, clear)
+            else:
+                _light(out, s, body, seat, zmax)
         elif s.kind == "grille":
             _grille(out, s, body, seat, zmax)
         elif s.kind == "wheel":
             _wheel(out, s, body, seat, zmax, clear)
-        elif s.kind in ("stick", "knob"):
+        elif s.kind == "knob":
+            _knob(out, s, body, seat, zmax, clear)
+        elif s.kind == "stick":
             _stick(out, s, body, seat, zmax, clear)
         else:
             _button(out, s, body, seat, zmax, clear)
         out.kinds[s.kind] = out.kinds.get(s.kind, 0) + 1
     return out
+
+
+SKIN_MM = 1.2  # shell left over a hidden part
+
+
+def hide_part(
+    out: Features,
+    x: float,
+    y: float,
+    w: float,
+    d: float,
+    rot: float,
+    z_hi: float,
+    body: Body,
+    seat: float,
+    clear: float,
+) -> None:
+    """A pocket for a part under the shell that never breaks through the top surface as an open
+    hole: a part taller than the shell there gets a closed boss over its pocket, inside the
+    plan. An opening the site cuts (a button hole, a window, a knob's shaft hole) still goes
+    through the boss, so only that opening shows."""
+    cs = _rrect(x, y, w + 2 * clear, d + 2 * clear, rot, 0.8)
+    z_top = max(z_hi, seat) + clear
+    lo = _top_over(body, x, y, w / 2 + clear, d / 2 + clear, rot)
+    need = z_hi + clear  # the part's own top decides, not the seat the pocket starts from
+    if need > lo - SKIN_MM:
+        top = max(need, z_top) + SKIN_MM
+        boss = _flare(cs.offset(SKIN_MM + 0.8, mf.JoinType.Round), lo - 1.0, top, -0.8)
+        plan = mf.CrossSection([[list(p) for p in list(orient(body.plan).exterior.coords)[:-1]]])
+        out.adds.append(boss ^ _prism(plan, lo - 2.0, top + 1.0))
+    out.cuts.append(_prism(cs, seat - 1.0, z_top))
+
+
+def _top_over(body: Body, x: float, y: float, hw: float, hd: float, rot: float) -> float:
+    """Lowest top surface over a part's footprint, sampled only where the plan is."""
+    c, s_ = math.cos(math.radians(rot)), math.sin(math.radians(rot))
+    zs = []
+    for u in np.linspace(-hw, hw, 5):
+        for v in np.linspace(-hd, hd, 5):
+            px, py = x + u * c - v * s_, y + u * s_ + v * c
+            if body.plan.contains(Point(px, py)):
+                zs.append(body.top_at(px, py))
+    return min(zs) if zs else body.top_at(x, y)
 
 
 def _local_top(body: Body, x: float, y: float, r: float) -> tuple[float, float]:
@@ -725,6 +807,110 @@ def _stick(out: Features, s: Site, body: Body, seat: float, zmax: float, clear: 
             (rc - 4.5, zc + 4.6), (0.0, zc + 3.7)]  # fmt: skip
     out.caps.append(_revolve(prof, s.x, s.y, 72))
     out.cutouts.append(_cut("stick", s.x, s.y, zc, 2 * r_h, "circle"))
+
+
+KNOB_MIN_D_MM, KNOB_MAX_D_MM, KNOB_H_MM = 14.0, 34.0, 9.0
+
+
+def _knob(out: Features, s: Site, body: Body, seat: float, zmax: float, clear: float) -> None:
+    """A rotary knob: a knurled cylinder cap with a chamfered top and a pointer notch, standing
+    on the surface over a shaft hole it covers. No dish, no rim ring and no domed thumb cap:
+    those make it read as a joystick."""
+    r_h = _stick_radius(s, clear)
+    r = min(max(r_h + 2.5, KNOB_MIN_D_MM / 2), KNOB_MAX_D_MM / 2)
+    zc = body.top_at(s.x, s.y)
+    out.cuts.append(_cyl(r_h, seat - 1.0, zmax + 6, s.x, s.y))
+    z0 = zc + 0.6  # a hair above the surface so it turns
+    zt = max(zc + KNOB_H_MM, s.z_hi + 1.5)  # tall enough to sleeve the shaft under it
+    n = max(18, int(2 * math.pi * r / 2.2))
+    ring = []
+    for i in range(2 * n):
+        a = math.pi * i / n
+        rr = r if i % 2 == 0 else r - 0.55
+        ring.append([s.x + rr * math.cos(a), s.y + rr * math.sin(a)])
+    knurl = _prism(mf.CrossSection([ring]), z0, zt - 1.2)
+    top = mf.Manifold.cylinder(1.2, r - 0.3, r - 1.3, 72).translate((s.x, s.y, zt - 1.2))
+    skirt = mf.Manifold.cylinder(1.0, r + 0.6, r + 0.6, 72).translate((s.x, s.y, z0))
+    shaft = _cyl(min(r_h - 0.8, r - 2.0), max(seat + 0.3, zc - 3.0), z0 + 0.1, s.x, s.y)
+    notch = _rrect(s.x, s.y + 0.55 * r, 1.4, 0.6 * r, 0.0, 0.5)
+    cap = (knurl + top + skirt + shaft) - _prism(notch, zt - 0.6, zt + 1.0)
+    out.caps.append(cap)
+    out.cutouts.append(_cut("knob", s.x, s.y, zc, 2 * r_h, "circle"))
+
+
+def _lens_tint(out: Features, group: list[Site]) -> None:
+    if not out.lens_tint:
+        out.lens_tint = next((s.tint for s in group if s.tint), "") or LENS_SMOKE
+
+
+def _lens(
+    out: Features, group: list[Site], body: Body, seat: float, zmax: float, clear: float
+) -> None:
+    """One lens window over a group of lights meant to be seen: the hull of the LEDs plus a
+    margin is cut through the top and filled with a translucent lens standing a little proud,
+    framed by a lip, so the lights read through it from outside."""
+    discs = [Point(s.x, s.y).buffer(max(s.w, s.d, 3.0) / 2 + clear + 2.0, 24) for s in group]
+    hull = orient(unary_union(discs).convex_hull.buffer(0.5, join_style="round"))
+    ring = list(hull.exterior.coords)[:-1]
+    win = mf.CrossSection([[list(p) for p in ring]])
+    cx, cy = hull.centroid.x, hull.centroid.y
+    zc = body.top_at(cx, cy)
+    out.cuts.append(_prism(win, seat - 1.0, zmax + 4))
+    lip = win.offset(1.4, mf.JoinType.Round) - win.offset(-0.2, mf.JoinType.Round)
+    out.adds.append(_prism(lip, zc - 1.6, zc + 0.6))
+    z0 = max(seat + 0.3, zc - 1.8)
+    lens = _flare(win.offset(-0.25, mf.JoinType.Round), z0, zc + 0.9, -0.5)
+    out.lenses.append(lens)
+    _lens_tint(out, group)
+    x0, y0, x1, y1 = hull.bounds
+    out.cutouts.append(_cut("lens", cx, cy, zc, x1 - x0, "unknown", y1 - y0))
+    for s in group:
+        if s.ref:
+            out.reached.add(s.ref)
+    out.kinds["lens"] = out.kinds.get("lens", 0) + 1
+
+
+def _edge_lens(out: Features, group: list[Site], body: Body, wall_mm: float, clear: float) -> None:
+    """A lens window through the rim where lights face an edge: a rounded slot through the wall
+    spanning the group, filled with a translucent lens flush with the outside."""
+    ang = math.radians(group[0].normal_deg)
+    nx, ny = math.cos(ang), math.sin(ang)
+    tx, ty = -ny, nx
+    cx = sum(s.x for s in group) / len(group)
+    cy = sum(s.y for s in group) / len(group)
+    hit = _exit_distance(body.plan, cx, cy, nx, ny)
+    if hit is None:
+        return
+    lo, hi = body.land()
+    zc = 0.5 * (lo + hi)
+    span = max(abs((s.x - cx) * tx + (s.y - cy) * ty) for s in group)
+    foot = max(max(max(s.w, s.d) for s in group), 3.0)
+    width = 2 * span + foot + 2 * clear + 4.0
+    height = max(4.0, min(0.6 * (hi - lo), width, 14.0))
+    px, py = cx + nx * hit, cy + ny * hit
+
+    def slab(h: float, w: float, depth: float, back: float) -> mf.Manifold:
+        sol = mf.Manifold.extrude(_rrect(0, 0, h, w, 0.0, min(h, w) / 2 - 0.01), depth)
+        sol = sol.rotate((0, 90, 0)).rotate((0, 0, group[0].normal_deg))
+        return sol.translate((px - nx * back, py - ny * back, zc))
+
+    out.wall_cuts.append(slab(height, width, wall_mm + 4.0, wall_mm + 2.5))
+    out.lenses.append(slab(height - 0.5, width - 0.5, wall_mm + 0.3, wall_mm + 0.5))
+    _lens_tint(out, group)
+    out.cutouts.append(
+        {
+            "cutout_id": f"cut_edge_lens_{len(out.cutouts)}",
+            "feature": "lens",
+            "face": _face(group[0].normal_deg),
+            "shape": "slot",
+            "center_mm": [round(px, 3), round(py, 3), round(zc, 3)],
+            "size_mm": [round(width, 3), round(height, 3)],
+        }
+    )
+    for s in group:
+        if s.ref:
+            out.reached.add(s.ref)
+    out.kinds["lens"] = out.kinds.get("lens", 0) + 1
 
 
 def _long_axis_deg(plan: Polygon) -> float:
@@ -835,9 +1021,7 @@ def _dpad(
     zc = body.top_at(cx, cy)
     for s in group:  # the part's whole footprint is hidden under the shell, not only the cross
         if s.w and s.d:
-            c = 2 * clear
-            pocket = _rrect(s.x, s.y, s.w + c, s.d + c, s.rot, 1.2)
-            out.cuts.append(_prism(pocket, seat - 1.0, max(s.z_hi, seat) + clear + 0.2))
+            hide_part(out, s.x, s.y, s.w, s.d, s.rot, s.z_hi + 0.2, body, seat, clear)
     out.cuts.append(_prism(cross, seat - 1.0, zmax + 4))
     out.cuts.append(_prism(cross.offset(1.8, mf.JoinType.Round), zc - 0.7, zmax + 4))
     inner = cross.offset(-0.7, mf.JoinType.Round)
@@ -872,9 +1056,7 @@ def _shoulder(out: Features, group: list[Site], body: Body, seat: float, clear: 
     out.reached.update(s.ref for s in group)
     for s in group:
         if s.w and s.d:
-            c = 2 * clear
-            pocket = _rrect(s.x, s.y, s.w + c, s.d + c, s.rot, 1.2)
-            out.cuts.append(_prism(pocket, seat - 1.0, max(s.z_hi, seat) + clear + 0.2))
+            hide_part(out, s.x, s.y, s.w, s.d, s.rot, s.z_hi + 0.2, body, seat, clear)
     out.cutouts.append(_cut("shoulder", px, py, zt, 2 * half, "rect", 2 * r))
 
 
