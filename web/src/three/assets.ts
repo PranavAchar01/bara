@@ -71,14 +71,8 @@ function footprintOf(o: THREE.Object3D | null): string | null {
 
 const cache = new Map<string, Promise<LoadedModel | null>>();
 const loader = new GLTFLoader();
-// Meshopt buffers decode in workers, so a large board never stalls orbiting or the UI.
-try {
-  const n = Math.min(4, Math.max(1, (navigator.hardwareConcurrency || 2) >> 1));
-  // useWorkers is in the decoder module but missing from its type definitions.
-  if (n > 1) (MeshoptDecoder as typeof MeshoptDecoder & { useWorkers: (count: number) => void }).useWorkers(n);
-} catch {
-  // main-thread decoding
-}
+// Meshopt decodes on the main thread: its worker pool builds the worker from function source,
+// which breaks once the production bundle renames those functions ("workerProcess is not defined").
 loader.setMeshoptDecoder(MeshoptDecoder);
 
 export type BoardLayer = "mask" | "silk" | "pad" | "copper" | "body";
