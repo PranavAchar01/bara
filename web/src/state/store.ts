@@ -126,7 +126,7 @@ export interface AppState {
   agentFocus: string | null;
   /** The bot has left the prompt bar and is working on the canvas. */
   agentOut: boolean;
-  /** Side panels over the canvas, closed until asked for: the parts list and the details. */
+  /** Side panels over the canvas: the parts list starts open, the details open with a selection. */
   panels: { layers: boolean; details: boolean };
   /** Bara's last short reply to something typed or said in the workspace, shown above the prompt. */
   baraSays: { text: string; n: number } | null;
@@ -182,7 +182,7 @@ export const useApp = create<AppState>(() => ({
   canvasRestoring: [],
   agentFocus: null,
   agentOut: false,
-  panels: { layers: false, details: false },
+  panels: { layers: true, details: false },
   baraSays: null,
   hoverPart: null,
   hoverLabel: null,
