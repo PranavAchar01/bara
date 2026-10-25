@@ -51,8 +51,9 @@ Rules:
 - Put the pointing sensor, codec, amplifier, bridge, driver, radio or power IC a product needs
   as its own block with its MPN in search_terms.
 - touchpoint is true for a block a person touches, looks at, listens to or plugs into, or that
-  must face the outside world (buttons, sticks, screens, speakers, ports, lenses, optical
-  sensors, microphones); false for parts hidden inside the housing.
+  must face the outside world (buttons, sticks, knobs and potentiometers, screens, speakers,
+  ports, lenses, optical, ultrasonic, distance and motion sensors, microphones); false for
+  parts hidden inside the housing.
 - requirement: the key numbers the chosen part must meet to make the product what it is, as one
   short phrase (a display's diagonal size and resolution, a connector standard, a rated
   voltage or current, a battery capacity). Empty when any part of the function will do.

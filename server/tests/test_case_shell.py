@@ -193,3 +193,25 @@ def test_a_small_microphone_grille_has_a_slot_over_its_centre():
     mic = [Site("grille", 0, 5.0, 5.0, "front", 0, 4.0, 3.0, ref="MK1")]
     out = build_features(mic, body, seat, 2.0, 0.4, 9.0, 3.5, {})
     assert _open_over(mic, out, body, seat) == [True]
+
+
+def test_an_ultrasonic_pair_looks_out_of_two_round_windows_and_a_pot_gets_a_knob() -> None:
+    from bara.geometry.shell import Site, build_features
+
+    assert shell.classify({"name": "ultrasonic distance sensor"}) == "eye"
+    assert shell.classify({"name": "Fan speed potentiometer"}) == "knob"
+    assert shell.classify({"name": "volume up button"}) == "button"
+    body, seat = _box_body()
+    # a 45 x 20 mm two-can module on top: one window over each can, none over its middle
+    pair = [Site("eye", 0, 0.0, 0.0, "front", 0, 45.0, 20.0, ref="U4")]
+    out = build_features(pair, body, seat, 2.0, 0.4, 9.0, 3.5, {})
+    eyes = [c for c in out.cutouts if c["feature"] == "sensor_window"]
+    assert len(eyes) == 2 and "U4" in out.reached
+    cans = [Site("eye", 0, c["center_mm"][0], c["center_mm"][1], "front", 0) for c in eyes]
+    assert all(_open_over(cans, out, body, seat))
+    assert _open_over([Site("eye", 0, 0.0, 0.0, "front", 0)], out, body, seat) == [False]
+    # facing an edge: the windows go through the rim
+    rim = [Site("eye", 0, 0.0, 20.0, "edge", 90.0, 45.0, 20.0, ref="U5")]
+    side = build_features(rim, body, seat, 2.0, 0.4, 9.0, 3.5, {})
+    holes = [c for c in side.cutouts if c["feature"] == "sensor_window"]
+    assert len(holes) == 2 and len(side.wall_cuts) == 2

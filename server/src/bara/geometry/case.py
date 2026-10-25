@@ -1042,8 +1042,16 @@ def enclose_report(
     if glass_w:
         parts_mesh.append(mesh_part(f"{eid}_glass", _union(glass_w), ident, GLASS_HEX, 0.12))
     if lens_w:
-        lens_hex = site_feats.lens_tint or shell.LENS_SMOKE
-        parts_mesh.append(mesh_part(f"{eid}_lens", _union(lens_w), ident, lens_hex, 0.1))
+        # one node per lens colour, so amber turn signals beside a red tail lamp stay amber; a
+        # lens that names no colour takes the first one named, else smoke
+        tints = (site_feats.lens_tints + [""] * len(lens_w))[: len(lens_w)]
+        fallback = site_feats.lens_tint or shell.LENS_SMOKE
+        by_hex: dict[str, list[Any]] = {}
+        for lens, tint in zip(lens_w, tints, strict=True):
+            by_hex.setdefault(tint or fallback, []).append(lens)
+        for i, (lens_hex, group) in enumerate(by_hex.items()):
+            name = f"{eid}_lens" if i == 0 else f"{eid}_lens{i}_lens"
+            parts_mesh.append(mesh_part(name, _union(group), ident, lens_hex, 0.1))
     out_dir = enclosure_dir()
     out_dir.mkdir(parents=True, exist_ok=True)
     assets = []

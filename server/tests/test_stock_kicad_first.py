@@ -73,3 +73,13 @@ def test_generic_parts_are_stock_first(label: str, recipe: str) -> None:
 
 def test_a_haptic_driver_is_not_a_stock_primitive() -> None:
     assert not stock_primitive(Need("k", "output.haptic", "haptic driver"))
+
+
+def test_a_cabled_particulate_sensor_gets_its_socket_not_a_header() -> None:
+    pm = Need("k", "sense.particulate", "Laser particulate matter sensor module (PMSA003I)")
+    assert recipe_for(pm)[0] == "socket for a cabled particulate sensor"
+    assert not stock_primitive(pm)  # tried only after LCSC has no part
+    header = Need("k", "sense.particulate", "PM2.54 pin header")
+    assert recipe_for(header) is None
+    fan = recipe_for(Need("k", "output.fan", "particulate filter fan"))
+    assert fan[0] == "wire-to-board connector for an off-board load"  # not a sensor block

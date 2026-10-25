@@ -33,8 +33,8 @@ MISS_TTL_S = 600.0
 SUFFIX_MAX = 4  # package + reel letters a vendor appends to a KiCad symbol name (TRG1, DSGR)
 UV_ARGS = ("--with", "easyeda2kicad", "--with", "trimesh", "--with", "numpy")
 
-# (term, function) -> monotonic time of the last miss
-_MISSES: dict[tuple[str, str], float] = {}
+# (term, function) -> (monotonic time of the last miss, why it missed)
+_MISSES: dict[tuple[str, str], tuple[float, str]] = {}
 
 Cli = Callable[[str, str, float], tuple[int, str]]
 
@@ -59,6 +59,16 @@ RECIPES: tuple[tuple[str, str, tuple[tuple[str, str], ...]], ...] = (
         (("fp", "RotaryEncoder_Alps_EC11E-Switch_Vertical_H20mm"),),
     ),
     (r"\b(buzzer|beeper|piezo)\b", "buzzer", (("fp", "Buzzer_12x9.5RM7.6"),)),
+    (
+        # a fan-and-laser particle counter is a sealed box on a cable (PMS5003, PMSA003,
+        # SPS30): no listing carries its CAD, so the board gets the 1.25 mm socket it plugs into
+        r"\b(particulate|particle|pm2\.5|pm10|dust sensor|pms\d{4}|pmsa003i?|sps30|sen5\d)\b",
+        "socket for a cabled particulate sensor",
+        (
+            ("fp", "JST_GH_SM08B-GHS-TB_1x08-1MP_P1.25mm_Horizontal"),
+            ("fp", "JST_GH_BM08B-GHS-TBT_1x08-1MP_P1.25mm_Vertical"),
+        ),
+    ),
     (
         # an off-board electromechanical load is wired to the board, as real products do
         r"\b(motor|rumble|vibration|haptic|erm|lra|fan|pump|solenoid|speaker|led strip)\b",
@@ -88,6 +98,7 @@ RECIPE_FAMILIES: dict[str, tuple[str, ...]] = {
     "IEC mains inlet": ("power.",),
     "rotary encoder": ("input.",),
     "buzzer": ("output.buzzer", "output.speaker", "output.sound", "output.audio"),
+    "socket for a cabled particulate sensor": ("sense.",),
     "wire-to-board connector for an off-board load": ("output.", "actuator."),
     "bicolor LED": ("display.indicator", "output.light", "output.led", "indicator"),
     "indicator LED": ("display.indicator", "output.light", "output.led", "indicator"),
@@ -369,8 +380,11 @@ class Resolver:
                 self.source.add(cached)
                 return cached
             key = (term, need.function_id)
-            if time.monotonic() - _MISSES.get(key, -1e9) < MISS_TTL_S:
-                reasons.append(f"{term}: no LCSC match (cached miss)")
+            missed_at, why = _MISSES.get(key, (-1e9, ""))
+            if time.monotonic() - missed_at < MISS_TTL_S:
+                # the reason it missed, not just that it did: a part with no EasyEDA CAD reads
+                # differently from a search that found nothing
+                reasons.append(f"{term}: {why} (cached)")
                 continue
             left = self.deadline - time.monotonic()
             if left < 3.0:
@@ -386,8 +400,9 @@ class Resolver:
                 part = rows[-1]
                 self.source.add(part)
                 return part
-            _MISSES[key] = time.monotonic()
-            reasons.append(f"{term}: " + (out.strip().splitlines() or ["failed"])[-1][:120])
+            why = (out.strip().splitlines() or ["failed"])[-1][:120]
+            _MISSES[key] = (time.monotonic(), why)
+            reasons.append(f"{term}: {why}")
         self.notes[need.key] = "; ".join(reasons) or "no search terms"
         return None
 

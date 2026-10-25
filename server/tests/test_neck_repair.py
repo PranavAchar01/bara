@@ -62,3 +62,35 @@ def test_a_neck_is_widened_and_slid_clear() -> None:
     assert out["w"] == pytest.approx(0.15)
     assert out["y"] < 0  # slid away from the pad above it
     assert out["joined"] and out["clear"]
+
+
+PIN_ENTRY = PROBE.replace(
+    "left, neck, right = track(-1, 0, 0.2), track(0, 1, 0.12), track(1, 2, 0.2)",
+    """own = pcbnew.PAD(fp)
+own.SetShape(pcbnew.PAD_SHAPE_RECTANGLE)
+own.SetAttribute(pcbnew.PAD_ATTRIB_SMD)
+own.SetLayerSet(own.SMDMask())
+own.SetSize(pcbnew.F_Cu, _vec(0.25, 0.25))
+fp.Add(own)
+own.SetPosition(_vec(1.1, 0))
+own.SetNet(nets["N"])
+left, neck = track(-1, 0, 0.2), track(0, 1, 0.12)
+right = left""",
+).replace(
+    '"joined": left.GetEnd() == neck.GetStart() and right.GetStart() == neck.GetEnd(),',
+    '"joined": left.GetEnd() == neck.GetStart() and neck.GetEnd() == _vec(1, 0),',
+)
+
+
+def test_a_neck_into_a_pin_keeps_its_pad_end_and_swings_clear() -> None:
+    proc = subprocess.run(
+        [str(KICAD_PYTHON), "-c", PIN_ENTRY, str(SCRIPT.parent)],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    out = json.loads(proc.stdout.strip().splitlines()[-1])
+    assert out["fixed"] == 1
+    assert out["w"] == pytest.approx(0.15)
+    assert out["y"] < 0  # the free end swung away from the foreign pad
+    assert out["joined"] and out["clear"]

@@ -526,9 +526,7 @@ class LiveRunner:
         opaque controls in one palette, dark-glass screen, real board and metal finishes),
         written as `finish` on parts, boards and the case and summarised on scene.finish."""
         st = self._stage(run, "render", "Choosing colours and materials")
-        msgs = finish_mod.events(
-            run.state, list(brief.get("colours") or []), brief.get("palette")
-        )
+        msgs = finish_mod.events(run.state, list(brief.get("colours") or []), brief.get("palette"))
         for msg_type, payload in msgs:
             st.emit(msg_type, payload)
         pal = ((run.state.get("scene") or {}).get("finish") or {}).get("palette_name", "")
@@ -1849,6 +1847,25 @@ class LiveRunner:
                 }
             )
             results.extend(evaluation["checks"])
+            # a violation an earlier board of this build had and this one does not is cleared,
+            # so a repaired board does not keep the old board's DRC failures
+            now = {r["check_key"] for r in results}
+            for old in run.state["checks"]:
+                key = str(old.get("check_key") or "")
+                if (
+                    key.startswith("board.drc.")
+                    and key.endswith(f":{bid}")
+                    and key not in now
+                    and old.get("status") == "fail"
+                ):
+                    results.append(
+                        {
+                            **old,
+                            "status": "pass",
+                            "message": f"Cleared on the rebuilt board: {old.get('message')}"[:200],
+                            "measured": 0,
+                        }
+                    )
         st.emit("check.result", {"results": results})
         failed = any(r["status"] == "fail" for r in results)
         t = board.get("timings") or {}
