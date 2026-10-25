@@ -8,6 +8,7 @@ import { cancelBuild, startBuild } from "../net/client";
 import { addCanvas } from "../state/canvases";
 import { act } from "../bot/act";
 import { Icon } from "../ui/common";
+import { VoiceKey } from "./VoiceKey";
 
 /** A press shorter than this on the docked bot is a tap. */
 const HOLD_MS = 220;
@@ -255,6 +256,7 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean; fresh?
           {replies ? <path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12" /> : <path d="M17 9l5 6M22 9l-5 6" />}
         </svg>
       </button>
+      <VoiceKey />
       {running && !text ? (
         <button type="button" className="btn stop" onClick={cancelBuild} title="Stop the build">
           <Icon name="stop" /> Stop

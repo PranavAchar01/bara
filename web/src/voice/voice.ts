@@ -11,6 +11,7 @@ import { answerClarify } from "../net/client";
 import { authHeaders, serverUrl } from "../net/mode";
 import { showToast, useApp } from "../state/store";
 import { cleanTranscript, endOfTurnMs, isNoise, pickOption } from "./turn";
+import { registerKey, useVoiceKey, withVoiceSid } from "./voiceKey";
 
 /** hold: Space (or the bot) is held and letting go sends. auto: a pause at the end sends. */
 export type ListenMode = "hold" | "auto";
@@ -125,7 +126,7 @@ export function trimReply(text: string, askedWords = 12): string {
 }
 
 function ttsAudio(line: string): HTMLAudioElement {
-  const a = new Audio(serverUrl(`/v1/tts?text=${encodeURIComponent(line)}`));
+  const a = new Audio(serverUrl(withVoiceSid(`/v1/tts?text=${encodeURIComponent(line)}`)));
   a.preload = "auto";
   a.addEventListener("playing", markFirstSound, { once: true });
   return a;
@@ -134,12 +135,22 @@ function ttsAudio(line: string): HTMLAudioElement {
 async function engineCanSpeak(): Promise<boolean> {
   if (engineVoice !== null) return engineVoice;
   try {
-    const res = await fetch(serverUrl("/v1/voice"), { headers: authHeaders() });
-    engineVoice = res.ok && Boolean(((await res.json()) as { tts?: boolean }).tts);
+    await registerKey();
+    const res = await fetch(serverUrl(withVoiceSid("/v1/voice")), { headers: authHeaders() });
+    const info = res.ok ? ((await res.json()) as { tts?: boolean; needs_user_key?: boolean; own_key?: boolean }) : null;
+    engineVoice = Boolean(info?.tts);
+    useVoiceKey.setState({ needsKey: Boolean(info?.needs_user_key) && !info?.own_key });
   } catch {
     engineVoice = false;
   }
   return engineVoice;
+}
+
+/** Ask the engine again whether it can speak (after the voice key changed). */
+export function recheckEngineVoice(): void {
+  engineVoice = null;
+  engineFails = 0;
+  void engineCanSpeak();
 }
 
 export function stopSpeaking(): void {
@@ -401,7 +412,7 @@ async function transcribe(blob: Blob, t: Turn, handsFree: boolean): Promise<void
   const timer = window.setTimeout(() => abort.abort(), STT_TIMEOUT_MS);
   try {
     const build = useApp.getState().build?.build_id;
-    const res = await fetch(serverUrl(`/v1/stt${build ? `?build_id=${encodeURIComponent(build)}` : ""}`), {
+    const res = await fetch(serverUrl(withVoiceSid(`/v1/stt${build ? `?build_id=${encodeURIComponent(build)}` : ""}`)), {
       method: "POST",
       headers: { ...authHeaders(), "content-type": blob.type || "audio/webm" },
       body: blob,

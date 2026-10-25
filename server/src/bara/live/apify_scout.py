@@ -26,12 +26,16 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
+from bara.live import open_designs
+
 log = logging.getLogger(__name__)
 ROOT = Path(__file__).resolve().parents[4]
 ACTOR_SRC = ROOT / "actors/bara-hardware-scout/src/scout.py"
 CACHE = Path(__file__).resolve().parents[3] / "data/cache/apify_scout"
 STATS = CACHE / "stats.jsonl"
 CREDIT = "Apify scout"
+YOU_CREDIT = "You.com"
+YOU_TIMEOUT_S = 25.0
 BUDGET_S = 60.0
 CLOUD_TIMEOUT_S = 90
 TTL_S = 7 * 86400
@@ -60,10 +64,11 @@ class ScoutResult:
     query: str
     designs: list[dict[str, Any]] = field(default_factory=list)
     parts: list[dict[str, Any]] = field(default_factory=list)
-    mode: str = "off"  # "apify cloud" | "local" | "cached" | "off" | "failed"
+    mode: str = "off"  # "you.com" | "apify cloud" | "local" | "cached" | "off" | "failed"
     pages_fetched: int = 0
     ms: int = 0
     notes: list[str] = field(default_factory=list)
+    source: str = CREDIT  # who answered: YOU_CREDIT, or CREDIT when the Apify path did
 
     def numbers(self) -> dict[str, Any]:
         return {
@@ -81,11 +86,12 @@ class ScoutResult:
 
     def summary(self) -> str:
         """One line for the build log."""
+        label = self.source if self.source == YOU_CREDIT else f"{self.source} ({self.mode})"
         if not self.designs and not self.parts:
-            return f"{CREDIT} ({self.mode}) found nothing for this device."
+            return f"{label} found nothing for this device."
         tops = "; ".join(self.top_sources()) or "none"
         return (
-            f"{CREDIT} ({self.mode}): {len(self.designs)} open designs, {len(self.parts)} "
+            f"{label}: {len(self.designs)} open designs, {len(self.parts)} "
             f"parts priced, {self.pages_fetched} public pages crawled. Top: {tops}."
         )
 
@@ -93,6 +99,7 @@ class ScoutResult:
         return {
             **self.numbers(),
             "query": self.query,
+            "source": self.source,
             "top": [
                 {"repo": d["repo"], "licence": d.get("licence"), "fit": d.get("fit")}
                 for d in self.designs[:5]
@@ -143,6 +150,36 @@ async def _run_local(inp: dict[str, Any]) -> list[dict[str, Any]]:
     return await _scout_module().scout(inp)
 
 
+def you_enabled() -> bool:
+    return bool(os.environ.get("YOU_API_KEY")) and enabled()
+
+
+async def _run_you(product: str) -> list[dict[str, Any]]:
+    """Open designs from You.com web search (repos checked for a KiCad board). Raises when You.com
+    is unavailable, errors or finds nothing, so the caller falls back to the Apify path."""
+    cands, note = await open_designs.search(product, require_you=True)
+    if not cands:
+        raise RuntimeError(note if note.startswith("search failed") else "You.com found nothing")
+    return [{"type": "design", **c} for c in cands]
+
+
+async def run_you(product: str) -> ScoutResult | None:
+    """The You.com answer, or None (error, empty result, timeout or no key) for the fallback."""
+    if not you_enabled():
+        return None
+    started = time.monotonic()
+    try:
+        items = await asyncio.wait_for(_run_you(product), YOU_TIMEOUT_S)
+    except Exception as exc:  # any You.com failure hands over to Apify
+        log.warning("You.com scout failed (%s); falling back to Apify", type(exc).__name__)
+        return None
+    res = ScoutResult(product, mode="you.com", source=YOU_CREDIT)
+    res.designs = split_items(items)[0]
+    res.pages_fetched = len(res.designs)
+    res.ms = int((time.monotonic() - started) * 1000)
+    return res
+
+
 async def execute(inp: dict[str, Any]) -> tuple[list[dict[str, Any]], str, list[str]]:
     """Run the Actor: on Apify when APIFY_TOKEN is set (local fallback on failure), else local."""
     token = os.environ.get("APIFY_TOKEN")
@@ -152,6 +189,8 @@ async def execute(inp: dict[str, Any]) -> tuple[list[dict[str, Any]], str, list[
             return await asyncio.wait_for(_run_cloud(token, inp), BUDGET_S), "apify cloud", notes
         except Exception as exc:  # network, auth, quota: the local run still gives an answer
             notes.append(f"apify cloud failed ({type(exc).__name__}); ran locally")
+    log.info("Apify (local): running the scout actor code in-process (no APIFY_TOKEN)")
+    notes.append("Apify (local)")
     return await asyncio.wait_for(_run_local(inp), BUDGET_S), "local", notes
 
 
@@ -161,6 +200,9 @@ async def run(product: str, *, max_repos: int = 6) -> ScoutResult:
     res = ScoutResult(product)
     if not enabled() or not product:
         return res
+    you = await run_you(product)
+    if you is not None:
+        return you
     inp = {"query": product, "maxRepos": max_repos}
     path = CACHE / f"run_{_key(inp)}.json"
     started = time.monotonic()
