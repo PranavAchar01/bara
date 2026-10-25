@@ -98,6 +98,22 @@ export function HistoryControls() {
 }
 
 /** Right of the tabs: history, the two panel toggles, simulate and export. */
+/** One click pulls the device apart into its exploded view; again puts it back together. */
+function ExplodeButton() {
+  const open = useApp((s) => s.explode > 0.5);
+  return (
+    <button
+      type="button"
+      className={`btn sm ${open ? "on" : ""}`}
+      aria-pressed={open}
+      onClick={() => useApp.setState({ explode: open ? 0 : 1 })}
+      title={open ? "Put it back together" : "Pull it apart to see every part"}
+    >
+      {open ? "Assemble" : "Explode"}
+    </button>
+  );
+}
+
 export function WorkTools() {
   const panels = useApp((s) => s.panels);
   const hasBuild = useApp((s) => s.build !== null);
@@ -115,6 +131,7 @@ export function WorkTools() {
             <Glyph name="details" />
           </button>
           <span className="wt-sep" aria-hidden />
+          <ExplodeButton />
           <SimulateButton />
           <ExportMenu primary />
         </>

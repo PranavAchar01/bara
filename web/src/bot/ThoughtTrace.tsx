@@ -130,35 +130,38 @@ function homeRect(): Rect | null {
   return { x: r.left, y: r.top, w: r.width, h: r.height };
 }
 
-/** The popover for the bot's thoughts; renders nothing while closed. */
+/** The popover for the bot's thoughts, for a canvas with no build yet; once there is a build the
+ *  thoughts open at the top of the Design tab instead (ThoughtCard). Renders nothing while closed. */
 export function ThoughtTrace() {
   const open = useTrace((s) => s.open);
   const screen = useApp((s) => s.screen);
-  if (!open || screen !== "workspace") return null;
+  const inline = useApp((s) => s.build !== null);
+  if (!open || screen !== "workspace" || inline) return null;
   return <Panel />;
 }
 
+/** The thoughts at the top of the Design tab: shown while open, closed with its x or Esc, and capped
+ *  in height so the spec below stays in view. */
+export function ThoughtCard() {
+  const open = useTrace((s) => s.open);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeTrace();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+  if (!open) return null;
+  return (
+    <section className="thought-trace inline" aria-label="What the agent is thinking">
+      <TraceBody />
+    </section>
+  );
+}
+
 function Panel() {
-  const build = useApp((s) => s.build);
-  const view = useApp((s) => s.view);
-  const log = useApp((s) => s.log);
-  const vocab = useApp((s) => s.vocab);
-  const running = useApp((s) => s.build?.status === "running" || s.build?.status === "awaiting_input");
-  const trace = useMemo(() => buildTrace({ build, view, log, label: (id) => vlabel(vocab, "stages", id) }), [build, view, log, vocab]);
-  // The reader's own folds win over the defaults (the working stage open, the rest folded).
-  const [folds, setFolds] = useState<Record<string, boolean>>({});
   const root = useRef<HTMLDivElement>(null);
-  const scroller = useRef<HTMLDivElement>(null);
-  const stick = useRef(true);
-
-  const isOpen = (g: TraceGroup) => folds[g.id] ?? (g.live || g.status === "failed" || g.status === "needs_input" || g.rows.some((r) => r.kind === "check" && r.tone === "fail"));
-  const rowCount = trace.groups.reduce((n, g) => n + (isOpen(g) ? g.rows.length : 0), 0) + trace.groups.length;
-
-  // Follow the working stage unless the reader has scrolled up.
-  useLayoutEffect(() => {
-    const el = scroller.current;
-    if (el && stick.current) el.scrollTop = el.scrollHeight;
-  }, [rowCount, trace.final]);
 
   // Esc and a press anywhere else close it; the bots toggle it themselves.
   useEffect(() => {
@@ -177,7 +180,6 @@ function Panel() {
       window.removeEventListener("pointerdown", onDown, true);
     };
   }, []);
-
   // Ride along with the bot: beside it on stage, above it at home.
   useEffect(() => {
     let raf = 0;
@@ -215,10 +217,39 @@ function Panel() {
     return () => cancelAnimationFrame(raf);
   }, []);
 
+  return (
+    <div ref={root} className="thought-trace" role="dialog" aria-label="What the agent is thinking" style={{ width: WIDTH, visibility: "hidden" }}>
+      <TraceBody />
+    </div>
+  );
+}
+
+/** The header and the stage list, shared by the popover and the Design tab card. */
+function TraceBody() {
+  const build = useApp((s) => s.build);
+  const view = useApp((s) => s.view);
+  const log = useApp((s) => s.log);
+  const vocab = useApp((s) => s.vocab);
+  const running = useApp((s) => s.build?.status === "running" || s.build?.status === "awaiting_input");
+  const trace = useMemo(() => buildTrace({ build, view, log, label: (id) => vlabel(vocab, "stages", id) }), [build, view, log, vocab]);
+  // The reader's own folds win over the defaults (the working stage open, the rest folded).
+  const [folds, setFolds] = useState<Record<string, boolean>>({});
+  const scroller = useRef<HTMLDivElement>(null);
+  const stick = useRef(true);
+
+  const isOpen = (g: TraceGroup) => folds[g.id] ?? (g.live || g.status === "failed" || g.status === "needs_input" || g.rows.some((r) => r.kind === "check" && r.tone === "fail"));
+  const rowCount = trace.groups.reduce((n, g) => n + (isOpen(g) ? g.rows.length : 0), 0) + trace.groups.length;
+
+  // Follow the working stage unless the reader has scrolled up.
+  useLayoutEffect(() => {
+    const el = scroller.current;
+    if (el && stick.current) el.scrollTop = el.scrollHeight;
+  }, [rowCount, trace.final]);
+
   const live = running && trace.groups.some((g) => g.live);
   const now = nowLine(trace);
   return (
-    <div ref={root} className="thought-trace" role="dialog" aria-label="What the agent is thinking" style={{ width: WIDTH, visibility: "hidden" }}>
+    <>
       <header className="tt-top">
         <span className="tt-title">{live ? "Thinking" : "How it was built"}</span>
         <button type="button" className="tt-x" onClick={closeTrace} aria-label="Close">
@@ -248,6 +279,6 @@ function Panel() {
         ))}
         {trace.final && <p className={`tt-final tone-${trace.final.tone}`}>{trace.final.text}</p>}
       </div>
-    </div>
+    </>
   );
 }

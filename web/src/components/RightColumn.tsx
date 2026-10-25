@@ -3,6 +3,7 @@ import { focusPart, select, useApp, type CodeTab, type RightTab } from "../state
 import { focusKeyOf } from "../three/Viewport3D";
 import { toggleTrace } from "../bot/traceState";
 import { ClarifyCard, DecisionTrace, ReuseCard, SpecCard, StageTimeline } from "./LeftColumn";
+import { ThoughtCard } from "../bot/ThoughtTrace";
 import { PanelToolbar } from "./TopBar";
 import { applyEdit } from "../net/client";
 import { serverUrl } from "../net/mode";
@@ -67,6 +68,7 @@ export function RightColumn() {
       <div className="tab-body">
         {tab === "design" && (
           <>
+            <ThoughtCard />
             <ClarifyCard />
             <SpecCard />
             <ReuseCard />

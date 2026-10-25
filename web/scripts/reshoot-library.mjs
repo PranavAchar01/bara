@@ -21,6 +21,8 @@ const engine = (pos[1] ?? "http://127.0.0.1:8797").replace(/\/$/, "");
 const only = flag("ids=")?.slice("--ids=".length).split(",").filter(Boolean);
 const includeFailed = !!flag("include-failed");
 const PER_SHOT_MS = 120_000;
+/** A shot must still be the page's shot this long after it appeared. */
+const SETTLED_MS = 3000;
 
 function findBrowser() {
   const cache = join(homedir(), "Library", "Caches", "ms-playwright");
@@ -65,9 +67,19 @@ for (const [i, b] of builds.entries()) {
   });
   try {
     await page.goto(`${app}/?shot=${encodeURIComponent(b.build_id)}&server=${encodeURIComponent(engine)}`, { waitUntil: "domcontentloaded" });
-    await page.waitForFunction(() => globalThis.__shot === "shot" || globalThis.__shot === "failed", null, { timeout: PER_SHOT_MS, polling: 400 });
-    const data = await page.evaluate(() => (globalThis.__shot === "shot" ? globalThis.__shotData : null));
-    if (!data) throw new Error(`page reported no shot (state ${await page.evaluate(() => globalThis.__shot)})`);
+    // A model can land just after the page took its shot (it then goes back to "loading" and shoots again),
+    // so only a shot that is still standing a moment later counts.
+    const until = Date.now() + PER_SHOT_MS;
+    let data = null;
+    while (!data) {
+      const left = until - Date.now();
+      if (left <= 0) throw new Error(`page reported no shot (state ${await page.evaluate(() => globalThis.__shot)})`);
+      const got = await page.waitForFunction(() => (globalThis.__shot === "shot" ? globalThis.__shotData : globalThis.__shot === "failed" ? "failed" : null), null, { timeout: left, polling: 400 });
+      const first = await got.jsonValue();
+      if (first === "failed") throw new Error("page reported failed");
+      await page.waitForTimeout(SETTLED_MS);
+      data = await page.evaluate((prev) => (globalThis.__shot === "shot" && globalThis.__shotData === prev ? prev : null), first);
+    }
     const bytes = Buffer.from(data.split(",")[1], "base64");
     const res = await fetch(`${engine}/v1/library/${encodeURIComponent(b.build_id)}/shot`, { method: "PUT", headers: { "content-type": "image/webp" }, body: bytes });
     if (!res.ok) throw new Error(`engine answered ${res.status}`);
