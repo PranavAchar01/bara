@@ -1192,7 +1192,7 @@
 }
 .ld-hero {
   display: grid;
-  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  grid-template-columns: minmax(0, 6fr) minmax(0, 5fr);
   grid-template-areas:
     "head window"
     "steps steps";
@@ -1329,11 +1329,19 @@
   padding: 0 0 1px;
   font-size: 13px;
 }
+/* Pushed into the right edge of the screen: a glimpse of the canvas at work, not the main event. */
 .ld-window {
   grid-area: window;
-  align-self: end;
+  align-self: center;
   min-width: 0;
-  margin: 0;
+  margin: 0 calc(-1 * max(32px, (100vw - 1328px) / 2)) 0 0;
+}
+.ld-window .ld-frame {
+  border-right: 0;
+  border-radius: 10px 0 0 10px;
+}
+.ld-window figcaption {
+  padding-right: 32px;
 }
 .ld-frame {
   position: relative;
@@ -1435,7 +1443,14 @@
     flex-basis: 176px;
   }
   .ld-window {
-    margin-top: 32px;
+    margin: 32px 0 0;
+  }
+  .ld-window .ld-frame {
+    border-right: 1.5px solid var(--ink);
+    border-radius: 10px;
+  }
+  .ld-window figcaption {
+    padding-right: 0;
   }
   .ld-steps {
     grid-template-columns: repeat(2, minmax(0, 1fr));
