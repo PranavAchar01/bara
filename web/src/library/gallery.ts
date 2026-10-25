@@ -151,7 +151,7 @@ export function reloadGallery(): Promise<void> {
   return loadGallery();
 }
 
-export function loadGallery(): Promise<void> {
+export function loadGallery(attempt = 0): Promise<void> {
   loading ??= (async () => {
     // an engine from before hiding still lists deleted builds, stamped: they stay out of the gallery
     const builds = (await fetchLibrary().catch(() => [])).filter((b) => !b.hidden_at);
@@ -159,6 +159,14 @@ export function loadGallery(): Promise<void> {
     for (const b of builds) rememberDeviceName(b.build_id, b.device);
     const items = builds.length ? await pickGallery(builds) : [];
     useGallery.setState({ items: items.length ? items : offlineGallery(), ready: true });
+    // the engine's address can arrive after the first look (or the engine wakes late): ask again
+    // a few times so the bundled drawings give way to the real pictures
+    if (!items.length && attempt < 5) {
+      setTimeout(() => {
+        loading = null;
+        void loadGallery(attempt + 1);
+      }, 2000 * (attempt + 1));
+    }
   })();
   return loading;
 }
