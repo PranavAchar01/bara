@@ -294,3 +294,9 @@ Web: bara-merge agent merges Nithin's figma-design-in-code / agent-board-3d / fi
 - 67f5204: Vercel SPA rewrites for /build, /library, /drafts.
 - Engine restarted on the current tree, so the bom export (2c8cf38) is live and the shopping list loads.
 - Still open: calculator still comes out as a keyboard (bara-general in flight); bara-engine, bara-sim, bara-look not reported. Held-out eval waits until those land, so it grades the merged engine.
+
+### 2026-10-24 ~19:50 PT: held-out eval (random pool + 2 new + calculator)
+- 6/6 done, all required checks pass, all boards routed (presenter clicker 302 s, pill box 1330 s, metronome 586 s, plant moisture beeper 505 s, bike tail light 489 s, calculator 666 s).
+- Calculator now has calculator parts: 22 tactile keys, segment-LCD driver, 8-digit LCD glass, zebra connector. No keyboard pipeline.
+- Worst gap: identity.reads_as_device fails 4/6 (generic slab cases). Sent to bara-engine (owns form.py). render.models boxes on 3 parts.
+- Merged + pushed: Nithin's multi-device/case-materials (3d77a7e), bara-canvas 6589e5a, bara-agent 7b90f93..d35dc1e, top bar labels.
