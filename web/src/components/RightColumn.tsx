@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { focusPart, select, useApp, type CodeTab, type RightTab } from "../state/store";
 import { focusKeyOf } from "../three/Viewport3D";
-import { toggleTrace } from "../bot/traceState";
 import { ClarifyCard, DecisionTrace, ReuseCard, SpecCard, StageTimeline } from "./LeftColumn";
 import { PanelToolbar } from "./TopBar";
 import { applyEdit } from "../net/client";
@@ -75,18 +74,8 @@ export function RightColumn() {
         )}
         {tab === "build" && (
           <>
-            {/* the reasoning lives with the agent: click it for what it is thinking; the full log stays here, folded */}
-            <div className="think-hint">
-              <p>What Bara is thinking is on Bara. Click the agent to see its current step and the steps before it.</p>
-              <button type="button" className="btn" onClick={toggleTrace}>
-                Show its thoughts
-              </button>
-            </div>
-            <details className="fold build-log">
-              <summary className="muted small">Full build log</summary>
-              <StageTimeline />
-              <DecisionTrace />
-            </details>
+            <StageTimeline />
+            <DecisionTrace />
           </>
         )}
         {tab === "code" && (

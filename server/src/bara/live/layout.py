@@ -206,24 +206,9 @@ def _half_keys(n: int, rows: int, cols: int, thumbs: int, stagger: bool, mirror:
     return [{"i": k.pop("i"), **k} for k in keys]
 
 
-KEYBOARD_STYLES = ("split", "unibody", "macropad")
-
-
-def keyboard_product(brief: dict[str, Any]) -> bool:
-    """The product itself is a keyboard: the device concept chose the keyboard build path. Keys
-    on any other device are that device's own buttons, not a keyboard.
-    Without a concept, a keyboard layout counts only when the brief does not class the product
-    as something other than an input device."""
-    if "keyboard_product" in brief:
-        return bool(brief["keyboard_product"])
-    return brief.get("device_class") in (None, "input_device") and brief.get("layout_style") in (
-        KEYBOARD_STYLES
-    )
-
-
 def plan_keyboard(brief: dict[str, Any]) -> KeyboardPlan | None:
     style = brief.get("layout_style")
-    if style not in KEYBOARD_STYLES or not keyboard_product(brief):
+    if style not in ("split", "unibody", "macropad"):
         return None
     log: list[str] = []
     preset = brief.get("layout_preset")

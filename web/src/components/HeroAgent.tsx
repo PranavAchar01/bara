@@ -2,7 +2,8 @@
 // ink stadium whose two small eyes follow the pointer, so it is plainly alive and not part of the recording
 // behind it. Pressing it (or just starting to type) washes the page to paper from the button outward while
 // the button glides to the middle and becomes Bara, who perks up and asks what's up, out loud when it can.
-// Answer by talking (the mic, or hold Space) or by typing; ideas type themselves into the empty field.
+// Then it listens: just answer, and a pause sends it (or hold Space, or type; typing takes over the mic).
+// Ideas type themselves into the empty field.
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { BaraBot } from "../bot/BaraBot";
@@ -12,8 +13,7 @@ import { routePrompt } from "../net/client";
 import { demoPrompts } from "../spec/fixtures";
 import { useApp } from "../state/store";
 import { Icon } from "../ui/common";
-import { armHandoff } from "./Handoff";
-import { cancelListening, speak, startListening, stopListening, stopSpeaking, useVoice } from "../voice/voice";
+import { cancelListening, micAllowed, speak, startListening, stopListening, stopSpeaking, useVoice } from "../voice/voice";
 
 const IDEAS = ["a macropad with one big knob", "a wireless split keyboard with an OLED", "a 60% keyboard with Choc switches", "something cool for my desk"];
 const GREETING = "Hey! What's up?";
@@ -150,6 +150,8 @@ export function AgentIntro(props: { open: IntroOpen; onClose: () => void }) {
   const listening = useVoice((s) => s.listening);
   const heard = useVoice((s) => s.heard);
   const transcribing = useVoice((s) => s.transcribing);
+  const voiceMode = useVoice((s) => s.mode);
+  const voiceError = useVoice((s) => s.error);
   const { ghost, idea } = useIdeaGhost(phase === "here" && !text && !listening && !transcribing && !pending);
 
   // Where Bara lands: the middle, a little high, at a size that suits the screen.
@@ -216,7 +218,14 @@ export function AgentIntro(props: { open: IntroOpen; onClose: () => void }) {
       at(760, () => emoteNow("delight"));
       for (let i = 1; i <= GREETING.length; i++) at(420 + i * 38, () => setAsked(GREETING.slice(0, i)));
     }
-    at(still ? 0 : 420, () => speak(GREETING, true));
+    // voice first: once it has asked, it listens for the answer, when the mic is already allowed
+    // (never a permission prompt out of nowhere) and nothing has been typed yet
+    const listen = () => {
+      if (!input.current?.value) void micAllowed().then((ok) => {
+          if (ok && !input.current?.value) void startListening("auto");
+        });
+    };
+    at(still ? 0 : 420, () => speak(GREETING, true, listen));
     at(still ? 0 : 900, () => input.current?.focus({ preventScroll: true }));
     return () => timers.forEach((t) => window.clearTimeout(t));
   }, [phase, still]);
@@ -237,7 +246,6 @@ export function AgentIntro(props: { open: IntroOpen; onClose: () => void }) {
     stopSpeaking();
     emoteNow("delight");
     setText(t);
-    armHandoff(t, document.querySelector(".ai-field"), document.querySelector(".ai-bot"));
     void routePrompt(t.slice(0, maxChars));
   };
   const submit = (e: FormEvent) => {
@@ -248,7 +256,8 @@ export function AgentIntro(props: { open: IntroOpen; onClose: () => void }) {
   // Esc steps back to the hero; spoken words arrive here once written down.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !useVoice.getState().listening) close();
+      // Esc while listening only stops the mic (voice keys); as rendered, before that handler ran
+      if (e.key === "Escape" && !listening) close();
     };
     const onPrompt = (e: Event) => send((e as CustomEvent<string>).detail ?? "");
     window.addEventListener("keydown", onKey);
@@ -266,10 +275,7 @@ export function AgentIntro(props: { open: IntroOpen; onClose: () => void }) {
   const shown = listening || transcribing ? heard : text;
   const toggleMic = () => {
     if (listening) stopListening();
-    else {
-      stopSpeaking();
-      void startListening();
-    }
+    else void startListening("auto");
   };
 
   return createPortal(
@@ -308,7 +314,7 @@ export function AgentIntro(props: { open: IntroOpen; onClose: () => void }) {
             disabled={!ready || pending}
             aria-pressed={listening}
             aria-label={listening ? "Stop listening" : "Talk to Bara"}
-            title={listening ? "Stop" : "Talk (or hold Space)"}
+            title={listening ? "Send now" : "Talk (or hold Space)"}
           >
             <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden>
               <rect x="7" y="2.5" width="6" height="10" rx="3" />
@@ -319,6 +325,8 @@ export function AgentIntro(props: { open: IntroOpen; onClose: () => void }) {
             ref={input}
             value={shown}
             onChange={(e) => {
+              // typing takes over from the mic
+              if (listening) cancelListening();
               setText(e.target.value);
               setKeys((k) => k + 1);
             }}
@@ -328,10 +336,22 @@ export function AgentIntro(props: { open: IntroOpen; onClose: () => void }) {
                 setText(idea);
               }
             }}
-            placeholder={listening ? "Listening…" : ready ? ghost : "Waking up"}
+            placeholder={
+              listening
+                ? voiceMode === "hold"
+                  ? "Listening… let go to send"
+                  : "Listening… just pause when you're done"
+                : transcribing
+                  ? "Writing down what you said…"
+                  : voiceError
+                    ? voiceError
+                    : ready
+                      ? ghost
+                      : "Waking up"
+            }
             aria-label="What should Bara build?"
             maxLength={maxChars}
-            disabled={!ready || pending || listening || transcribing}
+            disabled={!ready || pending || transcribing}
             spellCheck={false}
             autoComplete="off"
           />

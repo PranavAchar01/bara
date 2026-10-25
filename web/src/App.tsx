@@ -2,31 +2,27 @@ import { useEffect } from "react";
 import { useApp } from "./state/store";
 import { ConnectionBanner, EngineNotice, FileHeader, TopBar } from "./components/TopBar";
 import { ExampleChips, PromptBar } from "./components/PromptBar";
-import { BuildDialog } from "./components/BuildDialog";
-import { useRouteSync } from "./pages/routes";
-import { BaraBot } from "./bot/BaraBot";
 import { StepPlayer } from "./components/LeftColumn";
 import { BuildProgress, EditStatus, EventLog, FailureCard, LatencyHUD, Toast, WarningBanner } from "./components/Status";
 import { PartsList, RightColumn } from "./components/RightColumn";
 import { AddPartPicker, ConnectDialog, PartInspector, ResizePanel, SwapDrawer } from "./components/Overlays";
 import { FocusCard, FocusExit } from "./components/FocusCard";
 import { bindVoiceKeys } from "./voice/voice";
-import { LibraryPage } from "./components/Library";
-import { LandingHero, LandingSections } from "./components/Landing";
-import { Handoff, useHandoffRunning } from "./components/Handoff";
+import { Library } from "./components/Library";
+import { AgentSteps, LandingHero } from "./components/Landing";
 import { startAutosave } from "./library/autosave";
 import { Viewport3D } from "./three/Viewport3D";
 import { BotLab } from "./bot/BotLab";
 import { CanvasTabs } from "./components/CanvasTabs";
 import { startCanvasPersist } from "./state/canvases";
-import { ProjectPanel } from "./project/ProjectPanel";
-import { startLinkPruning } from "./project/project";
 import { AgentStage } from "./bot/AgentStage";
 import { ThoughtTrace } from "./bot/ThoughtTrace";
 import { Explainer } from "./bot/Explainer";
 import { CandidateFlyby } from "./bot/CandidateFlyby";
 import { SimView } from "./sim/SimView";
 import { useSimPanel } from "./sim/simPanelStore";
+import { ShotPage } from "./components/ShotPage";
+import { SHOT_ID } from "./three/shot";
 
 function useKeys() {
   useEffect(() => {
@@ -61,15 +57,16 @@ function Home() {
   return (
     <main className="home landing">
       <LandingHero />
-      <LandingSections />
+      <AgentSteps />
     </main>
   );
 }
 
-function Drafts() {
+/** Every build made here, on a page of its own (the top bar's Library button). */
+function LibraryPage() {
   return (
-    <main className="home libmain">
-      <LibraryPage />
+    <main className="home library-page">
+      <Library />
     </main>
   );
 }
@@ -89,7 +86,6 @@ function RightOverlay() {
 /** A canvas with no build yet (or one still being fetched after a reload): just the prompt. */
 function EmptyCanvas() {
   const restoring = useApp((s) => s.canvasRestoring.includes(s.activeCanvas));
-  const starting = useApp((s) => s.pendingStart?.prompt ?? null);
   return (
     <main className="workspace">
       <aside className="leftcol" aria-label="Layers">
@@ -100,12 +96,6 @@ function EmptyCanvas() {
         <div className="canvas-empty">
           {restoring ? (
             <p className="muted">Loading this canvas's build again…</p>
-          ) : starting ? (
-            <div className="canvas-empty-inner canvas-starting" role="status">
-              <BaraBot size={72} mood="thinking" />
-              <h2>{starting}</h2>
-              <p className="muted">Starting the build…</p>
-            </div>
           ) : (
             <div className="canvas-empty-inner">
               <h2>Describe a device for this canvas.</h2>
@@ -134,7 +124,6 @@ function Workspace() {
       <section className="centre">
         <CanvasTabs />
         <Viewport3D />
-        <ProjectPanel />
         <div className="centre-top">
           <BuildProgress />
           <WarningBanner />
@@ -167,30 +156,26 @@ const BOTLAB = new URLSearchParams(window.location.search).get("botlab") === "1"
 
 export function App() {
   if (BOTLAB) return <BotLab />;
+  if (SHOT_ID) return <ShotPage buildId={SHOT_ID} />;
   return <Main />;
 }
 
 function Main() {
   useKeys();
-  useRouteSync();
   useEffect(() => bindVoiceKeys(), []);
   useEffect(() => startAutosave(), []);
   useEffect(() => startCanvasPersist(), []);
-  useEffect(() => startLinkPruning(), []);
   const screen = useApp((s) => s.screen);
   const simOpen = useSimPanel((s) => s.open) && screen === "workspace";
-  const handing = useHandoffRunning();
   if (simOpen) return <SimView />;
   return (
-    <div className={`app ${handing ? "ho-run" : ""}`}>
+    <div className="app">
       {screen !== "workspace" && <TopBar />}
       <EngineNotice />
       <ConnectionBanner />
-      {screen === "home" ? <Home /> : screen === "drafts" ? <Drafts /> : <Workspace />}
+      {screen === "home" ? <Home /> : screen === "library" ? <LibraryPage /> : <Workspace />}
       <EventLog />
       <Toast />
-      <BuildDialog />
-      <Handoff screen={screen} />
     </div>
   );
 }

@@ -19,6 +19,8 @@ export interface LibraryCard {
   updatedAt: number;
   /** JPEG data URL of the canvas, or null before the 3D view has drawn the build. */
   thumb: string | null;
+  /** The product alone on transparency (the engine's rendered shot), preferred over the canvas snapshot. */
+  shot?: string | null;
   mock: boolean;
   /** Listed from the engine's shared library, so it may have no copy in this browser. */
   remote?: boolean;
@@ -76,6 +78,7 @@ export function remoteCard(b: StoredBuild): LibraryCard {
     createdAt: at,
     updatedAt: at,
     thumb: b.hero_url ? serverUrl(b.hero_url) : null,
+    shot: b.shot_url ? serverUrl(b.shot_url) : null,
     mock: false,
     remote: true,
   };
@@ -86,7 +89,7 @@ export function mergeCards(local: LibraryCard[], remote: StoredBuild[]): Library
   const have = new Map(local.map((c) => [c.build_id, c]));
   const out = local.map((c) => {
     const r = remote.find((x) => x.build_id === c.build_id);
-    return r ? { ...c, remote: true, thumb: c.thumb ?? (r.hero_url ? serverUrl(r.hero_url) : null) } : c;
+    return r ? { ...c, remote: true, thumb: c.thumb ?? (r.hero_url ? serverUrl(r.hero_url) : null), shot: r.shot_url ? serverUrl(r.shot_url) : null } : c;
   });
   for (const r of remote) if (!have.has(r.build_id)) out.push(remoteCard(r));
   return out.sort((a, b) => b.updatedAt - a.updatedAt);
@@ -171,6 +174,30 @@ export function summarize(build: Build, view: ViewState): string {
   return [design ?? kind, parts ? `${parts} parts` : null].filter(Boolean).join(" · ");
 }
 
+/** True when a picture is one flat colour: a canvas grabbed before the 3D view had drawn anything. */
+export function isFlat(src: CanvasImageSource, w: number, h: number): boolean {
+  const c = document.createElement("canvas");
+  c.width = 32;
+  c.height = 20;
+  const ctx = c.getContext("2d", { willReadFrequently: true });
+  if (!ctx || !w || !h) return false;
+  try {
+    ctx.drawImage(src, 0, 0, w, h, 0, 0, 32, 20);
+    const d = ctx.getImageData(0, 0, 32, 20).data;
+    let min = 255;
+    let max = 0;
+    for (let i = 0; i < d.length; i += 4) {
+      const v = (d[i] + d[i + 1] + d[i + 2]) / 3;
+      if (v < min) min = v;
+      if (v > max) max = v;
+    }
+    return max - min < 6;
+  } catch {
+    // a picture from elsewhere that can't be read back: trust it
+    return false;
+  }
+}
+
 /** A small JPEG of the 3D canvas, cropped to the card's 16:10, or null when there is nothing drawn. */
 export function snapshotCanvas(canvas: HTMLCanvasElement | null, width = 480, height = 300): string | null {
   if (!canvas || !canvas.width || !canvas.height) return null;
@@ -187,6 +214,7 @@ export function snapshotCanvas(canvas: HTMLCanvasElement | null, width = 480, he
     ctx.fillStyle = "#f6f6f5";
     ctx.fillRect(0, 0, width, height);
     ctx.drawImage(canvas, (canvas.width - sw) / 2, (canvas.height - sh) / 2, sw, sh, 0, 0, width, height);
+    if (isFlat(out, width, height)) return null;
     return out.toDataURL("image/jpeg", 0.82);
   } catch {
     return null;
