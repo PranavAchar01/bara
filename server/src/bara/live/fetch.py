@@ -20,6 +20,7 @@ from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
 
+from bara.live import seven_seg
 from bara.live.completeness import Need
 
 log = logging.getLogger(__name__)
@@ -311,6 +312,12 @@ class Resolver:
         search = getattr(self.source, "search", None)
         if search is None:
             return None
+        if need.function_id == seven_seg.FUNCTION_ID:
+            # the library tags every digit module display.lcd_char: read digits, colour and
+            # polarity from its descriptions instead of waiting for a named symbol
+            found = seven_seg.find(search, f"{need.label} {need.requirement}", self.rejected)
+            if found is not None:
+                return self._accept(found, need)
         for q in need.kicad:
             found = stock_symbol(search, q, self.rejected)
             if found is not None:

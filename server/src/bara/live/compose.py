@@ -22,6 +22,7 @@ from typing import Any
 from bara.board.generic import gpio_pins
 from bara.kicad_generated import GLB_URL, SERVER, KicadIndex, glb_stem
 from bara.live import completeness as cp
+from bara.live import seven_seg
 from bara.live.ask import ask_json
 from bara.live.brief import DISPLAY_TYPES
 from bara.live.catalog_source import (
@@ -1528,6 +1529,19 @@ class Composer:
     async def vet(self, slot: Slot, parts: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Parts that meet the block's key numbers (size, connector standard, rating). The ones
         that do not are rejected for good, so the next lookup moves on."""
+        if slot.function_id == seven_seg.FUNCTION_ID:
+            # digits, colour and polarity are read from words; nothing here is glass to size
+            want = (
+                seven_seg.want_from(f"{slot.need.label} {slot.need.requirement}")
+                if slot.need
+                else None
+            )
+            if want is not None:
+                for p in parts:
+                    if not seven_seg.meets_digits(p, want):
+                        self.resolver.rejected.add(p["part_id"])
+                return [p for p in parts if seven_seg.meets_digits(p, want)]
+            return parts
         if slot.function_id.startswith("display.") and slot.function_id != "display.indicator_led":
             # the typed size, else the size the brief wrote into this block's requirement
             need_text = f"{slot.need.label} {slot.need.requirement}" if slot.need else ""

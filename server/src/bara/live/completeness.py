@@ -15,6 +15,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+from bara.live import seven_seg
+
 Number = float
 
 
@@ -135,6 +137,11 @@ def _slug(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", text.lower()).strip("_")[:24] or "block"
 
 
+# readings of the air inside the case: nobody touches or looks through them, so they get no
+# opening of their own (an anchor for one would leave a bezel with nothing cut over it)
+AMBIENT = frozenset({"sense.temperature", "sense.humidity", "sense.pressure"})
+
+
 def need_from_block(block: dict[str, Any], taken: set[str]) -> Need:
     """A function-block-diagram block -> a required slot with its search terms."""
     fid = block["function_id"]
@@ -159,7 +166,7 @@ def need_from_block(block: dict[str, Any], taken: set[str]) -> Need:
         if fid == "power.regulator" or fid.split(".")[0] in _NO_PINS
         else _PIN_KIND.get(fid.split(".")[0], "sensor"),
         prefix=re.sub(r"[^a-z0-9]", "", key)[:10],
-        touch=bool(block.get("touchpoint")),
+        touch=bool(block.get("touchpoint")) and fid not in AMBIENT,
         groups=tuple(block.get("groups") or ()),
         requirement=str(block.get("requirement") or "")[:160],
         why=str(block.get("why") or "")[:200],
@@ -284,7 +291,22 @@ def apply(
             # identical parts are one block with a quantity
             # (a generic IC differs by part; every other function is one part per requirement)
             ident = terms if fid == "component.ic" else str(block.get("requirement") or "").lower()
+            if fid == seven_seg.FUNCTION_ID:
+                ident = ()  # one display: its readings (time, temperature) share the digits
             row = merged.setdefault((fid, ident), {**block, "count": 0, "groups": []})
+            if fid == seven_seg.FUNCTION_ID and row["groups"]:
+                # a second module for another reading is the same display; keep the longer one
+                text = f"{block.get('label')} {block.get('requirement')}"
+                if (seven_seg.digits_of(text) or 0) > (
+                    seven_seg.digits_of(f"{row.get('label')} {row.get('requirement')}") or 0
+                ):
+                    for k in ("label", "requirement", "count"):
+                        row[k] = block.get(k)
+                    row["count"] = 0
+                    row["groups"] = []
+                else:
+                    row["groups"].append(f"{block.get('label')} x1")
+                    continue
             row["search_terms"] = list(dict.fromkeys([*row.get("search_terms", []), *terms]))
             row["kicad_names"] = list(
                 dict.fromkeys([*row.get("kicad_names", []), *(block.get("kicad_names") or [])])
@@ -294,6 +316,12 @@ def apply(
                 row["why"] = "; ".join(x for x in (row.get("why"), block["why"]) if x)
             row["groups"].append(f"{block.get('label')} x{max(1, int(block.get('count') or 1))}")
         for block in merged.values():
+            if (
+                block["function_id"] == seven_seg.FUNCTION_ID
+                and (seven_seg.digits_of(f"{block.get('label')} {block.get('requirement')}") or 0)
+                > 1
+            ):
+                block["count"] = 1  # "4-digit module" is one module, not four
             need = need_from_block(block, taken)
             out.needs[need.key] = need
             if need.function_id == "compute.sbc":
@@ -309,6 +337,26 @@ def apply(
             ):
                 functions.remove(f)
                 have.pop(f["function_id"], None)
+        # the diagram names the device's screen: a different kind the brief guessed (an OLED
+        # for a clock whose digits are LEDs) would be a second display on the same face
+        screens = {f for f in covered if f.startswith("display.") and f != "display.indicator_led"}
+        if screens:
+            kinds = {f.removeprefix("display.") for f in screens}
+            for f in list(functions):
+                fid = f["function_id"]
+                if (
+                    fid.startswith("display.")
+                    and fid != "display.indicator_led"
+                    and fid not in screens
+                    and f.get("source") != "clarified"
+                ):
+                    functions.remove(f)
+                    have.pop(fid, None)
+            spec["hard_requirements"] = [
+                r
+                for r in spec.get("hard_requirements") or []
+                if not (r.get("facet") == "display_type" and r.get("value") not in kinds)
+            ]
         out.notes.append("block diagram: " + ", ".join(n.label for n in out.needs.values()))
 
     # a part that only exists on top of another is dropped when the device has no such base
