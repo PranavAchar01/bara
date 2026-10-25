@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 import { create } from "zustand";
 import { ExampleChips, fillPrompt, PromptBar } from "./PromptBar";
 import { Icon } from "../ui/common";
+import { armHandoff } from "./Handoff";
 
 export const useBuildDialog = create<{ open: boolean; seed: string | null }>(() => ({ open: false, seed: null }));
 /** Opens the dialog; with a seed, its prompt starts filled in (an example, or a gallery build to make again). */
@@ -35,6 +36,12 @@ export function BuildDialog() {
   useEffect(() => {
     if (open && seed) requestAnimationFrame(() => fillPrompt(seed));
   }, [open, seed]);
+  // the pop-up hands its prompt to the workspace the same way the intro does, then goes
+  const sent = () => {
+    const input = document.querySelector<HTMLInputElement>(".bd-field .prompt-input");
+    armHandoff(input?.value ?? "", document.querySelector(".bd-field .promptbar") ?? document.querySelector(".bd-field"), null);
+    close();
+  };
   if (!open) return null;
   return (
     <div className="bd-scrim" onPointerDown={(e) => e.target === e.currentTarget && close()}>
@@ -45,7 +52,7 @@ export function BuildDialog() {
         <h2 id="bd-h">What should Bara build?</h2>
         <p className="bd-sub">One line is enough. It picks real parts, routes the board, shapes the case and writes the firmware.</p>
         <div className="bd-field">
-          <PromptBar autoFocus fresh onSent={close} placeholder="Describe a device, or hold the bot and say it" />
+          <PromptBar autoFocus fresh onSent={sent} placeholder="Describe a device, or hold the bot and say it" />
         </div>
         <div className="bd-examples">
           <span className="bd-k">Try</span>

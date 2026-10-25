@@ -129,7 +129,7 @@ export function Library() {
   );
 }
 
-function GalleryCard(props: { item: GalleryItem }) {
+export function GalleryCard(props: { item: GalleryItem }) {
   const { item } = props;
   const [opening, setOpening] = useState(false);
   const open = async () => {

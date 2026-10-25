@@ -12,7 +12,8 @@ import { AddPartPicker, ConnectDialog, PartInspector, ResizePanel, SwapDrawer } 
 import { FocusCard, FocusExit } from "./components/FocusCard";
 import { bindVoiceKeys } from "./voice/voice";
 import { LibraryPage } from "./components/Library";
-import { LandingHero } from "./components/Landing";
+import { LandingHero, LandingSections } from "./components/Landing";
+import { Handoff, useHandoffRunning } from "./components/Handoff";
 import { startAutosave } from "./library/autosave";
 import { Viewport3D } from "./three/Viewport3D";
 import { BotLab } from "./bot/BotLab";
@@ -60,6 +61,7 @@ function Home() {
   return (
     <main className="home landing">
       <LandingHero />
+      <LandingSections />
     </main>
   );
 }
@@ -177,9 +179,10 @@ function Main() {
   useEffect(() => startLinkPruning(), []);
   const screen = useApp((s) => s.screen);
   const simOpen = useSimPanel((s) => s.open) && screen === "workspace";
+  const handing = useHandoffRunning();
   if (simOpen) return <SimView />;
   return (
-    <div className="app">
+    <div className={`app ${handing ? "ho-run" : ""}`}>
       {screen !== "workspace" && <TopBar />}
       <EngineNotice />
       <ConnectionBanner />
@@ -187,6 +190,7 @@ function Main() {
       <EventLog />
       <Toast />
       <BuildDialog />
+      <Handoff screen={screen} />
     </div>
   );
 }

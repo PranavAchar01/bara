@@ -8,6 +8,8 @@ import { ReplayControl } from "../bot/ReplayControl";
 import type { ConnStatus } from "../net/connection";
 import { SimulateButton } from "../sim/SimulateButton";
 import { useLibrary } from "../library/library";
+import { BaraMark } from "./Handoff";
+import { openBuildDialog } from "./BuildDialog";
 
 const CONN_LABEL: Record<ConnStatus, string> = {
   connecting: "Connecting",
@@ -37,8 +39,10 @@ export function TopBar() {
   return (
     <header className="topbar">
       <button type="button" className="brand" onClick={() => useApp.setState({ screen: "home" })} title="Home">
-        <span>Hardware builder</span>
+        <BaraMark className="brand-mark" />
+        <span>Bara</span>
       </button>
+      {screen === "home" && <LandingNav />}
       {screen === "workspace" && build && (
         <div className="topbar-build">
           <span className="mono muted">{build.build_id}</span>
@@ -66,9 +70,40 @@ export function TopBar() {
         )}
         {screen === "workspace" && <ShoppingListButton />}
         <ExportMenu />
+        {screen === "home" && (
+          <button type="button" className="btn primary sm nav-build" onClick={() => openBuildDialog()} aria-haspopup="dialog">
+            Start building
+          </button>
+        )}
         {screen !== "workspace" && <DraftsButton />}
       </div>
     </header>
+  );
+}
+
+const NAV: { id: string; label: string }[] = [
+  { id: "how", label: "How it works" },
+  { id: "examples", label: "Examples" },
+  { id: "faq", label: "FAQ" },
+];
+
+/** Anchor links to the landing's sections; the page scrolls inside its own container. */
+function LandingNav() {
+  return (
+    <nav className="ld-nav" aria-label="On this page">
+      {NAV.map((n) => (
+        <a
+          key={n.id}
+          href={`#${n.id}`}
+          onClick={(e) => {
+            e.preventDefault();
+            document.getElementById(n.id)?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+          }}
+        >
+          {n.label}
+        </a>
+      ))}
+    </nav>
   );
 }
 

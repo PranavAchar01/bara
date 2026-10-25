@@ -12,6 +12,7 @@ import { routePrompt } from "../net/client";
 import { demoPrompts } from "../spec/fixtures";
 import { useApp } from "../state/store";
 import { Icon } from "../ui/common";
+import { armHandoff } from "./Handoff";
 import { cancelListening, speak, startListening, stopListening, stopSpeaking, useVoice } from "../voice/voice";
 
 const IDEAS = ["a macropad with one big knob", "a wireless split keyboard with an OLED", "a 60% keyboard with Choc switches", "something cool for my desk"];
@@ -236,6 +237,7 @@ export function AgentIntro(props: { open: IntroOpen; onClose: () => void }) {
     stopSpeaking();
     emoteNow("delight");
     setText(t);
+    armHandoff(t, document.querySelector(".ai-field"), document.querySelector(".ai-bot"));
     void routePrompt(t.slice(0, maxChars));
   };
   const submit = (e: FormEvent) => {
