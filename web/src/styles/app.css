@@ -1349,6 +1349,34 @@ select {
 }
 
 /* checks (C17) */
+.check-bar {
+  display: flex;
+  gap: 2px;
+  height: 6px;
+  margin-bottom: 8px;
+}
+.check-bar > span {
+  border-radius: 3px;
+  min-width: 6px;
+}
+.check-bar .cb-pass {
+  background: var(--ok);
+}
+.check-bar .cb-fail {
+  background: var(--fail);
+}
+.check-bar .cb-unknown {
+  background: var(--line);
+}
+/* Folded detail: reasoning and passing rows, opened on demand */
+.fold > summary {
+  cursor: pointer;
+  padding: 4px 0;
+  list-style-position: inside;
+}
+.fold[open] > summary {
+  margin-bottom: 4px;
+}
 .check-group {
   display: flex;
   flex-direction: column;

@@ -116,7 +116,7 @@ export function applyServerEnvelope(env: ServerEnvelope, opts?: { note?: string 
   if (env.type === "error") {
     const p = env.payload as ServerPayloads["error"];
     if (p.error.code === "E_UNKNOWN_BUILD" && canvasWhere(s, (c) => !!c.openedFromLibrary && c.build?.build_id === c.openedFromLibrary)) {
-      showToast("Opened from your library. The engine has restarted since, so this copy is for looking; build it again to change it.");
+      // A library copy the engine no longer knows still opens for looking; an edit says why it can't apply.
       return;
     }
     if (p.error.code !== "E_RESUME_GAP") showToast(p.error.message);
@@ -278,7 +278,7 @@ async function restoreCanvases(): Promise<void> {
       }
     }),
   );
-  if (lost) showToast(lost === 1 ? "One canvas's build could not be found again; it is empty now." : `${lost} canvases' builds could not be found again; they are empty now.`);
+  if (lost) showToast(lost === 1 ? "A canvas couldn't be restored" : `${lost} canvases couldn't be restored`);
 }
 
 /** Closes a canvas tab; a build still running on it is stopped. */
