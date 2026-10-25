@@ -8,7 +8,7 @@ import { PanelToolbar } from "./TopBar";
 import { applyEdit } from "../net/client";
 import { serverUrl } from "../net/mode";
 import type { Board, BoardEvaluation, BuildPart, CheckResult, Connection, FirmwareFile } from "../spec/types";
-import { Badge, Chip, Dot, Empty, Panel, ProvenanceBadge } from "../ui/common";
+import { Badge, Chip, Dot, Empty, Panel, ProvenanceBadge, sourceTitle } from "../ui/common";
 import { checkArea, checkInstances, checkTone, fmtMm, fmtMs, fmtValue, instanceTone, known, severityRank, vlabel } from "../ui/format";
 import { elementPoses } from "../three/layout";
 
@@ -164,6 +164,7 @@ export function PartsList() {
                 data-agent={`row:${p.instance_id}`}
                 className={`part-row ${selection === p.instance_id ? "selected" : ""} ${p.placement.source === "intent" ? "provisional" : ""}`}
                 role="button"
+                title={sourceTitle(p.card)}
                 tabIndex={0}
                 aria-pressed={selection === p.instance_id}
                 data-focus-key={focusKeyOf(build, p)}

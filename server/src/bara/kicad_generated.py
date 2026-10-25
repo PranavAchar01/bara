@@ -273,6 +273,22 @@ def _convert(fp: dict[str, Any], out: Path) -> bool:
     return bool(res.get("ok"))
 
 
+KICAD_FP_URL = "https://gitlab.com/kicad/libraries/kicad-footprints/-/blob/master"
+KICAD_SYM_URL = "https://gitlab.com/kicad/libraries/kicad-symbols/-/blob/master"
+
+
+def kicad_source_url(part_id: str, lib: str) -> str | None:
+    """Where the part lives in the official KiCad library, from its id (kicad:fp:Lib:Name)."""
+    bits = part_id.split(":", 3)
+    if len(bits) != 4 or bits[0] != "kicad" or not lib:
+        return None
+    if bits[1] == "fp":
+        return f"{KICAD_FP_URL}/{lib}.pretty/{bits[3]}.kicad_mod"
+    if bits[1] == "sym":
+        return f"{KICAD_SYM_URL}/{lib}.kicad_sym"
+    return None
+
+
 def part_from_record(rec: dict[str, Any], fp: dict[str, Any] | None) -> dict[str, Any]:
     """A SPEC Part-shaped dict for an index row (generated tier, unverified)."""
     pid = rec["part_id"]
@@ -336,6 +352,11 @@ def part_from_record(rec: dict[str, Any], fp: dict[str, Any] | None) -> dict[str
             "source": rec["source"],
             "library": rec["lib"],
             "licence": rec["licence"],
+            **(
+                {"source_url": url}
+                if rec["source"] == "kicad" and (url := kicad_source_url(pid, rec["lib"]))
+                else {}
+            ),
         },
         "fp_ok": fp is not None,
         "pads_ok": bool(fp and fp.get("pads")),

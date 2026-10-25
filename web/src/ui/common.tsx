@@ -72,13 +72,19 @@ export function Skeleton(props: { lines?: number }) {
   );
 }
 
+/** What a part row says on hover: where the part comes from and under which licence. */
+export function sourceTitle(card: Pick<PartCard, "licence_spdx" | "source_url">): string {
+  const lic = card.licence_spdx && card.licence_spdx !== "NOASSERTION" ? card.licence_spdx : "not stated";
+  return card.source_url ? `Source: ${card.source_url}\nLicence: ${lic}` : `No open-source origin recorded\nLicence: ${lic}`;
+}
+
 /** C27 ProvenanceBadge: pure view of verified, licence_spdx and commercial_ok. */
-export function ProvenanceBadge(props: { card: Pick<PartCard, "verified" | "licence_spdx" | "commercial_ok"> }) {
+export function ProvenanceBadge(props: { card: Pick<PartCard, "verified" | "licence_spdx" | "commercial_ok" | "source_url"> }) {
   const v = known(props.card.verified, ["geometry", "human", "datasheet", "third_party", "none"] as const);
   const commercial = known(props.card.commercial_ok, ["yes", "no"] as const);
   const verified = v === "geometry" || v === "human" || v === "datasheet";
   return (
-    <span className="prov">
+    <span className="prov" title={sourceTitle(props.card)}>
       {verified && (
         <span className="prov-mark tone-ok" title={`Verified (${v})`}>
           <svg viewBox="0 0 12 12" width="11" height="11" aria-hidden>
@@ -88,6 +94,9 @@ export function ProvenanceBadge(props: { card: Pick<PartCard, "verified" | "lice
       )}
       {v === "third_party" && <span className="prov-dashed" title="Dimensions from a third party">3rd party</span>}
       {!verified && v !== "third_party" && <span className="prov-unverified" title="Not verified">unverified</span>}
+      {!props.card.source_url && (
+        <span className="prov-lic warn" title="No open-source origin recorded for this part">no source</span>
+      )}
       {props.card.licence_spdx && (
         <span className={`prov-lic ${commercial !== "yes" ? "warn" : ""}`} title={commercial !== "yes" ? `Commercial use: ${commercial}` : "Commercial use OK"}>
           {props.card.licence_spdx}
