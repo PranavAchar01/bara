@@ -18,6 +18,10 @@ export function LandingHero() {
   );
   return (
     <section className="ld">
+      <header className="ld-head">
+        <h1>Hardware, built while you watch.</h1>
+        <p>A small robot picks real parts, routes the board and closes the case around it.</p>
+      </header>
       <figure className="ld-window">
         <BuildScene />
       </figure>

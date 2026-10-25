@@ -55,12 +55,42 @@ export interface Frame {
   done: number;
   /** Whole-scene opacity: fades out at the end of the run. */
   alpha: number;
-  /** Where the cursor points, in build mm (z in mm above the desk), or "prompt" for the prompt pill. */
-  cursor: { x: number; y: number; z: number } | "prompt";
+  /** Where the agent points: build mm (z above the desk), the prompt pill, a toolbar button, or a
+   *  chip in the part tray. */
+  cursor: Cursor;
   /** True for a short moment while the cursor presses. */
   pressing: boolean;
   say: string | null;
   activity: "read" | "pick" | "arrange" | "route" | "sculpt" | "admire";
+  /** The part the agent is carrying right now (picked from the tray, not yet set down). */
+  carry: Carried | null;
+  /** The toolbar button that is lit: set by the agent's click. */
+  tool: "place" | "route" | "case" | null;
+  /** How many of the tray's parts have been taken. */
+  taken: number;
+}
+
+export type Cursor = { x: number; y: number; z: number } | "prompt" | "route" | "case" | { tray: number };
+
+export interface Carried {
+  label: string;
+  role: string;
+  /** How many of that part the build uses. */
+  count: number;
+}
+
+/** One trip: picked from the tray, flown to its place on the board, set down. */
+export interface Carry {
+  index: number;
+  start: number;
+  grab: number;
+  drop: number;
+}
+
+/** A moment the character reacts to, with how. */
+export interface Beat {
+  t: number;
+  kind: "nod" | "hop" | "surprise" | "delight";
 }
 
 /** Drops the manufacturer in brackets ("RKJXV1224005 (ALPSALPINE(...))") and trailing package notes. */
@@ -91,6 +121,30 @@ function clickTargets(order: ReplayFootprint[]): number[] {
   return out;
 }
 
+const CARRY_END = 5.8;
+const MAX_CARRIES = 3;
+const ROUTE_CLICK = 8.3;
+const CASE_CLICK = T.walls[0];
+
+function planCarries(clicks: number[]): Carry[] {
+  const k = Math.min(MAX_CARRIES, clicks.length);
+  const w = (CARRY_END - T.parts[0]) / Math.max(1, k);
+  return clicks.slice(0, k).map((index, i) => {
+    const start = T.parts[0] + i * w;
+    return { index, start, grab: start + 0.3, drop: start + w - 0.05 };
+  });
+}
+
+function planBeats(carries: Carry[]): Beat[] {
+  return [
+    ...carries.map((c): Beat => ({ t: c.drop + 0.12, kind: "nod" })),
+    { t: ROUTE_CLICK + 0.1, kind: "hop" },
+    { t: CASE_CLICK + 0.1, kind: "hop" },
+    { t: T.lid[1], kind: "surprise" },
+    { t: T.done[0], kind: "delight" },
+  ];
+}
+
 /** 45-degree PCB-style route from a to b: straight, then a chamfer onto the target. */
 function route(a: [number, number], b: [number, number]): [number, number][] {
   const dx = b[0] - a[0];
@@ -104,6 +158,9 @@ export interface Prepared {
   build: ReplayBuild;
   order: ReplayFootprint[];
   clicks: number[];
+  /** The few parts the agent carries by hand from the tray; the rest are set down in batches. */
+  carries: Carry[];
+  beats: Beat[];
   traces: [number, number][][];
   /** Extent of everything in mm: [minX, minY, maxX, maxY]. */
   box: [number, number, number, number];
@@ -135,7 +192,8 @@ export function prepare(build: ReplayBuild): Prepared {
   // a tall case (63 mm controller) would read as a tower in this view: cap it to a slab
   const tallest = Math.max(0, ...build.cases.map((c) => c.size[2]));
   const caseH = Math.min(tallest || 12, 0.16 * Math.min(box[2] - box[0], box[3] - box[1]) + 6);
-  return { build, order, clicks, traces, box, caseH };
+  const carries = planCarries(clicks);
+  return { build, order, clicks, carries, beats: planBeats(carries), traces, box, caseH };
 }
 
 function stageLabel(b: ReplayBuild, re: RegExp, fallback: string): string {
@@ -144,11 +202,16 @@ function stageLabel(b: ReplayBuild, re: RegExp, fallback: string): string {
 
 /** The scene at t seconds into one device's run. */
 export function frameAt(p: Prepared, t: number): Frame {
-  const { build, order, clicks } = p;
+  const { build, order } = p;
   const n = order.length;
   const pw = T.parts[1] - T.parts[0];
+  // carried parts appear where the agent sets them down; the rest follow in a batch after each drop
+  const carried = new Map(p.carries.map((c) => [c.index, c.drop]));
+  const rest = order.map((_, i) => i).filter((i) => !carried.has(i));
+  const batchOf = new Map(rest.map((i, r) => [i, Math.min(p.carries.length - 1, Math.floor((r * p.carries.length) / Math.max(1, rest.length)))]));
   const fps: PlacedFp[] = order.map((f, i) => {
-    const at = T.parts[0] + (n > 1 ? (i / (n - 1)) * pw * 0.92 : 0);
+    const batch = batchOf.get(i);
+    const at = carried.get(i) ?? (batch !== undefined && p.carries[batch] ? p.carries[batch].drop + 0.12 + (rest.indexOf(i) % 16) * 0.012 : T.parts[0] + (n > 1 ? (i / (n - 1)) * pw * 0.92 : 0));
     const landAt = T.drop[0] + (n > 1 ? (i / (n - 1)) * 0.7 : 0);
     return { ...f, at, appear: easeOut(clamp01((t - at) / 0.35)), land: easeInOut(clamp01((t - landAt) / 0.6)) };
   });
@@ -167,52 +230,85 @@ export function frameAt(p: Prepared, t: number): Frame {
   let say: string | null = null;
   let stage = stageLabel(build, /understand/i, "Understanding the request");
   let activity: Frame["activity"] = "read";
+  let carry: Frame["carry"] = null;
+  let tool: Frame["tool"] = null;
+  const taken = p.carries.filter((c) => t >= c.grab).length;
+  const labelOf = (f: ReplayFootprint) => {
+    const name = cleanPartName(f.label);
+    const same = order.filter((o) => cleanPartName(o.label) === name).length;
+    return { name, same };
+  };
 
   if (t >= T.type[1] + 0.3 && t < T.board[0]) {
     stage = stageLabel(build, /choos|pick/i, "Choosing parts");
     activity = "pick";
-    // the cursor visits each click target as it appears, pressing on arrival
-    let idx = clicks.findIndex((ci, k) => t < (fps[clicks[k + 1]]?.at ?? T.board[0]) && t >= fps[ci].at - 0.45);
-    if (idx < 0) idx = 0;
-    const f = fps[clicks[idx]] ?? fps[0];
-    if (f) {
+    // each trip: to the tray, press on a chip, carry the part to its place, set it down
+    const trip = [...p.carries].reverse().find((c) => t >= c.start) ?? p.carries[0];
+    const f = trip ? fps[trip.index] : fps[0];
+    if (trip && f) {
+      const { name, same } = labelOf(f);
+      if (t < trip.grab) {
+        cursor = { tray: p.carries.indexOf(trip) };
+        pressing = t >= trip.grab - 0.2;
+      } else {
+        cursor = { x: f.c[0], y: f.c[1], z: floatZ + roleHeight(f.role) };
+        if (t < trip.drop - 0.05) carry = { label: name, role: f.role, count: same };
+        const pick = build.picks.find((x) => cleanPartName(x.name) === name);
+        say = same > 1 ? `${same} × ${name}` : pick?.of && pick.of > 1 ? `${name}, best of ${pick.of}` : name;
+      }
+    } else if (f) {
       cursor = { x: f.c[0], y: f.c[1], z: floatZ + roleHeight(f.role) };
-      pressing = t >= f.at && t < f.at + 0.18;
-      const same = order.filter((o) => cleanPartName(o.label) === cleanPartName(f.label)).length;
-      const pick = build.picks.find((x) => cleanPartName(x.name) === cleanPartName(f.label));
-      const name = cleanPartName(f.label);
-      say = t >= f.at - 0.1 ? (same > 1 ? `${same} × ${name}` : pick?.of && pick.of > 1 ? `${name}, best of ${pick.of}` : name) : null;
     }
   } else if (t >= T.board[0] && t < T.route[0]) {
     stage = stageLabel(build, /plac/i, "Placing parts on the board");
     activity = "arrange";
+    tool = "place";
     const ob = build.boards[0]?.outline ?? [];
     const corner = ob.reduce<[number, number]>((m, q) => (q[0] + q[1] < m[0] + m[1] ? q : m), ob[0] ?? [x0, y0]);
-    cursor = { x: corner[0], y: corner[1], z: 2 };
-    pressing = t >= T.board[0] + 0.5 && t < T.board[0] + 0.7;
-    const bw = Math.round(x1 - x0);
-    const bh = Math.round(y1 - y0);
-    say = `Board ${bw} × ${bh} mm`;
+    if (t < T.drop[0] + 0.6) {
+      cursor = { x: corner[0], y: corner[1], z: 2 };
+      pressing = t >= T.board[0] + 0.5 && t < T.board[0] + 0.7;
+      const bw = Math.round(x1 - x0);
+      const bh = Math.round(y1 - y0);
+      say = `Board ${bw} × ${bh} mm`;
+    } else {
+      // on to the Route button, and a click
+      cursor = "route";
+      pressing = t >= ROUTE_CLICK - 0.12 && t < ROUTE_CLICK + 0.08;
+      if (t >= ROUTE_CLICK) tool = "route";
+    }
   } else if (t >= T.route[0] && t < T.walls[0]) {
     stage = stageLabel(build, /rout/i, "Routing the board");
     activity = "route";
+    tool = "route";
     const live = traces.find((tr) => tr.drawn > 0 && tr.drawn < 1) ?? traces.at(-1);
     if (live) {
       const end = live.pts[live.pts.length - 1];
       cursor = { x: end[0], y: end[1], z: 3 };
     }
     say = `Routing ${n} footprints`;
+    if (t >= CASE_CLICK - 0.5) {
+      cursor = "case";
+      say = null;
+    }
   } else if (t >= T.walls[0] && t < T.done[0]) {
     stage = stageLabel(build, /case|enclos/i, "Shaping the case");
     activity = "sculpt";
+    tool = "case";
     const c = build.cases[0];
     const lift = p.caseH * easeOut(span(t, T.walls));
-    cursor = c ? { x: c.at[0] + c.size[0] / 2 - 4, y: c.at[1] - c.size[1] / 2 + 4, z: lift } : { x: cx, y: y0, z: lift };
-    pressing = t >= T.lid[0] && t < T.lid[0] + 0.2;
-    if (c) say = `Case ${Math.round(c.size[0])} × ${Math.round(c.size[1])} mm, ${c.wall} mm walls`;
+    if (t < CASE_CLICK + 0.45) {
+      cursor = "case";
+      pressing = t < CASE_CLICK + 0.15;
+    } else {
+      // step aside and watch the walls rise and the lid close
+      cursor = c ? { x: c.at[0] + c.size[0] / 2 - 4, y: c.at[1] - c.size[1] / 2 + 4, z: lift } : { x: cx, y: y0, z: lift };
+      if (c) say = `Case ${Math.round(c.size[0])} × ${Math.round(c.size[1])} mm, ${c.wall} mm walls`;
+    }
   } else if (t >= T.done[0]) {
     stage = `${build.checks} checks passed`;
     activity = "admire";
+    tool = "case";
     cursor = { x: x1 - 6, y: y0 + 8, z: p.caseH + 4 };
     say = `${build.checks} checks passed`;
   }
@@ -231,5 +327,8 @@ export function frameAt(p: Prepared, t: number): Frame {
     pressing,
     say,
     activity,
+    carry,
+    tool,
+    taken,
   };
 }

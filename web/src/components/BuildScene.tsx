@@ -6,9 +6,10 @@
 // the live UI. Under reduced motion it is one still: the first device, finished.
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReplayBuild } from "../library/replayData";
-import { clamp01, easeOut, frameAt, prepare, roleHeight, RUN_S, T, type Frame, type Prepared } from "../library/replayTimeline";
+import { cleanPartName, clamp01, easeOut, frameAt, prepare, roleHeight, RUN_S, T, type Frame, type Prepared } from "../library/replayTimeline";
 import { reducedMotion } from "../bot/spring";
-import { SceneAgent, type AgentAim } from "./LandingAgent";
+import type { Emote } from "../bot/mood";
+import { CARRY_FILL, SceneAgent, type AgentAim } from "./LandingAgent";
 import landing from "../library/landingBuilds.json";
 
 // only replays whose checks all held (the macropad's board check failed, so it sits out)
@@ -124,7 +125,13 @@ export function SceneDrawing(props: { prep: Prepared; frame: Frame; className?: 
     <svg className={props.className} viewBox={vb.join(" ")} preserveAspectRatio="xMidYMid meet" aria-hidden>
       <g opacity={frame.alpha}>
         {/* desk shadow under where the device will be */}
-        <ellipse cx={(x0 + x1) / 2} cy={-((y0 + y1) / 2) * K + 2} rx={(x1 - x0) * 0.58} ry={(y1 - y0) * K * 0.6} fill="rgb(0 0 0 / 0.05)" />
+        <defs>
+          <radialGradient id="bs-desk">
+            <stop offset="55%" stopColor="rgb(0 0 0)" stopOpacity="0.07" />
+            <stop offset="100%" stopColor="rgb(0 0 0)" stopOpacity="0" />
+          </radialGradient>
+        </defs>
+        <ellipse cx={(x0 + x1) / 2} cy={-((y0 + y1) / 2) * K + 2} rx={(x1 - x0) * 0.58} ry={(y1 - y0) * K * 0.6} fill="url(#bs-desk)" />
         {/* the case: floor and far walls behind everything */}
         {build.cases.map((c, i) => {
           const poly = roundedRect(c.at[0], c.at[1], c.size[0], c.size[1], 9);
@@ -253,6 +260,9 @@ export function BuildScene() {
   const box = useRef<HTMLDivElement>(null);
   const body = useRef<HTMLDivElement>(null);
   const pill = useRef<HTMLSpanElement>(null);
+  const tray = useRef<HTMLDivElement>(null);
+  const routeBtn = useRef<HTMLSpanElement>(null);
+  const caseBtn = useRef<HTMLSpanElement>(null);
   const aim = useRef<AgentAim>({ x: 0, y: 0, pressing: false, set: false });
   const toasts = useRef<MockToast[]>([]);
   const lastSay = useRef<string | null>(null);
@@ -289,22 +299,37 @@ export function BuildScene() {
   lastSay.current = frame.say;
   toasts.current = toasts.current.filter((n) => clock.now - n.at < TOAST_S);
 
-  // where the cursor should be, in pixels inside the mock's body (read by the agent every frame):
-  // over the prompt in the sidebar while typing, then on the canvas
+  // where the agent should point, in pixels inside the mock's body (read by the agent every frame):
+  // the prompt in the sidebar while typing, the tray, a toolbar button, or the canvas
   const el = box.current;
   const bd = body.current;
   if (el && bd) {
     const b = bd.getBoundingClientRect();
-    if (frame.cursor === "prompt") {
+    const c = frame.cursor;
+    const at = (r: DOMRect | undefined, fx = 0.5, fy = 0.5, peek = true) =>
+      r ? { x: r.left + r.width * fx - b.left, y: r.top + r.height * fy - b.top, pressing: frame.pressing, set: true, peek, w: b.width, h: b.height } : aim.current;
+    if (c === "prompt") {
       const r = pill.current?.getBoundingClientRect();
-      aim.current = r ? { x: r.right - b.left - 10, y: r.bottom - b.top - 4, pressing: false, set: true } : aim.current;
-    } else {
+      if (r) aim.current = { x: r.right - b.left - 10, y: r.bottom - b.top - 4, pressing: false, set: true, peek: true, w: b.width, h: b.height };
+    }
+    else if (c === "route") aim.current = at(routeBtn.current?.getBoundingClientRect(), 0.55, 0.6);
+    else if (c === "case") aim.current = at(caseBtn.current?.getBoundingClientRect(), 0.55, 0.6);
+    else if ("tray" in c) aim.current = at(tray.current?.querySelector(`[data-i="${c.tray}"]`)?.getBoundingClientRect(), 0.45, 0.5, false);
+    else {
       const cr = el.getBoundingClientRect();
-      const c = frame.cursor;
       const p = toPx(viewBox(prep), el.clientWidth, el.clientHeight, P(c.x, c.y, c.z));
-      aim.current = { x: p.x + cr.left - b.left, y: p.y + cr.top - b.top, pressing: frame.pressing, set: true };
+      aim.current = { x: p.x + cr.left - b.left, y: p.y + cr.top - b.top, pressing: frame.pressing, set: true, peek: false, side: p.x < el.clientWidth / 2 ? -1 : 1, w: b.width, h: b.height };
     }
   }
+
+  // the character's reactions: the newest beat of this run that has passed
+  const beatIdx = still ? -1 : prep.beats.reduce((m, bt, i) => (clock.t >= bt.t ? i : m), -1);
+  const beat = useMemo(
+    () => (beatIdx >= 0 ? { kind: prep.beats[beatIdx].kind as Emote, n: clock.dev * 100 + beatIdx + 1 } : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [beatIdx, clock.dev],
+  );
+  const trayOn = !still && clock.t >= T.type[1] - 0.2 && clock.t < T.drop[0];
 
   const typing = clock.t < T.type[1] + 0.3;
   const prompt = still ? prep.build.prompt : prep.build.prompt.slice(0, frame.typed);
@@ -346,6 +371,29 @@ export function BuildScene() {
         </aside>
         <div ref={box} className="mk-canvas">
           <SceneDrawing prep={prep} frame={frame} className="bs-svg" />
+          <div className="mk-tools">
+            {(["place", "route", "case"] as const).map((k) => (
+              <span key={k} ref={k === "route" ? routeBtn : k === "case" ? caseBtn : undefined} className={`mk-tool ${frame.tool === k ? "on" : ""}`}>
+                {k === "place" ? "Place" : k === "route" ? "Route" : "Case"}
+              </span>
+            ))}
+          </div>
+          <div ref={tray} className={`mk-tray ${trayOn ? "on" : ""}`}>
+            <span className="mk-tray-k">Parts</span>
+            {prep.carries.map((c, i) => {
+              const f = prep.order[c.index];
+              const name = cleanPartName(f.label);
+              const same = prep.order.filter((o) => cleanPartName(o.label) === name).length;
+              return (
+                <span key={`${prep.build.id}${i}`} data-i={i} className={`mk-chip ${i < frame.taken ? "taken" : ""}`}>
+                  <i style={{ background: CARRY_FILL[f.role] ?? "#e4e4e4" }} />
+                  {same > 1 ? `${same} × ` : ""}
+                  {name}
+                </span>
+              );
+            })}
+            <span className="mk-chip more">and {Math.max(0, prep.order.length - prep.carries.length)} more</span>
+          </div>
           <div className="mk-toasts">
             {toasts.current.map((n) => (
               <span key={n.id} className={`mk-toast ${clock.now - n.at > TOAST_S - 0.3 ? "leaving" : ""}`}>
@@ -354,7 +402,7 @@ export function BuildScene() {
             ))}
           </div>
         </div>
-        <SceneAgent aim={aim} still={still} say={null} activity={frame.activity} done={frame.done > 0} hidden={frame.alpha < 0.5} />
+        <SceneAgent aim={aim} still={still} activity={frame.activity} done={frame.done > 0} hidden={frame.alpha < 0.5} carry={frame.carry} beat={beat} />
       </div>
     </div>
   );
