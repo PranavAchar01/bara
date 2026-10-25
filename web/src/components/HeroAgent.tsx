@@ -194,8 +194,9 @@ export function AgentIntro(props: { open: IntroOpen; onClose: () => void }) {
     html.style.overflow = "hidden";
     return () => {
       html.style.overflow = was;
-      stopSpeaking();
-      if (useVoice.getState().listening) cancelListening();
+      // only the intro's own greeting: the intro also closes because a build started, and what the
+      // build says (a question for you, and the mic it hands back) must carry on. Back (close) stops all.
+      if (useVoice.getState().caption === GREETING) stopSpeaking();
     };
   }, []);
 
