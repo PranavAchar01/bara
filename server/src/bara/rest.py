@@ -401,6 +401,9 @@ def build_router(svc: Services) -> APIRouter:
         name = f"{build_id}.zip" if include_all else f"{build_id}_firmware.zip"
         return _download(data, name, "application/zip")
 
+    from bara.firmware_sim.api import sim_routes
+
+    sim_routes(api, svc)
     return api
 
 
