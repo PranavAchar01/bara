@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { caseMaterial, FINISHES, finishInfo, resolveFinish } from "./caseFinish";
+import { caseMaterial, DEFAULT_FINISH, FINISHES, finishInfo, resolveFinish } from "./caseFinish";
 
 describe("case finishes", () => {
-  it("defaults to satin with the preset's own clarity and frost", () => {
-    expect(resolveFinish(undefined)).toEqual({ preset: "satin", clarity: 0, frost: 0.5 });
+  it("defaults to clear with the preset's own clarity and frost", () => {
+    expect(resolveFinish(undefined)).toEqual({ preset: "clear", clarity: 0.96, frost: 0.05 });
+    expect(resolveFinish(null)).toEqual(resolveFinish({ preset: DEFAULT_FINISH }));
+    expect(finishInfo(undefined).seeThrough).toBe(true);
+    expect(caseMaterial("#9E9E9E", undefined).transmission).toBeGreaterThan(0.9);
+    expect(resolveFinish({ preset: "satin" })).toEqual({ preset: "satin", clarity: 0, frost: 0.5 });
     expect(resolveFinish({ preset: "clear" })).toEqual({ preset: "clear", clarity: 0.96, frost: 0.05 });
     expect(resolveFinish({ preset: "frosted", clarity: 0.4 }).clarity).toBe(0.4);
   });
@@ -31,6 +35,6 @@ describe("case finishes", () => {
   it("reports a spec material for every finish", () => {
     expect(finishInfo("metal").material).toBe("metal");
     expect(finishInfo("clear").material).toBe("glass");
-    expect(finishInfo("unknown").preset).toBe("satin");
+    expect(finishInfo("unknown").preset).toBe("clear");
   });
 });

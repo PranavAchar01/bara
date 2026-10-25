@@ -45,11 +45,14 @@ export const FINISHES: FinishInfo[] = [
   { preset: "metal", label: "Metal", makes: "Anodised aluminium", material: "metal", seeThrough: false, clarity: 0, frost: 0.4 },
 ];
 
+/** The finish every shell starts in: clear, so the board and parts show through until someone picks another. */
+export const DEFAULT_FINISH: FinishPreset = "clear";
+
 export function finishInfo(preset: FinishPreset | undefined): FinishInfo {
-  return FINISHES.find((f) => f.preset === preset) ?? FINISHES[1];
+  return FINISHES.find((f) => f.preset === preset) ?? FINISHES.find((f) => f.preset === DEFAULT_FINISH)!;
 }
 
-/** The finish a case shows: its own, else satin (the shell before anyone picks one). */
+/** The finish a case shows: its own, else clear (the shell before anyone picks one). */
 export function resolveFinish(f: Finish | undefined | null): Required<Finish> {
   const info = finishInfo(f?.preset);
   return { preset: info.preset, clarity: f?.clarity ?? info.clarity, frost: f?.frost ?? info.frost };
@@ -127,7 +130,7 @@ function make(hex: string, f: Required<Finish>): THREE.MeshPhysicalMaterial {
       // Anodised aluminium: coloured metal with a brushed (anisotropic) highlight.
       return new THREE.MeshPhysicalMaterial({ color: tint, metalness: 1, roughness: 0.2 + 0.4 * frost, anisotropy: 0.7, clearcoat: 0.15, clearcoatRoughness: 0.4 });
     default: {
-      // Satin (the default): a little sheen at grazing angles so the shell's shape shows against the floor.
+      // Satin: a little sheen at grazing angles so the shell's shape shows against the floor.
       const rim = tint.clone().lerp(WHITE, 0.35);
       return new THREE.MeshPhysicalMaterial({
         color: tint,
