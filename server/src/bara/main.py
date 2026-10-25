@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from contextlib import asynccontextmanager
 
 import uvicorn
@@ -29,6 +30,10 @@ CORS_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
 CORS_ORIGIN_REGEX = r"https://(bara(-[a-z0-9-]+)?\.vercel\.app|[a-z0-9-]+\.trycloudflare\.com)"
 
 
+def _extra_origins() -> list[str]:
+    return [o for o in os.environ.get("BARA_EXTRA_ORIGINS", "").split(",") if o]
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or load_settings()
     svc = build_services(settings)
@@ -45,7 +50,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.add_middleware(AccessTokenMiddleware, token=settings.access_token)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=CORS_ORIGINS,
+        # BARA_EXTRA_ORIGINS: comma-separated local origins (a recording page on its own port).
+        allow_origins=CORS_ORIGINS + _extra_origins(),
         allow_origin_regex=CORS_ORIGIN_REGEX,
         allow_methods=["*"],
         allow_headers=["*"],

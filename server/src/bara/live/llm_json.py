@@ -18,7 +18,7 @@ from typing import Any
 import httpx
 from jsonschema import Draft202012Validator
 
-from bara.llm import CEREBRAS_URL, LlmResult, anthropic_headers
+from bara.llm import CEREBRAS_URL, LlmResult, anthropic_headers, record_usage
 
 log = logging.getLogger(__name__)
 
@@ -47,6 +47,7 @@ async def _cerebras(
             CEREBRAS_URL, json=body, headers={"Authorization": f"Bearer {key}"}
         )
     resp.raise_for_status()
+    record_usage("cerebras", model, name, resp.json().get("usage"))
     return _check(schema, json.loads(resp.json()["choices"][0]["message"]["content"]))
 
 
@@ -89,6 +90,7 @@ async def _anthropic(
         )
     finally:
         await client.close()
+    record_usage("anthropic", model, name, response.usage)
     if response.stop_reason == "refusal":
         raise ValueError(f"model refused the {name} request")
     text = next((b.text for b in response.content if b.type == "text"), None)

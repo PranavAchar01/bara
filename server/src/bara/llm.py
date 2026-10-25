@@ -122,6 +122,7 @@ async def _cerebras(
             CEREBRAS_URL, json=body, headers={"Authorization": f"Bearer {key}"}
         )
     resp.raise_for_status()
+    record_usage("cerebras", model, "classify", resp.json().get("usage"))
     content = resp.json()["choices"][0]["message"]["content"]
     return _validate(schema, json.loads(content))
 
@@ -147,12 +148,24 @@ async def _anthropic(
         )
     finally:
         await client.close()
+    record_usage("anthropic", model, "classify", response.usage)
     if response.stop_reason == "refusal":
         raise ValueError("model refused the classify request")
     text = next((b.text for b in response.content if b.type == "text"), None)
     if text is None:
         raise ValueError("no text block in the classify response")
     return _validate(schema, json.loads(text))
+
+
+def record_usage(provider: str, model: str, name: str, usage: Any) -> None:
+    """Append one call's token usage to BARA_USAGE_LOG (JSONL) when that env var is set."""
+    path = os.environ.get("BARA_USAGE_LOG")
+    if not path or usage is None:
+        return
+    data = usage if isinstance(usage, dict) else usage.model_dump()
+    row = {"t": time.time(), "provider": provider, "model": model, "name": name, "usage": data}
+    with open(path, "a") as fh:
+        fh.write(json.dumps(row) + "\n")
 
 
 def anthropic_headers() -> dict[str, str]:
