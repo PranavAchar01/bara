@@ -1,6 +1,6 @@
 // The agent on the landing page: the same bot as the workspace, out in the open. It rests in the
 // hero, slides to the prompt when you reach for it, leans in under an example chip you point at,
-// and walks over to the demo to say what it is. Position is three springs (transform only); the
+// and walks over to the demo when you point at it (or, on a narrow screen, scroll to it) to say what it is. Position is three springs (transform only); the
 // bot's own face, blink and gaze are untouched. Under reduced motion it stays at home.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BaraBot, botBubbles } from "../bot/BaraBot";
@@ -55,6 +55,7 @@ export function LandingAgent() {
     let placed = false;
     let armed = false; // the page's own autofocus does not count as the user reaching for the prompt
     let hoverChip: HTMLElement | null = null;
+    let overDemo = false;
     let current: Mode = "home";
     let n = 0;
     const lastSaid: Record<string, number> = {};
@@ -71,8 +72,11 @@ export function LandingAgent() {
       if (hoverChip && hoverChip.isConnected && spot("chip")) return "chip";
       const a = document.activeElement;
       if (armed && a instanceof HTMLElement && a.matches(PROMPT)) return "ask";
+      if (overDemo) return "demo";
+      // stacked (narrow) layout: the demo sits below the prompt, so the agent walks to it as it scrolls into view
       const f = q(".ld-frame")?.getBoundingClientRect();
-      if (f) {
+      const field = q(".ld-field")?.getBoundingClientRect();
+      if (f && field && f.top >= field.bottom) {
         const vis = Math.min(f.bottom, innerHeight) - Math.max(f.top, 0);
         if (vis > f.height * 0.5 && f.top < innerHeight * 0.55) return "demo";
       }
@@ -82,7 +86,9 @@ export function LandingAgent() {
     const spot = (m: Mode): Spot | null => {
       const c = box.getBoundingClientRect();
       const S = size.current;
-      const rel = (r: DOMRect) => ({ l: r.left - c.left, t: r.top - c.top, b: r.bottom - c.top, w: r.width, h: r.height });
+      // the page scrolls inside .landing, and the agent (absolute in it) scrolls with the content
+      const top = c.top - box.scrollTop;
+      const rel = (r: DOMRect) => ({ l: r.left - c.left, t: r.top - top, b: r.bottom - top, w: r.width, h: r.height });
       const oval = 0.26; // half the oval's height, as a share of the bot box
       if (m === "chip" && hoverChip) {
         const r = rel(hoverChip.getBoundingClientRect());
@@ -103,7 +109,7 @@ export function LandingAgent() {
         const fr = q(".ld-frame");
         if (fr) {
           const r = rel(fr.getBoundingClientRect());
-          const floor = innerHeight - c.top - oval * S - 18;
+          const floor = innerHeight - top - oval * S - 18;
           return { cx: r.l + 22 + S / 2, cy: Math.min(r.b - 22 - oval * S, floor), scale: 1 };
         }
       }
@@ -163,6 +169,7 @@ export function LandingAgent() {
     };
     const onOver = (e: PointerEvent) => {
       hoverChip = e.target instanceof Element ? e.target.closest<HTMLElement>(".example-chip") : null;
+      overDemo = e.target instanceof Element && !!e.target.closest(".ld-window");
     };
     const onFocusIn = (e: FocusEvent) => {
       if (e.target instanceof Element && e.target.matches(PROMPT)) setTyping(true);

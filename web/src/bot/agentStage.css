@@ -106,10 +106,256 @@
   100% { opacity: 0; transform: scale(1.4); }
 }
 
+/* Selection box, Figma style. Positioned and sized per frame. */
+.as-box {
+  position: absolute;
+  left: 0;
+  top: 0;
+  will-change: transform, width, height;
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+.as-box[data-on="1"] {
+  opacity: 1;
+}
+.as-box[data-bad="1"] {
+  --as-c: var(--fail);
+}
+.as-frame {
+  position: absolute;
+  inset: 0;
+  border: 1.5px solid var(--as-c);
+  background: color-mix(in srgb, var(--as-c) 5%, transparent);
+  border-radius: 1px;
+  animation: as-in 260ms ease both;
+}
+/* A box over most of the screen (the whole canvas) gets no tint: a problem there
+   would otherwise wash the canvas red. The border and chip say it. */
+.as-box[data-big="1"] .as-frame {
+  background: none;
+}
+@keyframes as-in {
+  from { opacity: 0.2; }
+  to { opacity: 1; }
+}
+.as-box[data-action="drop"] .as-frame {
+  transform-origin: 50% 100%;
+  animation: as-drop 560ms cubic-bezier(0.3, 0.7, 0.4, 1) both;
+}
+@keyframes as-drop {
+  0% { opacity: 0; transform: translateY(-70px) scale(0.96, 1.06); }
+  55% { opacity: 1; transform: translateY(0) scale(1.06, 0.86); }
+  75% { transform: translateY(0) scale(0.98, 1.04); }
+  100% { transform: none; }
+}
+/* cheer: the box glows, inside as well as out, since a canvas-sized box has no room outside */
+.as-box[data-action="cheer"] .as-frame {
+  animation: as-glow 900ms ease-in-out 2;
+}
+@keyframes as-glow {
+  0%, 100% {
+    box-shadow:
+      0 0 0 0 color-mix(in srgb, var(--as-c) 0%, transparent),
+      inset 0 0 0 0 color-mix(in srgb, var(--as-c) 0%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 0 0 4px color-mix(in srgb, var(--as-c) 25%, transparent),
+      0 0 28px 6px color-mix(in srgb, var(--as-c) 35%, transparent),
+      inset 0 0 36px 6px color-mix(in srgb, var(--as-c) 30%, transparent);
+  }
+}
+
+.as-h {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  background: var(--surface);
+  border: 1.5px solid var(--as-c);
+}
+.as-h.tl { left: -4.25px; top: -4.25px; }
+.as-h.tr { right: -4.25px; top: -4.25px; }
+.as-h.bl { left: -4.25px; bottom: -4.25px; }
+.as-h.br { right: -4.25px; bottom: -4.25px; }
+
+.as-chip {
+  position: absolute;
+  left: -1.5px;
+  bottom: calc(100% + 5px);
+  max-width: 240px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--as-c);
+  color: var(--accent-text);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.as-box[data-top="1"] .as-chip {
+  bottom: auto;
+  top: 5px;
+  left: 5px;
+}
+
+/* scan: a bright line sweeping down with a soft trail above it */
+.as-scan {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 2px;
+  background: var(--as-c);
+  box-shadow: 0 0 8px 1px var(--as-c);
+  animation: as-scan 1.2s linear infinite;
+}
+.as-scan::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 2px;
+  height: 26px;
+  background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--as-c) 18%, transparent));
+}
+@keyframes as-scan {
+  0% { top: 0; opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { top: calc(100% - 2px); opacity: 0; }
+}
+
+/* trace: a dashed route drawing itself across the box. The route runs left to
+   right, so a left-to-right reveal draws it in; the dashes march as it goes. */
+.as-trace {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  clip-path: inset(-8px 100% -8px -8px);
+  animation: as-reveal var(--as-draw, 1000ms) ease-in-out forwards;
+}
+.as-trace-line,
+.as-trace-glow {
+  fill: none;
+  vector-effect: non-scaling-stroke;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.as-trace-glow {
+  stroke: color-mix(in srgb, var(--as-c) 22%, transparent);
+  stroke-width: 6;
+}
+.as-trace-line {
+  stroke: var(--as-c);
+  stroke-width: 2;
+  stroke-dasharray: 5 4;
+  animation: as-march 600ms linear infinite;
+}
+@keyframes as-reveal {
+  to { clip-path: inset(-8px -8px -8px -8px); }
+}
+@keyframes as-march {
+  to { stroke-dashoffset: -9; }
+}
+
+/* type: a little code chip beside the box, typed out with a blinking caret */
+.as-code {
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 4px;
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 7px;
+  border-radius: 4px;
+  background: var(--text);
+  color: var(--surface);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 15px;
+  white-space: nowrap;
+  box-shadow: var(--shadow);
+}
+.as-box[data-flip="1"] .as-code {
+  left: auto;
+  right: -1.5px;
+  top: calc(100% + 8px);
+}
+.as-code-text {
+  display: inline-block;
+  overflow: hidden;
+  width: 0;
+  animation: as-type var(--as-type, 1.4s) steps(var(--as-n, 16), end) 120ms forwards;
+}
+@keyframes as-type {
+  to { width: calc(var(--as-n, 16) * 1ch); }
+}
+.as-caret {
+  display: inline-block;
+  width: 1.5px;
+  height: 12px;
+  margin-left: 1px;
+  background: var(--accent);
+  animation: as-blink 1s steps(1) infinite;
+}
+@keyframes as-blink {
+  50% { opacity: 0; }
+}
+
+/* check: a tick (or a cross) pops at the top-right corner */
+.as-mark {
+  position: absolute;
+  right: -11px;
+  top: -11px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--ok);
+  box-shadow: 0 0 0 2px var(--surface);
+  animation: as-pop 420ms cubic-bezier(0.34, 1.56, 0.64, 1) 150ms both;
+}
+.as-box[data-bad="1"] .as-mark {
+  background: var(--fail);
+}
+.as-mark path {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+@keyframes as-pop {
+  0% { transform: scale(0) rotate(-30deg); }
+  100% { transform: scale(1) rotate(0); }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .as-ripple.on::after {
+  .as-frame,
+  .as-box[data-action="drop"] .as-frame,
+  .as-box[data-action="cheer"] .as-frame,
+  .as-mark,
+  .as-ripple.on::after,
+  .as-trace-line {
     animation: none;
   }
+  .as-scan {
+    display: none;
+  }
+  .as-trace {
+    animation: none;
+    clip-path: none;
+  }
+  .as-code-text {
+    animation: none;
+    width: auto;
+  }
+  .as-box,
   .as-cursor,
   .as-bot {
     transition: none;
