@@ -89,13 +89,6 @@
         "type": "string"
       }
     },
-    "node_colors": {
-      "type": "object",
-      "description": "Base colour each GLB node was written with (hex), e.g. a lens node's tint.",
-      "additionalProperties": {
-        "type": "string"
-      }
-    },
     "origin": {
       "type": "string",
       "enum": [

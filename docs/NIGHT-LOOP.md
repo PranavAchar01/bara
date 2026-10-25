@@ -288,38 +288,3 @@ Web: bara-merge agent merges Nithin's figma-design-in-code / agent-board-3d / fi
   (3) mech.*/interconnect.* needs cost no controller pin (thumbstick caps took GPIO) (48094ac).
   Controller b_4JVtdvFkFZVY DONE, no DRC errors. Open: VZ30C motor and LiPo 401230 have no
   library 3D model (KiCad ships none); MCU free-pin count reads "unknown" for SuperMini.
-
-### 2026-10-24 ~19:45 PT
-- bara-ui done (65ddb5d): Build-only home over a replay of 3 real builds, /library with Build pop-up, /build/:id, toasts, cursor-only agent, shopping list. Verified: tsc clean, 225 tests, build ok.
-- 67f5204: Vercel SPA rewrites for /build, /library, /drafts.
-- Engine restarted on the current tree, so the bom export (2c8cf38) is live and the shopping list loads.
-- Still open: calculator still comes out as a keyboard (bara-general in flight); bara-engine, bara-sim, bara-look not reported. Held-out eval waits until those land, so it grades the merged engine.
-
-### 2026-10-24 ~19:50 PT: held-out eval (random pool + 2 new + calculator)
-- 6/6 done, all required checks pass, all boards routed (presenter clicker 302 s, pill box 1330 s, metronome 586 s, plant moisture beeper 505 s, bike tail light 489 s, calculator 666 s).
-- Calculator now has calculator parts: 22 tactile keys, segment-LCD driver, 8-digit LCD glass, zebra connector. No keyboard pipeline.
-- Worst gap: identity.reads_as_device fails 4/6 (generic slab cases). Sent to bara-engine (owns form.py). render.models boxes on 3 parts.
-- Merged + pushed: Nithin's multi-device/case-materials (3d77a7e), bara-canvas 6589e5a, bara-agent 7b90f93..d35dc1e, top bar labels.
-
-## 2026-10-24 20:15 PT
-- Pushed f8c1e87 (sim stage: no grid, ~88% fill, long axis across, Reset/Boot always, per-stick hitboxes) and engine fixes 4b8552a, 9e19ebb, ad8abc9 (tall-part swap, thickness swap, IndexError in re-narrowed slot pick that crashed the thermometer). test_fit_swap 5/5.
-- bara-general done: 4/7 of its invented devices pass. Remaining failures (parts under the case face, thermometer crash) went to bara-engine. Look gaps went to bara-look: display overlapping keys, knob drawn as a joystick, tail light with no lens, open pockets, stretched joystick shell.
-- Engine restarted. Held-out eval heldout-2015 running: fan controller, key finder, pill box from the pool, plus meat thermometer and step counter.
-
-## 2026-10-24 20:40 PT
-- Held-out heldout-2015: 3/5 pass (fan controller, pill box, step counter). Failures: key finder tag (FORM_OVERFLOW on a tiny form with free area, then floating/enclosure/access/DRC) and meat thermometer (critical display slot over-specified, every candidate rejected). Both sent to bara-engine. Identity still weak (step counter = tan slab).
-- Fixed schematic crash: _natural pin sort mixed str/int (pins 1 vs A1), which blocked board.built on 2 builds. Pushed with a test.
-- Pushed agent commits 09f192d (access ways for every touched part) and 41cf472 (footprints named by card, no brands). The committed tree passes test_case_shell 29/29; in-progress edits in the working tree break it, held back.
-
-## 2026-10-24 21:00 PT
-- Merged Nithin's calmer-agent (4bfb4db), his only unmerged branch: the hero has the recorded build behind and the Build button in front, you talk to the bot on the hero, and the cursor is a leaning arrowhead. Conflicts: Landing took his hero. TopBar kept the workspace-only mock badge, with the fallback model in the hover. shell.css kept both sides' rules. LandingAgent stays because the library stills use it. tsc clean, vitest 255/255, build OK, landing screenshotted. Site rebuilt.
-- 99a467d (bara-look form features: hanging hole, wedge, lens, pockets) verified on a clean tree: case/form tests 83/83.
-
-## 2026-10-24 21:10 PT
-- bara-look 33c3cd5 verified on a clean tree (case/form/fit tests 88/88) and pushed: parts on one face never share area (display clear of the keys), knurled knobs, tinted lens windows, closed bosses instead of open pockets, body-only silhouette, uniform scale-up of a too-small form.
-- bara-landing running (his 20:45 ask): Bara name, full landing sections, prompt bar clipping fix, handoff animation into the workspace.
-- Waiting on bara-engine (key finder overflow, over-specified critical slot), then restart and run held-out.
-
-## 2026-10-24 21:25 PT
-- bara-landing 189d8d6 pushed and site rebuilt: Bara brand and mark, nav, How it works, What you get, Examples, FAQ, CTA band, footer; demo trimmed so the prompt bar is no longer clipped; Handoff.tsx glide into the workspace (reduced motion = instant). tsc clean, vitest 255/255.
-- Gap: the hero video still shows brand part names and the old UI. Sent back to bara-landing to re-record against the current app.

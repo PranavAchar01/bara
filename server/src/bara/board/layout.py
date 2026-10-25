@@ -233,17 +233,6 @@ class Item:
             return None
         return self.world(unary_union([Polygon(ring) for ring in self.fp.keepouts]))
 
-    def body_poly(self) -> Polygon:
-        """The footprint without its antenna keep-out: what must lie on the board. The keep-out
-        may hang past the edge, the way a module's antenna is meant to sit."""
-        keep = self.keepout_poly()
-        poly = self.footprint_poly()
-        if keep is None:
-            return poly
-        if self.fp is not None and self.fp.fab:  # the module's own antenna end stays aboard
-            keep = keep.difference(self.world(box(*self.fp.fab)))
-        return poly.difference(keep)
-
     def cutout_poly(self) -> Polygon | None:
         """A hole the footprint cuts in the board (its own Edge.Cuts), in board coords."""
         if self.fp is None or self.fp.cutout is None:
