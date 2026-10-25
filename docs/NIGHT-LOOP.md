@@ -314,3 +314,8 @@ Web: bara-merge agent merges Nithin's figma-design-in-code / agent-board-3d / fi
 ## 2026-10-24 21:00 PT
 - Merged Nithin's calmer-agent (4bfb4db), his only unmerged branch: the hero has the recorded build behind and the Build button in front, you talk to the bot on the hero, and the cursor is a leaning arrowhead. Conflicts: Landing took his hero. TopBar kept the workspace-only mock badge, with the fallback model in the hover. shell.css kept both sides' rules. LandingAgent stays because the library stills use it. tsc clean, vitest 255/255, build OK, landing screenshotted. Site rebuilt.
 - 99a467d (bara-look form features: hanging hole, wedge, lens, pockets) verified on a clean tree: case/form tests 83/83.
+
+## 2026-10-24 21:10 PT
+- bara-look 33c3cd5 verified on a clean tree (case/form/fit tests 88/88) and pushed: parts on one face never share area (display clear of the keys), knurled knobs, tinted lens windows, closed bosses instead of open pockets, body-only silhouette, uniform scale-up of a too-small form.
+- bara-landing running (his 20:45 ask): Bara name, full landing sections, prompt bar clipping fix, handoff animation into the workspace.
+- Waiting on bara-engine (key finder overflow, over-specified critical slot), then restart and run held-out.
