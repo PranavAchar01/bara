@@ -22,6 +22,7 @@ from bara.board.evaluate import evaluate as evaluate_board
 from bara.live import adapters as A
 from bara.live import archetype, completeness, hero, open_designs, websearch
 from bara.live import blocks as blocks_mod
+from bara.live import finish as finish_mod
 from bara.live import form as form_mod
 from bara.live import identity as identity_mod
 from bara.live.brief import BriefResult, normalise_brief, spec_from_brief, write_brief
@@ -323,6 +324,30 @@ def _spans(product: form_mod.Form, size: tuple[float, float]) -> bool:
     )
 
 
+def _form_sig(product: form_mod.Form) -> tuple[Any, ...]:
+    """What a redraw can change: the outline (to the mm), the thickness and the anchors."""
+    return (
+        tuple((round(x), round(y)) for x, y in product.silhouette),
+        round(product.thickness_mm),
+        tuple(
+            (a.get("slot_id"), round(float(a["centre"][0])), round(float(a["centre"][1])))
+            for a in product.anchors
+        ),
+    )
+
+
+def _measured(run: BuildRun, product: form_mod.Form | None) -> tuple[float, float, float] | None:
+    """The built case's plan width, depth and height in mm (the form's when no case yet)."""
+    for enc in run.state.get("enclosures") or []:
+        size = enc.get("outer_size_mm")
+        if size and len(size) == 3:
+            return float(size[0]), float(size[1]), float(size[2])
+    if product is None:
+        return None
+    w, h = product.size_mm
+    return float(w), float(h), float(product.thickness_mm)
+
+
 def _extent(product: form_mod.Form) -> tuple[float, float, float]:
     """Overall width, height and area of the silhouette."""
     xs = [p[0] for p in product.silhouette]
@@ -394,10 +419,22 @@ class LiveRunner:
         self.firmware(run, brief, plan, result, board)
         self.render(run, result, board, ctx)
         failure = await self.repair(run, brief, plan, result, board, ctx)
+        self.finishing(run, brief)
         if failure is not None:
             run.emit("build.failed", {"error": failure})
             return
         run.emit("build.done", self.engine._done_payload(run, {}))
+
+    def finishing(self, run: BuildRun, brief: dict[str, Any]) -> None:
+        """After industrial design: colours and materials on purpose (clear tinted case,
+        opaque controls in one palette, dark-glass screen, real board and metal finishes),
+        written as `finish` on parts, boards and the case and summarised on scene.finish."""
+        st = self._stage(run, "render", "Choosing colours and materials")
+        msgs = finish_mod.events(run.state, list(brief.get("colours") or []))
+        for msg_type, payload in msgs:
+            st.emit(msg_type, payload)
+        pal = ((run.state.get("scene") or {}).get("finish") or {}).get("palette_name", "")
+        st.done(message=f"Clear case, {pal} palette, {len(msgs)} finishes"[:200])
 
     MAX_REPAIRS = 3
 
@@ -951,7 +988,17 @@ class LiveRunner:
                     break
         verdict: dict[str, Any] | None = None
         note = "no form" if product is None else "nothing to render"
-        if product is not None and meshes:
+        # a redraw that left the form as it was, or a re-judge that objects to the same things,
+        # cannot converge: the earlier verdict and message stand (so a repair round that sends
+        # it back sees the same failure and stops) instead of judging and redrawing again
+        last = getattr(run, "identity_last", None)
+        sig = _form_sig(product) if product is not None else None
+        stuck = bool(
+            final and last and not last["ok"] and (last["sig"] == sig or last.get("stuck"))
+        )
+        if stuck and last:
+            verdict, note = last["verdict"], "unchanged"
+        elif product is not None and meshes:
             if product.rest_pose == "upright":
                 meshes = hero.stand_up(meshes)
             eye, target = hero.hero_camera(meshes, product.rest_pose)
@@ -961,8 +1008,23 @@ class LiveRunner:
             run.hero_png = out / f"{run.build_id}{'_repaired' if final else ''}.png"  # type: ignore[attr-defined]
             run.hero_png.write_bytes(png)  # type: ignore[attr-defined]
             verdict, note = await identity_mod.judge(
-                run.prompt, product.description, product.reference, png, await self._photos(run)
+                run.prompt,
+                product.description,
+                product.reference,
+                png,
+                await self._photos(run),
+                device_class=str(product.device_class or getattr(run, "device", "") or ""),
+                measured=_measured(run, product),
             )
+            if (
+                final
+                and last
+                and not last["ok"]
+                and verdict is not None
+                and not verdict["reads_as_device"]
+                and identity_mod.same_objection(last["verdict"], verdict)
+            ):
+                stuck = True
         run.identity = verdict  # type: ignore[attr-defined]
         ok = verdict is not None and bool(verdict["reads_as_device"])
         message = (
@@ -976,6 +1038,21 @@ class LiveRunner:
         )
         if verdict and not ok and verdict["mismatches"]:
             message += " | " + "; ".join(verdict["mismatches"])
+        if stuck and last:
+            message = last["message"]
+            if not last.get("stuck"):
+                self._warn(
+                    run, "render", "w_identity_stuck", "other", "warning",
+                    "The redraw did not change what the look reviewer objected to; no further "
+                    "identity redraws. Last verdict: " + message[:200],
+                )  # fmt: skip
+        run.identity_last = {  # type: ignore[attr-defined]
+            "sig": sig,
+            "ok": ok,
+            "verdict": verdict,
+            "message": message,
+            "stuck": stuck,
+        }
         st.emit(
             "check.result",
             {
@@ -996,7 +1073,7 @@ class LiveRunner:
         )
         st.done()
         if verdict is not None and not ok and not final:
-            return identity_mod.critique(verdict)
+            return identity_mod.critique(verdict, _measured(run, product))
         return None
 
     def _form_fit_check(

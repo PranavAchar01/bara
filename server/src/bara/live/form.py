@@ -46,9 +46,11 @@ Rules:
 - silhouette: a closed outline as 8 to 60 points, counter-clockwise, no repeated or crossing
   edges. Draw the real shape: grips, notches, rounded ends, ears, an L or a pill, not a
   rectangle unless the real product is one. Use enough points on curves to read as curved.
-- reference: the real overall width x height x thickness in mm of well-known products of this
-  class (give the product names you are drawing on) and use those numbers for the silhouette's
-  bounding box and for thickness_mm. Do not shrink the product to fit parts.
+- reference: the typical real overall width x height x thickness in mm of products of this
+  class, and the generic kinds of product you are drawing on (plain descriptions such as
+  "portrait handheld game console with a d-pad", never a brand, product or model name, even
+  when the request names one). Use those numbers for the silhouette's bounding box and for
+  thickness_mm. Do not shrink the product to fit parts.
 - thickness_mm: maximum body thickness; edge_thickness_mm: thickness at the thinnest edge.
 - anchors: every touch slot gets one or more anchors; a slot made of several groups (listed
   after "groups") gets one anchor per group, and the anchors' counts add up to the slot's
@@ -171,9 +173,9 @@ def schema(slot_ids: list[str]) -> dict[str, Any]:
             "reference": {
                 "type": "object",
                 "additionalProperties": False,
-                "required": ["products", "width_mm", "height_mm", "thickness_mm"],
+                "required": ["kinds", "width_mm", "height_mm", "thickness_mm"],
                 "properties": {
-                    "products": {"type": "array", "items": {"type": "string"}},
+                    "kinds": {"type": "array", "items": {"type": "string"}},
                     "width_mm": {"type": "number"},
                     "height_mm": {"type": "number"},
                     "thickness_mm": {"type": "number"},
@@ -315,7 +317,7 @@ def validate(form: Form, touches: list[Touch]) -> list[str]:
         turned = max(abs(w / rh - 1), abs(h / rw - 1))
         if min(direct, turned) > SIZE_TOLERANCE:
             problems.append(
-                f"the silhouette is {w:.0f} x {h:.0f} mm but your reference products are "
+                f"the silhouette is {w:.0f} x {h:.0f} mm but your reference size is "
                 f"{rw:.0f} x {rh:.0f} mm: use the real size"
             )
     else:
