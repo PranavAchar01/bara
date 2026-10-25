@@ -65,6 +65,12 @@ class _Inputs:
         self.axis: dict[str, int] = {}  # ADC value 0..4095
         self.adc_by_ch: dict[int, str] = {}
         for r in self.rows:
+            if r["fw_kind"] == "sensor":
+                span = float(r["max"]) - float(r["min"]) or 1.0
+                self.axis[r["id"]] = int(
+                    round((float(r["default"]) - float(r["min"])) / span * 4095)
+                )
+                self.adc_by_ch[int(r.get("adc") or 0)] = r["id"]
             if r["fw_kind"] == "axis":
                 self.axis[r["id"]] = 2048
                 self.adc_by_ch[int(r.get("adc") or 0)] = r["id"]
@@ -147,7 +153,7 @@ class _Base:
     def _watch_pins(self) -> dict[int, str]:
         names: dict[int, str] = {}
         for o in self.io["outputs"]:
-            if o.get("pin") and o["kind"] in ("led", "tone"):
+            if o.get("pin") and o["kind"] in ("led", "tone", "motor"):
                 names[pin_number(self.board, o["pin"])] = o["label"]
         return names
 
@@ -252,6 +258,26 @@ class _Base:
             self._emit({"type": "input", "id": input_id, "label": r["label"], "value": v})
             self._sync_inputs()
 
+    def set_sensor(self, input_id: str, value: float) -> None:
+        """Set a sensor's physical value (in its own unit); the ADC reads the matching code."""
+        with self.lock:
+            r = self.inputs.by_id.get(input_id)
+            if not r or r["fw_kind"] != "sensor":
+                raise KeyError(input_id)
+            lo, hi = float(r["min"]), float(r["max"])
+            v = max(lo, min(hi, float(value)))
+            self.inputs.axis[input_id] = int(round((v - lo) / ((hi - lo) or 1.0) * 4095))
+            self._emit(
+                {
+                    "type": "input",
+                    "id": input_id,
+                    "label": r["label"],
+                    "value": v,
+                    "unit": r["unit"],
+                }
+            )
+            self._sync_inputs()
+
     def _sync_inputs(self) -> None:
         pass
 
@@ -265,13 +291,20 @@ class _Base:
         with self.lock:
             leds = []
             for o in self.io["outputs"]:
-                if o["kind"] in ("led", "tone") and o.get("pin"):
+                if o["kind"] in ("led", "tone", "motor") and o.get("pin"):
                     pin = pin_number(self.board, o["pin"])
                     lvl = self.led.get(pin, 0)
                     on = (not lvl) if o.get("active_low") else bool(lvl)
                     if pin in self.tone_pins:
                         on = self.now_ms() - self.tone_last.get(pin, -1e9) <= 3
-                    leds.append({"id": o["id"], "label": o["label"], "on": on and self.powered})
+                    leds.append(
+                        {
+                            "id": o["id"],
+                            "label": o["label"],
+                            "kind": o["kind"],
+                            "on": on and self.powered,
+                        }
+                    )
             return {
                 "mode": self.kind,
                 "powered": self.powered,
@@ -686,7 +719,7 @@ class HostSession(_Base):
                 a, bb = self.inputs.enc.get(r["id"], (False, False))
                 self._send_once(f"a{r['id']}", f"p {self.inputs.pin(r)} {0 if a else 1}")
                 self._send_once(f"b{r['id']}", f"p {self.inputs.pin(r, 'pin_b')} {0 if bb else 1}")
-            elif k == "axis":
+            elif k in ("axis", "sensor"):
                 ch = int(r.get("adc") or 0)
                 self._send_once(f"x{r['id']}", f"a {ch} {self.inputs.axis[r['id']]}")
         del b

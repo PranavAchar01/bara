@@ -7,7 +7,7 @@ import type { Build } from "../spec/types";
 import { deriveInputMap, type InputMap, type SimInput } from "./inputMap";
 import { createRuntime, press, release, type RemoteScreen, type Runtime } from "./runtime";
 import { displaySpec, operatingView, type DisplaySpec, type OperatingView } from "./view";
-import { openSimPanel } from "./simPanelStore";
+import { closeSimPanel, openSimPanel } from "./simPanelStore";
 
 interface Saved {
   explode: number;
@@ -91,16 +91,22 @@ export function enterBridge(build: Build): () => void {
     saved,
     version: 0,
   });
-  return exitSimulation;
+  return leaveStage;
 }
 
-export function exitSimulation(): void {
+/** Restore the workspace pose and stop the runtime; the panel's own state is left alone. */
+function leaveStage(): void {
   const { active, saved } = useSim.getState();
   if (!active) return;
   capHold.clear();
   simHooks.press = simHooks.release = undefined;
   useSim.setState({ active: false, runtime: null, hover: null });
   if (saved) useApp.setState({ explode: saved.explode, preset: saved.preset, toggles: saved.toggles });
+}
+
+export function exitSimulation(): void {
+  leaveStage();
+  closeSimPanel();
 }
 
 /** Mirror what the engine says the display shows, so the screen on the 3D model draws the firmware's output. */

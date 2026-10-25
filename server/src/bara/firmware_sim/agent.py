@@ -163,8 +163,21 @@ CHAT_SCHEMA: dict[str, Any] = {
                 "required": ["id", "label"],
             },
         },
+        "surface_ops": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "op": {"type": "string", "enum": ["show", "hide", "rename", "lead", "set"]},
+                    "input_id": {"type": "string"},
+                    "label": {"type": "string"},
+                    "value": {"type": "number"},
+                },
+                "required": ["op", "input_id", "label", "value"],
+            },
+        },
     },
-    "required": ["reply", "kind"],
+    "required": ["reply", "kind", "surface_ops"],
 }
 CHAT_SCHEMA = _closed(CHAT_SCHEMA)
 
@@ -175,7 +188,13 @@ CHAT_SYSTEM = (
     "0 to 64), led_on_press (LED stays lit while any input is held), and a label per input. "
     "If the person asks for a change, set kind to 'change', include only the settings that "
     "change, and say in one or two plain sentences what will happen. If it is a question, set "
-    "kind to 'question' and answer it in reply. Never invent settings that are not listed."
+    "kind to 'question' and answer it in reply. Never invent settings that are not listed. "
+    "The play surface shows one control per real input. A request to change the surface goes in "
+    "surface_ops: show (bring a hidden input back, for example 'add a slider for battery level' "
+    "when an input measures it), hide, rename (label in standardized technical wording), lead "
+    "(make it the main control), set (value is a sensor's physical value in its unit). Use only "
+    "input ids from the list. If the build has no part that provides what was asked, return no "
+    "op and say in reply which part is missing. Leave label empty and value 0 when unused."
 )
 
 
@@ -227,7 +246,12 @@ async def chat_patch(
                 f"{k}={cfg[k]}"
                 for k in ("blink_ms", "debounce_ms", "tone_ms", "axis_deadzone", "led_on_press")
             ),
-            "Inputs: " + "; ".join(f"{i['id']} = {i['label']}" for i in io["inputs"][:40]),
+            "Inputs: "
+            + "; ".join(
+                f"{i['id']} = {i['label']}"
+                + (f" ({i['min']} to {i['max']} {i['unit']})" if i["kind"] == "sensor" else "")
+                for i in io["inputs"][:60]
+            ),
             f"Person: {message}",
         ]
     )
@@ -263,4 +287,27 @@ async def chat_patch(
     }
     if labels:
         patch["labels"] = labels
+    ops = surface_ops(d.get("surface_ops"), io)
+    if ops:
+        patch["surface_ops"] = ops
     return patch, str(d.get("reply") or ""), str(d.get("kind") or "change"), res.provider
+
+
+def surface_ops(raw: Any, io: dict[str, Any]) -> list[dict[str, Any]]:
+    """The model's surface requests, kept only when they name a real input; a sensor value is
+    held inside the part's own range."""
+    by_id = {i["id"]: i for i in io["inputs"]}
+    out: list[dict[str, Any]] = []
+    for x in raw or []:
+        if not isinstance(x, dict) or x.get("input_id") not in by_id:
+            continue
+        i = by_id[x["input_id"]]
+        op = x.get("op")
+        if op in ("show", "hide", "lead"):
+            out.append({"op": op, "input_id": i["id"]})
+        elif op == "rename" and _clean(str(x.get("label") or ""), 32):
+            out.append({"op": op, "input_id": i["id"], "label": _clean(str(x["label"]), 32)})
+        elif op == "set" and i["kind"] == "sensor":
+            v = max(float(i["min"]), min(float(i["max"]), float(x.get("value") or 0)))
+            out.append({"op": op, "input_id": i["id"], "value": v})
+    return out

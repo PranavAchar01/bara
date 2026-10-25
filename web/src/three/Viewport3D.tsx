@@ -41,6 +41,7 @@ import { caps } from "../sim/press";
 import { pressKeyOf, type SimInput } from "../sim/inputMap";
 import { canSimulate, enterSimulation, exitSimulation, useSim } from "../sim/simStore";
 import { SimOverlay } from "../sim/SimOverlay";
+import { SimHotspotsHost } from "../sim/SimHotspots";
 import { inputHandlers, SimCaps, SimDriver, SimScreens } from "./sim3d";
 
 const DEG = Math.PI / 180;
@@ -1976,6 +1977,7 @@ export function Viewport3D() {
         gl={{ antialias: !post, preserveDrawingBuffer: true, powerPreference: "high-performance" }}
       >
         <SceneContents gizmoMode={gizmoMode} theme={theme} palette={palette} boardOnly={boardOnly} post={post} onFit={setMisfit} />
+        <SimHotspotsHost />
         <OrbitControls makeDefault enableDamping dampingFactor={0.12} enabled={!simOn} />
       </Canvas>
       {hasParts && <LabelOverlay rows={overlayRows} color="#1B1D1F" muted="#5D6166" line="#7C8086" accent="#2E7D46" />}
