@@ -29,6 +29,10 @@ ARCHETYPES = Path(__file__).resolve().parents[3] / "data/archetypes.json"
 PATTERNS = ["single", "row", "column", "grid", "diamond", "ring"]
 MOUNTS = ["front", "back", "edge"]
 REST_POSES = ["face_up", "upright"]
+# what makes a product recognisable beyond its outline and thickness; a generic vocabulary the
+# model composes from what the device is, never a template per device
+FEATURE_KINDS = ["appendage", "wedge", "panel_grid", "recess", "raised", "lens"]
+MAX_FEATURES = 8
 SIZE_TOLERANCE = 0.35  # silhouette vs the model's own cited real dimensions
 MIN_SIDE_MM, MAX_SIDE_MM = 12.0, 900.0
 MAX_ASPECT = 14.0
@@ -64,6 +68,22 @@ Rules:
 - rest_pose: how the product sits in use. face_up when it lies on a surface or in a hand
   with that face toward the sky (phone, keyboard, remote, scale); upright when it stands with
   that face toward the person (monitor, speaker, clock, router on its stand).
+- features: the form details a person recognises the product by beyond its outline, taken
+  from what the device is (the concept's identity cues, the reference products). Use none
+  when the outline and thickness already say it. Kinds:
+  appendage: a thin solid part of the body reaching out past the silhouette from its rim (a
+  stake pushed into soil, a hanging tab or lug with a hole, a hook, an ear, a handle tab),
+  given as its own outline that touches the silhouette and lies outside it, with
+  thickness_mm and hole_mm (0 = no hole) at centre;
+  wedge: the body is thicker toward axis_deg (0 = +x, 90 = +y) and thinnest, thickness_mm,
+  at the opposite edge (a desk calculator, a keyboard, a doorstop);
+  panel_grid: cols x rows lids, tiles or compartments marked as grooves on the main face over
+  width_mm x height_mm at centre (a weekly pill box, a tile keypad);
+  recess: a shallow pocket in the main face (a finger scoop, a label well, a display bay);
+  raised: a low pad standing on the main face (a grip pad, a lens bezel, a nameplate);
+  lens: a clear dome on the main face width_mm x height_mm, thickness_mm tall (a tail light,
+  a sensor eye, an indicator lens).
+  Fields a kind does not use are 0 or empty. Surface features sit inside the silhouette.
 - Use only slot_id values from the list."""
 
 
@@ -90,6 +110,7 @@ class Form:
     repaired: bool = False
     scale: float = 1.0
     rest_pose: str = "face_up"  # REST_POSES: upright stands with the main face toward the person
+    features: list[dict[str, Any]] = field(default_factory=list)  # FEATURE_KINDS, form frame
 
     @property
     def polygon(self) -> Polygon:
@@ -112,6 +133,7 @@ class Form:
             "size_mm": list(self.size_mm),
             "repaired": self.repaired,
             "rest_pose": self.rest_pose,
+            "features": self.features,
         }
 
     def summary(self) -> str:
@@ -155,6 +177,36 @@ def schema(slot_ids: list[str]) -> dict[str, Any]:
             "count": {"type": "integer"},
         },
     }
+    feature = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": [
+            "kind",
+            "purpose",
+            "outline",
+            "centre",
+            "width_mm",
+            "height_mm",
+            "cols",
+            "rows",
+            "thickness_mm",
+            "hole_mm",
+            "axis_deg",
+        ],
+        "properties": {
+            "kind": {"type": "string", "enum": FEATURE_KINDS},
+            "purpose": {"type": "string"},
+            "outline": {"type": "array", "items": pt},
+            "centre": pt,
+            "width_mm": {"type": "number"},
+            "height_mm": {"type": "number"},
+            "cols": {"type": "integer"},
+            "rows": {"type": "integer"},
+            "thickness_mm": {"type": "number"},
+            "hole_mm": {"type": "number"},
+            "axis_deg": {"type": "number"},
+        },
+    }
     return {
         "type": "object",
         "additionalProperties": False,
@@ -167,6 +219,7 @@ def schema(slot_ids: list[str]) -> dict[str, Any]:
             "silhouette_description",
             "rest_pose",
             "anchors",
+            "features",
         ],
         "properties": {
             "device_class": {"type": "string"},
@@ -187,6 +240,7 @@ def schema(slot_ids: list[str]) -> dict[str, Any]:
             "silhouette_description": {"type": "string"},
             "rest_pose": {"type": "string", "enum": REST_POSES},
             "anchors": {"type": "array", "items": anchor},
+            "features": {"type": "array", "items": feature},
         },
     }
 
@@ -265,6 +319,7 @@ def build(data: dict[str, Any]) -> Form | None:
         pts = [(float(p["x"]), float(p["y"])) for p in data["silhouette"]]
         for a in data.get("anchors") or []:
             a["centre"] = [float(a["centre"]["x"]), float(a["centre"]["y"])]
+        features = [_feature(f) for f in data.get("features") or []]
     except (KeyError, TypeError, ValueError):
         return None
     poly = Polygon(pts)
@@ -280,8 +335,31 @@ def build(data: dict[str, Any]) -> Form | None:
         reference=dict(data.get("reference") or {}),
         description=str(data.get("silhouette_description") or ""),
         rest_pose=data["rest_pose"] if data.get("rest_pose") in REST_POSES else "face_up",
+        features=features,
     )
     return form
+
+
+def _feature(f: dict[str, Any]) -> dict[str, Any]:
+    c = f.get("centre") or {}
+    return {
+        "kind": str(f["kind"]),
+        "purpose": str(f.get("purpose") or ""),
+        "outline": [[float(p["x"]), float(p["y"])] for p in f.get("outline") or []],
+        "centre": [float(c.get("x") or 0.0), float(c.get("y") or 0.0)],
+        **{k: float(f.get(k) or 0.0) for k in ("width_mm", "height_mm", "thickness_mm")},
+        **{k: float(f.get(k) or 0.0) for k in ("hole_mm", "axis_deg")},
+        "cols": max(1, int(f.get("cols") or 1)),
+        "rows": max(1, int(f.get("rows") or 1)),
+    }
+
+
+def move_features(form: Form, k: float = 1.0, dx: float = 0.0, dy: float = 0.0) -> None:
+    """Scale the features about the origin by k, then shift them by (-dx, -dy), as the outline."""
+    for f in form.features:
+        f["outline"] = [[x * k - dx, y * k - dy] for x, y in f["outline"]]
+        f["centre"] = [f["centre"][0] * k - dx, f["centre"][1] * k - dy]
+        f["width_mm"], f["height_mm"] = f["width_mm"] * k, f["height_mm"] * k
 
 
 def centre_on_origin(form: Form) -> None:
@@ -291,6 +369,7 @@ def centre_on_origin(form: Form) -> None:
     form.silhouette = [(x - dx, y - dy) for x, y in form.silhouette]
     for a in form.anchors:
         a["centre"] = [a["centre"][0] - dx, a["centre"][1] - dy]
+    move_features(form, 1.0, dx, dy)
 
 
 def validate(form: Form, touches: list[Touch]) -> list[str]:
@@ -351,7 +430,51 @@ def validate(form: Form, touches: list[Touch]) -> list[str]:
                 problems.append(f"edge anchor {a['name']} is {near:.0f} mm from the rim")
         elif not all(inside.contains(Point(p)) for p in pts):
             problems.append(f"anchor {a['name']} has instances outside the silhouette")
+    problems.extend(feature_problems(form))
     return problems
+
+
+def feature_problems(form: Form) -> list[str]:
+    """Each form feature must be buildable: an appendage reaches out from the rim, a surface
+    feature sits on the face, sizes and thicknesses are those of a real product."""
+    poly = Polygon(form.silhouette)
+    x0, y0, x1, y1 = poly.bounds
+    short = min(x1 - x0, y1 - y0)
+    out: list[str] = []
+    if len(form.features) > MAX_FEATURES:
+        out.append(f"{len(form.features)} features: keep the {MAX_FEATURES} that matter most")
+    for i, f in enumerate(form.features):
+        name = f"feature {i + 1} ({f['kind']}, {f['purpose'][:40]})"
+        t = f["thickness_mm"]
+        if f["kind"] == "appendage":
+            ap = Polygon(f["outline"]) if len(f["outline"]) >= 3 else Polygon()
+            if ap.is_empty or not ap.is_valid or ap.area < 4.0:
+                out.append(f"{name}: its outline is not a simple closed shape with area")
+                continue
+            if ap.distance(poly) > 1.0:
+                out.append(f"{name}: its outline must touch the silhouette's rim")
+            elif ap.difference(poly).area < 0.5 * ap.area:
+                out.append(f"{name}: most of it must lie outside the silhouette")
+            if not 0.8 <= t <= form.thickness_mm + 1e-6:
+                out.append(f"{name}: thickness_mm {t:g} must be 0.8 to {form.thickness_mm:g}")
+            if f["hole_mm"] and not ap.buffer(-0.8 * max(f["hole_mm"], 0.0)).contains(
+                Point(f["centre"])
+            ):
+                out.append(f"{name}: its hole at centre must lie inside the appendage")
+        elif f["kind"] == "wedge":
+            if not 0.5 <= t < form.thickness_mm:
+                out.append(f"{name}: thickness_mm is the thin edge, below {form.thickness_mm:g}")
+        else:
+            w, h = f["width_mm"], f["height_mm"]
+            if w <= 0 or h <= 0:
+                out.append(f"{name}: width_mm and height_mm must be positive")
+            elif not poly.buffer(1.0).contains(Point(f["centre"])) or max(w, h) > 1.05 * max(
+                x1 - x0, y1 - y0
+            ):
+                out.append(f"{name}: it must sit on the main face, inside the silhouette")
+            if f["kind"] == "lens" and not 0.5 <= t <= 0.5 * short:
+                out.append(f"{name}: a lens dome is 0.5 to {0.5 * short:.0f} mm tall")
+    return out
 
 
 def _prompt(prompt: str, touches: list[Touch], refs: list[dict[str, Any]], note: str) -> str:
