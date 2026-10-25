@@ -1,12 +1,10 @@
 // Home (Figma: Landing C2, "the product, with Bara at work"). The first screen is one plate: a recording of a real
 // build (scripts/record-hero.mjs) plays behind, and Bara's Build button sits in front; pressing it turns the
-// page over to Bara, who asks what to make (HeroAgent). Then four stills show what Bara does on the canvas, then the user's own builds.
+// page over to Bara, who asks what to make (HeroAgent). Then four stills show what Bara does on the canvas, then a call to start.
 import { useEffect, useRef, useState } from "react";
 import { AgentIntro, HeroCta, type IntroOpen } from "./HeroAgent";
 import { BaraMark } from "./Handoff";
-import { GalleryCard } from "./Library";
 import { openBuildDialog } from "./BuildDialog";
-import { loadGallery, useGallery } from "../library/gallery";
 import { useApp } from "../state/store";
 
 // Bump V when scripts/record-hero.mjs writes a new take, so no browser plays cached bytes of the old one.
@@ -249,24 +247,6 @@ const FAQ: { q: string; a: string }[] = [
   { q: "What if my idea is too big?", a: "Bara is best with devices made of keys, knobs, displays and a small board. If a build fails, it tells you what stopped it." },
 ];
 
-function Examples() {
-  const items = useGallery((s) => s.items);
-  const ready = useGallery((s) => s.ready);
-  useEffect(() => void loadGallery(), []);
-  if (ready && items.length === 0) return null;
-  return (
-    <section id="examples" className="ld-sec" aria-labelledby="ld-ex-h">
-      <header className="ld-sh">
-        <h2 id="ld-ex-h">Finished builds</h2>
-        <span className="cap">Open one to look inside</span>
-      </header>
-      <ul className="gal-grid ld-ex">
-        {ready ? items.slice(0, 6).map((it) => <GalleryCard key={it.build_id} item={it} />) : [0, 1, 2].map((i) => <li key={i} className="gal-card is-loading" aria-hidden />)}
-      </ul>
-    </section>
-  );
-}
-
 /** Everything under the hero. The nav in the top bar scrolls to these ids. */
 export function LandingSections() {
   return (
@@ -305,7 +285,6 @@ export function LandingSections() {
           ))}
         </ul>
       </section>
-      <Examples />
       <section id="faq" className="ld-sec" aria-labelledby="ld-faq-h">
         <header className="ld-sh">
           <h2 id="ld-faq-h">Questions</h2>
@@ -328,8 +307,7 @@ export function LandingSections() {
       <footer className="ld-foot">
         <span className="ld-foot-brand">
           <BaraMark className="brand-mark" />
-          Bara
-          <span className="brand-by">by Tangible Parts</span>
+          Tangible
         </span>
         <button type="button" className="ld-foot-link" onClick={() => useApp.setState({ screen: "drafts" })}>
           Library

@@ -1999,3 +1999,6 @@ label.check {
 .pick-tag span {
   color: var(--muted, #5d6166);
 }
+.failure-finish {
+  margin-top: 10px;
+}

@@ -1,5 +1,5 @@
 // The Library page (/library): finished builds from the engine (the gallery, one per kind of device,
-// every check held) with its own Build button, then this browser's drafts in Bara's own language: a small
+// every check held, shown as examples) with its own Build button, then your builds in Bara's own language: a small
 // Bara keeps the shelf, the newest draft sits large on a gridded plate like the hero's, and the rest stand
 // on a shelf by day. Every tile shows the build's finished product alone, rendered (library/shots.ts,
 // scripts/render-shots.mjs); one not rendered yet falls back to a drawing of its parts or, for a draft, a
@@ -12,6 +12,7 @@ import { showToast, useApp } from "../state/store";
 import { Icon } from "../ui/common";
 import { deleteEntry, loadEntry, restoreEntry, useLibrary, type LibraryCard } from "../library/library";
 import { loadGallery, reloadGallery, useGallery, type GalleryItem } from "../library/gallery";
+import { canFinish, cardSubline, finishBuild } from "../library/finish";
 import { BuildStill } from "./BuildScene";
 import { openBuildDialog } from "./BuildDialog";
 import { openScene } from "../project/scenes";
@@ -43,8 +44,8 @@ function shelfOf(t: number, now: number): string {
 const STATUS_LABEL: Record<string, string> = {
   running: "In progress",
   awaiting_input: "Needs an answer",
-  failed: "Failed",
-  cancelled: "Stopped",
+  failed: "Needs finishing",
+  cancelled: "Needs finishing",
 };
 
 async function openCard(card: LibraryCard): Promise<void> {
@@ -231,6 +232,11 @@ function BuildCard(props: { card: LibraryCard; now: number; index: number }) {
         <span className="lib-title">{card.prompt}</span>
         <Meta card={card} now={props.now} />
       </button>
+      {canFinish(card.status) && (
+        <button type="button" className="btn sm lib-finish" onClick={() => finishBuild(card.build_id, card.prompt)} aria-label={`Finish the “${card.prompt}” build`}>
+          Finish build
+        </button>
+      )}
       <Remove id={card.build_id} name={card.prompt} after={reloadGallery} />
     </li>
   );
@@ -254,6 +260,11 @@ function Latest(props: { card: LibraryCard; now: number }) {
         <span className="lib-kicker mono">Latest · {when(card.updatedAt, props.now)}</span>
         <h3>{card.prompt}</h3>
         <Meta card={card} now={props.now} />
+        {canFinish(card.status) && (
+          <button type="button" className="btn lib-finish" onClick={() => finishBuild(card.build_id, card.prompt)}>
+            Finish build
+          </button>
+        )}
         <button type="button" className="lib-pickup" onClick={() => void open()} disabled={opening}>
           {opening ? <span className="spinner light" aria-hidden /> : null}
           Pick it up
@@ -327,7 +338,7 @@ export function Library() {
       <header className="lib-head">
         <div className="lib-title-row">
           <Keeper />
-          <h2 id="lib-h">Your drafts</h2>
+          <h2 id="lib-h">Your builds</h2>
           {cards.length > 0 && <span className="lib-count mono">{cards.length}</span>}
         </div>
         {cards.length > 3 && (
@@ -404,7 +415,7 @@ export function GalleryCard(props: { item: GalleryItem; index?: number }) {
         </span>
         <span className="gal-meta">
           <span className="gal-title">{item.title}</span>
-          <span className="gal-sub">{item.checks} checks passed</span>
+          <span className="gal-sub">{cardSubline(item.checks, true)}</span>
         </span>
       </button>
       {!item.offline && <Remove id={item.build_id} name={item.title} after={reloadGallery} />}
@@ -412,7 +423,7 @@ export function GalleryCard(props: { item: GalleryItem; index?: number }) {
   );
 }
 
-/** Library page: the finished builds (library/gallery.ts picks them) under a Build button, then the drafts. */
+/** Library page: the examples (library/gallery.ts picks builds whose checks all held) under a Build button, then your builds. */
 export function LibraryPage() {
   const items = useGallery((s) => s.items);
   const ready = useGallery((s) => s.ready);
@@ -423,13 +434,14 @@ export function LibraryPage() {
       <header className="libpage-head">
         <div>
           <h1>Library</h1>
-          <p className="muted">Finished builds. Every check held. Open one to look inside, or start your own.</p>
+          <p className="muted">Examples where every check held. Open one to look inside, or start your own.</p>
         </div>
         <button type="button" className="btn primary libpage-build" onClick={() => openBuildDialog()} aria-haspopup="dialog">
           Build
         </button>
       </header>
-      <section className="gallery" aria-label="Finished builds">
+      <section className="gallery" aria-label="Examples">
+        <h2 className="gal-h">Examples</h2>
         <ul className="gal-grid">
           {ready
             ? items.map((it, i) => <GalleryCard key={it.build_id} item={it} index={i} />)
