@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# One command to put the engine behind the deployed site: start the engine, a Cloudflare quick
-# tunnel to it, and publish the tunnel URL to the site. The engine is open: anyone with the site
+# One command to put the engine behind the deployed site: start the engine, which the named tunnel
+# serves at api.tangible.parts. BARA_QUICK_TUNNEL=1 instead starts a Cloudflare quick tunnel and
+# publishes its URL to the site. The engine is open: anyone with the site
 # can build on it (and spends the Anthropic key on this Mac).
 #
 # The Anthropic key comes from the keychain item bara-anthropic and never touches a file. Quick
@@ -62,21 +63,28 @@ for _ in $(seq 120); do
   sleep 1
 done
 
-while kill -0 "$server_pid" 2>/dev/null; do
-  cloudflared tunnel --no-autoupdate --url "http://127.0.0.1:$port" >"$log_dir/tunnel.log" 2>&1 &
-  tunnel_pid=$!
-  url=""
-  for _ in $(seq 60); do
-    url="$(grep -a -o 'https://[a-z0-9-]*\.trycloudflare\.com' "$log_dir/tunnel.log" | head -1 || true)"
-    [ -n "$url" ] && break
-    sleep 1
+if [ -n "${BARA_QUICK_TUNNEL:-}" ]; then
+  while kill -0 "$server_pid" 2>/dev/null; do
+    cloudflared tunnel --no-autoupdate --url "http://127.0.0.1:$port" >"$log_dir/tunnel.log" 2>&1 &
+    tunnel_pid=$!
+    url=""
+    for _ in $(seq 60); do
+      url="$(grep -a -o 'https://[a-z0-9-]*\.trycloudflare\.com' "$log_dir/tunnel.log" | head -1 || true)"
+      [ -n "$url" ] && break
+      sleep 1
+    done
+    if [ -n "$url" ]; then
+      publish "$url" || echo "Publishing the URL failed; the site still points at the old one." >&2
+      echo "Open the app: https://bara-ivory-five.vercel.app"
+    fi
+    wait "$tunnel_pid" || true
+    echo "cloudflared exited, restarting"
+    sleep 3
   done
-  if [ -n "$url" ]; then
-    publish "$url" || echo "Publishing the URL failed; the site still points at the old one." >&2
-    echo "Open the app: https://bara-ivory-five.vercel.app"
-  fi
-  wait "$tunnel_pid" || true
-  echo "cloudflared exited, restarting"
-  sleep 3
-done
+else
+  # The named tunnel (LaunchAgent com.tangible.cloudflared) serves api.tangible.parts, and the
+  # site already points there, so nothing is published.
+  echo "Open the app: https://tangible.parts"
+  wait "$server_pid" || true
+fi
 echo "The engine exited; see $log_dir/server.log" >&2
