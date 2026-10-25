@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LAYER_RANK, explodeZ, humanGroupName, layerGap, layerOf, layerOffsets } from "./explode";
+import { DRAG_PX, EXPLODE_SETTLE, LAYER_RANK, easeInOutCubic, explodeZ, isDrag, layerProgress, humanGroupName, layerGap, layerOf, layerOffsets } from "./explode";
 import type { BuildPart } from "../spec/types";
 
 const part = (part_id: string, kind: string, primary_function: string, display_name = part_id): Pick<BuildPart, "part_id" | "card" | "label"> => ({
@@ -74,5 +74,53 @@ describe("layerOffsets", () => {
   it("keeps keycaps over their switches: only z changes, and they clear the switch tops", () => {
     const off = layerOffsets({ switches: [0, 18], keycaps: [10, 22] }, 8);
     expect(10 + off.keycaps!).toBeGreaterThanOrEqual(18 + off.switches! + 8);
+  });
+});
+
+describe("explode motion", () => {
+  it("eases softly and meets both ends", () => {
+    expect(easeInOutCubic(0)).toBe(0);
+    expect(easeInOutCubic(1)).toBe(1);
+    expect(easeInOutCubic(0.5)).toBeCloseTo(0.5);
+    expect(easeInOutCubic(0.1)).toBeLessThan(0.1);
+    expect(easeInOutCubic(0.9)).toBeGreaterThan(0.9);
+  });
+
+  it("starts from the top, lands the lowest layer last, and never lets a layer pass the one under it", () => {
+    const top = LAYER_RANK.lid;
+    for (let p = 0; p <= 1.0001; p += 0.02) {
+      let prev = -Infinity;
+      for (let rank = 0; rank <= top; rank++) {
+        const v = layerProgress(p, rank, top, true);
+        expect(v).toBeGreaterThanOrEqual(prev - 1e-9);
+        prev = v;
+      }
+    }
+    // a little way in only the top has moved
+    expect(layerProgress(0.15, top, top, true)).toBeGreaterThan(0);
+    expect(layerProgress(0.15, 1, top, true)).toBe(0);
+    // every layer is at rest by the time the labels start to fade
+    for (let rank = 0; rank <= top; rank++) expect(layerProgress(EXPLODE_SETTLE, rank, top, true)).toBeCloseTo(1);
+  });
+
+  it("agrees with the plain slider at both ends and follows it directly otherwise", () => {
+    for (const rank of [0, 3, 8]) {
+      expect(layerProgress(0, rank, 8, true)).toBe(0);
+      expect(layerProgress(1, rank, 8, true)).toBe(1);
+    }
+    expect(layerProgress(0.37, 5, 8, false)).toBeCloseTo(0.37);
+    expect(layerProgress(-1, 5, 8, false)).toBe(0);
+    expect(layerProgress(2, 5, 8, false)).toBe(1);
+  });
+});
+
+describe("press versus drag", () => {
+  it("is a press until the pointer travels past a few px", () => {
+    expect(isDrag(0, 0)).toBe(false);
+    expect(isDrag(DRAG_PX, 0)).toBe(false);
+    expect(isDrag(3, 3)).toBe(false);
+    expect(isDrag(DRAG_PX + 1, 0)).toBe(true);
+    expect(isDrag(-4, 4)).toBe(true);
+    expect(isDrag(10, 0, 20)).toBe(false);
   });
 });

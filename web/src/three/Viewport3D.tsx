@@ -20,10 +20,10 @@ import { failingByInstance } from "../ui/format";
 import { groupPieces, modelAsset, onModelsChanged, preloadModels, useModel, useModelsLoading, type LoadedModel, type MeshGroup } from "./assets";
 import { placeholderBox, type Box } from "./bbox";
 import { boardMatrix, matchComponents, type BoardCandidate } from "./boardgeom";
-import { LAYER_RANK, explodeZ, isKeycapPart, layerGap, layerOf, layerOffsets, partLabel, type LayerExtent, type LayerId, type PartLabel } from "./explode";
+import { EXPLODE_MS, LAYER_RANK, easeInOutCubic, explodeZ, layerProgress, isKeycapPart, layerGap, layerOf, layerOffsets, partLabel, type LayerExtent, type LayerId, type PartLabel } from "./explode";
 import { elementPoses, type ElementPose } from "./layout";
 import { arrangeDevices, chooseCamera, type Box as FloorBox } from "./arrange";
-import { LabelOverlay, LabelProjector, labelOpacity } from "./labels";
+import { LabelOverlay, LabelProjector } from "./labels";
 import { FocusDriver, meshBox, nearFocused } from "./focus";
 import { setLook, type Look } from "./look";
 import { ProjectLinkLines } from "./projectLinks";
@@ -201,7 +201,8 @@ function useLayerGroup(layer: LayerId, anchorKey: string | null, anchorLocal: TH
     // each layer lifts by its measured height so layers stand clear of one another; the plain
     // rank-times-gap stack stands in until they are measured
     const lifted = stage.layerZ?.[layer];
-    let z = lifted !== undefined ? lifted * stage.explode : explodeZ(layer, stage.gap, stage.explode);
+    const f = layerProgress(stage.explode, LAYER_RANK[layer], stage.rankTop, stage.stagger);
+    let z = lifted !== undefined ? lifted * f : explodeZ(layer, stage.gap, f);
     g.userData.restZ = z;
     // pick view: the picked part lifts a little out of its layer, every other part fades to a ghost;
     // otherwise the part under the pointer is tinted
@@ -961,8 +962,35 @@ const HERO_DIR = new THREE.Vector3(-0.55, -1, 1.1).normalize();
 const EXPLODED_DIR = new THREE.Vector3(-0.22, -1, 0.42).normalize();
 /** Fraction of the view width the model may use while labels are shown. */
 const LABEL_MODEL_WIDTH = 0.5;
-/** How far the view shifts right (as a fraction of width) so the model sits left of the labels. */
-const LABEL_SHIFT = 0.2;
+/** Room the label column keeps at the right of the canvas, px. */
+const LABEL_COLUMN_PX = 245;
+const PANEL_GAP_PX = 20;
+
+/**
+ * Where the exploded model may sit: the canvas between the floating panels (the parts list on the
+ * left, the details on the right when open), leaving the label column free at the right. Returns the
+ * width the model may use and how far its centre sits from the canvas centre, both as a fraction of
+ * the canvas width (a positive shift moves the model left); a label column sits on each side of it.
+ */
+function explodedRoom(): { width: number; shift: number } {
+  const canvas = document.querySelector<HTMLElement>(".viewport canvas");
+  if (!canvas) return { width: LABEL_MODEL_WIDTH, shift: 0.2 };
+  const r = canvas.getBoundingClientRect();
+  if (r.width < 200) return { width: LABEL_MODEL_WIDTH, shift: 0 };
+  let left = 0;
+  let right = r.width - PANEL_GAP_PX;
+  for (const el of document.querySelectorAll<HTMLElement>("aside.float-panel")) {
+    const b = el.getBoundingClientRect();
+    if (b.width < 1 || b.right <= r.left || b.left >= r.right) continue;
+    if (b.left + b.width / 2 < r.left + r.width / 2) left = Math.max(left, b.right - r.left + PANEL_GAP_PX);
+    else right = Math.min(right, b.left - r.left - PANEL_GAP_PX);
+  }
+  const room = Math.max(r.width * 0.4, right - left);
+  const centre = left + room / 2;
+  // a label column on each side of the model
+  const model = Math.max(r.width * 0.22, room - 2 * LABEL_COLUMN_PX);
+  return { width: Math.min(0.6, model / r.width), shift: (r.width / 2 - centre) / r.width };
+}
 
 function fallbackBox(): THREE.Box3 {
   const b = useApp.getState().build;
@@ -1106,7 +1134,7 @@ function stageBoxes(): THREE.Box3[] {
 function framePose(kind: FrameKind, cam: THREE.PerspectiveCamera, predictExplode: number | null) {
   const box = stageBox() ?? fallbackBox();
   if (predictExplode !== null) box.max.z += (stage.layerZ ? stage.lift : stage.gap * maxRank()) * (predictExplode - stage.explode);
-  if (kind === "exploded") return fitPose(box, EXPLODED_DIR, cam, LABEL_MODEL_WIDTH, Math.max(0.62, sizedFill(box, 0.8)), 0.04);
+  if (kind === "exploded") return fitPose(box, EXPLODED_DIR, cam, explodedRoom().width, Math.max(0.62, sizedFill(box, 0.8)), 0.04);
   if (kind === "sim") {
     // The operating view: straight at the control face, the device filling most of the viewport.
     const { view } = useSim.getState();
@@ -1175,6 +1203,7 @@ function LayerMeasure() {
     const same = stage.layerZ && Object.keys(next).length === Object.keys(stage.layerZ).length && (Object.keys(next) as LayerId[]).every((l) => Math.abs((stage.layerZ?.[l] ?? NaN) - (next[l] ?? 0)) < 0.05);
     if (same) return;
     stage.layerZ = Object.keys(next).length ? next : null;
+    stage.rankTop = Math.max(1, ...(Object.keys(next) as LayerId[]).map((l) => LAYER_RANK[l]));
     stage.lift = Math.max(0, ...Object.values(next));
     stage.settleVersion++;
     invalidate();
@@ -1274,13 +1303,55 @@ interface OrbitLike extends THREE.EventDispatcher<{ start: object; change: objec
   update: () => void;
 }
 
-/** Eases the explode factor toward the slider value; flags settle for shadows and framing. */
+/**
+ * Moves the explode factor to the slider value. A full open or close (a button press, or a jump
+ * to either end) runs on a clock, about a second, linear in time: the layers take their own eased,
+ * staggered paths from it (layerProgress) and the labels fade in only once the parts have settled.
+ * Dragging the slider follows it directly. With reduced motion every change is instant.
+ */
 function ExplodeDriver() {
   const target = useApp((s) => s.explode);
+  const invalidate = useThree((s) => s.invalidate);
+  const run = useRef<{ from: number; to: number; t: number; ms: number } | null>(null);
+  const aimed = useRef(target);
+  useEffect(() => {
+    if (aimed.current === target) return;
+    aimed.current = target;
+    const d = target - stage.explode;
+    const end = target <= 0.001 || target >= 0.999;
+    if (reducedMotion()) {
+      run.current = null;
+      stage.stagger = false;
+      stage.explode = target;
+      stage.settleVersion++;
+    } else if (end && (Math.abs(d) > 0.6 || run.current)) {
+      run.current = { from: stage.explode, to: target, t: 0, ms: Math.max(300, EXPLODE_MS * Math.abs(d)) };
+      stage.stagger = true;
+      stage.moving = true;
+    } else if (!run.current) stage.stagger = false;
+    else run.current = { from: stage.explode, to: target, t: 0, ms: Math.max(200, 500 * Math.abs(d)) };
+    invalidate();
+  }, [target, invalidate]);
   useFrame((_, dt) => {
+    const r = run.current;
+    if (r) {
+      r.t += dt * 1000;
+      const k = Math.min(1, r.t / r.ms);
+      stage.explode = r.from + (r.to - r.from) * k;
+      stage.moving = true;
+      if (k >= 1) {
+        run.current = null;
+        stage.explode = r.to;
+        stage.stagger = false;
+        stage.moving = false;
+        stage.settleVersion++;
+      }
+      invalidate();
+      return;
+    }
     const d = target - stage.explode;
     if (Math.abs(d) < 0.0015) {
-      if (stage.moving) {
+      if (stage.moving || stage.explode !== target) {
         stage.explode = target;
         stage.moving = false;
         stage.settleVersion++;
@@ -1288,7 +1359,8 @@ function ExplodeDriver() {
       return;
     }
     stage.moving = true;
-    stage.explode += d * (1 - Math.exp(-dt * 5.5));
+    stage.explode += d * (1 - Math.exp(-dt * 12));
+    invalidate();
   });
   return null;
 }
@@ -1314,6 +1386,7 @@ function CameraRig() {
   const userMoved = useRef(false);
   const framedFor = useRef<string | null>(null);
   const shift = useRef(0);
+  const room = useRef(0);
   const mode = useRef<"hero" | "exploded">("hero");
   const simActive = useSim((s) => s.active);
   const savedCam = useRef<{ pos: THREE.Vector3; target: THREE.Vector3 } | null>(null);
@@ -1322,6 +1395,7 @@ function CameraRig() {
     // while simulating, every refit (models loading, content changing) keeps the operating view
     const sim = useSim.getState().active;
     const kind = sim ? "sim" : asked;
+    if (kind === "exploded") room.current = explodedRoom().shift;
     const to = framePose(kind, cam, sim ? 0 : predict);
     cam.near = Math.max(0.5, to.dist * 0.02);
     cam.far = to.dist * 20;
@@ -1408,6 +1482,15 @@ function CameraRig() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content]);
   useEffect(() => {
+    // A side panel opening or closing while the model is exploded: seat the model in the new room.
+    const id = window.setInterval(() => {
+      if (mode.current !== "exploded" || userMoved.current || stage.moving || stage.animating || useSim.getState().active) return;
+      if (Math.abs(explodedRoom().shift - room.current) > 0.01) start("exploded");
+    }, 400);
+    return () => window.clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
     // Re-fit as real meshes replace placeholders (boxes are a guess at size).
     let raf = 0;
     const off = onModelsChanged(() => {
@@ -1433,18 +1516,18 @@ function CameraRig() {
   useFrame((_, dt) => {
     // Label column room: shift the projection, not the camera, so orbit stays centred on the model.
     // no label column while a part is in focus, so the view centres again
-    const want = labelOpacity(stage.explode) * (1 - focusAmount()) * LABEL_SHIFT;
+    const want = stage.explode * (1 - focusAmount()) * room.current;
     if (Math.abs(want - shift.current) > 1e-4) {
       shift.current = want;
-      if (want > 0) cam.setViewOffset(size.width, size.height, size.width * want, 0, size.width, size.height);
+      if (want !== 0) cam.setViewOffset(size.width, size.height, size.width * want, 0, size.width, size.height);
       else cam.clearViewOffset();
     }
     const a = anim.current;
     const ctl = controls as unknown as OrbitLike | null;
     stage.animating = !!a;
     if (!a) return;
-    a.t = Math.min(1, a.t + dt / 0.9);
-    const k = 1 - Math.pow(1 - a.t, 3);
+    a.t = Math.min(1, a.t + dt / 1.0);
+    const k = easeInOutCubic(a.t);
     cam.position.lerpVectors(a.fromP, a.toP, k);
     if (ctl) {
       ctl.target.lerpVectors(a.fromT, a.toT, k);
@@ -1453,7 +1536,7 @@ function CameraRig() {
     if (a.t >= 1) anim.current = null;
   });
   useEffect(() => {
-    if (shift.current > 0) cam.setViewOffset(size.width, size.height, size.width * shift.current, 0, size.width, size.height);
+    if (shift.current !== 0) cam.setViewOffset(size.width, size.height, size.width * shift.current, 0, size.width, size.height);
   }, [size.width, size.height, cam]);
   return null;
 }
@@ -2083,7 +2166,7 @@ export function Viewport3D() {
       >
         <SceneContents gizmoMode={gizmoMode} theme={theme} palette={palette} boardOnly={boardOnly} post={post} onFit={setMisfit} />
         <SimHotspotsHost />
-        <OrbitControls makeDefault enableDamping dampingFactor={0.12} enabled={!simOn} />
+        <OrbitControls makeDefault enableDamping dampingFactor={0.12} />
       </Canvas>
       {hasParts && <LabelOverlay rows={overlayRows} color="#1B1D1F" muted="#5D6166" line="#7C8086" accent="#2E7D46" />}
       {!hasParts && (

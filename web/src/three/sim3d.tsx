@@ -11,6 +11,7 @@ import { tick } from "../sim/runtime";
 import { pressInput, releaseInput, setHover, useSim } from "../sim/simStore";
 import type { SimInput } from "../sim/inputMap";
 import { screenSizeMm } from "../sim/view";
+import { isDrag } from "./explode";
 import { partWorldBox } from "./agentTargets";
 import { stage } from "./stage";
 
@@ -23,9 +24,50 @@ export interface InputHandlers {
 }
 
 const mouseHeld = new Set<string>();
+/** A press waits this long for a drag to show itself before the key goes down (a tap goes down on release). */
+const PRESS_HOLD_MS = 70;
+let pending: { input: SimInput; x: number; y: number; timer: number } | null = null;
+let dragWatch: ((e: PointerEvent) => void) | null = null;
+
+function commit(): void {
+  if (!pending) return;
+  const { input, timer } = pending;
+  window.clearTimeout(timer);
+  pending = null;
+  mouseHeld.add(input.id);
+  pressInput(input);
+}
+
+function stopDragWatch(): void {
+  if (dragWatch) window.removeEventListener("pointermove", dragWatch);
+  dragWatch = null;
+}
+
+/**
+ * Orbit always works: the camera is already turning under the pointer. A drag that starts on a key
+ * therefore never presses it, and one that began holding it lets it go once it travels past a few px.
+ */
+function watchDrag(x: number, y: number): void {
+  stopDragWatch();
+  dragWatch = (e) => {
+    if (!isDrag(e.clientX - x, e.clientY - y)) return;
+    if (pending) {
+      window.clearTimeout(pending.timer);
+      pending = null;
+    } else releaseMouse();
+    document.body.style.cursor = "";
+    stopDragWatch();
+  };
+  window.addEventListener("pointermove", dragWatch);
+}
 
 /** Release everything the mouse is holding (the pointer went up somewhere else). */
 export function releaseMouse(): void {
+  stopDragWatch();
+  if (pending) {
+    window.clearTimeout(pending.timer);
+    pending = null;
+  }
   const { byId } = useSim.getState();
   for (const id of mouseHeld) {
     const input = byId.get(id);
@@ -42,14 +84,17 @@ export function inputHandlers(
       const input = resolve(e);
       if (!input || e.button !== 0) return;
       e.stopPropagation();
-      mouseHeld.add(input.id);
-      pressInput(input);
+      commit();
+      pending = { input, x: e.clientX, y: e.clientY, timer: window.setTimeout(commit, PRESS_HOLD_MS) };
+      watchDrag(e.clientX, e.clientY);
     },
     onPointerUp: (e) => {
       const input = resolve(e);
       if (!input) return;
       e.stopPropagation();
+      if (pending?.input.id === input.id) commit();
       if (mouseHeld.delete(input.id)) releaseInput(input);
+      if (!mouseHeld.size && !pending) stopDragWatch();
     },
     onPointerOver: (e) => {
       const input = resolve(e);

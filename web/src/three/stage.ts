@@ -20,6 +20,10 @@ export const stage = {
   companions: null as THREE.Group | null,
   /** Displayed explode factor, eased toward the slider value. */
   explode: 0,
+  /** True while the explode runs its staggered open or close (the slider moves every layer together). */
+  stagger: false,
+  /** Highest explode rank among the layers on stage, for the stagger. */
+  rankTop: 7,
   /** Explode layer gap in mm for the current build. */
   gap: 20,
   /** True while the explode is still moving. */
