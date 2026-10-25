@@ -14,6 +14,7 @@ import { useApp } from "../state/store";
 import { DeviceScene } from "../three/Viewport3D";
 import { previewCase } from "../three/caseFinish";
 import { partRect } from "../three/agentTargets";
+import { elementPoses } from "../three/layout";
 import { studioPalette } from "../three/studio";
 import type { Build } from "../spec/types";
 import { serverUrl } from "../net/mode";
@@ -362,7 +363,15 @@ function Stage(props: { data: SimViewData; snap: SimSnap | null; act: Act }) {
   const palette = useMemo(() => studioPalette(), []);
   const scene = useMemo(() => <DeviceScene />, []);
   const placed = useMemo(() => new Set((useSim.getState().map?.inputs ?? []).map((i) => `${i.instanceId}#${i.index}`)), []);
-  const slots = useMemo(() => hotspotSlots(data.io.inputs.filter((i) => i.kind !== "key"), placed, null), [data.io.inputs, placed]);
+  const slots = useMemo(() => {
+    const b = useApp.getState().build;
+    return hotspotSlots(data.io.inputs.filter((i) => i.kind !== "key"), placed, null).map((s) => {
+      const part = b?.parts.find((p) => p.instance_id === s.instanceId);
+      if (!b || !part || part.quantity < 2) return s;
+      const layout = (b.layouts ?? []).find((l) => l.layout_id === part.placement.layout_id);
+      return { ...s, poses: elementPoses(part.placement, part.quantity, layout).map((e) => [e.position[0], e.position[1], e.position[2]] as [number, number, number]) };
+    });
+  }, [data.io.inputs, placed]);
   const power = data.io.power.switch;
   const powerSlots = useMemo(
     () => (power ? hotspotSlots([], placed, { id: power.id, label: power.label, kind: "power", instance_id: power.instance_id }) : []),
@@ -370,8 +379,6 @@ function Stage(props: { data: SimViewData; snap: SimSnap | null; act: Act }) {
   );
   const closed = snap?.inputs.closed ?? {};
   const leds = snap?.leds ?? [];
-  const bootHeld = useRef(false);
-  const hasReset = data.io.inputs.some((i) => /reset/i.test(i.label));
   return (
     <section className="sx2-stage" aria-label="Device" style={{ background: palette.background }}>
       <Canvas dpr={[1, 2]} frameloop="demand" camera={{ up: [0, 0, 1], position: [0, -200, 200], near: 1, far: 10000, fov: 30 }} gl={{ antialias: true, preserveDrawingBuffer: true }}>
@@ -387,33 +394,6 @@ function Stage(props: { data: SimViewData; snap: SimSnap | null; act: Act }) {
           </span>
         ))}
         {snap?.bootloader && <span className="sx2-led on">bootloader (USB drive mode)</span>}
-      </div>
-      <div className="sx2-chip-row">
-        {!hasReset && (
-          <>
-            <button
-              type="button"
-              className="sim-btn"
-              title="Restart the chip"
-              onClick={() => {
-                act("device", "reset", bootHeld.current);
-              }}
-            >
-              Reset
-            </button>
-            <button
-              type="button"
-              className="sim-btn"
-              title="Hold, then press Reset: the chip comes up as a USB drive"
-              aria-pressed={bootHeld.current}
-              onPointerDown={() => (bootHeld.current = true)}
-              onPointerUp={() => (bootHeld.current = false)}
-              onPointerLeave={() => (bootHeld.current = false)}
-            >
-              Boot (hold)
-            </button>
-          </>
-        )}
       </div>
       <div className="sx2-hint small">Click the keys, buttons, knobs and sticks on the device. Arrow keys, WASD, Z and X work too. Drag to orbit.</div>
     </section>
@@ -486,6 +466,7 @@ function Controls(props: { data: SimViewData; snap: SimSnap | null; act: Act }) 
     return [...out.entries()];
   }, [io.inputs]);
   const sw = io.power.switch;
+  const bootHeld = useRef(false);
   return (
     <div className="sx-controls">
       <div className="sx-controls-head">
@@ -493,6 +474,22 @@ function Controls(props: { data: SimViewData; snap: SimSnap | null; act: Act }) 
         <span className="small sx-muted">{io.labels_by === "ai" ? "named by the build agent" : "named from the parts list"}</span>
       </div>
       {io.try_first && <p className="small sx-try">{io.try_first}</p>}
+      <div className="sx-row">
+        <span className="sx-row-label">Chip</span>
+        <button type="button" className="sim-btn" title="Restart the chip" onClick={() => act("device", "reset", bootHeld.current)}>
+          Reset
+        </button>
+        <button
+          type="button"
+          className="sim-btn"
+          title="Hold, then press Reset: the chip comes up as a USB drive"
+          onPointerDown={() => (bootHeld.current = true)}
+          onPointerUp={() => (bootHeld.current = false)}
+          onPointerLeave={() => (bootHeld.current = false)}
+        >
+          Boot (hold)
+        </button>
+      </div>
       {sw && (
         <div className="sx-row">
           <span className="sx-row-label">{sw.label}</span>

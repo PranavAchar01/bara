@@ -12,6 +12,41 @@ type Act = (id: string, action: InputAction, value?: number | boolean) => void;
 export interface Slot {
   instanceId: string;
   inputs: RemoteInput[];
+  /** World position of each element of the part (a quantity above one), in element order. */
+  poses?: [number, number, number][];
+}
+
+/** One hit box: the inputs it drives and, for one element of several, where it sits. */
+interface Unit {
+  key: string;
+  instanceId: string;
+  inputs: RemoteInput[];
+  at: [number, number, number] | null;
+  /** How far apart the elements of the part sit (x, y), mm. */
+  spread: [number, number];
+}
+
+/**
+ * A part with several elements (two sticks) gets one hit box per element: the axes pair up in
+ * order (x, y per stick), a button goes with the stick of its order, and anything left over (a
+ * switch) stays with the first.
+ */
+export function unitsOf(slot: Slot): Unit[] {
+  const whole: Unit[] = [{ key: slot.instanceId, instanceId: slot.instanceId, inputs: slot.inputs, at: null, spread: [0, 0] }];
+  const poses = slot.poses ?? [];
+  const axes = slot.inputs.filter((i) => i.kind === "axis");
+  const sticks = Math.min(poses.length, Math.floor(axes.length / 2));
+  if (sticks < 2) return whole;
+  const range = (k: 0 | 1) => Math.max(...poses.map((p) => p[k])) - Math.min(...poses.map((p) => p[k]));
+  const buttons = slot.inputs.filter((i) => i.kind === "button");
+  const rest = slot.inputs.filter((i) => i.kind !== "axis" && i.kind !== "button");
+  return Array.from({ length: sticks }, (_, k) => ({
+    key: `${slot.instanceId}#${k}`,
+    instanceId: slot.instanceId,
+    inputs: [axes[2 * k], axes[2 * k + 1], ...(buttons.length >= sticks ? [buttons[k]] : []), ...(k === 0 ? rest : [])],
+    at: poses[k],
+    spread: [range(0), range(1)],
+  }));
 }
 
 /** The controls to give their own hit box: everything the engine lists that the input map does not place as a key or button. */
@@ -36,15 +71,15 @@ function clamp(v: number): number {
 export function SimHotspots(props: { slots: Slot[]; act: Act; closed: Record<string, boolean>; powered: boolean }) {
   return (
     <>
-      {props.slots.map((s) => (
-        <Hotspot key={s.instanceId} slot={s} act={props.act} closed={props.closed} powered={props.powered} />
+      {props.slots.flatMap(unitsOf).map((u) => (
+        <Hotspot key={u.key} unit={u} act={props.act} closed={props.closed} powered={props.powered} />
       ))}
     </>
   );
 }
 
-function Hotspot(props: { slot: Slot; act: Act; closed: Record<string, boolean>; powered: boolean }) {
-  const { slot, act, closed, powered } = props;
+function Hotspot(props: { unit: Unit; act: Act; closed: Record<string, boolean>; powered: boolean }) {
+  const { unit: slot, act, closed, powered } = props;
   const [box, setBox] = useState<THREE.Box3 | null>(null);
   const [hot, setHot] = useState(false);
   const drag = useRef<{ x: number; y: number; moved: boolean; dial: number; turned: number } | null>(null);
@@ -74,8 +109,14 @@ function Hotspot(props: { slot: Slot; act: Act; closed: Record<string, boolean>;
     const size = box.getSize(new THREE.Vector3());
     const centre = box.getCenter(new THREE.Vector3());
     const pad = 1.5;
+    if (slot.at) {
+      // one element of several: the part's box less the spread of the elements, centred on this one
+      const w = Math.max(4, size.x - slot.spread[0]);
+      const d = Math.max(4, size.y - slot.spread[1]);
+      return { size: [w + pad, d + pad, Math.max(size.z, 1) + pad] as const, centre: [slot.at[0], slot.at[1], centre.z] };
+    }
     return { size: [size.x + pad, size.y + pad, Math.max(size.z, 1) + pad] as const, centre: centre.toArray() };
-  }, [box]);
+  }, [box, slot]);
   if (!geometry) return null;
 
   const label = slot.inputs.map((i) => i.label).join(", ");

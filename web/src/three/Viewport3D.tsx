@@ -980,11 +980,30 @@ const toBox = (b: THREE.Box3): FloorBox => ({ min: [b.min.x, b.min.y, b.min.z], 
  * handheld ones from a 3/4 view.
  */
 function sceneDir(): THREE.Vector3 | null {
-  if (!stage.root) return null;
-  const boxes = [stage.root, ...(stage.companions?.children ?? [])].map((o) => new THREE.Box3().setFromObject(o)).filter((b) => !b.isEmpty());
+  const boxes = stageBoxes();
   if (!boxes.length) return null;
   const [x, y, z] = chooseCamera(boxes.map(toBox)).dir;
   return new THREE.Vector3(x, y, z);
+}
+
+/** Share of the sim stage the device spans: it is the whole point of the screen. */
+const SIM_FILL = 0.88;
+
+/**
+ * The operating direction turned about the vertical so the device's long floor axis runs across
+ * the screen (arrange.ts decides which axis that is). Only a view from above or below has a free
+ * turn; a view from the side already shows the width.
+ */
+function simDir(dir: THREE.Vector3): THREE.Vector3 {
+  const boxes = stageBoxes();
+  if (!boxes.length || Math.abs(dir.z) < 0.9) return dir;
+  if (chooseCamera(boxes.map(toBox)).across === "x") return dir;
+  // looking down with +Y to the right: a tiny sideways lean fixes the screen's right-hand axis
+  return new THREE.Vector3(0.0001 * Math.sign(dir.z), 0, dir.z).normalize();
+}
+
+function stageBoxes(): THREE.Box3[] {
+  return [stage.root, ...(stage.companions?.children ?? [])].filter((o): o is THREE.Object3D => !!o).map((o) => new THREE.Box3().setFromObject(o)).filter((b) => !b.isEmpty());
 }
 
 function framePose(kind: FrameKind, cam: THREE.PerspectiveCamera, predictExplode: number | null) {
@@ -993,10 +1012,8 @@ function framePose(kind: FrameKind, cam: THREE.PerspectiveCamera, predictExplode
   if (kind === "exploded") return fitPose(box, EXPLODED_DIR, cam, LABEL_MODEL_WIDTH, Math.max(0.62, sizedFill(box, 0.8)), 0.04);
   if (kind === "sim") {
     // The operating view: straight at the control face, the device filling most of the viewport.
-    // A typing device leaves room above for the terminal; a handheld, a narrow strip.
-    const { view, map } = useSim.getState();
-    const typing = map?.mode === "typing";
-    return fitPose(box, new THREE.Vector3(...view.dir).normalize(), cam, 1, typing ? 0.58 : 0.8, typing ? -0.1 : 0.05);
+    const { view } = useSim.getState();
+    return fitPose(box, simDir(new THREE.Vector3(...view.dir).normalize()), cam, 1, SIM_FILL, 0.02);
   }
   if (kind === "hero" || kind === "iso" || kind === "scene") {
     return fitPose(box, sceneDir() ?? HERO_DIR.clone().normalize(), cam, 1, sceneFill(box), 0.05);
@@ -1794,7 +1811,7 @@ function SceneContents(props: {
   return (
     <>
       <StudioEnvironment palette={props.palette} post={props.post} />
-      {preset !== "bottom" && <StudioFloor palette={props.palette} revision={revision} grid />}
+      {preset !== "bottom" && <StudioFloor palette={props.palette} revision={revision} grid={!simOn} />}
       <ExplodeDriver />
       <LayerMeasure />
       <HoverDriver />
