@@ -113,7 +113,14 @@ def parse_drc(data: dict) -> dict:
         if K._within_router_grid(v):
             continue
         if v.get("severity") == "error" and K._inside_one_footprint(v):
-            drc.append(_violation("drc", v, "warning", "pads inside one library footprint"))
+            drc.append(
+                _violation(
+                    "drc",
+                    v,
+                    "warning",
+                    "pads inside one library footprint (own geometry, not a design error)",
+                )
+            )
         else:
             drc.append(_violation("drc", v))
     unconnected = [
