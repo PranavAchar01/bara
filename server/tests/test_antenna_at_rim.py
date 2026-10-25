@@ -26,3 +26,14 @@ def test_a_module_antenna_hangs_past_the_edge() -> None:
     assert region.contains(mcu.world(box(*fp.fab)))  # the module itself never leaves the board
     keep = mcu.keepout_poly()
     assert keep is not None and keep.difference(region).area > 0.5 * keep.area  # mostly outside
+
+
+def test_the_case_sees_the_module_body_not_its_clearance() -> None:
+    from types import SimpleNamespace
+
+    from bara.board import _placements
+
+    fp = find_footprint("RF_Module:ESP32-S3-WROOM-1")
+    mcu = Item("U1", "mcu", fp, 0, 0, 0, "top", meta={"slot_id": "controller"})
+    (p,) = _placements(SimpleNamespace(items=[mcu]), 0.0, 0.0, {}, "main")  # type: ignore[arg-type]
+    assert p["size_mm"] == [18.0, 25.5]

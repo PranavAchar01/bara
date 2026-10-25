@@ -20,7 +20,7 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-from shapely.geometry import Point, Polygon
+from shapely.geometry import Point, Polygon, box
 
 from bara.config import load_settings
 from bara.geometry import glbopt
@@ -361,6 +361,11 @@ def _placements(
         # x/y and placement.position_mm are the footprint origin (where the KiCad model sits);
         # x_mm/y_mm are the body (courtyard) centre, which is what size_mm is centred on.
         cx, cy = _to_build(*it.centre(), dx, dy) if it.fp else (bx, by)
+        if it.fp is not None and it.fp.keepouts and it.fp.fab:  # the clearance is not body
+            x0, y0, x1, y1 = it.fp.fab
+            size = [x1 - x0, y1 - y0]
+            c = it.world(box(x0, y0, x1, y1)).centroid
+            cx, cy = _to_build(c.x, c.y, dx, dy)
         out.append(
             {
                 "ref": it.ref,
