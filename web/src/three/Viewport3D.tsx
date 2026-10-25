@@ -1016,11 +1016,14 @@ export function sizedFill(box: THREE.Box3, fill: number): number {
   return fill * Math.min(1, Math.max(0.55, Math.sqrt(diag / FULL_SIZE_DIAG_MM)));
 }
 
-/** Share of the view (its tighter axis) the framed device or devices may span: room all round. */
-const FIT_MIN = 0.55;
-const FIT_MAX = 0.65;
+/**
+ * Share of the view (its tighter axis) the framed device or devices may span: the device sits small
+ * on the desk with plenty of breathing room, so a first look is calm rather than a wall of parts.
+ */
+const FIT_MIN = 0.36;
+const FIT_MAX = 0.46;
 
-/** 55% of the view for a thumb-sized device up to 65% for a full-size keyboard or bigger. */
+/** 36% of the view for a thumb-sized device up to 46% for a full-size keyboard or bigger. */
 export function sceneFill(box: THREE.Box3): number {
   const diag = box.getSize(new THREE.Vector3()).length();
   return FIT_MIN + (FIT_MAX - FIT_MIN) * Math.min(1, Math.max(0, diag / FULL_SIZE_DIAG_MM));
@@ -1115,7 +1118,7 @@ function framePose(kind: FrameKind, cam: THREE.PerspectiveCamera, predictExplode
         : kind === "front"
         ? new THREE.Vector3(0, -1, 0.18)
         : new THREE.Vector3(1, 0, 0.18);
-  return fitPose(box, dir.normalize(), cam, 1, sizedFill(box, 0.7), 0.05);
+  return fitPose(box, dir.normalize(), cam, 1, sizedFill(box, 0.56), 0.05);
 }
 
 /** How far the picked part lifts out of its layer, mm. */
