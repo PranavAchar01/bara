@@ -1568,10 +1568,10 @@
   object-fit: cover;
   object-position: 47% 50%;
 }
-/* wide screens: the recording sits in the right three quarters so the device lands clear of the words */
+/* wide screens: the recording sits right of the words' column so the device never runs under them */
 @media (min-width: 761px) {
   .ld-bg {
-    left: 24%;
+    left: 36%;
   }
 }
 .mk-tab {
@@ -2076,9 +2076,9 @@
   background: linear-gradient(
     90deg,
     var(--paper) 0%,
-    color-mix(in srgb, var(--paper) 94%, transparent) 30%,
-    color-mix(in srgb, var(--paper) 60%, transparent) 46%,
-    transparent 64%
+    var(--paper) 43%,
+    color-mix(in srgb, var(--paper) 50%, transparent) 47%,
+    transparent 53%
   );
 }
 .ld-stage {
@@ -2087,7 +2087,7 @@
   top: 0;
   bottom: 0;
   left: clamp(24px, 4vw, 64px);
-  width: clamp(320px, 44%, 580px);
+  width: clamp(300px, calc(34% - clamp(24px, 4vw, 64px)), 560px);
   display: flex;
   flex-direction: column;
   justify-content: center;
