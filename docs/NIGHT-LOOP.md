@@ -319,3 +319,7 @@ Web: bara-merge agent merges Nithin's figma-design-in-code / agent-board-3d / fi
 - bara-look 33c3cd5 verified on a clean tree (case/form/fit tests 88/88) and pushed: parts on one face never share area (display clear of the keys), knurled knobs, tinted lens windows, closed bosses instead of open pockets, body-only silhouette, uniform scale-up of a too-small form.
 - bara-landing running (his 20:45 ask): Bara name, full landing sections, prompt bar clipping fix, handoff animation into the workspace.
 - Waiting on bara-engine (key finder overflow, over-specified critical slot), then restart and run held-out.
+
+## 2026-10-24 21:25 PT
+- bara-landing 189d8d6 pushed and site rebuilt: Bara brand and mark, nav, How it works, What you get, Examples, FAQ, CTA band, footer; demo trimmed so the prompt bar is no longer clipped; Handoff.tsx glide into the workspace (reduced motion = instant). tsc clean, vitest 255/255.
+- Gap: the hero video still shows brand part names and the old UI. Sent back to bara-landing to re-record against the current app.
