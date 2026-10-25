@@ -156,6 +156,36 @@ def _model_from_footprint(part: dict[str, Any], assets: list[dict[str, Any]]) ->
         a["status"] = "pending"
 
 
+CELL_FUNCTIONS = ("power.battery", "power.coin_cell")
+LI_ION = {"lipo", "liion", "li-ion", "li_ion", "lithium_ion", "li-po", "lithium_polymer"}
+
+
+def _chemistry_of(part: dict[str, Any]) -> str:
+    """The cell chemistry a part holds, charges or runs from ("" when it says nothing); the
+    lithium-ion family is one kind (a pouch cell and an 18650 take the same charger)."""
+    iface = interface_of(part, "battery", "requires") or {}
+    chem = (iface.get("params") or {}).get("chemistry") or (part.get("facets") or {}).get(
+        "chemistry"
+    )
+    chem = str(chem or "").strip().lower()
+    return "li_ion" if chem in LI_ION else chem
+
+
+def _holds_cell(part: dict[str, Any]) -> bool:
+    """A cell or cell holder (its primary function is a battery), not a part that runs from one."""
+    return any(
+        f.get("primary") and f.get("function_id") in CELL_FUNCTIONS
+        for f in part.get("functions") or []
+    )
+
+
+def _chemistry_fits(part: dict[str, Any], want: str) -> bool:
+    """A part of the wanted chemistry, or a plain connector that wires the cell off the board;
+    a holder whose chemistry is unknown is not assumed to fit."""
+    chem = _chemistry_of(part)
+    return chem == want if chem else not _holds_cell(part)
+
+
 @dataclass
 class Instance:
     instance_id: str
@@ -704,12 +734,17 @@ class Composer:
                     from_slot_id=other.slot_id,
                 )
             )
-        # 2b. a part that takes a battery names its chemistry; the cell has to be that kind
-        if slot.function_id == "power.battery":
+        # 2b. a part that charges or runs from the main cell names its chemistry; the cell
+        # has to be that kind (and the other way round for the charger). Another cell holder
+        # (a backup coin cell) holds its own cell and says nothing about this one.
+        if slot.function_id in ("power.battery", "power.charger"):
             for other in self.slots:
-                iface = interface_of(other.chosen, "battery", "requires") if other.chosen else None
-                want = str((iface or {}).get("params", {}).get("chemistry") or "").lower()
+                want = _chemistry_of(other.chosen) if other.chosen else ""
                 if other is slot or not want:
+                    continue
+                if slot.function_id == "power.battery" and _holds_cell(other.chosen):
+                    continue
+                if slot.function_id == "power.charger" and other.function_id != "power.battery":
                     continue
                 filters.append(
                     Filter(
@@ -718,10 +753,9 @@ class Composer:
                         want,
                         "compatibility",
                         f"{want} cell ({other.label})"[:60],
-                        lambda p, w=want: (
-                            str((p.get("facets") or {}).get("chemistry", w)).lower() == w
-                        ),
+                        lambda p, w=want: _chemistry_fits(p, w),
                         from_slot_id=other.slot_id,
+                        relaxable=True,
                     )
                 )
         # 3. logic level and I2C address room against parts on the same controller
