@@ -1,4 +1,4 @@
-// Your builds, at the bottom of Home (Figma 21): every build made in this browser, newest first,
+// The Drafts page (Figma 21), opened from the top bar: every build made in this browser, newest first,
 // with its canvas snapshot. Click to reopen; × (twice) to remove; type to filter.
 import { useEffect, useMemo, useState } from "react";
 import { openLibraryBuild, openSaved } from "../net/client";
@@ -86,7 +86,7 @@ export function Library() {
   const ready = useLibrary((s) => s.ready);
   const unavailable = useLibrary((s) => s.unavailable);
   const [q, setQ] = useState("");
-  // "2 min ago" is worked out when the list changes, which is when Home is looked at
+  // "2 min ago" is worked out when the list changes, which is when the page is looked at
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => setNow(Date.now()), [cards]);
   const shown = useMemo(() => {
@@ -98,11 +98,11 @@ export function Library() {
     <section className="library" aria-labelledby="lib-h">
       <header className="lib-head">
         <div>
-          <h2 id="lib-h">Your builds</h2>
           <span className="lib-kicker">{cards.length ? `${cards.length} saved in this browser · pick one back up` : "Every build you make is saved here"}</span>
+          <h1 id="lib-h">Drafts</h1>
         </div>
         {cards.length > 3 && (
-          <input className="lib-search" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search your builds" aria-label="Search your builds" />
+          <input className="lib-search" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search your drafts" aria-label="Search your drafts" />
         )}
       </header>
       {cards.length === 0 ? (

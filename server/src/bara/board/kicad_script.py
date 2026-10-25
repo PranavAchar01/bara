@@ -159,6 +159,7 @@ def _place_footprint(board, nets: dict, spec: dict) -> None:
     for zone in list(fp.Zones()):
         if zone.GetIsRuleArea() and not zone.GetDoNotAllowTracks():
             fp.Remove(zone)
+            _DROPPED.append(zone)  # freed by Python, it crashes SaveBoard (Pico "USB Cable")
     # Edge.Cuts that do not close (a jack drawn to splice into the board edge) are not
     # a cutout on our outline; keep them as a drawing so the outline stays closed.
     if not spec.get("edge_cuts", True):

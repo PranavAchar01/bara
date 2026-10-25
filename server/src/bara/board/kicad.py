@@ -206,12 +206,19 @@ def board_region(plan: BoardPlan) -> Polygon:
 # ---------------------------------------------------------------- steps
 
 
+def _pcbnew(args: list[str], timeout: float, cwd: Path) -> subprocess.CompletedProcess:
+    """Run kicad_script under KiCad's Python. pcbnew's wx traits assert ("create wxApp
+    before calling this") fires now and then under parallel builds; a rerun clears it."""
+    cmd = [str(KICAD_PYTHON), str(SCRIPT), *args]
+    for _ in range(3):
+        proc = _run(cmd, timeout, cwd=cwd)
+        if proc.returncode == 0 or "create wxApp" not in proc.stderr:
+            break
+    return proc
+
+
 def build_pcb(plan_path: Path, timeout: float = 120) -> None:
-    cmd = [str(KICAD_PYTHON), str(SCRIPT), "build", str(plan_path)]
-    proc = _run(cmd, timeout, cwd=plan_path.parent)
-    if proc.returncode != 0 and "create wxApp" in proc.stderr:
-        # pcbnew's wx traits assert fires now and then under parallel builds; a rerun clears it
-        proc = _run(cmd, timeout, cwd=plan_path.parent)
+    proc = _pcbnew(["build", str(plan_path)], timeout, plan_path.parent)
     if proc.returncode != 0:
         raise ToolError(f"kicad build failed: {proc.stderr[-2000:]}")
 
@@ -261,9 +268,7 @@ def freeroute(
 
 
 def import_ses(board: Path, ses: Path, timeout: float = 120) -> None:
-    proc = _run(
-        [str(KICAD_PYTHON), str(SCRIPT), "import", str(board), str(ses)], timeout, cwd=board.parent
-    )
+    proc = _pcbnew(["import", str(board), str(ses)], timeout, board.parent)
     if proc.returncode != 0:
         raise ToolError(f"SES import failed: {proc.stderr[-2000:]}")
 
