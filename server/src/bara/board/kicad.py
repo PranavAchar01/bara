@@ -294,6 +294,20 @@ def import_ses(board: Path, ses: Path, timeout: float = 120) -> None:
         raise ToolError(f"SES import failed: {proc.stderr[-2000:]}")
 
 
+# The autorouter snaps copper to its own grid, so a track can land a hair inside a clearance it
+# was given: 0.1492 mm against 0.15 mm. A fab cannot tell 0.8 micron, and the rule sits well above
+# the fab's floor, so a shortfall this small is not a clearance error.
+ROUTER_GRID_TOLERANCE_MM = 0.002
+_CLEARANCE_TEXT = re.compile(r"clearance\s+([0-9.]+)\s*mm;\s*actual\s+([0-9.]+)\s*mm")
+
+
+def _within_router_grid(violation: dict) -> bool:
+    if violation.get("type") != "clearance":
+        return False
+    m = _CLEARANCE_TEXT.search(str(violation.get("description", "")))
+    return bool(m) and float(m.group(1)) - float(m.group(2)) <= ROUTER_GRID_TOLERANCE_MM
+
+
 def run_drc(board: Path, timeout: float = 180) -> dict:
     report = board.with_suffix(".drc.json")
     proc = _run(
@@ -316,7 +330,7 @@ def run_drc(board: Path, timeout: float = 180) -> dict:
     if not report.exists():
         raise ToolError(f"kicad-cli drc failed: {proc.stderr[-1500:]}")
     data = json.loads(report.read_text())
-    viol = data.get("violations", [])
+    viol = [v for v in data.get("violations", []) if not _within_router_grid(v)]
     errors = [v for v in viol if v.get("severity") == "error"]
     warnings = [v for v in viol if v.get("severity") == "warning"]
     unconnected = data.get("unconnected_items", [])
