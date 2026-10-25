@@ -11,6 +11,7 @@ import { tick } from "../sim/runtime";
 import { pressInput, releaseInput, setHover, useSim } from "../sim/simStore";
 import { screenFrame, type SimInput } from "../sim/inputMap";
 import { screenSizeMm } from "../sim/view";
+import { useScreenAspect } from "../sim/screenAspect";
 import { isDrag } from "./explode";
 import { partWorldBox } from "./agentTargets";
 import { stage } from "./stage";
@@ -392,6 +393,8 @@ function ScreenPlane(props: { instanceId: string }) {
       angle = Math.PI / 2;
     }
     const [w, h] = handheld ? [face[0] * 0.97, face[1] * 0.97] : screenSizeMm(spec, face);
+    const aspect = Math.round((w / h) * 100) / 100;
+    if (useScreenAspect.getState().aspect !== aspect) useScreenAspect.setState({ aspect });
     const [cw, ch] = canvasSize(w, h);
     let cur = surface.current;
     if (!cur || cur.canvas.width !== cw || cur.canvas.height !== ch) {

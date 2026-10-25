@@ -26,6 +26,7 @@ class FwConfig:
     tone_ms: int = 40
     axis_deadzone: int = 6
     led_on_press: bool = True
+    screen_aspect: float = 2.0  # width / height of the screen as seen; sizes the game frame
     labels: dict[str, str] = field(default_factory=dict)  # input id -> label
     codes: dict[str, str] = field(default_factory=dict)  # input id -> keycode
 
@@ -39,11 +40,19 @@ class FwConfig:
         for k in ("blink_ms", "debounce_ms", "tone_ms", "axis_deadzone"):
             if k in d:
                 setattr(cfg, k, max(1, min(int(d[k]), 60_000)))
+        if "screen_aspect" in d:
+            cfg.screen_aspect = max(0.25, min(float(d["screen_aspect"]), 4.0))
         if "led_on_press" in d:
             cfg.led_on_press = bool(d["led_on_press"])
         cfg.labels = {str(k): str(v) for k, v in (d.get("labels") or {}).items()}
         cfg.codes = {str(k): str(v) for k, v in (d.get("codes") or {}).items()}
         return cfg
+
+
+def fb_size(aspect: float) -> tuple[int, int]:
+    """The game frame for a screen of this shape: 128 px on the long side, sides in 4 px cells."""
+    short = max(32, min(128, round(128 / max(aspect, 1 / aspect) / 4) * 4))
+    return (128, short) if aspect >= 1 else (short, 128)
 
 
 def c_str(s: str, limit: int = 24) -> str:
@@ -91,8 +100,8 @@ def config_header(io: dict[str, Any], cfg: FwConfig, board: Board) -> str:
         f"#define N_AXES {sum(1 for i in io['inputs'] if i['kind'] == 'axis')}",
         f"#define N_SENSORS {sum(1 for i in io['inputs'] if i['kind'] == 'sensor')}",
         f"#define GAME_MODE {1 if screen and io.get('kind') == 'gamepad' else 0}",
-        "#define FB_W 128",
-        "#define FB_H 64",
+        f"#define FB_W {fb_size(cfg.screen_aspect)[0]}",
+        f"#define FB_H {fb_size(cfg.screen_aspect)[1]}",
         f"#define IMAGE_ORIGIN 0x{board.image_origin:X}u",
     ]
     if matrix:

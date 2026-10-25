@@ -22,13 +22,12 @@ from pathlib import Path
 from typing import Any
 
 from . import elf as elfmod
-from .codegen import FwConfig, input_rows
+from .codegen import FwConfig, fb_size, input_rows
 from .mcu import BOARDS, Board, pin_number
 
 MAX_EVENTS = 4000
 SLICE_INSNS = 400_000  # instructions per run before the session forces time forward
 
-FB_W, FB_H = 128, 64
 _PLAIN = "abcdefghijklmnopqrstuvwxyz1234567890\n\x1b\b\t -=[]\\#;'`,./"
 _SHIFT = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ!@#$%^&*()\n\x1b\b\t _+{}|~:"~<>?'
 
@@ -137,6 +136,7 @@ class _Base:
         self.screen: list[str] = []
         self.hid: list[int] = [0] * 8
         self.fb: bytes | None = None  # display framebuffer, 2 bits per pixel, row-major
+        self.fb_w, self.fb_h = fb_size(cfg.screen_aspect)
         self.bootloader = False
         self._last_keys: set[int] = set()
         self.led: dict[int, int] = {}
@@ -313,7 +313,7 @@ class _Base:
                 "hid": " ".join(f"{b:02X}" for b in self.hid),
                 "bootloader": self.bootloader,
                 "fb": (
-                    {"w": FB_W, "h": FB_H, "b64": base64.b64encode(self.fb).decode()}
+                    {"w": self.fb_w, "h": self.fb_h, "b64": base64.b64encode(self.fb).decode()}
                     if self.fb and self.powered and not self.bootloader
                     else None
                 ),

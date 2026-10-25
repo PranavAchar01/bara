@@ -15,6 +15,7 @@ import { setActiveMachine, type DemoMachine } from "./api";
 import { deriveInputMap, type InputMap } from "./inputMap";
 import { controlLegend } from "./physical";
 import { closeSimPanel } from "./simPanelStore";
+import { mismatched, useScreenAspect } from "./screenAspect";
 import { enterBridge, showRemote, simHooks, useSim } from "./simStore";
 import { hotspotSlots } from "./SimHotspots";
 import { useSimLink } from "./simLink";
@@ -186,7 +187,7 @@ function Simulator(props: { build: Build }) {
     let live = true;
     setBusy("Building the firmware");
     sim
-      .start(id, map, scene.current)
+      .start(id, map, scene.current, useScreenAspect.getState().aspect)
       .then((v) => live && adopt(v))
       .catch((e: Error) => live && setError(e.message))
       .finally(() => live && setBusy(null));
@@ -194,6 +195,19 @@ function Simulator(props: { build: Build }) {
       live = false;
     };
   }, [id, map, adopt]);
+
+  // a game frame drawn for another screen shape than the one in view is rebuilt once to fill it
+  const aspect = useScreenAspect((s) => s.aspect);
+  const refit = useRef<string | null>(null);
+  useEffect(() => {
+    const fb = data?.snapshot?.fb;
+    if (!data || !fb || !aspect || refit.current === id || !mismatched(fb.w / fb.h, aspect)) return;
+    refit.current = id;
+    sim
+      .config(id, { screen_aspect: aspect })
+      .then(adopt)
+      .catch(() => undefined);
+  }, [data, aspect, id, adopt]);
 
   // the firmware's own tests run once when the device boots; the console says how they came out
   const checked = useRef<string | null>(null);

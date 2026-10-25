@@ -146,6 +146,7 @@ export interface SimConfig {
   tone_ms: number;
   axis_deadzone: number;
   led_on_press: boolean;
+  screen_aspect: number;
   labels: Record<string, string>;
 }
 
@@ -225,8 +226,13 @@ export function clientNames(map: InputMap | null): { names: Record<string, strin
 
 export const sim = {
   /** `scene`: the combined device this build stands in, so the build agent knows what is tested. */
-  start: (id: string, map: InputMap | null, scene: SimScene | null = null) =>
-    call<{ sim: SimViewData }>("POST", `${base(id)}/start`, { ...clientNames(map), ...(scene ? { scene } : {}) }).then((r) => r.sim),
+  start: (id: string, map: InputMap | null, scene: SimScene | null = null, screenAspect: number | null = null) =>
+    call<{ sim: SimViewData }>("POST", `${base(id)}/start`, {
+      ...clientNames(map),
+      ...(scene ? { scene } : {}),
+      ...(screenAspect ? { config: { screen_aspect: screenAspect } } : {}),
+    }).then((r) => r.sim),
+  config: (id: string, config: Partial<SimConfig>) => call<{ sim: SimViewData }>("POST", `${base(id)}/config`, config).then((r) => r.sim),
   view: (id: string) => call<{ sim: SimViewData }>("GET", base(id)).then((r) => r.sim),
   input: (id: string, body: { id: string; action: InputAction; value?: number | boolean; since: number }) =>
     call<{ snapshot: SimSnap }>("POST", `${base(id)}/input`, body).then((r) => r.snapshot),
