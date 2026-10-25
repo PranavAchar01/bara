@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../state/store";
 import { applyEdit, startBuild } from "../net/client";
+import { finishBuild } from "../library/finish";
 import type { CheckResult, Suggestion, Warning } from "../spec/types";
 import { STAGE_IDS } from "../spec/types";
 import { Chip, Icon, Panel, useNow } from "../ui/common";
@@ -258,6 +259,8 @@ export function FailureCard() {
   const status = useApp((s) => s.build?.status);
   const vocab = useApp((s) => s.vocab);
   const slots = useApp((s) => s.build?.slots ?? []);
+  const buildId = useApp((s) => s.build?.build_id);
+  const prompt = useApp((s) => s.build?.prompt);
   if (status !== "failed" && status !== "cancelled") return null;
   const err = failure?.error ?? error;
   if (!err) return null;
@@ -287,6 +290,11 @@ export function FailureCard() {
         </div>
       )}
       <SuggestionButtons items={failure?.suggestions ?? []} />
+      {buildId && prompt && (
+        <button type="button" className="btn primary failure-finish" onClick={() => finishBuild(buildId, prompt)}>
+          Finish build
+        </button>
+      )}
     </Panel>
   );
 }
