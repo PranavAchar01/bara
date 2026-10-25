@@ -1100,6 +1100,16 @@ select {
 @media (prefers-reduced-motion: reduce) {
   .vp-board-status::before { animation: none; }
 }
+/* A board model that did not load: the same pill, as a button that tries again. */
+.vp-board-retry {
+  font: inherit;
+  cursor: pointer;
+  color: var(--ink);
+}
+.vp-board-retry::before {
+  animation: none;
+  background: var(--fail);
+}
 /* Footprint under the pointer: refdes, part, then the KiCad footprint name. */
 .vp-footprint b {
   font-weight: 600;

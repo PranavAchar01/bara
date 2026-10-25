@@ -93,8 +93,36 @@ export function BoardPlaceholder(props: { board: Board; busy: boolean }) {
   );
 }
 
-/** Status pill over a board that is still routing or loading. */
-export function BoardStatus(props: { board: Board; text: string }) {
+export interface BoardBadge {
+  text: string;
+  /** Set when the badge is a retry button (the 3D board failed to load). */
+  retry?: () => void;
+}
+
+/**
+ * The status pill a board shows, if any. "Routing" only while the board stage can still deliver;
+ * once the build is over or the board stage has ended, a board still marked pending shows nothing
+ * (its drawn placeholder stays). Play mode never shows board badges.
+ */
+export function boardBadge(o: {
+  boardStatus: string | undefined;
+  model: { status: string; retry?: () => void };
+  buildOver: boolean;
+  boardStage: string | undefined;
+  playing: boolean;
+}): BoardBadge | null {
+  if (o.playing) return null;
+  if (o.boardStatus === "pending") {
+    const stageLive = o.boardStage === undefined || o.boardStage === "pending" || o.boardStage === "active";
+    return !o.buildOver && stageLive ? { text: "Routing on KiCad" } : null;
+  }
+  if (o.model.status === "loading") return { text: "Loading 3D board" };
+  if (o.model.status === "failed" && o.model.retry) return { text: "3D board did not load. Retry", retry: o.model.retry };
+  return null;
+}
+
+/** Status pill over a board that is still routing or loading, or a retry button when its model failed. */
+export function BoardStatus(props: { board: Board; badge: BoardBadge }) {
   const at = useMemo(() => {
     const pts = props.board.outline_mm ?? [];
     const c = new THREE.Vector3();
@@ -103,9 +131,24 @@ export function BoardStatus(props: { board: Board; text: string }) {
     c.z = (props.board.thickness_mm ?? 1.6) + 6;
     return c;
   }, [props.board.outline_mm, props.board.thickness_mm]);
+  const { text, retry } = props.badge;
   return (
-    <Html position={at} center zIndexRange={[20, 0]} style={{ pointerEvents: "none" }}>
-      <span className="vp-label vp-board-status">{props.text}</span>
+    <Html position={at} center zIndexRange={[20, 0]} style={{ pointerEvents: retry ? "auto" : "none" }}>
+      {retry ? (
+        <button
+          type="button"
+          className="vp-label vp-board-status vp-board-retry"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            retry();
+          }}
+        >
+          {text}
+        </button>
+      ) : (
+        <span className="vp-label vp-board-status">{text}</span>
+      )}
     </Html>
   );
 }

@@ -4,8 +4,8 @@
 // component bodies) and still draws as a few instanced meshes. Each mesh also
 // remembers which top-level component it came from (for a KiCad board: one
 // footprint), so the viewer can lift a board's components with their parts.
-// Failures resolve to null so the caller draws the bbox placeholder; one bad
-// asset never blocks the scene.
+// Failures and stalled fetches resolve to null (and are retried) so the caller
+// draws the bbox placeholder; one bad asset never blocks the scene.
 import { useEffect, useState, useSyncExternalStore } from "react";
 import * as THREE from "three";
 import { GLTFLoader, type GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
@@ -420,18 +420,33 @@ function convert(gltf: GLTF, board: boolean): LoadedModel {
   return { groups: groupPieces(pieces), merged, bbox, components, pieces, footprints };
 }
 
+/** How long one model fetch may take before it counts as failed (a stalled request never settles on its own). */
+export const MODEL_TIMEOUT_MS = 30_000;
+
+/**
+ * One shared load per key. A load that fails or outlasts `timeoutMs` resolves to null and leaves
+ * the cache, so the next ask fetches again instead of reusing the failure forever.
+ */
+export function cachedLoad<T>(store: Map<string, Promise<T | null>>, key: string, load: () => Promise<T>, timeoutMs: number): Promise<T | null> {
+  let p = store.get(key);
+  if (p) return p;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), timeoutMs);
+  });
+  const settled: Promise<T | null> = Promise.race([load().catch(() => null), timeout]).then((v) => {
+    clearTimeout(timer);
+    if (v === null && store.get(key) === settled) store.delete(key);
+    return v;
+  });
+  p = settled;
+  store.set(key, p);
+  return p;
+}
+
 /** `board`: a kicad-cli board export, whose layers get the KiCad board look. */
 export function loadModel(url: string, board = false): Promise<LoadedModel | null> {
-  const key = `${board ? "b" : "p"}:${url}`;
-  let p = cache.get(key);
-  if (!p) {
-    p = loader
-      .loadAsync(url)
-      .then((gltf) => convert(gltf, board))
-      .catch(() => null);
-    cache.set(key, p);
-  }
-  return p;
+  return cachedLoad(cache, `${board ? "b" : "p"}:${url}`, () => loader.loadAsync(url).then((gltf) => convert(gltf, board)), MODEL_TIMEOUT_MS);
 }
 
 /** Warm the cache for scene.ready's preload list (GLBs only). */
@@ -449,7 +464,10 @@ export function modelAsset(assets: AssetRef[] | undefined, preferLod: boolean): 
   return usable.find((a) => a.role === "model" || !a.role) ?? usable[0] ?? null;
 }
 
-export type ModelState = { status: "none" } | { status: "loading" } | { status: "ready"; model: LoadedModel } | { status: "failed" };
+export type ModelState = { status: "none" } | { status: "loading" } | { status: "ready"; model: LoadedModel } | { status: "failed"; retry: () => void };
+
+/** Automatic tries after a failed or timed-out load, and the wait before each, before the model shows as failed. */
+export const MODEL_RETRY_DELAYS_MS = [1_500, 5_000];
 
 /** Bumped whenever a model finishes loading, so shadows and framing can refresh. */
 let loadedVersion = 0;
@@ -481,6 +499,8 @@ export function useModelsLoading(): boolean {
 
 export function useModel(url: string | null, board = false): ModelState {
   const [state, setState] = useState<ModelState>(url ? { status: "loading" } : { status: "none" });
+  // bumped by a manual retry, so the effect runs again from the first try
+  const [round, setRound] = useState(0);
   useEffect(() => {
     if (!url) {
       setState({ status: "none" });
@@ -488,23 +508,32 @@ export function useModel(url: string | null, board = false): ModelState {
     }
     let live = true;
     let counted = true;
+    let wait: ReturnType<typeof setTimeout> | undefined;
     bumpLoading(1);
     const settle = () => {
       if (counted) bumpLoading(-1);
       counted = false;
     };
     setState({ status: "loading" });
-    void loadModel(url, board).then((m) => {
-      settle();
-      if (!live) return;
-      setState(m ? { status: "ready", model: m } : { status: "failed" });
-      loadedVersion++;
-      for (const l of listeners) l();
-    });
+    const attempt = (n: number) => {
+      void loadModel(url, board).then((m) => {
+        if (!live) return;
+        if (!m && n < MODEL_RETRY_DELAYS_MS.length) {
+          wait = setTimeout(() => attempt(n + 1), MODEL_RETRY_DELAYS_MS[n]);
+          return;
+        }
+        settle();
+        setState(m ? { status: "ready", model: m } : { status: "failed", retry: () => setRound((r) => r + 1) });
+        loadedVersion++;
+        for (const l of listeners) l();
+      });
+    };
+    attempt(0);
     return () => {
       live = false;
+      clearTimeout(wait);
       settle();
     };
-  }, [url, board]);
+  }, [url, board, round]);
   return state;
 }

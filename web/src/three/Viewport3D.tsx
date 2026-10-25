@@ -36,7 +36,7 @@ import { DemandDriver, StudioPost, postEnabled } from "./post";
 import { SHOT_ID } from "./shot";
 import { Glyph } from "../ui/glyphs";
 import { Icon } from "../ui/common";
-import { BoardPlaceholder, BoardStatus, FootprintHover, footprintBoxes } from "./board";
+import { BoardPlaceholder, BoardStatus, FootprintHover, boardBadge, footprintBoxes } from "./board";
 import { AgentTargetProbe, partWorldBox, registerPart } from "./agentTargets";
 import { agentPose, easeOut } from "./agentCam";
 import { caps } from "../sim/press";
@@ -806,9 +806,12 @@ function BoardNode(props: {
   const { board, onCovered } = props;
   const model = useModel(boardModelUrl(board), true);
   const loaded = model.status === "ready" && model.model.groups.length > 0 ? model.model : null;
-  // Routing (pending) or the GLB still on its way: the placeholder breathes and says which.
-  const busy = !loaded && (board.status === "pending" || model.status === "loading");
-  const statusText = board.status === "pending" ? "Routing on KiCad" : model.status === "loading" ? "Loading 3D board" : null;
+  const playing = useSim((s) => s.active);
+  const buildOver = useApp((s) => s.view.done !== null || s.view.failure !== null);
+  const boardStage = useApp((s) => s.view.stages.board?.status);
+  // Routing or the GLB still on its way: the placeholder breathes and says which; a failed load offers a retry.
+  const badge = loaded ? null : boardBadge({ boardStatus: board.status, model, buildOver, boardStage, playing });
+  const busy = badge !== null && !badge.retry;
   const boxes = useMemo(() => footprintBoxes(board, loaded), [board, loaded]);
   const match = useMemo(() => (loaded ? matchComponents(loaded, board, props.candidates) : null), [loaded, board, props.candidates]);
   const coveredKey = useMemo(() => (match ? [...new Set([...match.owner.values()].map((c) => c.instanceId))].sort().join("|") : ""), [match]);
@@ -857,7 +860,7 @@ function BoardNode(props: {
         <BoardPiece groups={[]} board={board} layer="pcb" labelKey={props.labelKey} anchor={anchorLocal} targetId={targetId} targetBox={targetBox}>
           <BoardPlaceholder board={board} busy={busy} />
           {hover}
-          {busy && statusText && <BoardStatus board={board} text={statusText} />}
+          {badge && <BoardStatus board={board} badge={badge} />}
         </BoardPiece>
       </group>
     );
