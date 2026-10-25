@@ -5,14 +5,31 @@ import { setReplies, startListening, stopListening, useVoice } from "../voice/vo
 import { BaraBot, botBubbles } from "../bot/BaraBot";
 import { toggleTrace, useTrace } from "../bot/traceState";
 import { cancelBuild, routePrompt, startBuild } from "../net/client";
-import { demoPrompts } from "../spec/fixtures";
+import { addCanvas } from "../state/canvases";
 import { Icon } from "../ui/common";
 
 /** A press shorter than this on the docked bot is a tap. */
 const HOLD_MS = 220;
 
+/**
+ * A new build from the landing's Build dialog: on a fresh canvas when this one already holds a
+ * build (that one stays in its tab and in Drafts), and straight onto the Build page.
+ */
+export function startFreshBuild(prompt: string): void {
+  const text = prompt.trim();
+  if (!text) return;
+  if (useApp.getState().build) addCanvas();
+  else useApp.setState({ screen: "workspace" });
+  startBuild(text);
+}
+
+/** Fills the open prompt (an example chip in the Build dialog) without sending it. */
+export function fillPrompt(text: string): void {
+  window.dispatchEvent(new CustomEvent("bara:fill", { detail: text }));
+}
+
 /** C02 PromptBar: Enter sends build.start; Stop (build.cancel) while running. */
-export function PromptBar(props: { docked?: boolean; autoFocus?: boolean }) {
+export function PromptBar(props: { docked?: boolean; autoFocus?: boolean; fresh?: boolean; onSent?: () => void; placeholder?: string }) {
   const [text, setText] = useState("");
   const [keys, setKeys] = useState(0);
   const [focused, setFocused] = useState(false);
@@ -39,10 +56,22 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean }) {
   const submit = () => {
     if (disabled || pending || !text.trim()) return;
     // with a part in focus the pill asks about it; it never throws the build away for a new one
-    if (focusKey) window.dispatchEvent(new CustomEvent("bara:ask", { detail: text.trim() }));
+    if (props.fresh) startFreshBuild(text.slice(0, maxChars));
+    else if (focusKey) window.dispatchEvent(new CustomEvent("bara:ask", { detail: text.trim() }));
     else void routePrompt(text.slice(0, maxChars));
     setText("");
+    props.onSent?.();
   };
+  const { fresh, onSent } = props;
+  useEffect(() => {
+    const onFill = (e: Event) => {
+      const t = (e as CustomEvent<string>).detail;
+      setText(t);
+      inputRef.current?.focus();
+    };
+    window.addEventListener("bara:fill", onFill);
+    return () => window.removeEventListener("bara:fill", onFill);
+  }, []);
   useEffect(() => {
     const onFocusAsk = () => inputRef.current?.focus();
     window.addEventListener("bara:focus-ask", onFocusAsk);
@@ -54,8 +83,6 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean }) {
   const caption = useVoice((s) => s.caption);
   const replies = useVoice((s) => s.replies);
   const voiceError = useVoice((s) => s.error);
-  const voiceMode = useVoice((s) => s.mode);
-  const sendHint = voiceMode === "hold" ? "let go to send" : "pause to send";
   const focusOpen = focusKey !== null;
   const sayN = useRef(0);
   const say = useMemo(() => (caption ? { text: caption, n: ++sayN.current } : null), [caption]);
@@ -64,13 +91,14 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean }) {
     const onPrompt = (e: Event) => {
       const t = (e as CustomEvent<string>).detail;
       if (!t || disabled || pending) return;
-      setText(t);
-      void routePrompt(t.slice(0, maxChars));
+      if (fresh) startFreshBuild(t.slice(0, maxChars));
+      else void routePrompt(t.slice(0, maxChars));
       setText("");
+      onSent?.();
     };
     window.addEventListener("bara:prompt", onPrompt);
     return () => window.removeEventListener("bara:prompt", onPrompt);
-  }, [disabled, pending, maxChars]);
+  }, [disabled, pending, maxChars, fresh, onSent]);
 
   return (
     <form
@@ -86,13 +114,13 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean }) {
         onPointerDown={(e) => {
           e.preventDefault();
           if (!props.docked) {
-            void startListening("hold");
+            void startListening();
             return;
           }
           window.clearTimeout(hold.current);
           hold.current = window.setTimeout(() => {
             hold.current = 0;
-            void startListening("hold");
+            void startListening();
           }, HOLD_MS);
         }}
         onPointerUp={() => {
@@ -140,8 +168,8 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean }) {
         placeholder={
           listening
             ? focusOpen
-              ? `Listening… ask about this part, ${sendHint}`
-              : `Listening… describe the device, ${sendHint}`
+              ? "Listening… ask about this part"
+              : "Listening… describe the device"
             : transcribing
               ? "Writing down what you said…"
               : voiceError
@@ -151,8 +179,8 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean }) {
                   : focusOpen
                     ? `Ask about ${focusName ? `the ${focusName}` : "this part"}, or hold Space to talk`
                     : props.docked
-                    ? "Describe another device, or hold Space to talk (tap it for hands-free)"
-                    : "Describe the device you want, or hold Space to talk (tap it for hands-free)"
+                    ? "Describe another device, or hold Space to talk"
+                    : (props.placeholder ?? "Describe the device you want, or hold Space to talk")
         }
         aria-label="Prompt"
         onChange={(e) => {
@@ -190,24 +218,23 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean }) {
   );
 }
 
-/** C03 ExampleChips: one chip per demo prompt from the stream fixtures. */
-export function ExampleChips() {
-  const [items, setItems] = useState<{ fixture: string; prompt: string }[]>([]);
+/** Plain descriptions of a few devices: no product or brand names. */
+export const EXAMPLE_PROMPTS = [
+  "a handheld arcade device with a joystick",
+  "a macropad with a knob",
+  "a wireless split keyboard with an OLED",
+  "a desk calculator with a screen",
+  "a game controller with two thumbsticks",
+];
+
+/** C03 ExampleChips: a click starts that build, or (onPick) hands the prompt over instead. */
+export function ExampleChips(props: { onPick?: (prompt: string) => void; max?: number }) {
   const helloSeen = useApp((s) => s.hello !== null);
-  useEffect(() => {
-    let live = true;
-    void demoPrompts().then((p) => {
-      if (live) setItems(p);
-    });
-    return () => {
-      live = false;
-    };
-  }, []);
   return (
     <div className="example-chips" aria-label="Examples">
-      {items.map((it) => (
-        <button key={it.fixture} type="button" className="example-chip" disabled={!helloSeen} onClick={() => startBuild(it.prompt)}>
-          {it.prompt}
+      {EXAMPLE_PROMPTS.slice(0, props.max ?? EXAMPLE_PROMPTS.length).map((p) => (
+        <button key={p} type="button" className="example-chip" disabled={!props.onPick && !helloSeen} onClick={() => (props.onPick ? props.onPick(p) : startBuild(p))}>
+          {p}
         </button>
       ))}
     </div>
