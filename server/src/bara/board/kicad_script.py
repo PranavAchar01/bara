@@ -209,7 +209,7 @@ def build(plan_path: str) -> None:
     with open(plan_path) as fh:
         plan = json.load(fh)
     board = pcbnew.NewBoard(plan["board_path"])
-    board.SetCopperLayerCount(2)
+    board.SetCopperLayerCount(int(plan.get("copper_layers", 2)))
     _set_rules(board, plan["rules"])
     nets: dict = {}
     for name in plan.get("nets", []):
@@ -295,6 +295,14 @@ def _repair_necks(board) -> int:
     return fixed
 
 
+def export_dsn(board_path: str, dsn_path: str) -> None:
+    """A routed board back to Specctra: its tracks and vias go in as the wiring, so the
+    router continues from them and only has the connections still open to find."""
+    board = pcbnew.LoadBoard(board_path)
+    if not pcbnew.ExportSpecctraDSN(board, dsn_path):
+        raise RuntimeError("DSN export failed")
+
+
 def import_ses(board_path: str, ses_path: str) -> None:
     board = pcbnew.LoadBoard(board_path)
     ok = pcbnew.ImportSpecctraSES(board, ses_path)
@@ -309,5 +317,7 @@ if __name__ == "__main__":
         build(sys.argv[2])
     elif sys.argv[1] == "import":
         import_ses(sys.argv[2], sys.argv[3])
+    elif sys.argv[1] == "dsn":
+        export_dsn(sys.argv[2], sys.argv[3])
     else:
         raise SystemExit("unknown command " + sys.argv[1])

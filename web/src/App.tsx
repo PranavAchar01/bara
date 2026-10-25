@@ -15,8 +15,6 @@ import { Viewport3D } from "./three/Viewport3D";
 import { BotLab } from "./bot/BotLab";
 import { CanvasTabs } from "./components/CanvasTabs";
 import { startCanvasPersist } from "./state/canvases";
-import { ProjectPanel } from "./project/ProjectPanel";
-import { startLinkPruning } from "./project/project";
 import { AgentStage } from "./bot/AgentStage";
 import { ThoughtTrace } from "./bot/ThoughtTrace";
 import { Explainer } from "./bot/Explainer";
@@ -122,7 +120,6 @@ function Workspace() {
       <section className="centre">
         <CanvasTabs />
         <Viewport3D />
-        <ProjectPanel />
         <div className="centre-top">
           <BuildProgress />
           <WarningBanner />
@@ -163,7 +160,6 @@ function Main() {
   useEffect(() => bindVoiceKeys(), []);
   useEffect(() => startAutosave(), []);
   useEffect(() => startCanvasPersist(), []);
-  useEffect(() => startLinkPruning(), []);
   const screen = useApp((s) => s.screen);
   const simOpen = useSimPanel((s) => s.open) && screen === "workspace";
   if (simOpen) return <SimView />;

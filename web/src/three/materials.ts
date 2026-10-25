@@ -1,7 +1,7 @@
 // Studio material presets (render recipe 2.5). One shared instance per
 // preset + colour, so 100 parts compile a handful of shader variants.
 import * as THREE from "three";
-import type { BuildPart } from "../spec/types";
+import type { BuildPart, Finish } from "../spec/types";
 import { layerOf } from "./explode";
 
 export type Preset = "keycap" | "case" | "pcb" | "switch" | "module" | "metal" | "glossy" | "battery" | "plastic";
@@ -16,9 +16,10 @@ function make(preset: Preset, hex: string): THREE.MeshStandardMaterial {
       return new THREE.MeshPhysicalMaterial({ color, roughness: 0.62, metalness: 0, sheen: 0.15, sheenRoughness: 0.8, sheenColor: sheen, specularIntensity: 0.6 });
     }
     case "case": {
-      // Satin moulded plastic: a little sheen at grazing angles so the shell's shape shows against the floor.
-      const rim = color.clone().lerp(new THREE.Color("#ffffff"), 0.35);
-      return new THREE.MeshPhysicalMaterial({ color, roughness: 0.5, metalness: 0, clearcoat: 0.2, clearcoatRoughness: 0.45, specularIntensity: 0.8, sheen: 0.35, sheenRoughness: 0.6, sheenColor: rim });
+      // Clear moulded plastic: the shell is always see-through, its colour a translucent tint
+      // so the board and parts inside read through it like a transparent handheld.
+      const tint = color.clone().lerp(new THREE.Color("#EEF3F7"), 0.5);
+      return new THREE.MeshPhysicalMaterial({ color: tint, roughness: 0.08, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.05, specularIntensity: 1, transparent: true, opacity: 1, depthWrite: false });
     }
     case "pcb":
       return new THREE.MeshPhysicalMaterial({ color, roughness: 0.45, metalness: 0, clearcoat: 0.35, clearcoatRoughness: 0.3 });
@@ -133,4 +134,34 @@ export function ghost(src: THREE.MeshStandardMaterial, opacity: number): THREE.M
 const placeholderMat = new THREE.MeshStandardMaterial({ color: "#C3C7CD", roughness: 0.7, metalness: 0, transparent: true, opacity: 0.32, depthWrite: false });
 export function placeholderMaterial(): THREE.MeshStandardMaterial {
   return placeholderMat;
+}
+
+const finishCache = new Map<string, THREE.MeshPhysicalMaterial>();
+
+/** The finishing pass's surface for a part, one shared instance per distinct finish. */
+export function finishMaterial(f: Finish): THREE.MeshPhysicalMaterial {
+  const key = JSON.stringify(f);
+  let m = finishCache.get(key);
+  if (!m) {
+    const opacity = f.opacity ?? 1;
+    m = new THREE.MeshPhysicalMaterial({
+      color: new THREE.Color(f.color),
+      roughness: f.roughness ?? 0.5,
+      metalness: f.metalness ?? 0,
+      transmission: f.transmission ?? 0,
+      ior: f.ior ?? 1.5,
+      transparent: opacity < 1,
+      opacity,
+      emissive: new THREE.Color(f.emissive ?? "#000000"),
+      emissiveIntensity: f.emissive ? (f.emissive_intensity ?? 1) : 0,
+    });
+    finishCache.set(key, m);
+  }
+  return m;
+}
+
+/** Controls and displays wear the finish palette; boards, metal and connectors keep the
+ * library model's own materials, which are already real. */
+export function wearsFinish(f: Finish | null | undefined): f is Finish {
+  return !!f && (f.role === "control" || f.role === "display");
 }
