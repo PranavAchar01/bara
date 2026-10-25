@@ -18,6 +18,13 @@
 
 ---
 
+<p align="center">
+  <a href="https://youtu.be/Tw2DHo8dgQ8">
+    <img src="https://img.youtube.com/vi/Tw2DHo8dgQ8/maxresdefault.jpg" alt="Watch the Bara demo video" width="720" />
+  </a><br />
+  <b><a href="https://youtu.be/Tw2DHo8dgQ8">▶ Watch the 3-minute demo</a></b>
+</p>
+
 Type "a wireless split keyboard with an OLED" and watch it come together. Bara picks real parts, lays them out in 3D, sculpts a case, routes a real KiCad board, and writes the firmware, explaining every choice as it goes. Then you change it in plain words or with your voice, and every edit is checked before it lands.
 
 <p align="center">
