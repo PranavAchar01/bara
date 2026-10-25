@@ -113,6 +113,57 @@ def clean(text: Any, n: int = 44) -> str:
     return s[:n].strip()
 
 
+_GENERIC = re.compile(
+    r"^(adjustment|adjust|setting|control|input|knob|dial|slider|axis|channel|value|menu selection)"
+    r"(\s*\d+)?(\s+press)?$",
+    re.I,
+)
+
+
+def is_generic(label: str) -> bool:
+    """A placeholder rather than a name: empty, the bare id, or a word like 'Adjustment 2'."""
+    s = (label or "").strip()
+    return not s or bool(_GENERIC.match(s))
+
+
+def derive_label(i: dict[str, Any], index: int = 0, count: int = 1) -> str:
+    """A standardized label with its unit, read off the part kind and how it is wired."""
+    kind = i.get("kind")
+    n = f" {index + 1}" if count > 1 else ""
+    if kind == "sensor":
+        q = clean(i.get("quantity") or "") or "Sensor reading"
+        return f"{q}{n} ({i['unit']})" if i.get("unit") else f"{q}{n}"
+    if kind == "axis":
+        ax = re.search(r"\.([xy])$", str(i.get("id", "")))
+        if ax:
+            return f"Joystick {ax.group(1).upper()} axis (%)"
+        return f"Potentiometer position{n} (%)"
+    if kind == "encoder":
+        return f"Rotary encoder position{n} (steps)"
+    if kind == "switch":
+        return f"Switch position{n} (on/off)"
+    if str(i.get("id", "")).endswith(".press"):
+        return f"Encoder push switch{n} (pressed)" if count > 1 else "Encoder push switch (pressed)"
+    return f"Push button{n} (pressed)"
+
+
+def fix_labels(surface: dict[str, Any], io: dict[str, Any]) -> dict[str, Any]:
+    """Replace placeholder control labels, whatever produced them (model, plan or an old cache)."""
+    by_id = {i["id"]: i for i in io["inputs"]}
+    kinds: dict[str, list[str]] = {}
+    for c in surface.get("controls", []):
+        i = by_id.get(c.get("input_id"))
+        if i:
+            kinds.setdefault(f"{i['kind']}:{str(i['id']).endswith('.press')}", []).append(i["id"])
+    for c in surface.get("controls", []):
+        i = by_id.get(c.get("input_id"))
+        if not i or not is_generic(c.get("label", "")):
+            continue
+        group = kinds[f"{i['kind']}:{str(i['id']).endswith('.press')}"]
+        c["label"] = derive_label(i, group.index(i["id"]), len(group))
+    return surface
+
+
 def _signature(io: dict[str, Any]) -> str:
     rows = [(i["id"], i["kind"], i.get("unit", "")) for i in io["inputs"]]
     rows += [(o["id"], o["kind"], "") for o in io["outputs"]]
@@ -181,13 +232,16 @@ def build_surface(io: dict[str, Any], model: dict[str, Any] | None) -> dict[str,
     outputs = [_output(o, wo.get(o["id"])) for o in io["outputs"]]
     ids = {i["id"] for i in io["inputs"]}
     lead = (model or {}).get("lead")
-    return {
-        "controls": controls,
-        "outputs": outputs,
-        "lead": lead if lead in ids else _lead_default(io),
-        "sig": _signature(io),
-        "by": "model" if model else "parts",
-    }
+    return fix_labels(
+        {
+            "controls": controls,
+            "outputs": outputs,
+            "lead": lead if lead in ids else _lead_default(io),
+            "sig": _signature(io),
+            "by": "model" if model else "parts",
+        },
+        io,
+    )
 
 
 def _brief(build: dict[str, Any], io: dict[str, Any]) -> str:
@@ -243,7 +297,7 @@ async def make_surface(
     if store and not refresh:
         hit = store.get(build_id, sig)
         if hit:
-            return hit
+            return fix_labels(hit, io)
     res, notes = await call_json(
         SYSTEM,
         _brief(build, io),

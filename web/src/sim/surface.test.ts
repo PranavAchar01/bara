@@ -61,3 +61,22 @@ describe("play surface layout", () => {
     expect(cleanName("  A–B  ")).toBe("A,B");
   });
 });
+
+describe("placeholder labels", () => {
+  it("never shows Adjustment N, and derives a label with unit from the control", async () => {
+    const { fixLabels } = await import("./surface");
+    const base = { kind: "axis", control: "slider", unit: "", group: "Settings", instance_id: "p" };
+    const s = fixLabels({
+      controls: [
+        { ...base, input_id: "p#0", label: "Adjustment 1" },
+        { ...base, input_id: "p#1", label: "Adjustment 2" },
+        { ...base, kind: "encoder", control: "knob", input_id: "e#0", label: "Menu selection" },
+      ],
+      outputs: [],
+      lead: "p#0",
+      sig: "x",
+      by: "model",
+    } as never);
+    expect(s.controls.map((c) => c.label)).toEqual(["Potentiometer position 1 (%)", "Potentiometer position 2 (%)", "Rotary encoder position (steps)"]);
+  });
+});

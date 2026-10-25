@@ -18,7 +18,7 @@ import { enterBridge, showRemote, simHooks, useSim } from "./simStore";
 import { hotspotSlots } from "./SimHotspots";
 import { useSimLink } from "./simLink";
 import { OutputsDock, PlayPanel, toneCount, useBuzzer } from "./PlaySurface";
-import { applyOps, fallbackSurface, loadLayout, resolveRows, saveLayout, type Layout } from "./surface";
+import { applyOps, fallbackSurface, fixLabels, loadLayout, resolveRows, saveLayout, type Layout } from "./surface";
 import { sim, terminalLine, typedText, type ChatEntry, type InputAction, type SimEvent, type SimSnap, type SimTest, type SimViewData, type Surface } from "./remote";
 import "./sim.css";
 import "./simulator.css";
@@ -350,7 +350,7 @@ function useSurface(id: string, data: SimViewData | null): Surface | null {
     let live = true;
     sim
       .surface(id)
-      .then((s) => live && setSurface(s))
+      .then((s) => live && setSurface(fixLabels(s)))
       .catch(() => live && setSurface(fallbackSurface(data.io)));
     return () => {
       live = false;

@@ -1040,8 +1040,33 @@ function sceneDir(): THREE.Vector3 | null {
   return new THREE.Vector3(x, y, z);
 }
 
-/** Share of the sim stage the device spans: it is the whole point of the screen. */
-const SIM_FILL = 0.88;
+/** Share of the free sim area the device spans on its tighter axis: a modest margin all round. */
+const SIM_FILL = 0.82;
+
+/** Space the play layout keeps clear around the device, in px (the top bar and the outputs dock). */
+const SIM_TOP_PX = 56;
+const SIM_DOCK_PX = 160;
+const SIM_EDGE_PX = 32;
+
+/**
+ * The part of the canvas the device may use once play mode has settled: the canvas minus the play
+ * panel on the right, the top bar and the outputs dock. Null when the canvas is not on the page.
+ */
+function simFreeArea(cam: THREE.PerspectiveCamera): { w: number; canvasH: number; freeH: number; top: number; bottom: number } | null {
+  const canvas = document.querySelector<HTMLElement>(".viewport canvas");
+  if (!canvas) return null;
+  const r = canvas.getBoundingClientRect();
+  const narrow = window.innerWidth <= 860;
+  const panelW = narrow ? 0 : Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--play-w")) || 340;
+  const w = window.innerWidth - panelW - Math.max(0, r.left);
+  const canvasH = r.height;
+  const dock = document.querySelector<HTMLElement>(".play-dock")?.offsetHeight ?? SIM_DOCK_PX;
+  const top = Math.max(0, SIM_TOP_PX - Math.max(0, r.top));
+  const bottom = dock + SIM_EDGE_PX + (narrow ? window.innerHeight * 0.46 : 0);
+  const freeH = canvasH - top - bottom;
+  if (w < 80 || freeH < 80 || !Number.isFinite(cam.fov)) return null;
+  return { w, canvasH, freeH, top, bottom };
+}
 
 /**
  * The operating direction turned about the vertical so the device's long floor axis runs across
@@ -1067,7 +1092,16 @@ function framePose(kind: FrameKind, cam: THREE.PerspectiveCamera, predictExplode
   if (kind === "sim") {
     // The operating view: straight at the control face, the device filling most of the viewport.
     const { view } = useSim.getState();
-    return fitPose(box, simDir(new THREE.Vector3(...view.dir).normalize()), cam, 1, SIM_FILL, 0.02);
+    const dir = simDir(new THREE.Vector3(...view.dir).normalize());
+    const free = simFreeArea(cam);
+    if (!free) return fitPose(box, dir, cam, 1, SIM_FILL, 0.02);
+    // Fit inside the free area (left of the play panel, between the top bar and the outputs dock),
+    // judged at the size the canvas settles to: the workspace is still resizing when the glide starts.
+    const tanV = Math.tan((cam.fov * DEG) / 2) * (free.freeH / free.canvasH);
+    const virt = cam.clone();
+    virt.fov = (2 * Math.atan(tanV)) / DEG;
+    virt.aspect = free.w / free.freeH;
+    return fitPose(box, dir, virt, 1, SIM_FILL, (free.bottom - free.top) / 2 / free.freeH);
   }
   if (kind === "hero" || kind === "iso" || kind === "scene") {
     return fitPose(box, sceneDir() ?? HERO_DIR.clone().normalize(), cam, 1, sceneFill(box), 0.05);
