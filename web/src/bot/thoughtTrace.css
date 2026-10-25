@@ -372,39 +372,15 @@ button.tt-hit:hover .tt-ic {
   }
 }
 
-/* The right panel's Build tab: a pointer to the agent instead of a second thinking feed */
-.think-hint {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 10px;
-  margin: 4px 0 14px;
-  padding: 12px 14px;
-  border-radius: 10px;
-  background: var(--surface-2);
-}
-.think-hint p {
-  margin: 0;
-  color: var(--text-2);
-  font-size: 13px;
-  line-height: 1.45;
-}
 .build-log > summary {
   cursor: pointer;
   padding: 6px 0;
 }
 
-/* In the Design tab: a card at the top, capped so the spec under it stays in view. */
-.thought-trace.inline {
-  position: relative;
-  z-index: auto;
-  width: auto;
-  max-height: min(46vh, 420px);
-  margin: 10px 12px 4px;
-  border-radius: 14px;
-  box-shadow: none;
-  animation: tt-in 220ms cubic-bezier(0.22, 0.9, 0.3, 1) both;
+/* Folded to the step it is on now: the header and that one line. */
+.thought-trace.folded .tt-scroll {
+  padding-bottom: 4px;
 }
-.thought-trace.inline::after {
-  display: none;
+.tt-top .tt-fold {
+  margin-left: auto;
 }
