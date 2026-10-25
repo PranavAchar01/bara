@@ -56,6 +56,8 @@ export function footprintBoxes(board: Board, model: Pick<LoadedModel, "footprint
 /** A part the board GLB may already show: its layer and element origins in build space. */
 export interface BoardCandidate {
   instanceId: string;
+  /** Catalog id; a footprint's library id appears in it for parts drawn from a KiCad footprint. */
+  partId?: string;
   layer: LayerId;
   points: THREE.Vector3[];
 }
@@ -91,6 +93,9 @@ export function matchComponents(loaded: LoadedModel, board: Board, candidates: B
     const cand = fp.instance_id ? byInstance.get(fp.instance_id) : undefined;
     if (cand) byRef.set(fp.ref, cand);
   }
+  // kicad-cli names every component by its footprint reference; a component that is one of the
+  // board's footprints is a part's model, never the bare board, however much of the board it covers.
+  const footprintByRef = new Map((board.footprints ?? []).map((f) => [f.ref, f]));
   let substrate = -1;
   let biggest = 0;
   loaded.components.forEach((c, i) => {
@@ -102,11 +107,12 @@ export function matchComponents(loaded: LoadedModel, board: Board, candidates: B
     }
     const b = c.bbox.clone().applyMatrix4(m);
     const area = (b.max.x - b.min.x) * (b.max.y - b.min.y);
-    if (area > biggest) {
+    const listed = footprintByRef.has(c.name);
+    if (!listed && area > biggest) {
       biggest = area;
       substrate = i;
     }
-    if (area > boardArea * 0.25) return;
+    if (!listed && area > boardArea * 0.25) return;
     const centre = b.getCenter(new THREE.Vector3());
     let best: BoardCandidate | null = null;
     let bestD = Infinity;
@@ -120,6 +126,10 @@ export function matchComponents(loaded: LoadedModel, board: Board, candidates: B
           best = cand;
         }
       }
+    // A part placed once but fitted several times (a D-pad's four switches) has one point; its other
+    // footprints share the part's library id.
+    const lib = footprintByRef.get(c.name)?.lib_id;
+    if (!best && lib) best = candidates.find((cand) => cand.partId?.includes(lib)) ?? null;
     if (best) owner.set(i, best);
   });
   return { owner, substrate };

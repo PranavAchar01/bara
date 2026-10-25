@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DRAG_PX, EXPLODE_SETTLE, LAYER_RANK, easeInOutCubic, explodeZ, isDrag, layerProgress, humanGroupName, layerGap, layerOf, layerOffsets } from "./explode";
+import { DRAG_PX, EXPLODE_SETTLE, LAYER_RANK, easeInOutCubic, explodeZ, isDrag, layerProgress, humanGroupName, layerGap, layerOf, layerOffsets, tiersByX } from "./explode";
 import type { BuildPart } from "../spec/types";
 
 const part = (part_id: string, kind: string, primary_function: string, display_name = part_id): Pick<BuildPart, "part_id" | "card" | "label"> => ({
@@ -122,5 +122,14 @@ describe("press versus drag", () => {
     expect(isDrag(DRAG_PX + 1, 0)).toBe(true);
     expect(isDrag(-4, 4)).toBe(true);
     expect(isDrag(10, 0, 20)).toBe(false);
+  });
+});
+
+describe("tiersByX", () => {
+  it("staggers neighbouring small parts left to right and leaves whole layers flat", () => {
+    const t = tiersByX("board_parts", [{ key: "c", x: 30 }, { key: "a", x: 0 }, { key: "b", x: 10 }, { key: "d", x: 40 }]);
+    expect([t.get("a"), t.get("b"), t.get("c"), t.get("d")]).toEqual([0, 1, 2, 0]);
+    expect(tiersByX("pcb", [{ key: "a", x: 0 }, { key: "b", x: 1 }]).size).toBe(0);
+    expect(tiersByX("board_parts", [{ key: "a", x: 0 }]).size).toBe(0);
   });
 });

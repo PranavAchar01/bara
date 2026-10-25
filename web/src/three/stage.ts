@@ -47,6 +47,10 @@ export const stage = {
   hoverKey: null as string | null,
   /** Every layer group by its layer, so their real heights can be measured. */
   layerGroups: new Map<THREE.Group, LayerId>(),
+  /** Extra height tier of a part group within its layer (see tiersByX). */
+  tier: new Map<THREE.Group, number>(),
+  /** Height of one tier in mm at explode = 1. */
+  tierStep: 0,
   /** Measured exploded offset per layer in mm at explode = 1, or null until measured. */
   layerZ: null as Partial<Record<LayerId, number>> | null,
   /** Height of the tallest exploded offset (mm at explode = 1), for framing. */

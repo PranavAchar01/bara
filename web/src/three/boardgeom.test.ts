@@ -71,4 +71,31 @@ describe("board components", () => {
     expect(owner.get(2)?.instanceId).toBe("u_btn");
     expect(substrate).toBe(0);
   });
+
+  it("matches a big display by position when its footprint carries no instance id", () => {
+    const loaded = {
+      bbox: new THREE.Box3(new THREE.Vector3(0, -130, 0), new THREE.Vector3(80, 0, 6)),
+      components: [comp("", [0, -130, 0], [80, 0, 1.6]), comp("DS1", [5, -60, 1.6], [75, -5, 6])],
+    } as unknown as LoadedModel;
+    const b = board([{ ref: "DS1", center_mm: [40, -32] }]);
+    const cands = [{ instanceId: "u_display", layer: "top" as const, points: [new THREE.Vector3(20, -20, 8)] }];
+    const { owner, substrate } = matchComponents(loaded, b, cands);
+    expect(owner.get(1)?.instanceId).toBe("u_display");
+    expect(substrate).toBe(0);
+  });
+
+  it("gives a part's other footprints to it by library id", () => {
+    const loaded = {
+      bbox: new THREE.Box3(new THREE.Vector3(0, -50, 0), new THREE.Vector3(80, 0, 6)),
+      components: [comp("", [0, -50, 0], [80, 0, 1.6]), comp("SW2", [5, -20, 1.6], [11, -14, 5]), comp("SW3", [5, -40, 1.6], [11, -34, 5])],
+    } as unknown as LoadedModel;
+    const b = board([
+      { ref: "SW2", lib_id: "Button:SW_X", center_mm: [8, -17] },
+      { ref: "SW3", lib_id: "Button:SW_X", center_mm: [8, -37] },
+    ]);
+    const cands = [{ instanceId: "u_dpad", partId: "kicadgen:kicad:fp:Button:SW_X", layer: "board_parts" as const, points: [new THREE.Vector3(8, -17, 2)] }];
+    const { owner } = matchComponents(loaded, b, cands);
+    expect(owner.get(1)?.instanceId).toBe("u_dpad");
+    expect(owner.get(2)?.instanceId).toBe("u_dpad");
+  });
 });
