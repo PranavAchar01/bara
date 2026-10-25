@@ -81,7 +81,9 @@ WIDE_RULES = {
     **RULES,
     "clearance_mm": 0.2,
     "track_mm": 0.25,
-    "min_track_mm": 0.2,
+    # the router's necks past fine-pitch pads keep the base board's floor: wider copper rules
+    # must not turn a legal 0.19 mm neck into a track-width error
+    "min_track_mm": RULES["min_track_mm"],
     "via_mm": 0.6,
     "via_drill_mm": 0.35,
     "edge_clearance_mm": 0.45,
