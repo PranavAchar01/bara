@@ -16,10 +16,20 @@ export interface BBox {
 }
 
 export type Material = Open<"plastic" | "metal" | "pcb" | "rubber" | "glass" | "fabric" | "wood" | "unknown">;
+export type FinishPreset = Open<"matte" | "satin" | "gloss" | "silk" | "frosted" | "clear" | "smoke" | "metal" | "unknown">;
+/** How a surface is made beyond its colour; cases use it, including see-through finishes. */
+export interface Finish {
+  preset: FinishPreset;
+  /** See-through finishes: 0 opaque to 1 fully clear. */
+  clarity?: number;
+  /** 0 polished to 1 fully frosted. */
+  frost?: number;
+}
 export interface Color {
   hex: string;
   material?: Material;
   node?: string | null;
+  finish?: Finish;
 }
 
 export const STAGE_IDS = ["classify", "reuse", "compose", "place", "enclose", "board", "firmware", "render"] as const;
