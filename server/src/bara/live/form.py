@@ -20,7 +20,8 @@ from pathlib import Path
 from typing import Any
 
 from shapely.errors import GEOSException
-from shapely.geometry import Point, Polygon
+from shapely.geometry import LineString, Point, Polygon
+from shapely.geometry import box as shapely_box
 from shapely.validation import explain_validity
 
 from bara.live.ask import ask_json
@@ -461,7 +462,7 @@ def separate(form: Form, touches: list[Touch], rounds: int = 60) -> None:
         for i in range(len(items)):
             for j in range(i + 1, len(items)):
                 (a, sa), (b, sb) = items[i], items[j]
-                if a["mount"] != b["mount"]:
+                if a["mount"] != b["mount"] or _stacked(a, b):
                     continue
                 ba, bb = _anchor_box(a, sa), _anchor_box(b, sb)
                 ox, oy = _overlap(ba, bb, FACE_GAP_MM)
@@ -481,6 +482,252 @@ def separate(form: Form, touches: list[Touch], rounds: int = 60) -> None:
             break
 
 
+# ---------------------------------------------------------------- pointing devices
+
+POINTER_CLASS = re.compile(r"\b(?:mouse|trackball)\b")
+CAP_MM = 9.0  # a pressed switch carries a cap this wide, whatever its own footprint
+WHEEL_STACK = re.compile(r"scroll|wheel|encoder|middle|\bmmb\b")
+_POINTER_ROLES = (
+    ("thumb", r"thumb|forward|backward|side (?:button|switch)|\bback (?:button|switch)"),
+    ("sensor", r"optical|\bpmw|\bpaw\d|tracking|motion sensor|surface sensor"),
+    ("wheel", WHEEL_STACK.pattern),
+    (
+        "click",
+        r"click|\blmb\b|\brmb\b|primary|secondary"
+        r"|(?:left|right|main) (?:and \w+ )?(?:button|switch)",
+    ),
+)
+
+
+def _stacked(a: dict[str, Any], b: dict[str, Any]) -> bool:
+    """The encoder, its push switch and the wheel on its shaft are one stack on one spot."""
+    if a.get("mount") != "front" or b.get("mount") != "front":
+        return False
+    texts = (" ".join(str(x.get(k) or "") for k in ("name", "slot_id")).lower() for x in (a, b))
+    return all(WHEEL_STACK.search(t) for t in texts) and math.dist(a["centre"], b["centre"]) < 1.0
+
+
+def pointer_role(a: dict[str, Any]) -> str:
+    """thumb, sensor, wheel or click for a pointing device's anchor, from its name and slot (a
+    power switch or a DPI button is none of them); the name decides first."""
+    name = str(a.get("name") or "").lower()
+    both = f"{name} {a.get('slot_id') or ''}".lower()
+    for text in (name, both):
+        for role, pat in _POINTER_ROLES:
+            if re.search(pat, text):
+                return role
+    return ""
+
+
+def is_pointer(form: Form) -> bool:
+    return bool(POINTER_CLASS.search(form.device_class.lower()))
+
+
+def _turn(p: tuple[float, float], deg: float) -> tuple[float, float]:
+    c, s = math.cos(math.radians(deg)), math.sin(math.radians(deg))
+    return p[0] * c - p[1] * s, p[0] * s + p[1] * c
+
+
+def _span_at(poly: Polygon, v: float) -> tuple[float, float] | None:
+    """Left and right extent of the plan along the line at height v."""
+    x0, y0, x1, y1 = poly.bounds
+    cut = poly.intersection(LineString([(x0 - 1, v), (x1 + 1, v)]))
+    if cut.is_empty:
+        return None
+    b = cut.bounds
+    return b[0], b[2]
+
+
+def arrange_pointer(form: Form, touches: list[Touch]) -> None:
+    """Put a mouse's controls where a hand finds them, whatever the model drew: the two clicks
+    side by side at the front under the index and middle finger with the wheel (and the push
+    switch under it) between them, the thumb buttons one behind the other on the thumb's side
+    wall, the optical sensor at the centre of the underside. The model's outline stays, and so
+    does every anchor it drew for another job (a cable port, an indicator)."""
+    if not is_pointer(form):
+        return
+    roles = {id(a): pointer_role(a) for a in form.anchors}
+    mine = {
+        r: [a for a in form.anchors if roles[id(a)] == r]
+        for r in ("thumb", "sensor", "wheel", "click")
+    }
+    if not mine["click"]:
+        return
+    poly = Polygon(form.silhouette)
+    if not poly.is_valid or poly.area <= 0:
+        return
+    x0, y0, x1, y1 = poly.bounds
+    # the frame: front along +v. The long axis is the front axis; the end the clicks lean to
+    # (the model's own front) is the front, +y when it says nothing
+    long_x = (x1 - x0) > 1.1 * (y1 - y0)
+    axis = (1.0, 0.0) if long_x else (0.0, 1.0)
+    cx, cy = poly.centroid.x, poly.centroid.y
+    lean = sum(
+        (a["centre"][0] - cx) * axis[0] + (a["centre"][1] - cy) * axis[1] for a in mine["click"]
+    ) / len(mine["click"])
+    length = (x1 - x0) if long_x else (y1 - y0)
+    forward = (0.0 if axis[0] else 90.0) + (180.0 if lean < -0.1 * length else 0.0)
+    turn = 90.0 - forward  # the angle that brings the front to +y
+    framed = Polygon([_turn(p, turn) for p in form.silhouette])
+    fx0, fy0, fx1, fy1 = framed.bounds
+    height = fy1 - fy0
+    by_slot = {t.slot_id: t for t in touches}
+
+    def box(a: dict[str, Any]) -> float:
+        t = by_slot.get(a.get("slot_id"))
+        w, d = _part_box(form, t)
+        return max(w, d, CAP_MM)
+
+    def back(p: tuple[float, float]) -> list[float]:
+        x, y = _turn(p, -turn)
+        return [x, y]
+
+    wheels = mine["wheel"]
+    wheel_w = max((box(a) for a in wheels), default=0.0)
+    n_clicks = sum(max(1, int(a.get("count") or 1)) for a in mine["click"])
+    cap = max(box(a) for a in mine["click"])
+    # the wheel in the middle, a click on each side of it
+    half = (wheel_w / 2 if wheels else 0.0) + cap / 2 + FACE_GAP_MM + 0.5
+    reach = half + cap / 2 + 2.0  # plan half-width the click row needs at its height
+    yc = fy1 - 0.25 * height
+    while yc > fy1 - 0.5 * height:
+        span = _span_at(framed, yc)
+        if (
+            span is not None
+            and (span[1] - span[0]) / 2 >= reach
+            and (span[0] + span[1]) / 2 - span[0] >= reach
+        ):
+            break
+        yc -= 1.0
+    span = _span_at(framed, yc) or (fx0, fx1)
+    xm = (span[0] + span[1]) / 2
+    for a in wheels:
+        a["mount"], a["pattern"], a["count"] = "front", "single", max(1, int(a.get("count") or 1))
+        a["centre"] = back((xm, yc))
+    for a in [a for a in mine["click"] if int(a.get("count") or 1) == 2 and n_clicks == 2]:
+        # one anchor for both clicks reads as a solid bar across the wheel: one anchor each
+        twin = {**a, "name": f"{a['name']} (second)", "count": 1, "pattern": "single"}
+        a["count"], a["pattern"] = 1, "single"
+        form.anchors.insert(form.anchors.index(a) + 1, twin)
+        mine["click"].append(twin)
+    left_first = sorted(
+        mine["click"],
+        key=lambda a: 0 if re.search(r"left|primary|lmb", str(a.get("name")).lower()) else 1,
+    )
+    for k, a in enumerate(left_first):
+        side = -1.0 if k == 0 else 1.0
+        off = side * half if wheels else side * (cap / 2 + FACE_GAP_MM)
+        a["mount"], a["pattern"] = "front", "single"
+        a["centre"] = back((xm + off if k < 2 else xm, yc))
+    # the thumb buttons: on the wall the existing thumb anchors lean to, the left otherwise
+    if mine["thumb"]:
+        lean_x = sum(_turn(tuple(a["centre"]), turn)[0] - (fx0 + fx1) / 2 for a in mine["thumb"])
+        side = 1.0 if lean_x > 1.0 else -1.0
+        yt = fy1 - 0.45 * height
+        pitch = max(14.0, max(box(a) for a in mine["thumb"]) + FACE_GAP_MM)
+        order = sorted(
+            mine["thumb"],
+            key=lambda a: 1 if re.search(r"forward|fwd|next", str(a.get("name")).lower()) else 0,
+        )
+        slots: list[tuple[dict[str, Any], float]] = []
+        if len(order) == 1:
+            slots = [(order[0], yt)]
+        else:
+            for k, a in enumerate(order):
+                slots.append((a, yt + (k - (len(order) - 1) / 2) * pitch))
+        for a, y in slots:
+            a["mount"] = "edge"
+            if int(a.get("count") or 1) > 1:
+                a["pattern"] = "column" if turn % 180 == 0 else "row"
+                a["pitch_mm"] = pitch
+            else:
+                a["pattern"] = "single"
+            span_t = _span_at(framed, y)
+            span_a = _span_at(framed, y - 2.0)
+            span_b = _span_at(framed, y + 2.0)
+            if span_t is None or span_a is None or span_b is None:
+                continue
+            xe = span_t[1] if side > 0 else span_t[0]
+            slope = (span_b[1] - span_a[1] if side > 0 else span_b[0] - span_a[0]) / 4.0
+            nx, ny = (1.0, -slope) if side > 0 else (-1.0, slope)
+            # a stacked pair sits one above the other on the wall: the anchor is their middle
+            a["centre"] = back((xe - side * 0.5, y))
+            a["edge_normal_deg"] = (math.degrees(math.atan2(ny, nx)) - turn) % 360.0
+    # the optical sensor looks through the middle of the floor
+    for a in mine["sensor"]:
+        a["mount"], a["pattern"], a["count"] = "back", "single", max(1, int(a.get("count") or 1))
+        a["centre"] = [cx, cy]
+
+    _clear_the_hand_zone(form, touches, poly)
+
+
+def _clear_the_hand_zone(form: Form, touches: list[Touch], poly: Polygon) -> None:
+    """A control the model drew for another job (a power slide, a DPI button) that now sits over
+    the click row or the wheel moves to the nearest free spot on the face, clear of them."""
+    by_slot = {t.slot_id: t for t in touches}
+
+    def size(a: dict[str, Any]) -> tuple[float, float]:
+        t = by_slot.get(a.get("slot_id"))
+        w, d = _part_box(form, t)
+        if t is not None and t.function_id.startswith("input."):
+            w, d = max(w, CAP_MM), max(d, CAP_MM)
+        return w, d
+
+    fixed = [
+        _anchor_box(a, size(a))
+        for a in form.anchors
+        if pointer_role(a) in ("click", "wheel") and a.get("mount") == "front"
+    ]
+    room = poly.buffer(-1.0)
+    x0, y0, x1, y1 = poly.bounds
+
+    def free(cx: float, cy: float, w: float, d: float) -> bool:
+        b = (cx - w / 2, cy - d / 2, cx + w / 2, cy + d / 2)
+        return room.contains(shapely_box(*b)) and all(
+            min(_overlap(b, f, FACE_GAP_MM)) <= 0 for f in fixed
+        )
+
+    for a in form.anchors:
+        if pointer_role(a) or a.get("mount") != "front" or int(a.get("count") or 1) != 1:
+            continue
+        w, d = size(a)
+
+        here = (float(a["centre"][0]), float(a["centre"][1]))
+        if not free(here[0], here[1], w, d):
+            spots = [
+                (x, y)
+                for x in (x0 + 1.5 * k for k in range(int((x1 - x0) / 1.5) + 1))
+                for y in (y0 + 1.5 * k for k in range(int((y1 - y0) / 1.5) + 1))
+                if free(x, y, w, d)
+            ]
+            if spots:
+                a["centre"] = list(min(spots, key=lambda q: math.dist(q, here)))
+        fixed.append(_anchor_box(a, (w, d)))
+
+
+def pointer_overlaps(form: Form, touches: list[Touch]) -> list[str]:
+    """Controls of a pointing device whose caps would share area on the top face."""
+    if not is_pointer(form):
+        return []
+    by_slot = {t.slot_id: t for t in touches}
+    items = []
+    for a in form.anchors:
+        if a.get("mount") != "front" or not a.get("centre") or not pointer_role(a):
+            continue
+        w, d = _part_box(form, by_slot.get(a.get("slot_id")))
+        items.append((a, (max(w, CAP_MM), max(d, CAP_MM))))
+    out = []
+    for i in range(len(items)):
+        for j in range(i + 1, len(items)):
+            (a, sa), (b, sb) = items[i], items[j]
+            if _stacked(a, b):
+                continue
+            ox, oy = _overlap(_anchor_box(a, sa), _anchor_box(b, sb), 0.0)
+            if ox > 0.5 and oy > 0.5:
+                out.append(f"{a['name']} and {b['name']} caps overlap by {ox:.0f} x {oy:.0f} mm")
+    return out
+
+
 def face_overlaps(form: Form, touches: list[Touch]) -> list[str]:
     """Anchors whose parts still share area on one face, as problems the model can act on."""
     items = _face_anchors(form, touches)
@@ -488,7 +735,7 @@ def face_overlaps(form: Form, touches: list[Touch]) -> list[str]:
     for i in range(len(items)):
         for j in range(i + 1, len(items)):
             (a, sa), (b, sb) = items[i], items[j]
-            if a["mount"] != b["mount"]:
+            if a["mount"] != b["mount"] or _stacked(a, b):
                 continue
             ox, oy = _overlap(_anchor_box(a, sa), _anchor_box(b, sb), 0.0)
             if ox > 0.5 and oy > 0.5:
@@ -559,6 +806,7 @@ def validate(form: Form, touches: list[Touch]) -> list[str]:
         elif not all(inside.contains(Point(p)) for p in pts):
             problems.append(f"anchor {a['name']} has instances outside the silhouette")
     problems.extend(face_overlaps(form, touches))
+    problems.extend(pointer_overlaps(form, touches))
     problems.extend(feature_problems(form))
     if form.rest_pose == "face_up" and form.thickness_mm > min(w, h) + 1e-6:
         problems.append(
@@ -705,6 +953,7 @@ def scaled_to_fit(form: Form, report: dict, touches: list[Touch]) -> Form | None
     )
     move_features(grown, k)
     centre_on_origin(grown)
+    arrange_pointer(grown, touches)
     separate(grown, touches)
     grown.problems = validate(grown, touches)
     return None if grown.problems else grown
@@ -771,6 +1020,7 @@ async def derive(
         if got is None:
             return form, why or "unreadable form"
         centre_on_origin(got)
+        arrange_pointer(got, touches)
         separate(got, touches)
         got.problems = validate(got, touches)
         got.repaired = attempt == 1
