@@ -310,3 +310,7 @@ Web: bara-merge agent merges Nithin's figma-design-in-code / agent-board-3d / fi
 - Held-out heldout-2015: 3/5 pass (fan controller, pill box, step counter). Failures: key finder tag (FORM_OVERFLOW on a tiny form with free area, then floating/enclosure/access/DRC) and meat thermometer (critical display slot over-specified, every candidate rejected). Both sent to bara-engine. Identity still weak (step counter = tan slab).
 - Fixed schematic crash: _natural pin sort mixed str/int (pins 1 vs A1), which blocked board.built on 2 builds. Pushed with a test.
 - Pushed agent commits 09f192d (access ways for every touched part) and 41cf472 (footprints named by card, no brands). The committed tree passes test_case_shell 29/29; in-progress edits in the working tree break it, held back.
+
+## 2026-10-24 21:00 PT
+- Merged Nithin's calmer-agent (4bfb4db), his only unmerged branch: the hero has the recorded build behind and the Build button in front, you talk to the bot on the hero, and the cursor is a leaning arrowhead. Conflicts: Landing took his hero. TopBar kept the workspace-only mock badge, with the fallback model in the hover. shell.css kept both sides' rules. LandingAgent stays because the library stills use it. tsc clean, vitest 255/255, build OK, landing screenshotted. Site rebuilt.
+- 99a467d (bara-look form features: hanging hole, wedge, lens, pockets) verified on a clean tree: case/form tests 83/83.
