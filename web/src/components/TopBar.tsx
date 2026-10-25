@@ -54,7 +54,7 @@ export function TopBar() {
         <span
           className={`conn-pill tone-${CONN_TONE[conn]}`}
           aria-live="polite"
-          title={health?.llm?.provider ? `${health.llm.provider} ${health.llm.model ?? ""}` : undefined}
+          title={health?.llm?.provider ? `${health.llm.provider} ${health.llm.model}. Fallback: ${health.llm_fallback?.provider ?? "none"} ${health.llm_fallback?.model ?? ""}` : undefined}
         >
           <span className="dot" />
           {CONN_LABEL[conn]}
