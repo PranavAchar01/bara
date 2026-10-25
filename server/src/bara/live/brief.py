@@ -86,9 +86,18 @@ SYSTEM_PROMPT = (
     "'top left', 'right thumb'). A feature the request negates ('no trackball') is left "
     "out.\n"
     "colours: every colour named, with what it applies to and a hex value.\n"
+    "palette: the product's shell colours as hex, chosen the way an industrial designer would "
+    "dress this kind of device: body (main shell), trim (bezel or frame around the screen), "
+    "buttons (main controls), accent (action buttons), screen (display glass tint). A classic "
+    "handheld console gets a warm light grey body, dark grey trim, near black direction pad, "
+    "magenta action buttons and a pale green screen. Keep any colour the request names. Null "
+    "only for out_of_scope requests.\n"
     "blocking_facet: primary_function only when the request names no job at all (a mood, "
     "a place, 'a gadget'); which_device for unrelated alternatives; else null."
 )
+
+
+PALETTE_KEYS = ("body", "trim", "buttons", "accent", "screen")
 
 
 def brief_schema(function_ids: list[str], device_classes: list[str]) -> dict[str, Any]:
@@ -116,6 +125,7 @@ def brief_schema(function_ids: list[str], device_classes: list[str]) -> dict[str
             "display_type",
             "features",
             "colours",
+            "palette",
             "tented",
             "blocking_facet",
         ],  # fmt: skip
@@ -166,6 +176,12 @@ def brief_schema(function_ids: list[str], device_classes: list[str]) -> dict[str
                         "hex": {"type": "string"},
                     },
                 },
+            },
+            "palette": {
+                "type": ["object", "null"],
+                "additionalProperties": False,
+                "required": list(PALETTE_KEYS),
+                "properties": {k: {"type": "string"} for k in PALETTE_KEYS},
             },
             "tented": {"type": "boolean"},
             "blocking_facet": {"type": ["string", "null"], "enum": BLOCKING},
@@ -350,6 +366,7 @@ def rules_brief(prompt: str, router: Router, catalog: Catalog) -> dict[str, Any]
         "display_type": display_type,
         "features": features,
         "colours": colours,
+        "palette": None,
         "tented": bool(re.search(r"\btent(ed|ing)?\b", text)),
         "blocking_facet": blocking,
     }
@@ -394,6 +411,16 @@ def normalise_brief(brief: dict[str, Any], catalog: Catalog) -> dict[str, Any]:
         if not re.fullmatch(r"#[0-9A-Fa-f]{6}", colour.get("hex") or ""):
             colour["hex"] = COLOUR_WORDS.get(colour.get("name", "").lower(), "#9E9E9E")
         colour["hex"] = colour["hex"].upper()
+    pal = out.get("palette")
+    if isinstance(pal, dict):
+        clean = {
+            k: str(pal[k]).upper()
+            for k in PALETTE_KEYS
+            if re.fullmatch(r"#[0-9A-Fa-f]{6}", str(pal.get(k) or ""))
+        }
+        out["palette"] = clean or None
+    else:
+        out["palette"] = None
     knobs = sum(f["count"] for f in out.get("features", []) if f["kind"] == "knob")
     if knobs:
         for f in ("input.rotary_encoder", "mech.knob"):

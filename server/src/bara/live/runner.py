@@ -526,7 +526,9 @@ class LiveRunner:
         opaque controls in one palette, dark-glass screen, real board and metal finishes),
         written as `finish` on parts, boards and the case and summarised on scene.finish."""
         st = self._stage(run, "render", "Choosing colours and materials")
-        msgs = finish_mod.events(run.state, list(brief.get("colours") or []))
+        msgs = finish_mod.events(
+            run.state, list(brief.get("colours") or []), brief.get("palette")
+        )
         for msg_type, payload in msgs:
             st.emit(msg_type, payload)
         pal = ((run.state.get("scene") or {}).get("finish") or {}).get("palette_name", "")

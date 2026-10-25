@@ -478,6 +478,18 @@ class EditEngine:
         enc["revision"] = int(enc.get("revision", 0)) + 1
         self._push(work, plan, "enclosure.updated", {"enclosure": enc})
 
+    def _op_palette(
+        self, work: dict[str, Any], op: dict[str, Any], plan: EditPlan, state: dict
+    ) -> None:
+        """Change the shell palette (body, trim, buttons, accent, screen) and redo the finish."""
+        from bara.live import finish as finish_mod
+
+        have = ((work.get("scene") or {}).get("finish") or {}).get("palette") or {}
+        merged = {k: have[k] for k in finish_mod.SHELL_KEYS if k in have}
+        merged.update({k: v for k, v in op["palette"].items() if k in finish_mod.SHELL_KEYS})
+        for msg_type, payload in finish_mod.events(work, None, merged):
+            self._push(work, plan, msg_type, payload)
+
     def _op_move(
         self, work: dict[str, Any], op: dict[str, Any], plan: EditPlan, state: dict
     ) -> None:
@@ -750,6 +762,8 @@ class EditEngine:
             return f"Removing the {side + ' ' if side else ''}{base}"
         if kind == "recolor":
             return f"Recoloring the {lower_first(base) if inst else 'case'}"
+        if kind == "palette":
+            return "Recoloring the shell"
         if kind == "move":
             return f"Moving the {side + ' ' if side else ''}{base}"
         if kind == "resize":
@@ -787,6 +801,7 @@ class EditEngine:
                 "swap_part": self._op_swap,
                 "remove_part": self._op_remove,
                 "recolor": self._op_recolor,
+                "palette": self._op_palette,
                 "move": self._op_move,
                 "resize": self._op_resize,
                 "disconnect": self._op_disconnect,

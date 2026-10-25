@@ -67,7 +67,12 @@ def clear_case(tint: str) -> dict[str, Any]:
     )  # fmt: skip
 
 
-def screen_glass() -> dict[str, Any]:
+def screen_glass(tint: str | None = None) -> dict[str, Any]:
+    if tint:  # a tinted glass the palette chose: lit in its own colour
+        return _finish(
+            "display", "tinted glass, lit window", tint, roughness=0.06, ior=1.52,
+            emissive=tint, emissive_intensity=0.3,
+        )  # fmt: skip
     return _finish(
         "display", "dark glass, lit window", "#0B0E12", roughness=0.06, ior=1.52,
         emissive="#9CC7FF", emissive_intensity=0.35,
@@ -108,10 +113,34 @@ def lens_color(asset: dict[str, Any], node: str) -> str:
     return hx if HEX.match(hx) else "#3A3F46"
 
 
-def palette_for(prompt: str, colours: list[dict[str, Any]] | None) -> dict[str, str]:
-    """The build's palette; colours the person named replace the matching entries."""
+def _mix(a: str, b: str, t: float) -> str:
+    """Hex a moved t of the way toward hex b."""
+    ca, cb = (tuple(int(h[i : i + 2], 16) for i in (1, 3, 5)) for h in (a, b))
+    return "#" + "".join(f"{round(x + (y - x) * t):02X}" for x, y in zip(ca, cb, strict=True))
+
+
+# Shell palette keys the design step (or the person) can set: body, trim, buttons, accent, screen.
+SHELL_KEYS = ("body", "trim", "buttons", "accent", "screen")
+
+
+def palette_for(
+    prompt: str,
+    colours: list[dict[str, Any]] | None,
+    proposed: dict[str, Any] | None = None,
+) -> dict[str, str]:
+    """The build's palette. Order of precedence: colours the person named, then `proposed`
+    (the design step's palette, or the person's edit), then the curated palette picked by a
+    hash of the prompt (the neutral fallback)."""
     i = int(hashlib.sha256(prompt.strip().lower().encode()).hexdigest(), 16) % len(PALETTES)
     pal = dict(PALETTES[i])
+    pal["body"] = _mix(pal["tint"], "#FFFFFF", 0.62)
+    pal["trim"] = pal["primary"]
+    for k, v in (proposed or {}).items():
+        if k in SHELL_KEYS and HEX.match(str(v)):
+            pal[k] = str(v).upper()
+    if proposed and HEX.match(str(proposed.get("body"))):
+        pal["tint"] = pal["body"]
+    pal["primary"] = pal.get("buttons", pal["primary"])
     for c in colours or []:
         hx = str(c.get("hex") or "")
         if not HEX.match(hx):
@@ -119,6 +148,7 @@ def palette_for(prompt: str, colours: list[dict[str, Any]] | None) -> dict[str, 
         target = c.get("target")
         if target in ("case", "all"):
             pal["tint"] = hx
+            pal["body"] = hx
         if target in ("keycaps", "knob", "trackball", "all"):
             pal["primary"] = hx
         if target == "accent":
@@ -145,12 +175,16 @@ def role(fn: str, kind: str) -> str:
     return "other"
 
 
-def plan(build: dict[str, Any], colours: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+def plan(
+    build: dict[str, Any],
+    colours: list[dict[str, Any]] | None = None,
+    proposed: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Finish records for every part, board and case of the build, without mutating it.
 
     Returns {"palette", "parts": {instance_id: finish}, "boards": {board_id: finish},
     "enclosures": {enclosure_id: (finish, node_finish)}}."""
-    pal = palette_for(str(build.get("prompt") or ""), colours)
+    pal = palette_for(str(build.get("prompt") or ""), colours, proposed)
     slots = {s.get("slot_id"): s for s in build.get("slots") or []}
     # control groups in slot order: the first gets the primary colour, the next the accent, the
     # rest the quiet one, so a device reads as one designed palette
@@ -170,7 +204,7 @@ def plan(build: dict[str, Any], colours: list[dict[str, Any]] | None = None) -> 
             tone, hx = group_tone[key]
             parts[part["instance_id"]] = control(hx, f"{tone} control")
         elif r == "display":
-            parts[part["instance_id"]] = screen_glass()
+            parts[part["instance_id"]] = screen_glass(pal.get("screen"))
         elif r == "connector":
             parts[part["instance_id"]] = connector()
         elif r == "metal":
@@ -195,14 +229,20 @@ def plan(build: dict[str, Any], colours: list[dict[str, Any]] | None = None) -> 
                 if name.endswith("_caps"):
                     nodes[name] = caps
                 elif name.endswith("_glass"):
-                    nodes[name] = screen_glass()
+                    nodes[name] = screen_glass(pal.get("screen"))
                 elif name.endswith("_lens"):
                     nodes[name] = lens(lens_color(a, name))
-                elif name.endswith(("_tray", "_bezel")):
+                elif name.endswith("_bezel"):
+                    nodes[name] = clear_case(pal["trim"]) if pal.get("trim") else case
+                elif name.endswith("_tray"):
                     nodes[name] = case
         encs[enc["enclosure_id"]] = (case, nodes)
     palette = {
         "case": pal["tint"],
+        "body": pal["body"],
+        "trim": pal["trim"],
+        "buttons": pal["primary"],
+        "screen": pal.get("screen") or "#0B0E12",
         "primary": pal["primary"],
         "accent": pal["accent"],
         "quiet": pal["quiet"],
@@ -219,10 +259,12 @@ def plan(build: dict[str, Any], colours: list[dict[str, Any]] | None = None) -> 
 
 
 def events(
-    build: dict[str, Any], colours: list[dict[str, Any]] | None = None
+    build: dict[str, Any],
+    colours: list[dict[str, Any]] | None = None,
+    proposed: dict[str, Any] | None = None,
 ) -> list[tuple[str, dict[str, Any]]]:
     """The (message type, payload) list that writes the finish into the build state."""
-    fin = plan(build, colours)
+    fin = plan(build, colours, proposed)
     out: list[tuple[str, dict[str, Any]]] = []
     for part in build.get("parts") or []:
         f = fin["parts"].get(part["instance_id"])

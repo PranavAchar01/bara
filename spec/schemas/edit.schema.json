@@ -22,6 +22,9 @@
           "$ref": "#/$defs/Recolor"
         },
         {
+          "$ref": "#/$defs/Palette"
+        },
+        {
           "$ref": "#/$defs/Move"
         },
         {
@@ -42,6 +45,7 @@
         "connect",
         "disconnect",
         "recolor",
+        "palette",
         "move",
         "resize",
         "add_part",
@@ -135,6 +139,30 @@
           ]
         }
       ]
+    },
+    "Palette": {
+      "type": "object",
+      "description": "Set the shell palette. Any of body, trim, buttons, accent, screen; the finish is redone from it.",
+      "required": [
+        "op",
+        "palette"
+      ],
+      "properties": {
+        "op": {
+          "const": "palette"
+        },
+        "palette": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "body": {"$ref": "common.schema.json#/$defs/HexColor"},
+            "trim": {"$ref": "common.schema.json#/$defs/HexColor"},
+            "buttons": {"$ref": "common.schema.json#/$defs/HexColor"},
+            "accent": {"$ref": "common.schema.json#/$defs/HexColor"},
+            "screen": {"$ref": "common.schema.json#/$defs/HexColor"}
+          }
+        }
+      }
     },
     "Move": {
       "type": "object",

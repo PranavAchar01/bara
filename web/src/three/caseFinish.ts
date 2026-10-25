@@ -184,3 +184,52 @@ export function finishSwatch(hex: string, preset: FinishPreset): string {
       return `linear-gradient(160deg, rgb(255 255 255 / 25%), rgb(0 0 0 / 8%)), ${hex}`;
   }
 }
+
+/**
+ * How the shell is shown while building: clear (the default, so the board and parts show
+ * through) or coloured in the palette. The simulation always shows it coloured.
+ */
+export const useShellView = create<{ clear: boolean; panel: boolean }>(() => ({ clear: true, panel: false }));
+
+const solidCache = new Map<string, THREE.MeshPhysicalMaterial>();
+
+/** Opaque moulded plastic in a palette colour: matte with a soft clearcoat, so it reads as a product. */
+export function solidShell(hex: string): THREE.MeshPhysicalMaterial {
+  const key = hex.toLowerCase();
+  let m = solidCache.get(key);
+  if (!m) {
+    // The studio lights run a little hot, so the base colour is pulled down to land on the palette colour.
+    const c = new THREE.Color(hex).multiplyScalar(0.84);
+    m = new THREE.MeshPhysicalMaterial({
+      color: c,
+      roughness: 0.52,
+      metalness: 0,
+      clearcoat: 0.3,
+      clearcoatRoughness: 0.55,
+      specularIntensity: 0.55,
+      sheen: 0.25,
+      sheenRoughness: 0.7,
+      sheenColor: c.clone().lerp(WHITE, 0.4),
+    });
+    m.userData.finish = "solid";
+    solidCache.set(key, m);
+  }
+  return m;
+}
+
+const glassCache = new Map<string, THREE.MeshPhysicalMaterial>();
+
+/** Screen glass tinted by the palette: glossy, faintly lit, so the screen reads as a display. */
+export function screenGlass(hex: string): THREE.MeshPhysicalMaterial {
+  const key = hex.toLowerCase();
+  let m = glassCache.get(key);
+  if (!m) {
+    m = new THREE.MeshPhysicalMaterial({ color: new THREE.Color(hex), roughness: 0.08, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.05, emissive: new THREE.Color(hex), emissiveIntensity: 0.18 });
+    m.userData.finish = "solid";
+    glassCache.set(key, m);
+  }
+  return m;
+}
+
+/** The shell colours of a build whose design step gave none: warm grey body, dark grey trim, near black buttons, maroon action buttons, pale green screen. */
+export const DEFAULT_SHELL = { body: "#CFCBC0", trim: "#4A4D55", buttons: "#23252A", accent: "#A8325E", screen: "#B7D39A" } as const;

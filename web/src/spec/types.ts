@@ -523,8 +523,19 @@ export interface Warning {
   stage?: StageId;
 }
 
+/** Shell colours: main shell, trim around the screen, main controls, action buttons, screen glass tint. */
+export interface ShellPalette {
+  body: string;
+  trim: string;
+  buttons: string;
+  accent: string;
+  screen: string;
+}
+
 export interface Scene {
   camera: { position_mm: Vec3; target_mm: Vec3; fov_deg?: number };
+  /** Finishing pass summary; `palette` carries the shell colours (and older role colours). */
+  finish?: { palette?: Partial<ShellPalette> & Record<string, string>; palette_name?: string } | null;
   assembly_bbox_mm: BBox;
   render?: AssetRef | null;
   preload?: string[];
@@ -586,6 +597,7 @@ export type EditOp =
   | { op: "connect"; from: PortRef; to: PortRef }
   | { op: "disconnect"; connection_id: string }
   | { op: "recolor"; instance_id?: string; enclosure_id?: string; color: Color }
+  | { op: "palette"; palette: Partial<ShellPalette> }
   | {
       op: "move";
       instance_id: string;

@@ -28,7 +28,9 @@ import { FocusDriver, meshBox, nearFocused } from "./focus";
 import { setLook, type Look } from "./look";
 import { ProjectLinkLines } from "./projectLinks";
 import { AutoLinker } from "../project/project";
-import { caseMaterial, finishInfo, useCasePreview } from "./caseFinish";
+import { CAPS_NAME, GLASS_NAME, splitButtons, type CaseRole } from "./shellRoles";
+import { ShellColors } from "../components/ShellColors";
+import { caseMaterial, DEFAULT_SHELL, finishInfo, screenGlass, solidShell, useCasePreview, useShellView } from "./caseFinish";
 import { defaultColor, finishMaterial, ghost, placeholderMaterial, presetFor, presetMaterial, tinted, usesPreset, wearsFinish } from "./materials";
 import { focusAmount, registerAnchor, stage, stageBox } from "./stage";
 import { StudioEnvironment, StudioFloor, studioPalette, type StudioPalette } from "./studio";
@@ -579,24 +581,41 @@ function upCoverage(geoms: THREE.BufferGeometry[]): number {
   return area / footprint;
 }
 
-/** A case piece: its geometries, and whether it is the lid that lifts off in the explode. */
+/** A case piece: its geometries, whether it is the lid that lifts off in the explode, and (for the
+ * coloured shell) which part of the case it is. Role pieces ride with the case body. */
 interface CasePiece {
   geoms: THREE.BufferGeometry[];
   lid: boolean;
+  role?: CaseRole;
+  /** A coloured sub-part (buttons, bars, screen): no label of its own. */
+  extra?: boolean;
 }
 
 function casePieces(loaded: LoadedModel): CasePiece[] {
-  const named = loaded.components.map((c, i) => ({ i, lid: LID_NAME.test(c.name) }));
+  const named = loaded.components.map((c, i) => ({ i, lid: LID_NAME.test(c.name), caps: CAPS_NAME.test(c.name), glass: GLASS_NAME.test(c.name) }));
   const geomsOf = (keep: (i: number) => boolean) => groupPieces(loaded.pieces, keep).map((g) => g.geometry);
   if (named.length > 1 && named.some((c) => c.lid) && named.some((c) => !c.lid)) {
     const lidSet = new Set(named.filter((c) => c.lid).map((c) => c.i));
-      return [
-      { geoms: geomsOf((i) => !lidSet.has(i)), lid: false },
-      { geoms: geomsOf((i) => lidSet.has(i)), lid: true },
+    const capsSet = new Set(named.filter((c) => c.caps && !c.lid).map((c) => c.i));
+    const glassSet = new Set(named.filter((c) => c.glass && !c.lid).map((c) => c.i));
+    const base = geomsOf((i) => !lidSet.has(i) && !capsSet.has(i) && !glassSet.has(i));
+    const out: CasePiece[] = [
+      { geoms: base.length ? base : geomsOf((i) => !lidSet.has(i)), lid: false, role: "trim" },
+      { geoms: geomsOf((i) => lidSet.has(i)), lid: true, role: "body" },
     ];
+    if (base.length) {
+      if (capsSet.size) {
+        const { buttons, accent, bars } = splitButtons(geomsOf((i) => capsSet.has(i)));
+        if (buttons.length) out.push({ geoms: buttons, lid: false, role: "buttons", extra: true });
+        if (accent.length) out.push({ geoms: accent, lid: false, role: "accent", extra: true });
+        if (bars.length) out.push({ geoms: bars, lid: false, role: "trim", extra: true });
+      }
+      if (glassSet.size) out.push({ geoms: geomsOf((i) => glassSet.has(i)), lid: false, role: "screen", extra: true });
+    }
+    return out;
   }
   const all = loaded.groups.map((g) => g.geometry);
-  return [{ geoms: all, lid: upCoverage(all) > 0.6 }];
+  return [{ geoms: all, lid: upCoverage(all) > 0.6, role: "body" }];
 }
 
 function CasePieceNode(props: {
@@ -707,11 +726,33 @@ function EnclosureNode(props: { enc: Enclosure; theme: Theme; selected: boolean;
     if (!loaded) for (const p of pieces) for (const g of p.geoms) g.dispose();
   }, [loaded, pieces]);
   const finish = preview ? preview.finish : enc.color?.finish;
+  // The simulation always shows the shell as coloured moulded plastic; the build view shows it
+  // clear unless the colour view is on. A finish someone picked that is already opaque stays.
+  const simActive = useSim((s) => s.active);
+  const clearView = useShellView((s) => s.clear);
+  const bodyHex = useApp((s) => s.build?.scene?.finish?.palette?.body) ?? DEFAULT_SHELL.body;
+  const solid = (simActive || !clearView) && finishInfo(finish?.preset).seeThrough;
+  const pal = useApp((s) => s.build?.scene?.finish?.palette);
   const material = useMemo(() => {
-    const base = caseMaterial(hex, finish);
+    const base = solid ? solidShell(preview?.hex ?? bodyHex) : caseMaterial(hex, finish);
     if (pending) return ghost(base, 0.35);
     return loaded ? base : ghost(base, 0.6);
-  }, [hex, finish, loaded, pending]);
+  }, [hex, finish, loaded, pending, solid, bodyHex, preview?.hex]);
+  // The coloured shell: each part of the case in its palette colour (the lid in the body colour, the
+  // tray in the trim, buttons, action buttons and screen glass in theirs).
+  const roleMaterial = (role: CaseRole | undefined) => {
+    if (!solid || !loaded || pending || !role) return material;
+    const body = preview?.hex ?? bodyHex;
+    const tone: Record<CaseRole, string> = {
+      body,
+      // the base is the body colour leaning toward the trim, so a dark trim reads as a seam, not a slab
+      trim: "#" + new THREE.Color(body).lerp(new THREE.Color(pal?.trim ?? DEFAULT_SHELL.trim), 0.3).getHexString(),
+      buttons: pal?.buttons ?? DEFAULT_SHELL.buttons,
+      accent: pal?.accent ?? DEFAULT_SHELL.accent,
+      screen: pal?.screen ?? DEFAULT_SHELL.screen,
+    };
+    return role === "screen" ? screenGlass(tone.screen) : solidShell(tone[role]);
+  };
   if (enc.kind === "none" || !pieces.length) return null;
   const edge = props.failing ? theme.fail : props.selected ? theme.accent : null;
   const onClick = (e: ThreeEvent<MouseEvent>) => {
@@ -726,11 +767,11 @@ function EnclosureNode(props: { enc: Enclosure; theme: Theme; selected: boolean;
           key={`${enc.enclosure_id}:${i}:${p.lid}`}
           piece={p}
           enc={enc}
-          material={material}
-          seeThrough={finishInfo(finish?.preset).seeThrough}
+          material={roleMaterial(p.role)}
+          seeThrough={finishInfo(finish?.preset).seeThrough && !solid}
           edge={edge}
           onClick={onClick}
-          anchorKey={props.labelled ? (p.lid && pieces.length > 1 ? "e:case_top" : "e:case") : null}
+          anchorKey={props.labelled && !p.extra ? (p.lid && pieces.length > 1 ? "e:case_top" : "e:case") : null}
           focusKey={p.lid && pieces.length > 1 ? "e:case_top" : "e:case"}
         />
       ))}
@@ -2236,6 +2277,7 @@ function ViewportToolbar(props: {
     }),
   );
   const setPreset = (p: ViewPreset) => setView(p);
+  const shellPanel = useShellView((s) => s.panel);
   const toggle = (k: keyof typeof toggles) => useApp.setState((s) => ({ toggles: { ...s.toggles, [k]: !s.toggles[k] } }));
   // folded into one small button until wanted: the canvas is the device, not a control panel
   const [open, setOpen] = useState(false);
@@ -2301,6 +2343,21 @@ function ViewportToolbar(props: {
           </button>
         )}
       </div>
+      {applies.case && (
+        <>
+          <span className="vp-sep" />
+          <button
+            type="button"
+            className={`seg-btn ${shellPanel ? "active" : ""}`}
+            aria-pressed={shellPanel}
+            onClick={() => useShellView.setState((s) => ({ panel: !s.panel }))}
+            title="Colour the shell"
+          >
+            colours
+          </button>
+          {shellPanel && <ShellColors />}
+        </>
+      )}
       {simReady && (
         <>
           <span className="vp-sep" />

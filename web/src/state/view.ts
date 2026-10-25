@@ -271,6 +271,8 @@ function describeOps(ops: EditOp[]): string {
       return `Add${n}`;
     case "recolor":
       return "Recolour";
+    case "palette":
+      return "Shell colours";
     case "move":
       return "Move";
     case "resize":
