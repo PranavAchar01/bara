@@ -337,6 +337,24 @@ def apply(
             ):
                 functions.remove(f)
                 have.pop(f["function_id"], None)
+        # a sensor or control the diagram left out and the prompt never names is the brief
+        # reading one typed part twice ("proximity sensor" as presence and distance too)
+        said = re.sub(r"[^a-z]+", " ", str(spec.get("prompt") or "").lower())
+        for f in list(functions):
+            fid = f["function_id"]
+            leaf = fid.partition(".")[2].split("_")
+            if (
+                not keyboard
+                and fid.split(".")[0] in ("sense", "input")
+                and fid not in covered
+                and f.get("source") != "clarified"
+                and not all(re.search(rf"\b{w}", said) for w in leaf)
+            ):
+                functions.remove(f)
+                have.pop(fid, None)
+                out.dropped.append(
+                    _dropped({"label": fid, "function_id": fid}, "not in the prompt or diagram")
+                )
         # the diagram names the device's screen: a different kind the brief guessed (an OLED
         # for a clock whose digits are LEDs) would be a second display on the same face
         screens = {f for f in covered if f.startswith("display.") and f != "display.indicator_led"}

@@ -163,6 +163,22 @@ def _function_names(part: dict[str, Any], facet: str, op: str, value: Any) -> bo
     )
 
 
+def typed_mpns(prompt: str) -> set[str]:
+    """Part numbers the person typed: words with letters and digits, five characters or more
+    ("PAW3212", "DS3231"), lowercased with punctuation dropped. Sizes ("6x6") are too short."""
+    words = re.findall(r"[A-Za-z0-9][A-Za-z0-9-]{3,}", prompt)
+    return {
+        w.lower().replace("-", "")
+        for w in words
+        if re.search(r"[a-z]", w, re.I) and re.search(r"\d", w) and len(w.replace("-", "")) >= 5
+    }
+
+
+def names_typed_mpn(part: dict[str, Any], typed: set[str]) -> bool:
+    mpn = re.sub(r"[^a-z0-9]", "", str(part.get("mpn") or part.get("display_name") or "").lower())
+    return bool(mpn) and any(mpn.startswith(t) for t in typed)
+
+
 def is_chip(part: dict[str, Any]) -> bool:
     """A part whose datasheet category or package says it is an IC, whatever it was tagged."""
     package = str((part.get("facets") or {}).get("package") or "")
@@ -1628,6 +1644,11 @@ class Composer:
         need = slot.need
         if need is None or not need.requirement or not parts:
             return parts
+        typed = typed_mpns(str(self.spec.get("prompt") or ""))
+        if any(names_typed_mpn(p, typed) for p in parts):
+            # the part number the person typed is the part they asked for, whatever function
+            # the block was filed under
+            return [p for p in parts if names_typed_mpn(p, typed)]
         shown = parts[:12]
         lines = "\n".join(
             f"{i}: {p.get('display_name')} [{p.get('part_id')}] "
@@ -1785,6 +1806,12 @@ class Composer:
             if part is not None and not await self.vet(slot, [part]):
                 part = None
             via = f"a composed {part['composed']} (KiCad library)" if part else ""
+        typed = typed_mpns(str(self.spec.get("prompt") or ""))
+        label = re.sub(r"[^a-z0-9]", "", slot.need.label.lower())
+        if part is None and any(t in label for t in typed):
+            # the block is a part the person named: another part filed under the same
+            # function (a trackball for an optical sensor) would be a different device
+            return
         if part is None:
             # nothing by name: a catalog part serving the function, spec-checked (a near miss
             # is still taken later) beats a device missing it

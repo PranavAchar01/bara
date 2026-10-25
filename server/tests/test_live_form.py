@@ -428,6 +428,7 @@ def test_unresolved_block_is_retried_with_relaxed_names(monkeypatch: Any) -> Non
     comp = object.__new__(cmp.Composer)
     comp.resolver = FakeResolver()  # type: ignore[assignment]
     comp.extra, comp.fetched = {}, []
+    comp.spec = {"prompt": "a gadget"}
     comp.next_warning = lambda prefix: prefix + "1"  # type: ignore[method-assign]
     comp.vet = lambda slot, parts: asyncio.sleep(0, parts)  # type: ignore[method-assign]
     need = cp.Need("lcd", "display.lcd", "LCD", terms=("BAD1",), kicad=("Nope",))
@@ -982,6 +983,7 @@ def test_a_required_block_nothing_meets_takes_the_closest_real_part(monkeypatch:
     comp = object.__new__(cmp.Composer)
     comp.resolver = type("R", (), {"rejected": set(), "notes": {}})()  # type: ignore[assignment]
     comp.extra, comp.near_miss, comp.warning_n = {}, {}, 0
+    comp.spec = {"prompt": "a mouse with a fast sensor"}
     need = cp.Need("sensor", "sense.distance", "Mouse sensor", requirement="26000 DPI")
     slot = cmp.Slot("sensor", "Mouse sensor", "sense.distance", "critical", 1, [], need=need)
     pmw = {"part_id": "lcsc:pmw3360", "display_name": "PMW3360DM-T2QU"}
