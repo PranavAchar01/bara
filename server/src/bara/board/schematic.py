@@ -147,6 +147,7 @@ class Pin:
     y: float
     angle: int  # direction from the connection point into the body
     unit: int
+    kind: str = ""  # electrical type, e.g. power_out
 
 
 @dataclass
@@ -206,8 +207,8 @@ def _symbol_from(node: Node, lib: str, source: str) -> Symbol | None:
     units: set[int] = set()
     for sub in [node, *_kids(node, "symbol")]:
         unit, style = _unit_of(_uq(sub[1]), base) if sub is not node else (0, 1)
-        if style != 1:
-            continue  # the alternate (De Morgan) body
+        if style not in (0, 1):
+            continue  # the alternate (De Morgan) body; style 0 is shared by both
         if unit:
             units.add(unit)
         for c in sub:
@@ -224,6 +225,7 @@ def _symbol_from(node: Node, lib: str, source: str) -> Symbol | None:
                         float(at[2]),
                         int(float(at[3]) if len(at) > 3 else 0),
                         unit,
+                        c[1] if len(c) > 1 and isinstance(c[1], str) else "",
                     )
                 )
                 shapes.setdefault(unit, []).append((float(at[1]), float(at[2])))
@@ -699,6 +701,55 @@ def write(items: list[Item], path: Path, *, title: str, project: str = "main") -
                         uid(),
                     ]
                 )
+
+    # a power net no part drives fails KiCad's ERC; a PWR_FLAG on it says the supply comes from
+    # off the sheet (a USB port, a battery). Nets a pin already drives get none: two drivers clash.
+    driven = {
+        it.pads.get(p.number) for it in parts for p in syms[it.ref].pins if p.kind == "power_out"
+    }
+    flag = _power_symbol("PWR_FLAG")
+    fx, fy = MARGIN + 5.08, _snap(ph - MARGIN - TITLE_H + 10.16)
+    for net in sorted(n for n in nets if n in POWER and n not in driven):
+        lib_name, default = POWER[net]
+        pwr = _power_symbol(lib_name)
+        lib_nodes.setdefault(pwr.lib_id, pwr.node)
+        lib_nodes.setdefault(flag.lib_id, flag.node)
+        x, top, low = _snap(fx), fy, fy + 5.08
+        pts = ["pts", ["xy", f"{x:.2f}", f"{top:.2f}"], ["xy", f"{x:.2f}", f"{low:.2f}"]]
+        body.append(["wire", pts, ["stroke", ["width", "0"], ["type", "default"]], uid()])
+        pwr_n += 1
+        body.append(
+            instance(
+                flag.lib_id,
+                f"#FLG{pwr_n:03d}",
+                "PWR_FLAG",
+                x,
+                top,
+                0,
+                1,
+                [flag.pins[0].number],
+                ref_at=(x, top),
+                val_at=(x, top - 5.08),
+                hidden_ref=True,
+            )
+        )
+        rot = 0 if default == 270 else 180  # the supply symbol hangs below the flag either way
+        body.append(
+            instance(
+                pwr.lib_id,
+                f"#PWR{pwr_n:03d}",
+                net,
+                x,
+                low,
+                rot,
+                1,
+                [pwr.pins[0].number],
+                ref_at=(x, low),
+                val_at=(x, low + 6.35),
+                hidden_ref=True,
+            )
+        )
+        fx += 12.7
 
     today = dt.date.today().isoformat()
     tb: Node = [

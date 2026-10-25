@@ -112,3 +112,37 @@ def test_a_fetched_part_takes_the_symbol_fetched_beside_its_footprint(tmp_path: 
     assert sheet.symbols["U1"] == "C50506.kicad_sym"
     text = (tmp_path / "main.kicad_sch").read_text()
     assert '"Manufacturer"' not in text  # vendor fields stay out of the drawing
+
+
+def test_power_nets_from_off_the_sheet_carry_a_flag_and_pass_erc(tmp_path: Path) -> None:
+    import json
+    import subprocess
+
+    sch = tmp_path / "main.kicad_sch"
+    S.write(_items(), sch, title="desk lamp")
+    text = sch.read_text()
+    # nothing on this board drives GND or 3V3 (they come in over USB): one flag each
+    assert len(re.findall(r'\(lib_id\s+"power:PWR_FLAG"', text)) == 2
+    report = tmp_path / "erc.json"
+    subprocess.run(
+        [
+            KICAD_CLI,
+            "sch",
+            "erc",
+            "--format",
+            "json",
+            "--severity-all",
+            "-o",
+            str(report),
+            str(sch),
+        ],
+        capture_output=True,
+        check=False,
+    )
+    errors = [
+        v["type"]
+        for s in json.loads(report.read_text())["sheets"]
+        for v in s["violations"]
+        if v["severity"] == "error"
+    ]
+    assert errors == []
