@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import shutil
 import subprocess
@@ -26,7 +27,8 @@ from bara.live.completeness import Need
 log = logging.getLogger(__name__)
 
 SERVER = Path(__file__).resolve().parents[3]
-FETCHED_JSONL = SERVER / "data/catalog/fetched/fetched.jsonl"
+DATA = Path(os.environ.get("BARA_DATA_DIR", SERVER / "data"))  # where the engine serves from
+FETCHED_JSONL = DATA / "catalog/fetched/fetched.jsonl"
 PER_FETCH_S = 25.0
 TOTAL_BUDGET_S = 140.0
 BUDGET_PER_NEED_S = 20.0  # a device with many parts to find gets time for each of them

@@ -22,7 +22,9 @@ LIBS = SOURCES / "kicad-libs"
 # under its own folder, <C number>/<C number>.kicad_mod (live/fetch.py).
 FETCHED_SRC = Path(
     os.environ.get(
-        "BARA_FETCHED_SRC", Path(__file__).resolve().parents[3] / "data/catalog/fetched/src"
+        "BARA_FETCHED_SRC",
+        Path(os.environ.get("BARA_DATA_DIR", Path(__file__).resolve().parents[3] / "data"))
+        / "catalog/fetched/src",
     )
 )
 

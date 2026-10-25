@@ -16,6 +16,7 @@ data/assets/parts/kicad_gen/, served at /assets/parts/kicad_gen/<stem>.glb.
 from __future__ import annotations
 
 import json
+import os
 import re
 import sqlite3
 import sys
@@ -26,8 +27,9 @@ from pathlib import Path
 from typing import Any
 
 SERVER = Path(__file__).resolve().parents[2]
-DEFAULT_PATH = SERVER / "data" / "catalog" / "kicad_index.sqlite"
-GLB_DIR = SERVER / "data" / "assets" / "parts" / "kicad_gen"
+DATA = Path(os.environ.get("BARA_DATA_DIR", SERVER / "data"))  # the tree the engine serves
+DEFAULT_PATH = DATA / "catalog" / "kicad_index.sqlite"
+GLB_DIR = DATA / "assets" / "parts" / "kicad_gen"
 GLB_URL = "/assets/parts/kicad_gen"
 TIER = "kicad_generated"
 SIBLING_SIMILARITY = 0.8  # how alike a sibling footprint's name must be to lend its model

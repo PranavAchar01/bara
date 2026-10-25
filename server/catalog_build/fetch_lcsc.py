@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import sys
 import tempfile
@@ -28,9 +29,11 @@ from pathlib import Path
 from typing import Any
 
 SERVER = Path(__file__).resolve().parent.parent
-FETCHED_DIR = SERVER / "data/catalog/fetched"
+# the engine's data tree (BARA_DATA_DIR), so a part fetched mid-build is served from where it lands
+DATA = Path(os.environ.get("BARA_DATA_DIR", SERVER / "data"))
+FETCHED_DIR = DATA / "catalog/fetched"
 FETCHED_JSONL = FETCHED_DIR / "fetched.jsonl"
-ASSET_DIR = SERVER / "data/assets/parts/fetched"
+ASSET_DIR = DATA / "assets/parts/fetched"
 
 LCSC_RE = re.compile(r"^C\d{2,10}$")
 DEFAULT_FUNCTION = "component.ic"
