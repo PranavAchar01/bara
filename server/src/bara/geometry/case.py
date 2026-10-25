@@ -755,6 +755,7 @@ def enclose_report(
     pockets: list[tuple[mf.CrossSection, float]] = []
     openings: dict[str, Any] = {"keys": 0, "encoders": [], "screens": [], "usb": []}
     openings["wheels"] = site_feats.wheels
+    openings["reached"] = sorted(r for r in site_feats.reached if r)
     keycaps = [f for f in feats if f.role == "keycap"]
     for f in feats:
         z_lo, z_hi = f.z_range(t)

@@ -394,6 +394,8 @@ def sites_from_anchors(
             )
             near = None
             best = 30.0 if kind == "port" else max(6.0, 0.7 * pitch)
+            if s.mount == "edge":
+                best = max(best, 12.0)  # the anchor rides the rim, its switch sits inboard
             for f in feats:
                 if f.ref in claimed or f.role in ("battery", "sensor", "trackball"):
                     continue
@@ -518,6 +520,9 @@ class Features:
     wheels: list[dict[str, Any]] = field(default_factory=list)  # wheel slots, for checks
     claimed: set[str] = field(default_factory=set)
     kinds: dict[str, int] = field(default_factory=dict)
+    # parts a finger reaches some way other than straight down through the top: a side button,
+    # a bumper bar over them, or a press through the stick or wheel above
+    reached: set[str] = field(default_factory=set)
 
 
 def shoulder_lobes(sites: list[Site], plan: Polygon) -> list[Polygon]:
@@ -590,6 +595,7 @@ def build_features(
             out.kinds[s.kind] = out.kinds.get(s.kind, 0) + 1
             continue
         if s.kind == "button" and s.mount == "front" and _under_knob(s, knobs, clear):
+            out.reached.add(s.ref)
             continue  # pressed through the wheel or stick above it (a mouse's middle click)
         if s.kind == "inner":
             continue
@@ -605,7 +611,7 @@ def build_features(
             if s.group not in cross:
                 cross[s.group] = _cross_sites([t for t in sites if t.group == s.group])
                 _dpad(out, cross[s.group], body, seat, zmax, clear)
-            elif not any(t is s for t in cross[s.group]):
+            if not any(t is s for t in cross[s.group]):
                 _button(out, s, body, seat, zmax, clear)  # the slot's other switches (A/B, start)
         elif s.kind == "light":
             _light(out, s, body, seat, zmax)
@@ -709,6 +715,7 @@ def _grille(out: Features, s: Site, body: Body, seat: float, zmax: float) -> Non
     w, d = (s.w, s.d) if s.w and s.d else (12.0, 12.0)
     span, length = max(w, d), max(4.0, min(w, d) - 1.0)
     n = max(2, int(span // GRILLE_PITCH_MM))
+    n += 1 - n % 2  # odd: one slot runs over the part's centre, where its sound port is
     zc = body.top_at(s.x, s.y)
     ang = math.radians(s.rot)
     ux, uy = math.cos(ang), math.sin(ang)  # slots step along the footprint's long side
@@ -802,6 +809,7 @@ def _shoulder(out: Features, group: list[Site], body: Body, seat: float, clear: 
     ]
     bar = mf.Manifold.batch_hull(ends).scale((1.0, 1.0, 0.72)).translate((0, 0, zt - 0.2))
     out.caps.append(bar)
+    out.reached.update(s.ref for s in group)
     for s in group:
         if s.w and s.d:
             c = 2 * clear
@@ -876,6 +884,7 @@ def _edge_button(out: Features, s: Site, body: Body, wall_mm: float, clear: floa
     hit = _exit_distance(body.plan, s.x, s.y, nx, ny)
     if hit is None:
         return
+    out.reached.add(s.ref)
     lo, hi = body.land()
     zc = 0.5 * (lo + hi)
     r_c = max(max(s.w, s.d) / 2, 2.6)
