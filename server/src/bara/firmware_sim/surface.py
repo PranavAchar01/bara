@@ -141,10 +141,14 @@ def _lead_default(io: dict[str, Any]) -> str:
 
 def _control(i: dict[str, Any], want: dict[str, Any] | None) -> dict[str, Any]:
     allowed = CONTROLS.get(i["kind"], ("button",))
+    if i["kind"] == "axis":  # one stick drives an x and a y input; a dial is a lone slider
+        allowed = ("stick",) if str(i["id"]).endswith((".x", ".y")) else ("slider",)
     ctl = want.get("control") if want else None
     row: dict[str, Any] = {
         "input_id": i["id"],
         "kind": i["kind"],
+        "instance_id": i.get("instance_id"),
+        "index": i.get("index"),
         "control": ctl if ctl in allowed else allowed[0],
         "label": clean(want.get("label") if want else "") or clean(i["label"]) or i["id"],
         "group": clean(want.get("group") if want else "", 20) or default_group(i),

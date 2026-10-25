@@ -5,7 +5,7 @@ import { getRest } from "../net/client";
 import { authHeaders, serverUrl } from "../net/mode";
 import type { InputMap } from "./inputMap";
 
-export type SimInputKind = "key" | "mkey" | "button" | "switch" | "encoder" | "axis" | "pot" | "power";
+export type SimInputKind = "key" | "mkey" | "button" | "switch" | "encoder" | "axis" | "pot" | "sensor" | "power";
 
 export interface RemoteInput {
   id: string;
@@ -16,6 +16,12 @@ export interface RemoteInput {
   pin?: string;
   code?: string | null;
   matters?: boolean;
+  /** Sensors: the measured quantity, its unit, the part's physical range and its resting value. */
+  quantity?: string;
+  unit?: string;
+  min?: number;
+  max?: number;
+  default?: number;
 }
 
 export interface RemoteOutput {
@@ -92,7 +98,7 @@ export interface SimSnap {
   t_ms: number;
   screen: string[];
   hid: string;
-  leds: { id: string; label: string; on: boolean }[];
+  leds: { id: string; label: string; kind?: string; on: boolean }[];
   inputs: { closed: Record<string, boolean>; axes: Record<string, number> };
   events: SimEvent[];
   wave: Record<string, { name: string; edges: [number, number][] }>;
@@ -123,6 +129,15 @@ export interface ChatEntry {
   by?: string;
   build_status?: string | null;
   tests?: { passed: number; failed: number } | null;
+  surface_ops?: SurfaceOp[];
+}
+
+/** A change to the play surface the agent asked for; the server has already checked it against the real parts. */
+export interface SurfaceOp {
+  op: "show" | "hide" | "rename" | "lead" | "set";
+  input_id: string;
+  label?: string;
+  value?: number;
 }
 
 export interface SimConfig {
@@ -146,7 +161,40 @@ export interface SimViewData {
   snapshot: SimSnap | null;
 }
 
-export type InputAction = "press" | "release" | "tap" | "turn" | "axis" | "power" | "reset";
+export type ControlKind = "key" | "button" | "toggle" | "knob" | "stick" | "slider";
+export type OutputShow = "screen" | "led" | "led_strip" | "buzzer" | "motor" | "console";
+
+/** One control of the play surface: always one real input of the build. */
+export interface SurfaceControl {
+  input_id: string;
+  kind: SimInputKind;
+  control: ControlKind;
+  label: string;
+  unit: string;
+  group: string;
+  instance_id?: string;
+  index?: number;
+  min?: number;
+  max?: number;
+  default?: number;
+}
+
+export interface SurfaceOutput {
+  output_id: string;
+  kind: string;
+  show: OutputShow;
+  label: string;
+}
+
+export interface Surface {
+  controls: SurfaceControl[];
+  outputs: SurfaceOutput[];
+  lead: string;
+  sig: string;
+  by: "model" | "parts";
+}
+
+export type InputAction = "press" | "release" | "tap" | "turn" | "axis" | "sensor" | "power" | "reset";
 
 async function call<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
   const res = await getRest().request<T>(method, path, body);
@@ -176,6 +224,7 @@ export const sim = {
   run: (id: string, ms: number, since: number) => call<{ snapshot: SimSnap }>("POST", `${base(id)}/run`, { ms, since }).then((r) => r.snapshot),
   reset: (id: string) => call<{ sim: SimViewData }>("POST", `${base(id)}/reset`, {}).then((r) => r.sim),
   tests: (id: string, ids?: string[]) => call<{ results: SimTest[]; sim: SimViewData }>("POST", `${base(id)}/tests`, ids ? { ids } : {}),
+  surface: (id: string, refresh = false) => call<{ surface: Surface }>("POST", `${base(id)}/surface`, { refresh }).then((r) => r.surface),
   chat: (id: string, message: string) => call<{ reply: ChatEntry; sim: SimViewData }>("POST", `${base(id)}/chat`, { message }),
   async source(id: string, name: string): Promise<string> {
     const res = await fetch(serverUrl(`${base(id)}/source/${encodeURIComponent(name)}`), { headers: authHeaders() });
