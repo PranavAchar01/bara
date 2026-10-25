@@ -262,6 +262,33 @@ describe("screenUp: which way a handheld stands", () => {
   });
 });
 
+describe("screenUp: a landscape handheld with a lone D-pad", () => {
+  const dpad = [[-52, 21], [-52, 1], [-62, 11], [-42, 11]];
+  const make = (outer: [number, number, number], turn: number, label: string) => {
+    const disp = part({ id: "disp", fn: "display.tft", label });
+    disp.placement = { ...disp.placement, position_mm: [-22.7, -20, 15.7], rotation_deg: [0, 0, turn] } as BuildPart["placement"];
+    return build([part({ id: "dpad", fn: "input.button", name: "Tactile switch", quantity: 4 }), disp], {
+      enclosures: [{ outer_size_mm: outer, cutouts: [] }],
+      boards: [{ footprints: dpad.map(([x, y], i) => ({ ref: `SW${i + 1}`, role: "button", center_mm: [x, y] })), position_mm: [0, 0, 0], rotation_deg: [0, 0, 0] }],
+    });
+  };
+
+  it("stands upright landscape, short side up, D-pad on the left", () => {
+    expect(screenUp(make([144, 82, 28], 90, "3.2in TFT 240x320"))).toEqual([0, 1]);
+  });
+
+  it("puts the D-pad on the left when the device is laid the other way round", () => {
+    const b = make([144, 82, 28], 90, "3.2in TFT 240x320");
+    (b.parts[1].placement as { position_mm: number[] }).position_mm = [-80, -20, 15.7];
+    expect(screenUp(b)).toEqual([0, -1]);
+  });
+
+  it("leaves a portrait case to the direction of the screen", () => {
+    expect(screenUp(make([82, 144, 28], 90, "3.2in TFT 240x320"))).not.toEqual([0, 1]);
+  });
+
+});
+
 describe("deriveInputMap: nothing to press", () => {
   it("is empty for a build without inputs", () => {
     expect(deriveInputMap(build([part({ id: "x", fn: "mcu.rp2040" })])).inputs).toEqual([]);

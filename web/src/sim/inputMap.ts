@@ -353,7 +353,25 @@ export function screenUp(build: Build | null): [number, number] | null {
       }
     }
   }
+  const side = plus ? sideBySideUp(build, display, raws, screen) : null;
+  if (side) return side;
   return toScreen ? snapAxis(toScreen, 5) : null;
+}
+
+/**
+ * A landscape handheld with a lone D-pad (a Game Boy Advance): the case is wider than it is deep and
+ * the screen sits beside the D-pad, not above it (the panel is turned a quarter in the case, so its
+ * window is landscape whatever its part card's resolution says), so the device stands with its short side up and the D-pad on the person's left. Null when the case or layout say otherwise, which leaves the screen-direction rule in charge.
+ */
+function sideBySideUp(build: Build, display: BuildPart | undefined, raws: Raw[], screen: V3 | null): [number, number] | null {
+  if (!display || !screen) return null;
+  const size = build.enclosures?.find((e) => e.outer_size_mm)?.outer_size_mm;
+  if (!size || size[0] < size[1] * 1.15) return null;
+  const plus = findPlus(raws.map((r) => ({ x: r.pos[0], y: r.pos[1] }))) ?? labelledPlus(raws);
+  if (!plus) return null;
+  const dpad = centroid([plus.up, plus.down, plus.left, plus.right].map((i) => raws[i].pos));
+  if (Math.abs(screen[0] - dpad[0]) < 5) return null;
+  return dpad[0] < screen[0] ? [0, 1] : [0, -1];
 }
 
 /** Base-layer key codes of the build's keymap, ZMK `.keymap` or QMK `keymap.c`; null for a non-key binding. */
