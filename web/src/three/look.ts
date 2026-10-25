@@ -31,7 +31,7 @@ function hoverOf(orig: THREE.Material): THREE.Material | null {
   if (!h) {
     const m = orig.clone() as THREE.MeshStandardMaterial;
     m.emissive = HOVER_COLOR.clone();
-    m.emissiveIntensity = 0.45;
+    m.emissiveIntensity = 0.7;
     isClone.add(m);
     hovers.set(orig, m);
     h = m;

@@ -51,6 +51,7 @@ export function LabelOverlay(props: { rows: LabelRow[]; color: string; muted: st
                 s.line = el;
                 slots.set(r.key, s);
               }}
+              className="explode-line"
               stroke={props.line}
               strokeWidth={1}
             />
@@ -139,6 +140,22 @@ export function spreadLabels(ys: number[], top: number, bottom: number, gap: num
   out[0] = Math.max(out[0], top);
   for (let i = 1; i < n; i++) out[i] = Math.max(out[i], out[i - 1] + g);
   return out;
+}
+
+/**
+ * Which labels go in the left column: each part takes the column on its own side of the model
+ * (`mid`), so leader lines never run back across it. Only when one side holds more than `cap`
+ * rows do the parts nearest the middle move over to the other column.
+ * Returns the keys for the left column.
+ */
+export function splitSides<P extends { key: string; x: number }>(pts: P[], mid: number, cap: number): Set<string> {
+  const leftList = pts.filter((p) => p.x < mid).sort((a, b) => a.x - b.x);
+  const rightList = pts.filter((p) => p.x >= mid).sort((a, b) => b.x - a.x);
+  const room = Math.max(1, cap);
+  // the overflowing side hands its innermost parts (end of the list) across
+  while (leftList.length > room && rightList.length < room) rightList.push(leftList.pop()!);
+  while (rightList.length > room && leftList.length < room) leftList.push(rightList.pop()!);
+  return new Set(leftList.map((p) => p.key));
 }
 
 function crosses(ax: number, ay: number, by: number, cx: number, cy: number, dy: number, col: number): boolean {
@@ -294,16 +311,18 @@ export function LabelProjector() {
       maxX = Math.max(...pts.map((p) => p.x), w / 2);
     }
     const n = pts.length;
-    const mid = (minX + maxX) / 2;
-    const byX = [...pts].sort((a, b) => a.x - b.x);
-    const wantLeft = byX.filter((p) => p.x < mid).length;
-    const nLeft = Math.min(Math.max(wantLeft, Math.ceil(n / 2) - 2), Math.floor(n / 2) + 2, n);
-    const left = new Set(byX.slice(0, Math.max(0, nLeft)).map((p) => p.key));
+    const top = Math.max(16, h * 0.14);
+    const bottom = Math.min(h - 40, h - 150);
+    const left = splitSides(pts, (minX + maxX) / 2, Math.floor(Math.max(0, bottom - top) / LABEL_GAP) + 1);
     const colW = Math.min(COL_W, Math.max(140, (w - (maxX - minX)) / 2 - 24));
     const rightX = Math.min(maxX + COL_PAD, w - colW - 16);
     const leftX = Math.max(minX - COL_PAD, colW + 16);
-    const top = Math.max(16, h * 0.14);
-    const bottom = Math.min(h - 40, h - 150);
+    // the part under the pointer (on the model or on its label) lights its row and leader line
+    const hot = stage.hoverKey ?? useApp.getState().hoverLabel;
+    for (const [key, s] of slots) {
+      const on = key === hot;
+      for (const node of [s.row, s.line]) if (node && node.hasAttribute("data-hot") !== on) node.toggleAttribute("data-hot", on);
+    }
     let last = top;
     for (const side of [false, true]) {
       const list = pts.filter((p) => left.has(p.key) === side).sort((a, b) => a.y - b.y);

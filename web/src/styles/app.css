@@ -1862,8 +1862,13 @@ label.check {
   border-radius: 6px;
   transition: background-color 120ms ease;
 }
-.explode-label:hover {
+.explode-label:hover,
+.explode-label[data-hot] {
   background: var(--accent-soft);
+}
+.explode-line[data-hot] {
+  stroke: var(--accent);
+  stroke-width: 1.6;
 }
 
 /* A device standing beside the build on the same canvas: its name, and the way to open it. */

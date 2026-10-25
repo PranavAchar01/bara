@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { spreadLabels } from "./labels";
+import { splitSides, spreadLabels } from "./labels";
 
 describe("spreadLabels", () => {
   it("keeps labels level with spread-out anchors", () => {
@@ -36,5 +36,17 @@ describe("untangle", () => {
     const pts = [{ k: "a", x: 0, y: 100 }, { k: "b", x: 0, y: 200 }];
     untangle(pts, [100, 200], 300);
     expect(pts.map((p) => p.k)).toEqual(["a", "b"]);
+  });
+});
+
+describe("splitSides", () => {
+  const at = (key: string, x: number) => ({ key, x });
+  it("puts each label on its own side of the model so lines never run back across it", () => {
+    const left = splitSides([at("a", 10), at("b", 20), at("c", 30), at("d", 90), at("e", 95)], 50, 10);
+    expect([...left].sort()).toEqual(["a", "b", "c"]);
+  });
+  it("moves only the parts nearest the middle when a column is full", () => {
+    const left = splitSides([at("a", 10), at("b", 20), at("c", 30), at("d", 45), at("e", 90)], 50, 3);
+    expect([...left].sort()).toEqual(["a", "b", "c"]);
   });
 });
