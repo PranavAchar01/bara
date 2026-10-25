@@ -47,7 +47,7 @@ const exact = replay("exact_keyboard");
 describe("explainPart", () => {
   it("says why a model pick won, with the filter and the design it fits", () => {
     const e = explainPart(compose.build, compose.view, "u_mcu_l")!;
-    expect(e.short).toBe("Picked nice!nano v2 — BLE, fits the Corne");
+    expect(e.short).toBe("Picked nice!nano v2: BLE, fits the Corne");
     expect(e.long[0]).toMatch(/BLE controller in Corne builds/);
     expect(e.long.join(" ")).toMatch(/Narrowed 214 controllers to 4; runner-up SuperMini nRF52840 \(0\.77 vs 0\.91\)/);
     expect(e.long.join(" ")).toMatch(/Wired to PCB left \(Socketed on the PCB\)/);
@@ -62,7 +62,7 @@ describe("explainPart", () => {
 
   it("explains an exact design reuse without repeating itself", () => {
     const e = explainPart(exact.build, exact.view, "u_trrs_l")!;
-    expect(e.short).toBe("PJ-320A TRRS jack — straight from the Corne");
+    expect(e.short).toBe("PJ-320A TRRS jack, straight from the Corne");
     expect(e.long.filter((l) => /Corne/.test(l))).toHaveLength(1);
     expect(e.long.join(" ")).toMatch(/Wired to TRRS cable/);
   });

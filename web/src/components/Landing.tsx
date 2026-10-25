@@ -1,5 +1,5 @@
 // Home (Figma: Landing C2, "the product, with Bara at work"). The first screen is one plate: a recording of a real
-// build (scripts/record-demo.mjs) plays behind, and Bara's Build button sits in front; pressing it turns the
+// build (scripts/record-hero.mjs) plays behind, and Bara's Build button sits in front; pressing it turns the
 // page over to Bara, who asks what to make (HeroAgent). Then four stills show what Bara does on the canvas, then the user's own builds.
 import { useEffect, useRef, useState } from "react";
 import { AgentIntro, HeroCta, type IntroOpen } from "./HeroAgent";
@@ -9,12 +9,14 @@ import { openBuildDialog } from "./BuildDialog";
 import { loadGallery, useGallery } from "../library/gallery";
 import { useApp } from "../state/store";
 
-// Bump V when scripts/record-demo.mjs writes a new take, so no browser plays cached bytes of the old one.
-const V = "4";
-const VIDEO = { mp4: `/landing/bara-demo.mp4?v=${V}`, webm: `/landing/bara-demo.webm?v=${V}`, poster: `/landing/bara-demo.jpg?v=${V}` };
+// Bump V when scripts/record-hero.mjs writes a new take, so no browser plays cached bytes of the old one.
+const V = "5";
+// AV1 at 2560 wide for the 2x screens that can play it, H.264 High at 1920 for the rest; both 60 fps.
+const VIDEO = { av1: `/landing/bara-demo.av1.mp4?v=${V}`, mp4: `/landing/bara-demo.mp4?v=${V}`, poster: `/landing/bara-demo.jpg?v=${V}` };
 const FALLBACK_POSTER = "/landing/hero-poster.jpg";
 
-/** Muted, looping, never interactive. Plays only while on screen; a still under reduced motion. */
+/** Muted, never interactive. Plays the build once and rests on the finished device. It starts loading only
+ *  after the page has painted and gone idle, and plays only while on screen; a still under reduced motion. */
 function DemoVideo() {
   const ref = useRef<HTMLVideoElement>(null);
   const [failed, setFailed] = useState(false);
@@ -22,15 +24,29 @@ function DemoVideo() {
   useEffect(() => {
     const v = ref.current;
     if (!v || reduced) return;
-    const io = new IntersectionObserver(
-      ([e]) => {
-        if (e.isIntersecting) void v.play().catch(() => undefined);
-        else v.pause();
-      },
-      { threshold: 0.2 },
-    );
-    io.observe(v);
-    return () => io.disconnect();
+    let io: IntersectionObserver | null = null;
+    const start = () => {
+      v.preload = "auto";
+      io = new IntersectionObserver(
+        ([e]) => {
+          if (e.isIntersecting && !v.ended) void v.play().catch(() => undefined);
+          else v.pause();
+        },
+        { threshold: 0.2 },
+      );
+      io.observe(v);
+    };
+    const idle = window.requestIdleCallback ?? ((f: () => void) => window.setTimeout(f, 200));
+    const cancelIdle = window.cancelIdleCallback ?? window.clearTimeout;
+    let handle = 0;
+    const afterLoad = () => (handle = idle(start, { timeout: 1200 }));
+    if (document.readyState === "complete") afterLoad();
+    else window.addEventListener("load", afterLoad, { once: true });
+    return () => {
+      window.removeEventListener("load", afterLoad);
+      cancelIdle(handle);
+      io?.disconnect();
+    };
   }, [reduced]);
   if (failed || reduced) return <img className="demo-media" src={failed ? FALLBACK_POSTER : VIDEO.poster} onError={(e) => ((e.currentTarget.src = FALLBACK_POSTER))} alt="" />;
   return (
@@ -39,17 +55,15 @@ function DemoVideo() {
       className="demo-media"
       poster={VIDEO.poster}
       muted
-      loop
       playsInline
-      autoPlay
-      preload="metadata"
+      preload="none"
       disablePictureInPicture
       disableRemotePlayback
       tabIndex={-1}
       aria-hidden
       onError={() => setFailed(true)}
     >
-      <source src={VIDEO.webm} type="video/webm" />
+      <source src={VIDEO.av1} type={'video/mp4; codecs="av01.0.12M.08"'} />
       {/* a source can report an error for an aborted load; fall back only when no source is left to play */}
       <source src={VIDEO.mp4} type="video/mp4" onError={() => ref.current?.networkState === HTMLMediaElement.NETWORK_NO_SOURCE && setFailed(true)} />
     </video>

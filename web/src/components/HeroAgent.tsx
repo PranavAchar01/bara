@@ -80,21 +80,41 @@ export function HeroCta(props: { onOpen: (o: IntroOpen) => void; hidden: boolean
   const openRef = useRef(open);
   openRef.current = open;
 
-  // The eyes look toward the pointer, a couple of pixels at most.
+  // The eyes look toward the pointer, a couple of pixels at most. At most one write per frame, and the
+  // eyes' centre is measured only after a scroll or resize, so moving the mouse never forces a layout.
   useEffect(() => {
-    const move = (e: PointerEvent) => {
+    let centre: { x: number; y: number } | null = null;
+    let at: { x: number; y: number } | null = null;
+    let raf = 0;
+    const stale = () => (centre = null);
+    const paint = () => {
+      raf = 0;
       const el = eyes.current;
-      if (!el) return;
-      const r = el.getBoundingClientRect();
-      const dx = e.clientX - (r.left + r.width / 2);
-      const dy = e.clientY - (r.top + r.height / 2);
+      if (!el || !at) return;
+      if (!centre) {
+        const r = el.getBoundingClientRect();
+        centre = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+      }
+      const dx = at.x - centre.x;
+      const dy = at.y - centre.y;
       const d = Math.hypot(dx, dy) || 1;
       const k = Math.min(1, d / 240);
       el.style.setProperty("--look-x", `${((dx / d) * 2.2 * k).toFixed(2)}px`);
       el.style.setProperty("--look-y", `${((dy / d) * 1.6 * k).toFixed(2)}px`);
     };
+    const move = (e: PointerEvent) => {
+      at = { x: e.clientX, y: e.clientY };
+      if (!raf) raf = requestAnimationFrame(paint);
+    };
     window.addEventListener("pointermove", move, { passive: true });
-    return () => window.removeEventListener("pointermove", move);
+    window.addEventListener("scroll", stale, { passive: true });
+    window.addEventListener("resize", stale);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("scroll", stale);
+      window.removeEventListener("resize", stale);
+    };
   }, []);
 
   // Typing anywhere (or Enter) opens the intro with what was typed already in the field.

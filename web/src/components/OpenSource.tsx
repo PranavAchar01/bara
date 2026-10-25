@@ -1,5 +1,5 @@
 // Open-source boards on the Library page, ported from Etch's Explore: real KiCad projects from GitHub with
-// category chips, search, a "Copyable only" licence switch and a sort. Opening one shows its credits (who
+// category chips, search and a sort. Opening one shows its credits (who
 // made it, which commit, which licence, both linked: the licences ask for that), what it is made of, and
 // a one-line "what is this part" for every part, taken from the board's own part descriptions, beside an
 // interactive 3D view of the board itself (LibraryBoard3D) where picking a part lights it.
@@ -36,7 +36,7 @@ function Credit({ b }: { b: OsBoard }) {
 }
 
 function Licence({ b }: { b: Pick<OsBoard, "license" | "copyable"> }) {
-  return <span className={`os-lic ${b.copyable ? "ok" : "view"}`}>{b.license ?? "No licence"}</span>;
+  return <span className="os-lic ok">{b.license ?? "No licence"}</span>;
 }
 
 function BoardCard({ b, onOpen }: { b: OsBoard; onOpen: () => void }) {
@@ -133,11 +133,7 @@ function BoardDetail({ b, onClose }: { b: OsBoard; onClose: () => void }) {
               {size && <li>{size}</li>}
               {b.stars > 0 && <li>{b.stars.toLocaleString()} stars</li>}
             </ul>
-            <p className={`os-licnote ${b.copyable ? "ok" : "view"}`}>
-              {b.copyable
-                ? `${b.license} lets you copy and adapt this board, as long as you keep the credit above.`
-                : `${b.license ?? "No licence"} does not allow copying, so this one is for looking only.`}
-            </p>
+            <p className="os-licnote ok">Copy and adapt this board, and keep the credit above.</p>
           </div>
           <div className="os-d-right">
             <input className="os-search" type="search" placeholder="Find a part" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find a part" />
@@ -171,14 +167,13 @@ export function OpenSource() {
   const { boards, categories, ready, failed } = useOpenSource();
   const [q, setQ] = useState("");
   const [category, setCategory] = useState<string | null>(null);
-  const [copyableOnly, setCopyableOnly] = useState(false);
   const [sort, setSort] = useState<OsSort>("popular");
   const [all, setAll] = useState(false);
   const [open, setOpen] = useState<OsBoard | null>(null);
   useEffect(() => void loadOpenSource(), []);
-  const list = useMemo(() => filterBoards(boards, { q, category, copyableOnly, sort }), [boards, q, category, copyableOnly, sort]);
+  const list = useMemo(() => filterBoards(boards, { q, category, sort }), [boards, q, category, sort]);
   if (ready && (failed || boards.length === 0)) return null;
-  const narrowed = !!(q || category || copyableOnly);
+  const narrowed = !!(q || category);
   const visible = all || narrowed ? list : list.slice(0, FIRST);
   return (
     <section className="os" aria-label="Open-source boards">
@@ -189,10 +184,6 @@ export function OpenSource() {
         </div>
         <div className="os-tools">
           <input className="os-search" type="search" placeholder="Title, owner, repo" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search boards" />
-          <button type="button" className={`os-sw ${copyableOnly ? "on" : ""}`} role="switch" aria-checked={copyableOnly} onClick={() => setCopyableOnly((v) => !v)}>
-            <span className="os-knob" />
-            Copyable only
-          </button>
           <select className="os-sort" value={sort} onChange={(e) => setSort(e.target.value as OsSort)} aria-label="Sort">
             <option value="popular">Popular</option>
             <option value="parts">Most parts</option>

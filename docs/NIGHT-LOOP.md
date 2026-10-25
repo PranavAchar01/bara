@@ -323,3 +323,11 @@ Web: bara-merge agent merges Nithin's figma-design-in-code / agent-board-3d / fi
 ## 2026-10-24 21:25 PT
 - bara-landing 189d8d6 pushed and site rebuilt: Bara brand and mark, nav, How it works, What you get, Examples, FAQ, CTA band, footer; demo trimmed so the prompt bar is no longer clipped; Handoff.tsx glide into the workspace (reduced motion = instant). tsc clean, vitest 255/255.
 - Gap: the hero video still shows brand part names and the old UI. Sent back to bara-landing to re-record against the current app.
+
+## 22:45 PT
+- Merged/pushed tonight: 300e94e + c16a2c8 (Nithin calmer-agent), 3c53df6 + cace9a4 (Etch Explore boards, empty panels hidden, calm cursor). Engine work committed (ba39139, 1d787c5, c24b532); :8797 restarted.
+- Sim rework in progress (26e0784, 8feca52, 8d13ee5, ee15add): part-derived play surface, standardized labels with units, no scenarios.
+- Held-out generic eval launched: scratchpad/heldout-2245.{json,log} (air quality meter, parking sensor, dice roller, key finder, fan controller).
+- In flight: Nithin merge (rendered-product tiles), sim, parts, hero re-record, demo clip.
+
+- 2026-10-24 23:50: pushed 36731b4 (sim no-overlap, click only presses), c9ef57f (library soft delete, 112 re-rendered shots, 20 curated, OSS board 3D), 5e7cd6f (Loading 3D hang + sim badge). Engine restarted. Running: bigpass (build-view list), landing2 (landing lag), oss-builds (OSS boards as full builds).
