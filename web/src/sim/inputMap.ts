@@ -246,15 +246,39 @@ interface Named {
   code?: string | null;
 }
 
+const PAIR = /\b([a-z]+)\s*\/\s*([a-z]+)\b/i;
+const ALONG_UP = new Set(["up", "down", "top", "bottom", "forward", "back", "front", "rear"]);
+// three letters fit a cap; whole LEFT/RIGHT/UP/DOWN would read as a D-pad's arrows
+const SHORT: Record<string, string> = { left: "L", right: "R", up: "UP", down: "DN", forward: "FWD", back: "BK", front: "FRT", rear: "RR", top: "TOP", bottom: "BOT" };
+
+/** A two-button part whose label names the pair ("left/right click", "forward/back"): the first word
+ * goes to the button on the person's left, or the upper one for an up/down kind of pair. */
+function pairNames(raws: Raw[]): Map<Raw, string> {
+  const out = new Map<Raw, string>();
+  for (const id of new Set(raws.map((r) => r.part.instance_id))) {
+    const two = raws.filter((r) => r.part.instance_id === id);
+    const m = two.length === 2 ? PAIR.exec(two[0].part.label ?? "") : null;
+    if (!m) continue;
+    const [a, b] = [m[1].toLowerCase(), m[2].toLowerCase()];
+    const vertical = ALONG_UP.has(a) || ALONG_UP.has(b);
+    const [first, second] = [...two].sort((p, q) => (vertical ? q.pos[1] - p.pos[1] : p.pos[0] - q.pos[0]));
+    out.set(first, SHORT[a] ?? a.slice(0, 3).toUpperCase());
+    out.set(second, SHORT[b] ?? b.slice(0, 3).toUpperCase());
+  }
+  return out;
+}
+
 /** Names for buttons without a keymap, from where they sit on the control face (plus shape, then position). */
-function nameButtons(all: Raw[], up: [number, number]): Named[] {
+function nameButtons(all: Raw[], up: [number, number], game: boolean): Named[] {
   const out: Named[] = [];
   // names follow the screen: positions are read in the person's frame (right, up), not the build's
   const raws = all.map((r) => ({ ...r, pos: inFrame(r.pos, up) }));
   const back = new Map(raws.map((r, i) => [r, all[i]]));
-  const system = raws.filter((r) => isSystemPart(r.part));
-  const shoulders = raws.filter((r) => !isSystemPart(r.part) && isShoulderPart(r.part));
-  const rest = raws.filter((r) => !isSystemPart(r.part) && !isShoulderPart(r.part));
+  const pairs = pairNames(raws);
+  for (const [raw, name] of pairs) out.push({ raw, name, role: "action" });
+  const system = raws.filter((r) => !pairs.has(r) && isSystemPart(r.part));
+  const shoulders = raws.filter((r) => !pairs.has(r) && !isSystemPart(r.part) && isShoulderPart(r.part));
+  const rest = raws.filter((r) => !pairs.has(r) && !isSystemPart(r.part) && !isShoulderPart(r.part));
   // shoulder buttons sit on the top edge: left to right on screen they are L and R
   [...shoulders].sort((p, q) => p.pos[0] - q.pos[0]).forEach((raw, i, all) => out.push({ raw, name: all.length === 1 ? "L" : i === 0 ? "L" : i === all.length - 1 ? "R" : `S${i + 1}`, role: "action" }));
   const plus = findPlus(rest.map((r) => ({ x: r.pos[0], y: r.pos[1] }))) ?? labelledPlus(rest);
@@ -267,7 +291,8 @@ function nameButtons(all: Raw[], up: [number, number]): Named[] {
     }
   }
   const actions = orderByPosition(rest.filter((_, i) => !used.has(i)));
-  const letters = ["Y", "X", "B", "A"];
+  // face-button letters belong to a game with a screen; a mouse or remote numbers what is left
+  const letters = game ? ["Y", "X", "B", "A"] : [];
   actions.forEach((raw, i) => {
     const fromEnd = actions.length - 1 - i;
     out.push({ raw, name: fromEnd < letters.length ? letters[letters.length - 1 - fromEnd] : `BTN${i + 1}`, role: "action" });
@@ -392,7 +417,7 @@ export function deriveInputMap(build: Build | null): InputMap {
     if (codes) named.push(...nameKeys(keyRaws, codes));
     else orderByPosition(keyRaws).forEach((raw, i) => named.push({ raw, name: `K${i + 1}`, role: "key", code: null }));
   }
-  named.push(...nameButtons(buttonRaws, screenUp(build) ?? screenFrame.up()));
+  named.push(...nameButtons(buttonRaws, screenUp(build) ?? screenFrame.up(), displays.length > 0));
   const inputs: SimInput[] = named.map((n) => ({
     id: `${n.raw.part.instance_id}#${n.raw.element}`,
     name: n.name,

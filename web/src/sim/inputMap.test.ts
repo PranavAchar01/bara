@@ -199,6 +199,35 @@ describe("deriveInputMap: handheld from board footprints", () => {
   });
 });
 
+describe("deriveInputMap: a mouse names its buttons from the part labels", () => {
+  const footprints = [
+    { ref: "SW1", role: "button", center_mm: [-10, 30] },
+    { ref: "SW2", role: "button", center_mm: [10, 30] },
+    { ref: "SW3", role: "button", center_mm: [-25, 0] },
+    { ref: "SW4", role: "button", center_mm: [-25, -12] },
+    { ref: "SW5", role: "button", center_mm: [0, -30] },
+  ];
+  const b = build(
+    [
+      part({ id: "click", fn: "input.button", label: "Main left/right click tactile switch 6x6", quantity: 2 }),
+      part({ id: "thumb", fn: "input.button", label: "Thumb forward/back tactile switch 6x6 mm", quantity: 2 }),
+      part({ id: "dpi", fn: "input.button", label: "DPI cycle button", quantity: 1 }),
+    ],
+    { boards: [{ footprints, position_mm: [0, 0, 0], rotation_deg: [0, 0, 0] }] },
+  );
+
+  it("reads left/right and forward/back from where the buttons sit, and no game letters without a screen", () => {
+    const map = deriveInputMap(b);
+    expect(map.mode).toBe("pad");
+    const at = (n: string) => map.inputs.find((i) => i.name === n)?.pos.slice(0, 2);
+    expect(at("L")).toEqual([-10, 30]);
+    expect(at("R")).toEqual([10, 30]);
+    expect(at("FWD")).toEqual([-25, 0]);
+    expect(at("BK")).toEqual([-25, -12]);
+    expect(map.inputs.map((i) => i.name)).not.toContain("A");
+  });
+});
+
 describe("screenUp: which way a handheld stands", () => {
   const rows: [string, number, number][] = [
     ["SW1", 20, 40],
