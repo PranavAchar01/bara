@@ -180,10 +180,25 @@ def _xyz_degrees(m: list[list[float]]) -> list[float]:
     return [round(math.degrees(v), 3) for v in (x, y, z)]
 
 
-def _seat_on_footprints(board: dict[str, Any], parts: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """The routed board is where a part really sits: a single-element part with one footprint
-    moves onto that footprint's centre and turn, on the board's top face. Placed before routing,
-    parts otherwise float where the planner left them while the board shows them elsewhere."""
+def _unplaced(placement: dict[str, Any]) -> bool:
+    """A part nothing has positioned: no pose, or the compose default of exactly the origin."""
+    pos = placement.get("position_mm")
+    return not pos or all(abs(float(v)) < 1e-9 for v in pos)
+
+
+def _seat_on_footprints(
+    board: dict[str, Any], parts: list[dict[str, Any]], seated: set[str] | None = None
+) -> list[dict[str, Any]]:
+    """The routed board is where a part really sits, so every part that belongs to it ends on it.
+    - One footprint, quantity 1: onto that footprint's centre and turn, on the top face.
+    - Several footprints or a quantity above 1 (a line the placement model has one pose for):
+      the centroid of its footprints, turned with the board.
+    - No footprint and nothing placed it (still at the compose default, the origin): a row
+      under the board, centred on the outline, so it is neither at the origin nor on top of
+      the placed parts.
+    Layout parts keep the layout's key poses, and a part the planner did place keeps that pose
+    (the case stage already carried it through the board transform). `seated` holds the ids
+    an earlier board took, so a part shared by both halves of a split is seated once."""
     by_id: dict[str, list[dict[str, Any]]] = {}
     for fp in board.get("footprints") or []:
         if fp.get("instance_id") and fp.get("center_mm"):
@@ -191,20 +206,55 @@ def _seat_on_footprints(board: dict[str, Any], parts: list[dict[str, Any]]) -> l
     pos = board.get("position_mm") or [0.0, 0.0, 0.0]
     rb = _euler_xyz(board.get("rotation_deg") or [0.0, 0.0, 0.0])
     top = float(board.get("thickness_mm") or 1.6)
+    side = board.get("side") or "none"
+    taken = seated if seated is not None else set()
+
+    def world(local: list[float]) -> list[float]:
+        return [pos[i] + sum(rb[i][k] * local[k] for k in range(3)) for i in range(3)]
+
+    pts = board.get("outline_mm") or [fp["center_mm"] for fp in board.get("footprints") or []]
+    xs, ys = [float(q[0]) for q in pts] or [0.0], [float(q[1]) for q in pts] or [0.0]
+    mid = ((min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2)
+    row: list[dict[str, Any]] = []
     out = []
-    for part in parts:
-        fps = by_id.get(part["instance_id"]) or []
-        placement = part.get("placement") or {}
-        if len(fps) != 1 or int(part.get("quantity") or 1) != 1 or placement.get("layout_id"):
-            continue
-        cx, cy = fps[0]["center_mm"]
-        local = [float(cx), float(cy), top]
-        world = [pos[i] + sum(rb[i][k] * local[k] for k in range(3)) for i in range(3)]
-        rot = _matmul(rb, _euler_xyz([0.0, 0.0, float(fps[0].get("rot_deg") or 0.0)]))
-        pl = {**placement, "position_mm": [round(v, 3) for v in world]}
-        pl["rotation_deg"] = _xyz_degrees(rot)
+
+    def put(part: dict[str, Any], position: list[float], rotation: list[float]) -> None:
+        pl = {**(part.get("placement") or {}), "position_mm": [round(v, 3) for v in position]}
+        pl["rotation_deg"] = rotation
         part["placement"] = pl
+        taken.add(part["instance_id"])
         out.append({"instance_id": part["instance_id"], "placement": pl})
+
+    for part in parts:
+        iid = part["instance_id"]
+        placement = part.get("placement") or {}
+        if iid in taken or placement.get("layout_id") or placement.get("mode") == "layout":
+            continue
+        fps = by_id.get(iid) or []
+        if fps:
+            if len(fps) == 1 and int(part.get("quantity") or 1) == 1:
+                cx, cy = fps[0]["center_mm"]
+                turn = _euler_xyz([0.0, 0.0, float(fps[0].get("rot_deg") or 0.0)])
+            else:
+                cx = sum(float(f["center_mm"][0]) for f in fps) / len(fps)
+                cy = sum(float(f["center_mm"][1]) for f in fps) / len(fps)
+                turn = _euler_xyz([0.0, 0.0, 0.0])
+            put(part, world([float(cx), float(cy), top]), _xyz_degrees(_matmul(rb, turn)))
+        elif _unplaced(placement) and part.get("side", "none") in (side, "none", None):
+            row.append(part)
+    if row:
+        spans = []
+        for part in row:
+            lo, hi = _zspan(part.get("record") or {})
+            bb = ((part.get("record") or {}).get("mechanical") or {}).get("bbox_mm") or {}
+            w = abs(float((bb.get("max") or [8.0])[0]) - float((bb.get("min") or [0.0])[0]))
+            spans.append((max(w, 2.0), max(hi - lo, 1.0)))
+        total = sum(w for w, _ in spans) + 2.0 * (len(spans) - 1)
+        x = mid[0] - total / 2
+        flip = _matmul(rb, _euler_xyz([180.0, 0.0, 0.0]))
+        for part, (w, h) in zip(row, spans, strict=True):
+            put(part, world([x + w / 2, mid[1], -h]), _xyz_degrees(flip))
+            x += w + 2.0
     return out
 
 
@@ -223,7 +273,9 @@ def _seat_caps(
     The host is the placed shaft part whose slot label shares the most words with the cap's
     ("Thumbstick caps" -> "Analog thumbsticks"), then the one with the same count."""
     hosts = [
-        p for p in parts if p["instance_id"] in moves and _primary(p["record"]) in SHAFT_FUNCTIONS
+        p
+        for p in parts
+        if p["instance_id"] in moves and _primary(p.get("record") or {}) in SHAFT_FUNCTIONS
     ]
     out = []
     for cap in parts:
@@ -1722,6 +1774,7 @@ class LiveRunner:
         board = routed
         id_map = self._instance_map(board, result)
         results = []
+        seated_ids: set[str] = set()
         for entry in board["boards"]:
             spec_board = copy.deepcopy(entry["board"])
             side = spec_board.get("side") or "none"
@@ -1745,7 +1798,14 @@ class LiveRunner:
             spec_board["evaluation"] = evaluation["summary"]
             spec_board["revision"] = 1
             st.emit("board.updated", {"board": spec_board})
-            seated = _seat_on_footprints(spec_board, run.state["parts"])
+            seated = _seat_on_footprints(spec_board, run.state["parts"], seated_ids)
+            if seated:
+                moved = {m["instance_id"]: m for m in seated}
+                for cap in _seat_caps(run.state["parts"], moved):
+                    for part in run.state["parts"]:
+                        if part["instance_id"] == cap["instance_id"]:
+                            part["placement"] = cap["placement"]
+                    seated.append(cap)
             if seated:
                 st.emit("placement.updated", {"placements": seated})
             drc = entry.get("drc") or {}
