@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-46 -46 92 92">
+  <style>
+    .oval { fill: #161616; }
+    .eye { fill: #ffffff; }
+    @media (prefers-color-scheme: dark) {
+      .oval { fill: #e7e9eb; }
+      .eye { fill: #111315; }
+    }
+  </style>
+  <rect class="oval" x="-44" y="-31" width="88" height="62" rx="31" />
+  <rect class="eye" x="-19" y="-9.5" width="13" height="19" rx="6.5" />
+  <rect class="eye" x="6" y="-9.5" width="13" height="19" rx="6.5" />
+</svg>
