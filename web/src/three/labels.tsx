@@ -243,19 +243,26 @@ export function LabelProjector() {
     }
     const pts: { key: string; x: number; y: number; a: number }[] = [];
     let behind = 0;
+    // the model's middle on screen: a part's label goes to the column on its side of it
+    let midNdc = 0;
+    if (check) {
+      const b = stageBox();
+      if (b) midNdc = b.getCenter(tmp).project(camera).x;
+    }
     for (const [key, list] of stage.anchors) {
       if (!list.length || !slots.has(key)) continue;
       const st = seen.get(key) ?? { visible: true, hiddenFor: 0, alpha: 1, anchor: 0 };
       seen.set(key, st);
       if (check && stage.root) {
-        // the anchor in view closest to the label column wins, so its line crosses as little as possible
+        // the anchor in view furthest out from the model's middle wins: it is the one nearest the
+        // label column on that side, so its line crosses as little of the model as possible
         let best = -1;
         let bestX = -Infinity;
         for (let i = 0; i < Math.min(list.length, 4); i++) {
           const a = list[i];
           const wp = a.world();
           if (!inView(wp, a.owner?.() ?? null, stage.root)) continue;
-          const sx = tmp.copy(wp).project(camera).x;
+          const sx = Math.abs(tmp.copy(wp).project(camera).x - midNdc);
           if (sx > bestX) {
             bestX = sx;
             best = i;
