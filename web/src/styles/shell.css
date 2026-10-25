@@ -1176,285 +1176,677 @@
   flex: none;
 }
 
-/* Landing (Figma: Landing C2). One view: the prompt beside the product window playing a recorded
-   build, and the four steps under both. */
+/* Landing: one screen and one Build button over a small mock of the app replaying real builds
+   from scratch (BuildScene). Never scrolls on a desktop screen. */
 .home.landing {
   display: block;
   position: relative;
-  overflow-x: clip;
   padding: 0;
+  overflow: hidden;
 }
-.landing > section,
-.landing > .library {
-  width: min(1328px, calc(100% - 64px));
-  margin-left: auto;
-  margin-right: auto;
-}
-.ld-hero {
+.ld {
+  position: relative;
+  height: 100%;
   display: grid;
-  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-  grid-template-areas:
-    "head window"
-    "steps steps";
-  column-gap: 48px;
-  padding: 40px 0 48px;
+  place-items: center;
+  padding: 24px 32px 28px;
 }
-.ld-head {
-  grid-area: head;
+.ld-window {
+  margin: 0;
+  width: min(1240px, 100%);
+  height: 100%;
+  max-height: 780px;
+  min-height: 0;
+}
+.ld-cta {
+  position: absolute;
+  left: 50%;
+  bottom: 64px;
+  transform: translateX(-50%);
+  z-index: 10;
+}
+.ld-build.btn.primary {
+  font-size: 18px;
+  padding: 14px 52px;
+  height: auto;
+  border-radius: 999px;
+  box-shadow: 0 10px 30px rgb(20 20 20 / 18%);
+}
+
+/* the mock app: top bar with tabs, sidebar with the prompt and stages, canvas, notifications */
+.mk {
+  height: 100%;
   display: flex;
   flex-direction: column;
-  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  user-select: none;
 }
-.ld-copy h1 {
-  font-family: var(--font-display);
-  font-weight: 400;
-  font-size: clamp(38px, 3.9vw, 58px);
-  line-height: 0.96;
-  letter-spacing: var(--track-display);
-}
-.ld-copy p {
-  margin: 14px 0 0;
-  font-size: 16px;
-  color: var(--text-2);
-  max-width: 560px;
-}
-/* Where the agent rests, just above the prompt; it roams from here (LandingAgent). */
-.ld-home {
-  flex: 1 0 150px;
-}
-/* The agent is the mic on this page, so the small bot inside the bar steps out. */
-.ld-field .bot-mic {
-  display: none;
-}
-.ld-agent {
-  position: absolute;
-  left: 0;
-  top: 0;
-  z-index: 20;
-  pointer-events: none;
-  opacity: 0;
-  will-change: transform;
-}
-.ld-agent.ready {
-  opacity: 1;
-  transition: opacity 500ms ease;
-}
-.ld-agent.m-chip .ld-agent-btn {
-  pointer-events: none;
-}
-/* A ring in the page colour keeps the oval readable over the light demo in dark mode. */
-.ld-agent .bb-oval {
-  stroke: var(--surface);
-  stroke-width: 3;
-}
-.ld-agent .bb-speech {
-  box-shadow: 0 0 0 1.5px var(--surface), 0 4px 14px rgb(0 0 0 / 0.18);
-}
-.ld-agent-lean {
-  width: 100%;
-  height: 100%;
-}
-.ld-agent-btn {
-  display: block;
-  width: 100%;
-  height: 100%;
-  padding: 0;
-  border: 0;
-  background: none;
-  border-radius: 50%;
-  cursor: pointer;
-  pointer-events: auto;
-  touch-action: manipulation;
-}
-.ld-agent-btn:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -14px;
-}
-.ld-agent-float {
-  display: block;
-  line-height: 0;
-  animation: ld-float 5.2s ease-in-out infinite;
-}
-@keyframes ld-float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-5px); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .ld-agent-float { animation: none; }
-  .ld-agent.ready { transition: none; }
-}
-.ld-field .promptbar {
-  border: 1.5px solid var(--ink);
-  border-radius: 2px;
-  background: var(--paper);
-  padding: 8px;
-  gap: 10px;
-}
-.ld-field .promptbar .prompt-input {
-  border: 0;
-  background: transparent;
-  font-family: var(--font-display);
-  font-size: 21px;
-  letter-spacing: -0.02em;
-  height: 44px;
-  padding: 0 4px;
-}
-.ld-field .promptbar .prompt-input:focus {
-  box-shadow: none;
-  outline: none;
-}
-.ld-field .promptbar .btn.primary {
-  border-radius: 2px;
-  height: 40px;
-}
-.ld-foot {
+.mk-top {
+  flex: none;
   display: flex;
-  justify-content: space-between;
-  border: 1.5px solid var(--ink);
-  border-top: 1px solid var(--line);
-  margin-top: -1.5px;
-  padding: 6px 12px;
+  align-items: center;
+  gap: 14px;
+  height: 42px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--line);
   font-size: 12px;
   color: var(--text-2);
 }
-.ld-field .example-chips {
-  margin-top: 12px;
-  gap: 6px 14px;
+.mk-brand {
+  font-family: var(--font-display);
+  font-size: 18px;
+  color: var(--text);
 }
-.ld-field .example-chip {
-  border: 0;
-  border-bottom: 1px solid var(--ink-faint);
-  border-radius: 0;
-  background: none;
-  padding: 0 0 1px;
-  font-size: 13px;
-}
-.ld-window {
-  grid-area: window;
-  align-self: end;
+.mk-tabs {
+  display: flex;
+  gap: 4px;
   min-width: 0;
-  margin: 0;
-}
-.ld-frame {
-  position: relative;
-  aspect-ratio: 16 / 10;
-  border: 1.5px solid var(--ink);
-  border-radius: 10px;
-  background: var(--paper-2);
   overflow: hidden;
-  box-shadow: 0 30px 60px -40px rgba(0, 0, 0, 0.35);
-  /* a recording, not a control: nothing in it can be clicked, selected or dragged */
-  pointer-events: none;
-  user-select: none;
 }
-.demo-media {
+.mk-tab {
+  padding: 4px 10px;
+  border-radius: 6px;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+.mk-tab.on {
+  background: var(--surface-2);
+  border-color: var(--line);
+  color: var(--text);
+}
+.mk-conn {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.mk-led {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ok);
+}
+.mk-btn {
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+}
+.mk-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+}
+.mk-side {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  border-right: 1px solid var(--line);
+  min-width: 0;
+}
+.mk-msg {
+  display: block;
+  min-height: 42px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--text);
+}
+.mk-stages {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.mk-stages li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.mk-stages li.on {
+  color: var(--text);
+  font-weight: 600;
+}
+.mk-stages li.done {
+  color: var(--text-2);
+}
+.mk-tick {
+  flex: none;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 1.5px solid var(--line-strong);
+}
+.mk-stages li.on .mk-tick {
+  border-color: var(--ink);
+  border-right-color: transparent;
+  animation: mk-spin 0.9s linear infinite;
+}
+.mk-stages li.done .mk-tick {
+  border-color: var(--ok);
+  background: var(--ok);
+}
+@keyframes mk-spin {
+  to { transform: rotate(360deg); }
+}
+.mk-count {
+  margin-top: auto;
+  font-size: 11px;
+  color: var(--muted);
+}
+.mk-canvas {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background-color: var(--viewport-bg);
+  background-image: radial-gradient(var(--grid-line) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+.mk-canvas .bs-svg {
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  top: 28px;
+  bottom: 120px;
+  width: calc(100% - 56px);
+  height: calc(100% - 148px);
+}
+.mk-toasts {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  z-index: 3;
+}
+.mk-toast {
+  padding: 7px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  font-size: 12px;
+  color: var(--text);
+  animation: mk-in 0.24s ease-out;
+  transition: opacity 0.3s, transform 0.3s;
+}
+.mk-toast.leaving {
+  opacity: 0;
+  transform: translateX(12px);
+}
+@keyframes mk-in {
+  from { opacity: 0; transform: translateX(16px); }
+}
+.bs-caret {
+  display: inline-block;
+  width: 1.5px;
+  height: 1em;
+  margin-left: 1px;
+  vertical-align: -0.15em;
+  background: var(--ink);
+  animation: bs-blink 1s steps(2, start) infinite;
+}
+@keyframes bs-blink {
+  to { visibility: hidden; }
+}
+
+/* Bara working the mock: an arrow cursor that moves and clicks, the bot floating behind it */
+.bs-agent {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+  transition: opacity 0.3s;
+}
+.bs-agent.is-hidden {
+  opacity: 0;
+}
+.bs-bot,
+.bs-cursor,
+.bs-ripple {
+  position: absolute;
+  left: 0;
+  top: 0;
+  will-change: transform;
+}
+.bs-bot-lean {
+  transform-origin: 50% 80%;
+}
+.bs-cursor {
+  transform-origin: 0 0;
+}
+.bs-cursor svg {
+  display: block;
+  margin: -1px 0 0 -1px;
+  filter: drop-shadow(0 1px 1.5px rgb(0 0 0 / 25%));
+}
+.bs-cursor path {
+  fill: var(--ink);
+  stroke: var(--paper);
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+}
+.bs-ripple::after {
+  content: "";
+  position: absolute;
+  left: -14px;
+  top: -14px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid var(--ink);
+  opacity: 0;
+}
+.bs-ripple.on::after {
+  animation: bs-ripple 0.5s ease-out;
+}
+@keyframes bs-ripple {
+  from { opacity: 0.45; transform: scale(0.3); }
+  to { opacity: 0; transform: scale(1.4); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mk-toast,
+  .bs-caret,
+  .bs-ripple.on::after,
+  .mk-stages li.on .mk-tick {
+    animation: none;
+  }
+}
+
+/* Library page: finished builds under its own Build button, then this browser's drafts */
+.home.libmain {
+  display: block;
+  overflow: auto;
+  padding: 0 32px;
+}
+.libpage {
+  width: min(1180px, 100%);
+  margin: 0 auto;
+  padding: 40px 0 64px;
+}
+.libpage-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 28px;
+}
+.libpage-head h1 {
+  margin: 0;
+  font-size: 46px;
+}
+.home .libpage-head p {
+  margin: 8px 0 0;
+}
+.libpage-build.btn.primary {
+  flex: none;
+  font-size: 16px;
+  padding: 12px 36px;
+  height: auto;
+  border-radius: 999px;
+}
+.gal-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 18px;
+}
+.gal-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  overflow: hidden;
+  transition: box-shadow 0.15s, transform 0.15s;
+}
+.gal-card:not(.is-loading):hover {
+  box-shadow: var(--shadow);
+  transform: translateY(-2px);
+}
+.gal-card.opening {
+  opacity: 0.6;
+}
+.gal-open {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.gal-open:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: -2px;
+}
+.gal-thumb {
+  display: block;
+  aspect-ratio: 16 / 10;
+  background: var(--surface-2);
+}
+.gal-thumb img,
+.gal-still {
   display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
-.ld-window figcaption {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  margin-top: 10px;
-  font-size: 13px;
-  color: var(--text-2);
+.gal-still {
+  padding: 12px;
 }
-.ld-steps {
-  grid-area: steps;
-  list-style: none;
-  margin: 36px 0 0;
-  padding: 16px 0 0;
-  border-top: 1.5px solid var(--ink);
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 24px;
-}
-.ld-steps li {
+.gal-meta {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  gap: 2px;
+  padding: 12px 14px 14px;
 }
-.ld-st {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-}
-.ld-n {
-  font: 800 30px/0.8 var(--font-sans);
-  letter-spacing: -0.05em;
-}
-.ld-st b {
-  font-size: 16px;
+.gal-title {
+  font-size: 15px;
   font-weight: 600;
 }
-.ld-steps li p {
-  margin: 6px 0 10px;
+.gal-sub {
+  font-size: 12px;
+  color: var(--muted);
+}
+.gal-card.is-loading {
+  aspect-ratio: 16 / 12.6;
+  background: linear-gradient(90deg, var(--surface-2), var(--sunken), var(--surface-2));
+  background-size: 200% 100%;
+  animation: gal-shimmer 1.4s linear infinite;
+}
+@keyframes gal-shimmer {
+  to { background-position: -200% 0; }
+}
+.libpage .library {
+  width: 100%;
+  margin-top: 48px;
+}
+.home .libpage .lib-empty,
+.home .libpage .lib-note {
+  margin: 12px 0 0;
+}
+.libpage .lib-head h2 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 28px;
+  margin: 2px 0 0;
+}
+
+/* Build pop-up: one big prompt, a few examples, Build */
+.bd-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgb(20 20 20 / 28%);
+  backdrop-filter: blur(3px);
+  animation: bd-fade 0.16s ease-out;
+}
+.bd-card {
+  position: relative;
+  width: min(680px, 100%);
+  padding: 32px 32px 22px;
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: 0 24px 64px rgb(0 0 0 / 18%);
+  animation: bd-pop 0.2s ease-out;
+}
+.bd-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+}
+.bd-card h2 {
+  margin: 0 0 6px;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 34px;
+  letter-spacing: var(--track-display);
+}
+.bd-sub {
+  margin: 0 0 20px;
   font-size: 14px;
   color: var(--text-2);
 }
-/* The label the agent puts on its work on the canvas. */
-.ld-chip {
-  margin-top: auto;
-  padding: 2px 7px;
-  border-radius: 3px;
-  background: var(--ink);
-  color: var(--paper);
-  font: 600 11px var(--font-sans);
-  white-space: nowrap;
+.bd-field .prompt-input {
+  font-size: 17px;
+  min-height: 56px;
 }
-.drafts .library {
-  border-top: 0;
-  padding-top: 40px;
+.bd-examples {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
 }
-/* .home p would otherwise flatten these */
-.drafts .lib-empty,
-.drafts .lib-note {
-  margin: 20px 0 0;
-  max-width: 720px;
+.bd-k {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+  color: var(--muted);
 }
-.drafts .lib-head h1 {
+.bd-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin: 22px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.bd-foot kbd {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 1px 5px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  color: var(--text-2);
+}
+@keyframes bd-fade {
+  from { opacity: 0; }
+}
+@keyframes bd-pop {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+}
+
+/* Build notes as toasts: slide in at the top right, stack three, close on their own */
+.note-stack {
+  position: fixed;
+  top: 60px;
+  right: 16px;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(360px, calc(100% - 32px));
+}
+.note-toast {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "code x" "msg x";
+  gap: 2px 8px;
+  padding: 10px 8px 10px 12px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--tone, var(--neutral));
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  animation: note-in 0.22s ease-out;
+}
+.note-toast.leaving {
+  animation: note-out 0.22s ease-in forwards;
+}
+.note-code {
+  grid-area: code;
+  color: var(--tone, var(--text-2));
+}
+.note-msg {
+  grid-area: msg;
+  font-size: 13px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.note-toast > .btn {
+  grid-area: x;
+  align-self: start;
+}
+@keyframes note-in {
+  from { opacity: 0; transform: translateX(24px); }
+}
+@keyframes note-out {
+  to { opacity: 0; transform: translateX(24px); }
+}
+.eventlog-notes {
+  border-bottom: 1px solid var(--line);
+  padding: 8px 12px;
+  font-size: 12px;
+}
+.eventlog-notes summary {
+  cursor: pointer;
+  color: var(--text-2);
+}
+.eventlog-notes ul {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.eventlog-notes li {
+  border-left: 2px solid var(--tone, var(--neutral));
+  padding-left: 8px;
+}
+
+/* a canvas whose build was just asked for: the prompt and Bara thinking, until the engine answers */
+.canvas-starting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+}
+.canvas-starting h2 {
   font-family: var(--font-display);
   font-weight: 400;
-  font-size: clamp(38px, 3.9vw, 58px);
-  line-height: 0.96;
-  letter-spacing: var(--track-display);
-  margin-top: 8px;
+  font-size: 28px;
+  margin: 6px 0 0;
 }
-@media (max-width: 980px) {
-  .ld-hero {
+
+/* Bara on the canvas is a cursor all the way through: no selection boxes, scan bands or blue
+   traces, just the arrow moving and clicking (bot/AgentStage draws them; hidden here). */
+.app .agent-stage .as-box,
+.app .agent-stage .as-scan,
+.app .agent-stage .as-trace {
+  display: none;
+}
+.app .agent-stage .as-cursor path {
+  fill: var(--ink);
+  stroke: var(--paper);
+}
+.app .agent-stage .as-ripple::after {
+  border-color: var(--ink);
+}
+.vp-board-status::before {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .mk-body {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-areas:
-      "head"
-      "window"
-      "steps";
-    padding-top: 28px;
   }
-  .ld-home {
-    flex-basis: 176px;
+  .mk-side {
+    display: none;
   }
-  .ld-window {
-    margin-top: 32px;
+  .mk-tabs .mk-tab:not(.on) {
+    display: none;
   }
-  .ld-steps {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .ld {
+    padding: 16px;
+  }
+  .home.libmain {
+    padding: 0 16px;
+  }
+  .libpage-head {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
-@media (max-width: 560px) {
-  .landing > section,
-  .landing > .library {
-    width: calc(100% - 32px);
-  }
-  .ld-steps {
-    grid-template-columns: 1fr;
-    gap: 18px;
-  }
-  .ld-home {
-    flex-basis: 112px;
-  }
-  .ld-window figcaption {
-    flex-direction: column;
-    gap: 2px;
-  }
+
+/* Shopping list (Build page, beside Export) */
+.bd-card.sl-card {
+  width: min(1040px, 100%);
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+}
+.sl-scroll {
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.sl-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.sl-table th,
+.sl-table td {
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+.sl-table th {
+  position: sticky;
+  top: 0;
+  background: var(--surface-2);
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.sl-table .num {
+  text-align: right;
+  white-space: nowrap;
+}
+.sl-table tfoot td {
+  font-weight: 600;
+  border-bottom: 0;
+}
+.sl-links {
+  white-space: nowrap;
+}
+.sl-links a {
+  margin-right: 10px;
+  color: var(--text);
+}
+.sl-foot {
+  justify-content: flex-end;
+}
+.sl-foot a.btn {
+  text-decoration: none;
 }

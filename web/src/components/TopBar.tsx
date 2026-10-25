@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { ShoppingListButton } from "./ShoppingList";
 import { useApp } from "../state/store";
 import { paths } from "../net/rest";
 import { serverUrl, storeKey } from "../net/mode";
@@ -63,6 +64,7 @@ export function TopBar() {
             <Icon name="home" /> Home
           </button>
         )}
+        {screen === "workspace" && <ShoppingListButton />}
         <ExportMenu />
         {screen !== "workspace" && <DraftsButton />}
       </div>
@@ -70,7 +72,7 @@ export function TopBar() {
   );
 }
 
-/** Top right of Home: opens the Drafts page (every build saved in this browser); on Drafts it goes back. */
+/** Top right of Home: opens the Library page (finished builds plus this browser's drafts); on Library it goes back. */
 function DraftsButton() {
   const screen = useApp((s) => s.screen);
   const count = useLibrary((s) => s.cards.length);
@@ -82,7 +84,7 @@ function DraftsButton() {
       aria-current={on ? "page" : undefined}
       onClick={() => useApp.setState({ screen: on ? "home" : "drafts" })}
     >
-      Drafts
+      Library
       {count > 0 && <span className="drafts-n mono">{count}</span>}
     </button>
   );
@@ -162,6 +164,7 @@ export function PanelToolbar() {
       </button>
       <span className="spacer" />
       <SimulateButton />
+      <ShoppingListButton compact />
       <ExportMenu primary />
     </div>
   );
