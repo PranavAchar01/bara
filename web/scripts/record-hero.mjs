@@ -1,7 +1,12 @@
 /* global document, window, NodeFilter, HTMLInputElement, MutationObserver, MediaRecorder, FileReader */
 // Records the landing hero's backdrop: a real build in the real app, captured smoothly and sharp.
 //
-//   node scripts/record-hero.mjs --url "http://localhost:5492/?mock=1" [--prompt "…"] [--out public/landing]
+//   node scripts/record-hero.mjs --url "http://localhost:5493/" [--prompt "…"] [--out public/landing]
+//
+// Point it at the live engine, never ?mock=1: the mock fixtures carry hand-written placements (the
+// PCBs sit at corner coordinates while cases and keys are centred), so in a mock take the boards
+// float beside their cases and the keycaps miss them. The engine solves every seat from the real
+// geometry, so the take shows the board in its case and the caps on their switches.
 //
 // Why not headless: headless Chromium paces requestAnimationFrame at about 14 fps, so every spring
 // and tween in the app ran at that rate and the old take had ~9 unique frames a second. This opens a
@@ -23,13 +28,14 @@ const arg = (name, fallback) => {
   const i = process.argv.indexOf(`--${name}`);
   return i > 0 && process.argv[i + 1] ? process.argv[i + 1] : fallback;
 };
-const URL = arg("url", "http://localhost:5173/?mock=1");
+const URL = arg("url", "http://localhost:5173/");
+if (/[?&]mock=1/.test(URL)) throw new Error("record against the live engine: the mock fixtures place parts off their seats");
 const PROMPT = arg("prompt", "a wireless split keyboard with an OLED");
 const OUT = resolve(arg("out", "public/landing"));
 const FPS = 60;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-const BRANDS = /gateron|cherry|kailh|mx2a|ec11|alps|panasonic|espressif|esp32|rp2040|raspberry|adafruit|sparkfun|seeed|xiao|arduino|stmicro|stm32|nordic|nrf5\d|ssd13\d\d|sh1106|molex|omron|bourns|lcsc|digi-?key|mouser|nice!?\s?nano|corne|pro micro|atmega|wemos|lilygo|waveshare|\bjst\b|choc\b|nintendo|game ?boy/i;
+const BRANDS = /gateron|cherry|kailh|mx2a|ec11|alps|panasonic|espressif|esp32|rp2040|raspberry|adafruit|sparkfun|seeed|xiao|arduino|stmicro|stm32|nordic|nrf5\d|ssd13\d\d|sh1106|molex|omron|bourns|lcsc|digi-?key|mouser|nice!?\s?nano|corne|pro micro|atmega|wemos|lilygo|waveshare|\bjst\b|choc\b|nintendo|game ?boy|apify|kicad|\bmx\b/i;
 
 const browser = await chromium.launch({
   headless: false,
@@ -53,6 +59,10 @@ await page.addInitScript(() => {
     [/\bjst(\s*[a-z]{1,3})?\b/gi, "connector"],
     [/corne(\s*v?\d)?(\s*(chocolate|cherry))?/gi, "split board"],
     [/\s*\(MX\)/g, ""],
+    [/\bMX\b\s*(·\s*)?/g, ""],
+    [/apify\s*/gi, ""],
+    [/\s*(on|in)\s+kicad\b/gi, ""],
+    [/kicad\s*/gi, ""],
   ];
   const fix = (n) => {
     let t = n.nodeValue;
@@ -68,6 +78,10 @@ await page.addInitScript(() => {
     for (let n = w.nextNode(); n; n = w.nextNode()) fix(n);
   };
   const start = () => {
+    // notices are build chatter (licence notes, scout logs), not the product; the take leaves them out
+    const css = document.createElement("style");
+    css.textContent = ".toast,.mk-toasts,.note-stack{display:none!important}";
+    document.head.appendChild(css);
     walk(document.body);
     new MutationObserver((ms) => {
       for (const m of ms) {
@@ -79,17 +93,26 @@ await page.addInitScript(() => {
   if (document.body) start();
   else document.addEventListener("DOMContentLoaded", start);
 });
-await page.goto(URL);
 // Tab capture: the compositor's own frames at the display rate, at full device pixels, recorded in the page.
 // (CDP screencast tops out near 5 fps at this size.) It needs a user gesture, and it has to start
-// before the app boots (later the request fails with InvalidStateError), so it opens on a click at first load.
-await page.mouse.click(1100, 160);
-const capture = await page.evaluate(async () => {
-  const stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 60 }, width: { ideal: 2880 }, height: { ideal: 1800 } }, audio: false, preferCurrentTab: true, selfBrowserSurface: "include" });
-  const s = stream.getVideoTracks()[0].getSettings();
-  window.__hero = { stream, chunks: [], rec: null };
-  return `${s.width}x${s.height} @ ${s.frameRate}`;
-});
+// before the app boots (later the request fails with InvalidStateError), so it opens on a click at
+// first load, with a fresh load and another try when the click lands too late.
+let capture = null;
+for (let attempt = 1; !capture; attempt++) {
+  await page.goto(URL);
+  await page.mouse.click(1100, 160);
+  capture = await page
+    .evaluate(async () => {
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 60 }, width: { ideal: 2880 }, height: { ideal: 1800 } }, audio: false, preferCurrentTab: true, selfBrowserSurface: "include" });
+      const s = stream.getVideoTracks()[0].getSettings();
+      window.__hero = { stream, chunks: [], rec: null };
+      return `${s.width}x${s.height} @ ${s.frameRate}`;
+    })
+    .catch((e) => {
+      if (attempt >= 4) throw e;
+      return null;
+    });
+}
 console.log("tab capture", capture);
 const cta = page.locator(".hero-cta");
 await cta.waitFor({ state: "visible", timeout: 30000 });
@@ -129,8 +152,9 @@ await input.pressSequentially(PROMPT, { delay: 40 });
 await sleep(400);
 await input.press("Enter");
 await page.locator(".workspace").waitFor({ timeout: 30000 });
-// The video is the hero's backdrop, so it opens on the workspace once the handoff has landed.
-await sleep(900);
+// The video is the hero's backdrop: it opens as the engine starts choosing parts (reading the
+// prompt is ten quiet seconds of an empty grid).
+await page.waitForFunction(() => /choose\s+parts/i.test(document.querySelector(".workspace")?.textContent ?? ""), null, { timeout: 120000 }).catch(() => undefined);
 await startRec();
 
 // The build, until the Stop button leaves the prompt bar.

@@ -14,6 +14,7 @@ import { deleteEntry, loadEntry, restoreEntry, useLibrary, type LibraryCard } fr
 import { loadGallery, reloadGallery, useGallery, type GalleryItem } from "../library/gallery";
 import { BuildStill } from "./BuildScene";
 import { openBuildDialog } from "./BuildDialog";
+import { openScene } from "../project/scenes";
 import { OpenSource } from "./OpenSource";
 import "../styles/library.css";
 
@@ -392,7 +393,7 @@ export function GalleryCard(props: { item: GalleryItem; index?: number }) {
       return;
     }
     setOpening(true);
-    await openLibraryBuild(item.build_id);
+    await (item.scene ? openScene(item.scene, item.build_id) : openLibraryBuild(item.build_id));
     setOpening(false);
   };
   return (

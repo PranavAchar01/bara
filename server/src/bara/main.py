@@ -25,9 +25,9 @@ log = logging.getLogger(__name__)
 
 CORS_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
 # The Vercel deploys (production and previews) and the self-hosted site on its own quick tunnel
-# reach a local server through a tunnel. The engine is already open to anyone with its link, so
+# reach a local server through a tunnel, as does the permanent site on tangible.parts. The engine is already open to anyone with its link, so
 # letting a quick-tunnel page read it exposes nothing new.
-CORS_ORIGIN_REGEX = r"https://(bara(-[a-z0-9-]+)?\.vercel\.app|[a-z0-9-]+\.trycloudflare\.com)"
+CORS_ORIGIN_REGEX = r"https://(bara(-[a-z0-9-]+)?\.vercel\.app|[a-z0-9-]+\.trycloudflare\.com|(www\.)?tangible\.parts)"
 
 
 def _extra_origins() -> list[str]:

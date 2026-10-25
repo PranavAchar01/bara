@@ -33,6 +33,22 @@ def _label(session: Any, input_id: str) -> str:
     return str(row.get("label") or "").lower()
 
 
+def scene_of(raw: Any) -> dict[str, Any] | None:
+    """The combined device the page says this build stands in, cut to plain short strings."""
+    if not isinstance(raw, dict) or not isinstance(raw.get("title"), str):
+        return None
+
+    def texts(v: Any) -> list[str]:
+        return [str(x)[:200] for x in v[:8] if isinstance(x, str)] if isinstance(v, list) else []
+
+    return {
+        "title": raw["title"][:80],
+        "testing": str(raw.get("testing") or "")[:300],
+        "devices": texts(raw.get("devices")),
+        "flows": texts(raw.get("flows")),
+    }
+
+
 def sim_routes(api: APIRouter, svc: Any) -> None:
     from bara.rest import ApiError, body  # rest imports this module inside build_router
 
@@ -125,6 +141,7 @@ def sim_routes(api: APIRouter, svc: Any) -> None:
             client = {str(k): str(v) for k, v in (data.get("names") or {}).items()}
             codes = {str(k): str(v) for k, v in (data.get("codes") or {}).items()}
             sb.cfg = FwConfig.from_dict(data.get("config"))
+            sb.scene = scene_of(data.get("scene"))
             sb.plan(client, codes)
             if data.get("labels", True):
                 labels, notes = await ai_labels(state, sb.io, **models)
@@ -252,7 +269,9 @@ def sim_routes(api: APIRouter, svc: Any) -> None:
         if not message:
             raise ApiError("E_BAD_MESSAGE", "Send a message.")
         sb.chat.append({"role": "user", "text": message})
-        patch, reply, kind, by = await chat_patch(message, sb.cfg.to_dict(), sb.io, **models)
+        patch, reply, kind, by = await chat_patch(
+            message, sb.cfg.to_dict(), sb.io, **models, scene=sb.scene
+        )
         rebuilt = False
         ops = patch.pop("surface_ops", [])
         if ops and not reply:

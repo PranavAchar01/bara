@@ -18,6 +18,7 @@ from bara import bom as bom_mod
 from bara.edits import Reject
 from bara.library import BUILD_ID_RE
 from bara.llm import providers_configured
+from bara.scenes import Scenes, scene_routes
 from bara.services import Services
 from bara.util import error_obj, http_status
 
@@ -264,7 +265,8 @@ def build_router(svc: Services) -> APIRouter:
     @api.get("/v1/library")
     def library_list(hidden: bool = False) -> JSONResponse:
         """The shown builds; ?hidden=1 lists the hidden ones, which restore can bring back."""
-        return body({"builds": svc.engine.library.list(hidden=hidden)})
+        rows = svc.engine.library.list(hidden=hidden)
+        return body({"builds": Scenes(svc.engine.library.root / "scenes.json").annotate(rows)})
 
     @api.get("/v1/library/{build_id}")
     def library_get(build_id: str) -> JSONResponse:
@@ -455,6 +457,7 @@ def build_router(svc: Services) -> APIRouter:
     from bara.firmware_sim.api import sim_routes
 
     sim_routes(api, svc)
+    scene_routes(api, svc)
     return api
 
 

@@ -33,6 +33,8 @@ class SimBuild:
     label_notes: list[str] = field(default_factory=list)
     lock: threading.RLock = field(default_factory=threading.RLock)
     touched: float = field(default_factory=time.time)
+    # the combined device this build stands in, from the page: {title, testing, devices, flows}
+    scene: dict[str, Any] | None = None
 
     # ---- lifecycle ----
     def plan(self, client: dict[str, str] | None = None, codes: dict[str, str] | None = None):
@@ -93,6 +95,7 @@ class SimBuild:
             "chat": self.chat[-40:],
             "labels_note": "; ".join(self.label_notes),
             "snapshot": snap,
+            "scene": self.scene,
         }
 
     def run_tests(self, ids: list[str] | None = None) -> list[dict[str, Any]]:

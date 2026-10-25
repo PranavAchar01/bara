@@ -9,6 +9,7 @@ import { SimulateButton } from "../sim/SimulateButton";
 import { useLibrary } from "../library/library";
 import { BaraMark } from "./Handoff";
 import { openBuildDialog } from "./BuildDialog";
+import { useCombinedTitle } from "../project/scenes";
 
 const CONN_LABEL: Record<ConnStatus, string> = {
   connecting: "Connecting",
@@ -35,6 +36,7 @@ export function TopBar() {
   const health = useApp((s) => s.health);
   const mock = useApp((s) => s.mode.mock);
   const status = build?.status ?? "idle";
+  const combined = useCombinedTitle(build?.build_id);
   return (
     <header className="topbar">
       <button type="button" className="brand" onClick={() => useApp.setState({ screen: "home" })} title="Home">
@@ -47,7 +49,7 @@ export function TopBar() {
           <span className="mono muted">{build.build_id}</span>
           <span className={`status-pill st-${String(status)}`}>{String(status).replace("_", " ")}</span>
           <span className="topbar-prompt" title={build.prompt}>
-            {build.prompt}
+            {combined ?? build.prompt}
           </span>
         </div>
       )}
@@ -132,6 +134,7 @@ export function FileHeader() {
   const health = useApp((s) => s.health);
   const mock = useApp((s) => s.mode.mock);
   const status = build?.status ?? "idle";
+  const combined = useCombinedTitle(build?.build_id);
   const fallback = health?.llm_fallback?.provider ? `Fallback: ${health.llm_fallback.provider} ${health.llm_fallback.model ?? ""}` : "No fallback";
   const used = usedModels(build);
   const primary = health?.llm?.model;
@@ -147,7 +150,7 @@ export function FileHeader() {
         </button>
         <span className="sep">/</span>
         <span className="file-prompt" title={build?.prompt}>
-          {build?.prompt ?? "New build"}
+          {combined ?? build?.prompt ?? "New build"}
         </span>
       </div>
       <div className="file-meta">

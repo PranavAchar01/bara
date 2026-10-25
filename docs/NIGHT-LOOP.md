@@ -331,3 +331,4 @@ Web: bara-merge agent merges Nithin's figma-design-in-code / agent-board-3d / fi
 - In flight: Nithin merge (rendered-product tiles), sim, parts, hero re-record, demo clip.
 
 - 2026-10-24 23:50: pushed 36731b4 (sim no-overlap, click only presses), c9ef57f (library soft delete, 112 re-rendered shots, 20 curated, OSS board 3D), 5e7cd6f (Loading 3D hang + sim badge). Engine restarted. Running: bigpass (build-view list), landing2 (landing lag), oss-builds (OSS boards as full builds).
+- 2026-10-25 00:00: pushed 29c409e (60 fps hero), 3540eed (no Copyable only), 197a27c (clear shells default); merged Nithin a92b24b (workspace.css union). In flight: hero fresh take, Etch-style boards + thumb reshoot, combined devices + sim, network recovery, Fable half of video. Workspace UI and OSS import agents stopped by Pranav; their edits are uncommitted, waiting on his call.

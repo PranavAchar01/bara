@@ -28,7 +28,7 @@ import { FocusDriver, meshBox, nearFocused } from "./focus";
 import { setLook, type Look } from "./look";
 import { ProjectLinkLines } from "./projectLinks";
 import { AutoLinker } from "../project/project";
-import { caseMaterial, useCasePreview } from "./caseFinish";
+import { caseMaterial, finishInfo, useCasePreview } from "./caseFinish";
 import { defaultColor, finishMaterial, ghost, placeholderMaterial, presetFor, presetMaterial, tinted, usesPreset, wearsFinish } from "./materials";
 import { focusAmount, registerAnchor, stage, stageBox } from "./stage";
 import { StudioEnvironment, StudioFloor, studioPalette, type StudioPalette } from "./studio";
@@ -36,7 +36,7 @@ import { DemandDriver, StudioPost, postEnabled } from "./post";
 import { SHOT_ID } from "./shot";
 import { Glyph } from "../ui/glyphs";
 import { Icon } from "../ui/common";
-import { BoardPlaceholder, BoardStatus, FootprintHover, boardBadge, footprintBoxes } from "./board";
+import { BoardPlaceholder, BoardStatus, FootprintHover, LOADING_PILL_DELAY_MS, boardBadge, footprintBoxes, useHeld } from "./board";
 import { AgentTargetProbe, partWorldBox, registerPart } from "./agentTargets";
 import { agentPose, easeOut } from "./agentCam";
 import { caps } from "../sim/press";
@@ -579,8 +579,6 @@ function upCoverage(geoms: THREE.BufferGeometry[]): number {
 }
 
 /** A case piece: its geometries, and whether it is the lid that lifts off in the explode. */
-const CLEAR_MAX = 0.42;
-
 interface CasePiece {
   geoms: THREE.BufferGeometry[];
   lid: boolean;
@@ -604,8 +602,8 @@ function CasePieceNode(props: {
   piece: CasePiece;
   enc: Enclosure;
   material: THREE.MeshStandardMaterial;
-  /** The user chose a finish: show the real material assembled, not the ghost shell. */
-  real: boolean;
+  /** A see-through finish (clear by default): clicks reach the parts seen inside it. */
+  seeThrough: boolean;
   edge: string | null;
   anchorKey: string | null;
   focusKey: string;
@@ -626,10 +624,8 @@ function CasePieceNode(props: {
     return v.add(new THREE.Vector3(pos[0], pos[1], pos[2]));
   }, [piece, pos, rot]);
   const ref = useLayerGroup(piece.lid ? "lid" : "case", props.anchorKey, anchorLocal, props.focusKey);
-  // Assembled, every case piece is a translucent shell with its edges drawn, so
-  // the board inside stays in view; pieces turn solid as the explode opens. A
-  // finish the user picked is shown as it is instead: see-through finishes pass
-  // light (transmission) and show the board for real, opaque ones are solid.
+  // Every shell is drawn in its finish, clear unless someone picked another: see-through
+  // finishes pass light (transmission) and show the board for real, opaque ones are solid.
   const material = useMemo(() => {
     const m = props.material.clone();
     m.transparent = true;
@@ -642,16 +638,12 @@ function CasePieceNode(props: {
   const edgeMat = useMemo(() => new THREE.LineBasicMaterial({ color: "#1F2226", transparent: true, opacity: 0.3, depthWrite: false, toneMapped: false }), []);
   useEffect(() => () => edgeMat.dispose(), [edgeMat]);
   const base = props.material.opacity;
-  const floor = piece.lid ? 0.16 : 0.24;
-  const real = props.real;
+  const seeThrough = props.seeThrough;
   useFrame(() => {
-    const k = real ? 1 : Math.min(1, stage.explode / 0.6);
-    // A chosen real material carries its own opacity; otherwise clear plastic, a little denser when pulled apart, never opaque.
-    const o = real ? base : (floor + (CLEAR_MAX - floor) * k) * base;
-    material.opacity = o;
-    // Creases stay drawn when pulled apart, like the outlines the library parts carry in their own geometry.
-    edgeMat.opacity = real ? 0.12 : 0.3 + 0.25 * k;
-    const solid = k >= 0.999 && base >= 0.999;
+    material.opacity = base;
+    // Creases stay drawn, a little stronger on a see-through shell so its outline still reads.
+    edgeMat.opacity = seeThrough ? 0.22 : 0.12;
+    const solid = base >= 0.999;
     if (material.depthWrite !== solid) {
       material.depthWrite = solid;
       material.transparent = !solid;
@@ -673,7 +665,7 @@ function CasePieceNode(props: {
             onClick={(e) => {
               // A see-through shell lets the click reach the part you can see inside it (a key, the
               // board, the controller): only a click on bare case picks the case.
-              if (material.transparent && material.opacity < 0.5 && throughShell(e, ref.current)) return;
+              if ((seeThrough || material.opacity < 0.5) && throughShell(e, ref.current)) return;
               if (useApp.getState().explode > 0.5 && !useSim.getState().active) {
                 e.stopPropagation();
                 pickPart(props.focusKey);
@@ -734,7 +726,7 @@ function EnclosureNode(props: { enc: Enclosure; theme: Theme; selected: boolean;
           piece={p}
           enc={enc}
           material={material}
-          real={!!finish}
+          seeThrough={finishInfo(finish?.preset).seeThrough}
           edge={edge}
           onClick={onClick}
           anchorKey={props.labelled ? (p.lid && pieces.length > 1 ? "e:case_top" : "e:case") : null}
@@ -809,8 +801,10 @@ function BoardNode(props: {
   const playing = useSim((s) => s.active);
   const buildOver = useApp((s) => s.view.done !== null || s.view.failure !== null);
   const boardStage = useApp((s) => s.view.stages.board?.status);
-  // Routing or the GLB still on its way: the placeholder breathes and says which; a failed load offers a retry.
-  const badge = loaded ? null : boardBadge({ boardStatus: board.status, model, buildOver, boardStage, playing });
+  // Routing or the GLB still on its way: the placeholder breathes and says which (a load only once it is
+  // slow, so a quick one goes straight from the drawn board to the real one); a failed load offers a retry.
+  const slow = useHeld(model.status === "loading", LOADING_PILL_DELAY_MS);
+  const badge = loaded ? null : boardBadge({ boardStatus: board.status, model: model.status === "loading" && !slow ? { status: "none" } : model, buildOver, boardStage, playing });
   const busy = badge !== null && !badge.retry;
   const boxes = useMemo(() => footprintBoxes(board, loaded), [board, loaded]);
   const match = useMemo(() => (loaded ? matchComponents(loaded, board, props.candidates) : null), [loaded, board, props.candidates]);
@@ -1715,10 +1709,11 @@ function CompanionBoard(props: { board: Board; pick: CompanionPick }) {
   const loaded = model.status === "ready" && model.model.groups.length > 0 ? model.model : null;
   const pos = props.board.position_mm ?? [0, 0, 0];
   const rot = props.board.rotation_deg ?? [0, 0, 0];
-  if (!loaded) return null;
   return (
     <group position={[pos[0], pos[1], pos[2]]} rotation={new THREE.Euler(rot[0] * DEG, rot[1] * DEG, rot[2] * DEG, "XYZ")}>
-      {loaded.groups.map((g) => (
+      {/* until its GLB lands (or if it never does) the board is drawn from its record, never a gap */}
+      {!loaded && <BoardPlaceholder board={props.board} busy={false} />}
+      {loaded?.groups.map((g) => (
         <mesh key={`${g.geometry.uuid}:${g.material.uuid}`} geometry={g.geometry} material={g.material} onClick={props.pick.onClick} onPointerOver={(e) => (e.stopPropagation(), props.pick.onHover(true))} onPointerOut={() => props.pick.onHover(false)} />
       ))}
     </group>

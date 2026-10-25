@@ -236,11 +236,23 @@ async def chat_patch(
     io: dict[str, Any],
     cerebras_model: str,
     anthropic_model: str,
+    scene: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], str, str, str]:
-    """(patch, reply, kind, by). Falls back to the rule reading when no model answers."""
+    """(patch, reply, kind, by). Falls back to the rule reading when no model answers. `scene`
+    is the combined device this one stands in: what the simulation tests across the devices."""
+    combined = (
+        [
+            f"Combined device: {scene['title']} ({', '.join(scene.get('devices') or [])}). "
+            f"This firmware runs the first one; the simulation tests: {scene.get('testing')}",
+            "Cross-device behaviour: " + "; ".join(scene.get("flows") or []),
+        ]
+        if scene
+        else []
+    )
     prompt = "\n".join(
         [
             f"Device: {(io.get('device') or {}).get('name')}",
+            *combined,
             "Current settings: "
             + ", ".join(
                 f"{k}={cfg[k]}"

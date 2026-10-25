@@ -1,0 +1,16 @@
+/* The open-source board's 3D panel: the KiCad poster at full strength until the live view has drawn, then a crossfade. */
+.b3d .b3d-poster { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; opacity: 1; transition: opacity 360ms ease; pointer-events: none; }
+.b3d .b3d-poster.gone { opacity: 0; }
+.b3d .b3d-canvas { position: absolute !important; inset: 0; opacity: 0; transition: opacity 360ms ease; }
+.b3d .b3d-canvas.on { opacity: 1; }
+.b3d .b3d-blank { position: absolute; inset: 18% 22%; border-radius: 10px; background: linear-gradient(110deg, var(--surface-2) 30%, var(--surface) 50%, var(--surface-2) 70%) 0 0 / 300% 100%; animation: b3d-sheen 1.6s linear infinite; }
+.b3d .b3d-chip { position: absolute; left: 12px; bottom: 10px; display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line); background: color-mix(in srgb, var(--surface) 88%, transparent); font-size: 11px; color: var(--text-2); }
+.b3d .b3d-retry { cursor: pointer; color: var(--text); }
+.b3d .b3d-retry:hover { border-color: var(--text-2); }
+.b3d .b3d-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: b3d-pulse 1.2s ease-in-out infinite; }
+@keyframes b3d-sheen { to { background-position: -300% 0; } }
+@keyframes b3d-pulse { 50% { opacity: 0.25; } }
+@media (prefers-reduced-motion: reduce) {
+  .b3d .b3d-poster, .b3d .b3d-canvas { transition: none; }
+  .b3d .b3d-blank, .b3d .b3d-dot { animation: none; }
+}

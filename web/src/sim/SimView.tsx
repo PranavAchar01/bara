@@ -20,6 +20,8 @@ import { useSimLink } from "./simLink";
 import { OutputsDock, PlayPanel, toneCount, useBuzzer } from "./PlaySurface";
 import { applyOps, fallbackSurface, fixLabels, loadLayout, resolveRows, saveLayout, type Layout } from "./surface";
 import { sim, terminalLine, typedText, type ChatEntry, type InputAction, type SimEvent, type SimSnap, type SimTest, type SimViewData, type Surface } from "./remote";
+import { CombinedDisplay, useCombinedPlan, useRunTheSource } from "./CombinedDisplay";
+import { emptyScreen, foldScreen, sceneContext } from "./combined";
 import "./sim.css";
 import "./simulator.css";
 import "./play.css";
@@ -98,6 +100,12 @@ function Simulator(props: { build: Build }) {
   const chain = useRef<Promise<unknown>>(Promise.resolve());
   const subs = useRef(new Set<() => void>());
   const typedAll = useRef("");
+  // with other devices on the board, the simulation runs them as one: the plan says what is tested
+  const plan = useCombinedPlan(id);
+  useRunTheSource(plan);
+  const scene = useRef(plan ? sceneContext(plan, plan.devices.map((d) => d.noun)) : null);
+  scene.current = plan ? sceneContext(plan, plan.devices.map((d) => d.noun)) : null;
+  const [combo, setCombo] = useState(emptyScreen);
 
   const absorb = useCallback((s: SimSnap | null, reset = false) => {
     if (!s) return;
@@ -107,6 +115,7 @@ function Simulator(props: { build: Build }) {
       setLines([]);
       setTyped("");
       useSim.setState({ typed: "" });
+      setCombo(emptyScreen());
     }
     const fresh: SimEvent[] = s.events.filter((e) => e.seq > seq.current);
     seq.current = Math.max(seq.current, s.seq);
@@ -115,6 +124,7 @@ function Simulator(props: { build: Build }) {
     if (beeps) setTones((n) => n + beeps);
     showRemote({ powered: s.powered, bootloader: !!s.bootloader, fb: s.fb ?? null, rows: s.screen });
     if (!fresh.length) return;
+    setCombo((c) => foldScreen(c, fresh));
     if (fresh.some((e) => e.type === "typed")) {
       typedAll.current = typedText(fresh, typedAll.current);
       setTyped(typedAll.current);
@@ -143,7 +153,7 @@ function Simulator(props: { build: Build }) {
     let live = true;
     setBusy("Building the firmware");
     sim
-      .start(id, map)
+      .start(id, map, scene.current)
       .then((v) => live && adopt(v))
       .catch((e: Error) => live && setError(e.message))
       .finally(() => live && setBusy(null));
@@ -294,6 +304,11 @@ function Simulator(props: { build: Build }) {
       <header className="play-bar">
         <span className="play-live" aria-hidden />
         <strong>Simulation</strong>
+        {plan && (
+          <span className="play-testing" title={plan.testing}>
+            {plan.testing}
+          </span>
+        )}
         <span className="spacer" />
         <button type="button" className="play-btn primary" onClick={closeSimPanel} title="Back to the build (Esc)">
           Back <kbd>Esc</kbd>
@@ -328,7 +343,9 @@ function Simulator(props: { build: Build }) {
             onChecks={() => setChecks((v) => !v)}
             onAsk={ask}
           />
-          <OutputsDock surface={surface} snap={snap} typed={typed} lines={lines} tones={tones} />
+          <OutputsDock surface={surface} snap={snap} typed={typed} lines={lines} tones={tones}>
+            {plan && <CombinedDisplay plan={plan} screen={combo} powered={!!snap?.powered} />}
+          </OutputsDock>
           {checks && (
             <div className="play-checks sx">
               <button type="button" className="play-btn play-checks-x" onClick={() => setChecks(false)}>

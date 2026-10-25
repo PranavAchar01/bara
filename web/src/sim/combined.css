@@ -1,0 +1,76 @@
+/* the other device of a combined device, in the outputs dock */
+.play-testing {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  max-width: 60ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.combo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.combo-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 12.5px;
+}
+.combo-glass {
+  position: relative;
+  min-height: 64px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #101316;
+  color: #9aa3ab;
+  box-shadow: inset 0 0 0 1px #2a3036;
+  animation: combo-flash 0.25s ease-out;
+}
+.combo-glass.on {
+  color: #e8f1f5;
+}
+@keyframes combo-flash {
+  from {
+    box-shadow: inset 0 0 0 1px #2a3036, inset 0 0 18px rgba(120, 190, 255, 0.35);
+  }
+}
+.combo-text {
+  margin: 0;
+  font: 600 16px/1.3 var(--font-mono);
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 64px;
+  overflow: auto;
+}
+.combo-hint {
+  color: #6b747c;
+  font-weight: 500;
+}
+.combo-level {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 12px;
+}
+.combo-level i {
+  height: 6px;
+  border-radius: 3px;
+  background: #2a3036;
+  overflow: hidden;
+}
+.combo-level b {
+  display: block;
+  height: 100%;
+  background: #7cc4ff;
+  transition: width 0.15s ease;
+}
+.combo-last {
+  margin-top: 4px;
+  font-size: 11.5px;
+  color: #8fa0ad;
+}
