@@ -432,6 +432,8 @@ class LiveRunner:
                 f"Repair round {n}: sending back {notes}",
             )  # fmt: skip
             run.repair = f"The last attempt failed these checks; fix them: {notes}"  # type: ignore[attr-defined]
+            if any(rid == "board.routing.complete" for rid, _ in bad):
+                ctx["route_effort"] = n  # the router searches further, never the same input
             board = await self.place(run, brief, plan, result, ctx)
             await self.enclose(run, brief, plan, result, board, ctx)
             board = await self.board_stage(run, board, result, ctx)
@@ -1333,7 +1335,7 @@ class LiveRunner:
                 preview["position_mm"] = [round(v, 3) for v in pos]
                 preview["rotation_deg"] = [round(v, 3) for v in rot]
             st.emit("board.updated", {"board": preview})
-        routed, err = await A.route_board(board, st.progress)
+        routed, err = await A.route_board(board, st.progress, effort=ctx.get("route_effort", 0))
         if routed is None:
             self._warn(run, "board", "w_board", "other", "warning", f"No KiCad board: {err}")
             st.emit(

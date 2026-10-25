@@ -55,6 +55,25 @@ ROUTE_STRATEGIES: list[tuple[str, list[str]]] = [
     ("ripup_50", ["--router.scoring.start_ripup_costs=50"]),
     ("ripup_200", ["--router.scoring.start_ripup_costs=200"]),
 ]
+# A board the 2-layer strategies leave with connections open is routed again on four copper
+# layers (two inner signal layers, same 1.6 mm board, so the case is unchanged). Measured
+# 2026-10-24: a 271 mm choc board left with 3 open on two layers routes complete on four.
+LAYER_LADDER = (2, 4)
+FOUR_LAYER_STRATEGIES: list[tuple[str, list[str]]] = [
+    ("default", []),
+    ("ripup_200", ["--router.scoring.start_ripup_costs=200"]),
+    ("via_costs_100", ["--router.scoring.via_costs=100"]),
+]
+COPPER = {2: ["F.Cu", "B.Cu"], 4: ["F.Cu", "In1.Cu", "In2.Cu", "B.Cu"]}
+
+
+def with_layers(plan_data: dict, layers: int) -> dict:
+    """The same board on `layers` copper layers: the edge keep-out covers every one."""
+    out = {**plan_data, "copper_layers": layers}
+    out["rule_areas"] = [{**a, "layers": COPPER[layers]} for a in plan_data.get("rule_areas", [])]
+    return out
+
+
 # DRC errors that come from copper being too close, not from the parts: one more pass with
 # wider rules (clearance, track, edge) before the board is reported with them.
 WIDENABLE = ("clearance", "copper_edge_clearance", "solder_mask_bridge", "annular_width")
