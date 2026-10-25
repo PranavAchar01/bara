@@ -848,13 +848,20 @@ def _anchor_targets(
         if not take and k0 >= len(group) and group:
             take = []
         used[a["slot_id"]] = k0 + len(take)
-        spots = expand(a, max(1, len(take)))
         if region is not None and len(take) >= 3 and classify(a) == "dpad":
+            # neighbouring arms of the cross sit a footprint (and its gap) apart on both axes,
+            # or the placer shoves the one that collides off its arm
+            apart = max(min(_extent(it)) for it in take) + PART_GAP
+            spots = expand(
+                {**a, "pitch_mm": max(float(a.get("pitch_mm") or 0.0), apart)}, len(take)
+            )
             board_spots = [(x * scale, -y * scale) for x, y in spots]
             reach = max(max(_extent(it)) for it in take) / 2
             spots = [
                 (x / scale, -y / scale) for x, y in _keep_cross_inside(board_spots, reach, region)
             ]
+        else:
+            spots = expand(a, max(1, len(take)))
         for k, it in enumerate(take):
             x, y = spots[k % len(spots)]
             out[id(it)] = (x * scale, -y * scale, a["mount"])

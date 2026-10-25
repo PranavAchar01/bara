@@ -303,7 +303,7 @@ def _num(value: Any, default: float) -> float:
 def _feature_from_placement(p: dict[str, Any]) -> Feature | None:
     size = p.get("size_mm") or [0, 0]
     role = p.get("role") or infer_role(p.get("lib_id"), p.get("ref"))
-    if role not in {r for r, _ in ROLE_KEYWORDS} and role != "other":
+    if role not in {r for r, _ in ROLE_KEYWORDS} and role not in ("other", "sd_card"):
         # a board-side role (module, module_connector, connector) says where a part sits, not
         # what it is: read the part itself, so a connector to a module is not a controller
         role = infer_role(p.get("lib_id")) if p.get("lib_id") else infer_role(p.get("label"))
@@ -671,6 +671,7 @@ def enclose_report(
         sites = shell.sites_from_anchors(list(brief.get("anchors") or []), feats, t, y_down)
         claimed_refs = {s_.ref for s_ in sites if s_.ref}
         port_parts = [f for f in feats if f.role == "usb"] or [f for f in feats if f.role == "mcu"]
+        port_parts += [f for f in feats if f.role == "sd_card"]  # a card slot opens at the rim too
         raw = _largest_polygon(outer_cs)
         for f in port_parts:  # a port part no anchor claimed still gets its slot
             if f.ref in claimed_refs:
@@ -836,7 +837,7 @@ def enclose_report(
             r = max(f.w, f.d) / 2 + H["part_opening_clearance_mm"]
             holes_cs.append(_circle_cs(f.x, f.y, r))
             openings.setdefault("lights", []).append({"ref": f.ref, "r": r})
-        elif f.touch and f.role not in ("usb", "mcu", "battery"):
+        elif f.touch and f.role not in ("usb", "mcu", "battery", "sd_card"):
             # finger-sized, soft-cornered: a bare switch footprint is far smaller than the
             # button a person presses
             c = 2 * H["part_opening_clearance_mm"]

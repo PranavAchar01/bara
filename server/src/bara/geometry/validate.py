@@ -525,7 +525,7 @@ def validate(report: EncloseReport) -> list[dict[str, Any]]:
     n_touch = 0
     reached = set(report.openings.get("reached", []))  # pressed from the side or through a cap
     for f in feats:
-        if not f.touch or f.role in ("usb", "mcu", "battery") or f.ref in reached:
+        if not f.touch or f.role in ("usb", "mcu", "battery", "sd_card") or f.ref in reached:
             continue
         n_touch += 1
         a = math.radians(f.rot_deg)

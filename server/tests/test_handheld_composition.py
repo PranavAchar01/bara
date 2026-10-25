@@ -69,6 +69,40 @@ def test_dpad_anchor_targets_form_a_plus() -> None:
     assert xs[3] - xs[0] == 18.0 and ys[3] - ys[0] == 18.0
 
 
+def test_a_tight_dpad_pitch_opens_to_the_switch_size() -> None:
+    from pathlib import Path
+
+    from bara.board.generic import PART_GAP, _extent
+    from bara.board.libs import FootprintInfo, Pad
+
+    fp = FootprintInfo(
+        lib="t",
+        lib_dir=Path("t.pretty"),
+        name="sw",
+        pads=[Pad("1", "thru_hole", 0, 0, 1.5, 1.5, ["F.Cu", "B.Cu"])],
+        courtyard=(-4.75, -3.75, 4.75, 3.75),
+        courtyard_back=None,
+        models=[],
+    )
+    anchor = {
+        "slot_id": "dpad",
+        "name": "D-pad",
+        "mount": "front",
+        "pattern": "diamond",
+        "centre": [0.0, 0.0],
+        "pitch_mm": 7.0,
+        "count": 4,
+    }
+    items = []
+    for i in range(4):
+        it = Item(ref=f"SW{i}", role="button", fp=fp, x=0, y=0)
+        it.meta["slot_id"] = "dpad"
+        items.append(it)
+    out = _anchor_targets({"anchors": [anchor]}, items, 1.0, box(-60, -60, 60, 60))
+    xs = sorted(out[id(it)][0] for it in items)
+    assert xs[3] - xs[0] >= 2 * (min(_extent(items[0])) + PART_GAP) - 1e-6
+
+
 def test_a_card_slot_is_a_port_at_the_rim() -> None:
     assert classify({"name": "microSD slot", "purpose": "game files"}) == "port"
     assert "sd_card" in CABLE_ROLES
@@ -94,6 +128,15 @@ def test_a_card_slot_is_a_port_at_the_rim() -> None:
     }
     sites = sites_from_anchors([anchor], [feat], y_down=False)
     assert sites[0].kind == "port" and sites[0].ref == "U4"
+
+
+def test_a_card_slot_stays_a_card_slot_in_the_case() -> None:
+    from bara.geometry.case import _feature_from_placement
+
+    f = _feature_from_placement(
+        {"ref": "U4", "role": "sd_card", "lib_id": "C91145:C91145", "size_mm": [14.0, 14.0]}
+    )
+    assert f is not None and f.role == "sd_card"  # not re-read from its LCSC id as "other"
 
 
 def test_the_card_slot_gets_an_anchor_from_the_form_stage() -> None:
