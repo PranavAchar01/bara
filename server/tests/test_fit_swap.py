@@ -183,3 +183,36 @@ def test_a_part_far_taller_than_the_product_is_swapped_for_a_lower_one(monkeypat
     )
     assert parts[0]["part_id"] == "pouch" and len(warned) == 1
     assert lr._stack_mm(board)[0] < 15.0 * R.LiveRunner.THICK_SLACK
+
+
+def _disc(r: float, n: int = 48) -> list[list[float]]:
+    import math
+
+    turn = [2 * math.pi * k / n for k in range(n)]
+    return [[r * math.cos(a), r * math.sin(a)] for a in turn]
+
+
+def test_a_tight_form_packs_on_both_sides_before_it_overflows() -> None:
+    # a small round tag: a sounder the form anchors on the face fills the middle, and the
+    # controller has no room beside it on that side, but the back of the board is free
+    pf = {
+        "silhouette": _disc(17.0),
+        "anchors": [
+            {
+                "slot_id": "sounder",
+                "centre": [0.0, 0.0],
+                "mount": "front",
+                "count": 1,
+                "pattern": "single",
+            }
+        ],
+    }
+    sounder = _bar("LS1", 12.0, 12.0, "sounder")
+    sounder.role = "buzzer"
+    sounder.meta["slot_id"] = "sounder"
+    mcu = _bar("U1", 18.0, 12.0, "mcu")
+    mcu.role = "mcu"
+    log: list[str] = []
+    place_in_form([sounder, mcu], mcu, pf, log)
+    assert pf["fit_report"]["ok"], log
+    assert sounder.side == "top" and mcu.side == "bottom"

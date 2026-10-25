@@ -1064,9 +1064,32 @@ def place_in_form(
     flippable = {
         id(it) for it in on_board if id(it) not in anchored and id(it) not in rim and it is not mcu
     }
+    sides = {id(it): it.side for it in on_board}
     stuck = _attempt_with_follow(
         order, region, targets, gaps, mcu, set(anchored) | set(rim), flippable
     )
+    if stuck is not None:
+        # a tight form packs before it fails: the parts held to a place go first, then the
+        # rest biggest first, and every part no finger, plug or eye needs on the face (a cell
+        # holder, the controller, a part the form put on the back) may take either side and turn
+        spare = {
+            id(it)
+            for it in on_board
+            if id(it) not in rim
+            and not it.meta.get("touch")
+            and it.role != "screen"
+            and (id(it) not in anchored or anchored[id(it)][2] == "back")
+        }
+        for it in on_board:
+            it.side = sides[id(it)]
+        packed = [it for it in order if id(it) not in spare] + sorted(
+            (it for it in order if id(it) in spare), key=lambda it: -_area(it)
+        )
+        stuck = _attempt_with_follow(
+            packed, region, targets, gaps, mcu, set(anchored) | set(rim), flippable | spare
+        )
+        if stuck is None:
+            log.append("tight form: packed biggest first, with parts on both sides")
     ok = stuck is None
     areas = sorted(((_area(it), it) for it in on_board), key=lambda a: -a[0])
     widest = max(on_board, key=lambda it: max(_extent(it)), default=None)
