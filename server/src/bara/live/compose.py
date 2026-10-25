@@ -830,6 +830,10 @@ class Composer:
                 s += 0.15 - min(0.15, (gpio - need) * 0.01)  # smallest controller that fits
             if self.board_controller_for(part):
                 s += 0.05
+        # a footprint the matched open reference design used for this function
+        ref = getattr(self, "reference_fps", None) or {}
+        if str(part.get("footprint") or "") in ref.get(slot.function_id, ()):
+            s += 0.25
         st = self.brief.get("switch_type")
         if slot.slot_id == "switches" and st and st in name:
             s += 0.2

@@ -27,6 +27,7 @@ from bara.live import concept as concept_mod
 from bara.live import finish as finish_mod
 from bara.live import form as form_mod
 from bara.live import identity as identity_mod
+from bara.live import reference_design as reference_mod
 from bara.live.brief import BriefResult, normalise_brief, spec_from_brief, write_brief
 from bara.live.catalog_source import PartSource, merge_into_catalog, model_asset
 from bara.live.compose import ASSETS_DIR, Composer, ComposeResult, Slot
@@ -753,10 +754,45 @@ class LiveRunner:
         )
         st.done()
 
+    REFERENCE_BUDGET_S = 25.0
+
+    async def _reference_design(self, run: BuildRun, st: Any, composer: Composer) -> None:
+        """Match the open KiCad projects the build already retrieved against its function
+        blocks; a reusable match's footprints are preferred when parts are chosen, and the
+        project is recorded with its licence."""
+        ret = getattr(run, "retrieval", None)
+        designs = list(getattr(ret, "designs", None) or [])
+        if not designs:
+            return
+        st.progress("Matching open reference designs by function block", None)
+        try:
+            ref = await asyncio.wait_for(
+                reference_mod.match(designs, [s.function_id for s in composer.slots]),
+                self.REFERENCE_BUDGET_S,
+            )
+        except TimeoutError:
+            ref = None
+        run.reference_design = ref.json() if ref else None  # type: ignore[attr-defined]
+        if ref is None:
+            return
+        composer.reference_fps = reference_mod.preferred(ref)  # type: ignore[attr-defined]
+        if composer.reference_fps:  # type: ignore[attr-defined]
+            how = "its footprints are preferred for those blocks."
+        elif not ref.reusable:
+            how = "compared only (its licence does not allow reuse)."
+        else:
+            how = "compared only (too few blocks in common)."
+        self._warn(
+            run, "compose", "w_reference", "other", "info",
+            f"Reference design {ref.repo} ({ref.licence}) builds {len(ref.matched)} of this "
+            f"device's function blocks ({ref.coverage:.0%}); {how}",
+        )  # fmt: skip
+
     def _write_chain(self, run: BuildRun, record: dict[str, Any]) -> None:
         """Keep the jobs -> functions -> blocks -> parts chain next to the build's artefacts."""
         out = self.settings.data_dir / "cache" / "chains"
         out.mkdir(parents=True, exist_ok=True)
+        record = {**record, "reference_design": getattr(run, "reference_design", None)}
         (out / f"{run.build_id}.json").write_text(json.dumps(record, indent=1))
 
     # ---- compose -------------------------------------------------------------------------
@@ -788,6 +824,7 @@ class LiveRunner:
             self.source, spec, brief, plan, self.settings, controllers, blocks=blocks
         )
         st.emit("slots.ready", {"slots": [s.json() for s in composer.slots]})
+        await self._reference_design(run, st, composer)
         if plan is not None:
             for half in plan.halves:
                 lid = {"left": "lay_l", "right": "lay_r"}.get(half.side, "lay_main")
