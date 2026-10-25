@@ -38,6 +38,8 @@ COLUMNS = [
     "lib_id",
     "licence",
     "commercial_ok",
+    "stock",
+    "sourced_via",
 ]
 
 _LCSC_ID = re.compile(r"(?:^|[_:])(c\d{3,})$", re.I)
@@ -86,6 +88,11 @@ def _maker(record: dict[str, Any] | None) -> str:
     return _PAREN_NON_ASCII.sub("", str((record or {}).get("manufacturer") or "")).strip()
 
 
+def _row_lcsc(row: dict[str, Any]) -> str:
+    m = re.search(r"/product-detail/(C\d+)\.html$", str(row.get("lcsc_url") or ""))
+    return m.group(1).upper() if m else ""
+
+
 def _row(**kw: Any) -> dict[str, Any]:
     row: dict[str, Any] = dict.fromkeys(COLUMNS, "")
     row.update(quantity=0, instances=[], unit_price_usd=None, line_total_usd=None)
@@ -93,8 +100,16 @@ def _row(**kw: Any) -> dict[str, Any]:
     return row
 
 
-def bom(build: dict[str, Any], lookup: Lookup | None = None) -> dict[str, Any]:
-    """The shopping list of a build: {"rows": [...], "case_files": [...], "totals": {...}}."""
+def bom(
+    build: dict[str, Any],
+    lookup: Lookup | None = None,
+    quotes: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """The shopping list of a build: {"rows": [...], "case_files": [...], "totals": {...}}.
+
+    `quotes` maps LCSC ids to Apify scout part listings (price, stock, buy links); it defaults to
+    the quotes the scout already cached. A price the part record states wins; a scouted price
+    fills the rest and the row says so in `sourced_via`."""
     lookup = lookup or (lambda _pid: None)
     rows: dict[str, dict[str, Any]] = {}
     records: dict[str, dict[str, Any] | None] = {}
@@ -126,6 +141,20 @@ def bom(build: dict[str, Any], lookup: Lookup | None = None) -> dict[str, Any]:
             )
         rows[pid]["quantity"] += int(part.get("quantity", 1) or 1)
         rows[pid]["instances"].append(part["instance_id"])
+
+    if quotes is None:
+        from bara.live import apify_scout
+
+        quotes = apify_scout.cached_quotes(list(filter(None, map(_row_lcsc, rows.values()))))
+    for row in rows.values():
+        q = quotes.get(_row_lcsc(row))
+        if not q:
+            continue
+        row["stock"] = q.get("stock", "")
+        row["sourced_via"] = "Apify scout"
+        if row["unit_price_usd"] is None and q.get("unit_price_usd") is not None:
+            row["unit_price_usd"] = q["unit_price_usd"]
+        row["mpn"] = row["mpn"] or q.get("mpn", "")
 
     boards = build.get("boards") or []
     loose: list[tuple[str, dict[str, Any]]] = []
@@ -199,6 +228,7 @@ def bom(build: dict[str, Any], lookup: Lookup | None = None) -> dict[str, Any]:
         "case_files": case_files,
         "totals": {
             "lines": len(rows),
+            "sourced_via_apify": sum(r["sourced_via"] == "Apify scout" for r in rows.values()),
             "priced_lines": priced,
             "known_total_usd": round(total, 2) if priced else None,
         },

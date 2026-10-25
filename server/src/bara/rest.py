@@ -94,6 +94,14 @@ def build_router(svc: Services) -> APIRouter:
                 record = None
         return record
 
+    @api.get("/v1/apify/stats")
+    def apify_stats() -> Response:
+        """Totals over every build the Apify scout ran for (designs found, parts priced,
+        pages crawled): the numbers to cite."""
+        from bara.live import apify_scout
+
+        return body({"actor": "bara-hardware-scout", **apify_scout.totals()})
+
     def run_or_404(build_id: str):
         run = svc.engine.get(build_id)
         if run is None:

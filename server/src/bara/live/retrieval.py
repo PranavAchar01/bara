@@ -22,7 +22,7 @@ from typing import Any
 
 import httpx
 
-from bara.live import open_designs, websearch
+from bara.live import apify_scout, open_designs, websearch
 
 log = logging.getLogger(__name__)
 CACHE = Path(__file__).resolve().parents[3] / "data/cache/retrieval"
@@ -134,13 +134,14 @@ async def _pages(client: httpx.AsyncClient, product: str, key: str) -> list[dict
     return out
 
 
-async def gather(product: str) -> Retrieval:
+async def gather(product: str, scout: apify_scout.ScoutResult | None = None) -> Retrieval:
     """References for `product` (the device as the request names it). Text is cached by
     product; photos are cached by the photo search itself."""
     product = product.strip()[:120] or "device"
     ret = Retrieval(product)
     path = CACHE / f"{hashlib.sha256(product.lower().encode()).hexdigest()[:24]}.json"
     photos_task = asyncio.create_task(websearch.reference_photos(product))
+    scouted = scout.designs if scout is not None else []
     try:
         cached = json.loads(path.read_text())
         ret.designs, ret.pages, ret.notes = cached["designs"], cached["pages"], ["cached"]
@@ -164,6 +165,9 @@ async def gather(product: str) -> Retrieval:
             path.write_text(json.dumps({"designs": ret.designs, "pages": ret.pages}))
         except OSError:
             log.warning("retrieval for %s not cached", product)
+    ret.designs = apify_scout.merge_designs(scouted, ret.designs)[: MAX_DESIGNS + 2]
+    if scouted:
+        ret.notes.append(f"{len(scouted)} designs from the {apify_scout.CREDIT}")
     ret.photos, ret.photo_sources, note = await photos_task
     ret.notes.append(f"photos: {note}")
     return ret

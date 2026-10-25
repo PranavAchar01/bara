@@ -18,10 +18,11 @@ from typing import TYPE_CHECKING, Any
 
 from shapely.geometry import Polygon
 
+from bara import bom as bom_mod
 from bara.board.evaluate import evaluate as evaluate_board
 from bara.board.generic import board_footprint_mm
 from bara.live import adapters as A
-from bara.live import archetype, completeness, hero, open_designs, retrieval, websearch
+from bara.live import apify_scout, archetype, completeness, hero, open_designs, retrieval, websearch
 from bara.live import blocks as blocks_mod
 from bara.live import concept as concept_mod
 from bara.live import finish as finish_mod
@@ -434,6 +435,7 @@ class LiveRunner:
                 await self.enclose(run, brief, plan, result, board, ctx)
                 board = await self.board_stage(run, board, result, ctx)
                 await self.identity(run, ctx, final=True)
+        await self.source_parts(run)
         self.firmware(run, brief, plan, result, board)
         self.render(run, result, board, ctx)
         failure = await self.repair(run, brief, plan, result, board, ctx)
@@ -442,6 +444,30 @@ class LiveRunner:
             run.emit("build.failed", {"error": failure})
             return
         run.emit("build.done", self.engine._done_payload(run, {}))
+
+    async def source_parts(self, run: BuildRun) -> None:
+        """Price and stock for the build's LCSC parts through the Apify scout, cached for the
+        shopping list; the build's honest numbers are recorded."""
+        scout = getattr(run, "apify_scout", None)
+        if scout is None or scout.mode == "off":
+            return
+        ids: list[str] = []
+        for part in run.state.get("parts") or []:
+            try:
+                rec = self.source.get_part(part["part_id"])
+            except KeyError:
+                rec = None
+            cid = bom_mod.lcsc_id(part["part_id"], rec)
+            if cid:
+                ids.append(cid)
+        quoted = await apify_scout.quote(list(dict.fromkeys(ids))) if ids else {}
+        apify_scout.record(run.build_id, scout, len(quoted))
+        if quoted:
+            self._warn(
+                run, "compose", "w_apify_bom", "other", "info",
+                f"Shopping list: {len(quoted)} of {len(set(ids))} parts priced with live stock, "
+                f"sourced via {apify_scout.CREDIT}.",
+            )  # fmt: skip
 
     def finishing(self, run: BuildRun, brief: dict[str, Any]) -> None:
         """After industrial design: colours and materials on purpose (clear tinted case,
@@ -674,9 +700,16 @@ class LiveRunner:
         """Retrieve real references for this kind of device, then have the model write the
         device concept from them: what it is, its form, layout and parts, and which build path
         fits. The concept is a reading grounded in what was retrieved, never a fixed label."""
-        st.progress("Retrieving real products and open designs of this device", 0.5)
         # a generic product class, never a brand or a model name the request may have typed
-        ret = await retrieval.gather(str(brief.get("device") or "") or _product_name(run, brief))
+        product = str(brief.get("device") or "") or _product_name(run, brief)
+        st.progress("Scouting open-source designs (Apify scout)", 0.4)
+        scout = await apify_scout.run(product)
+        run.apify_scout = scout  # type: ignore[attr-defined]
+        if scout.mode != "off":
+            st.progress(scout.summary(), 0.5)
+            self._warn(run, "classify", "w_apify", "other", "info", scout.summary())
+        st.progress("Retrieving real products and open designs of this device", 0.55)
+        ret = await retrieval.gather(product, scout)
         run.retrieval = ret  # type: ignore[attr-defined]
         run.web_photos = ret.photos  # type: ignore[attr-defined]
         run.web_sources = ret.photo_sources  # type: ignore[attr-defined]
@@ -759,6 +792,9 @@ class LiveRunner:
             reason = "No archetype matched; generating a new KiCad board, case and firmware."
         st.progress("Searching open KiCad projects", 0.2)
         found, note = await open_designs.search(_product_name(run, brief))
+        scout = getattr(run, "apify_scout", None)
+        if scout is not None:  # the Apify scout is the front door: its designs lead
+            found = apify_scout.merge_designs(scout.designs, found)
         scouted = open_designs.rows(run.prompt, str(brief.get("device") or ""))
         seen = {r["design_id"] for r in scouted}
         opens = scouted + [r for r in open_designs.to_rows(found, 5) if r["design_id"] not in seen]
