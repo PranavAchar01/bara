@@ -5,12 +5,6 @@
   "path": "C5556545/C5556545.step",
   "query": "BA9VPC"
  },
- "led:ws2812b_2020": {
-  "lcsc": "C965555",
-  "mpn": "WS2812B-2020",
-  "path": "C965555/C965555.step",
-  "query": "WS2812B-2020"
- },
  "rf:esp_01": {
   "lcsc": "C503581",
   "mpn": "ESP-01",

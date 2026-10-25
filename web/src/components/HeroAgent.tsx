@@ -13,7 +13,6 @@ import { routePrompt } from "../net/client";
 import { demoPrompts } from "../spec/fixtures";
 import { useApp } from "../state/store";
 import { Icon } from "../ui/common";
-import { armHandoff } from "./Handoff";
 import { cancelListening, micAllowed, speak, startListening, stopListening, stopSpeaking, useVoice } from "../voice/voice";
 
 const IDEAS = ["a macropad with one big knob", "a wireless split keyboard with an OLED", "a 60% keyboard with Choc switches", "something cool for my desk"];
@@ -152,6 +151,7 @@ export function AgentIntro(props: { open: IntroOpen; onClose: () => void }) {
   const heard = useVoice((s) => s.heard);
   const transcribing = useVoice((s) => s.transcribing);
   const voiceMode = useVoice((s) => s.mode);
+  const voiceError = useVoice((s) => s.error);
   const { ghost, idea } = useIdeaGhost(phase === "here" && !text && !listening && !transcribing && !pending);
 
   // Where Bara lands: the middle, a little high, at a size that suits the screen.
@@ -246,7 +246,6 @@ export function AgentIntro(props: { open: IntroOpen; onClose: () => void }) {
     stopSpeaking();
     emoteNow("delight");
     setText(t);
-    armHandoff(t, document.querySelector(".ai-field"), document.querySelector(".ai-bot"));
     void routePrompt(t.slice(0, maxChars));
   };
   const submit = (e: FormEvent) => {
@@ -337,7 +336,19 @@ export function AgentIntro(props: { open: IntroOpen; onClose: () => void }) {
                 setText(idea);
               }
             }}
-            placeholder={listening ? (voiceMode === "hold" ? "Listening… let go to send" : "Listening… just pause when you're done") : ready ? ghost : "Waking up"}
+            placeholder={
+              listening
+                ? voiceMode === "hold"
+                  ? "Listening… let go to send"
+                  : "Listening… just pause when you're done"
+                : transcribing
+                  ? "Writing down what you said…"
+                  : voiceError
+                    ? voiceError
+                    : ready
+                      ? ghost
+                      : "Waking up"
+            }
             aria-label="What should Bara build?"
             maxLength={maxChars}
             disabled={!ready || pending || transcribing}

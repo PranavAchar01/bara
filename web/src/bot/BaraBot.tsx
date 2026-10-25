@@ -12,7 +12,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useApp } from "../state/store";
 import { emoteFor, moodOf, speechFor, THOUGHTS, type Activity, type Emote, type Mood, type ThoughtIcon } from "./mood";
-import { clamp, lerp, PRESETS, reducedMotion, Spring } from "./spring";
+import { clamp, lerp, PRESETS, reducedMotion, Spring, wander } from "./spring";
 import { ThoughtGlyph } from "./glyphs";
 import "./bot.css";
 
@@ -335,8 +335,8 @@ function BotFace(props: FaceProps) {
       target.by += 0.8 * breath;
 
       // Gaze: the pointer when it is attending to the user, the activity's path otherwise.
-      let lookX = 0;
-      let lookY = 0;
+      let lookX = 0.25 * wander(t * 0.35, 1);
+      let lookY = 0.2 * wander(t * 0.3, 2);
       const attends = L.mood === "idle" || L.mood === "listening" || L.mood === "asking" || L.mood === "happy";
       if (attends && pointer) {
         const r = root.getBoundingClientRect();
@@ -568,7 +568,7 @@ function ThoughtBubble(props: { on: boolean; icons: ThoughtIcon[] }) {
 function SpeechBubble(props: { on: boolean; text: string }) {
   return (
     <span className={`bb-speech ${props.on && props.text ? "on" : ""}`} role="status" aria-live="polite">
-      {props.text}
+      <span className="bb-speech-text">{props.text}</span>
     </span>
   );
 }

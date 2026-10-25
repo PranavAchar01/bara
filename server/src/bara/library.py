@@ -15,6 +15,8 @@ from pathlib import Path
 from typing import Any
 
 BUILD_ID_RE = re.compile(r"^b_[A-Za-z0-9]{1,32}$")
+# A product shot is a 1200 x 900 WebP, around 60 KB; anything far past that is not one.
+MAX_SHOT_BYTES = 4 * 1024 * 1024
 TERMINAL_STATUS = {"build.done": "done", "build.failed": "failed"}
 
 
@@ -34,6 +36,30 @@ class Library:
             if (self.assets_dir / "cache" / "hero" / f"{build_id}{suffix}.png").is_file():
                 return f"/assets/cache/hero/{build_id}{suffix}.png"
         return None
+
+    def _shot_path(self, build_id: str) -> Path:
+        return self.assets_dir / "cache" / "shots" / f"{build_id}.webp"
+
+    def save_shot(self, build_id: str, webp: bytes) -> str:
+        """Keep a product shot for a stored build (the browser that built it renders one when it finishes)."""
+        if not BUILD_ID_RE.fullmatch(build_id):
+            raise ValueError("invalid build id")
+        if len(webp) > MAX_SHOT_BYTES or webp[:4] != b"RIFF" or webp[8:12] != b"WEBP":
+            raise ValueError("not a WebP image")
+        path = self._shot_path(build_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".tmp")
+        tmp.write_bytes(webp)
+        tmp.replace(path)
+        return self._shot_url(build_id) or ""
+
+    def _shot_url(self, build_id: str) -> str | None:
+        """The product shot scripts/render-shots.mjs writes: the finished device alone, transparent around it."""
+        path = self._shot_path(build_id)
+        try:
+            return f"/assets/cache/shots/{build_id}.webp?v={int(path.stat().st_mtime)}"
+        except OSError:
+            return None
 
     def record(self, run: Any, msg: dict[str, Any]) -> None:
         """Append one outgoing event; on build.done or build.failed write the index row."""
@@ -64,7 +90,8 @@ class Library:
             except (OSError, ValueError):
                 continue
             if isinstance(row, dict) and BUILD_ID_RE.fullmatch(str(row.get("build_id", ""))):
-                rows.append(row)
+                # shots are rendered after the fact, so look for one each time rather than in the stored row
+                rows.append({**row, "shot_url": self._shot_url(row["build_id"])})
         rows.sort(key=lambda r: str(r.get("created_at") or ""), reverse=True)
         return rows
 
@@ -85,4 +112,5 @@ class Library:
             found = meta.is_file() or events.is_file()
             meta.unlink(missing_ok=True)
             events.unlink(missing_ok=True)
+            self._shot_path(build_id).unlink(missing_ok=True)
         return found
