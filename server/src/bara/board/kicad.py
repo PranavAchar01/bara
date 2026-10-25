@@ -308,6 +308,23 @@ def _within_router_grid(violation: dict) -> bool:
     return bool(m) and float(m.group(1)) - float(m.group(2)) <= ROUTER_GRID_TOLERANCE_MM
 
 
+_ITEM_OWNER = re.compile(r"\bof ([A-Za-z]+[0-9]+)\b")
+
+
+def _inside_one_footprint(violation: dict) -> bool:
+    """A clearance between two pads of the same footprint is the vendor land pattern's own
+    geometry. No placement or route can change it, so it is reported as a warning."""
+    if violation.get("type") != "clearance":
+        return False
+    owners = set()
+    for it in violation.get("items", []):
+        m = _ITEM_OWNER.search(str(it.get("description", "")))
+        if not m or "Track" in str(it.get("description", "")):
+            return False
+        owners.add(m.group(1))
+    return len(owners) == 1 and len(violation.get("items", [])) >= 2
+
+
 def run_drc(board: Path, timeout: float = 180) -> dict:
     report = board.with_suffix(".drc.json")
     proc = _run(
@@ -331,8 +348,9 @@ def run_drc(board: Path, timeout: float = 180) -> dict:
         raise ToolError(f"kicad-cli drc failed: {proc.stderr[-1500:]}")
     data = json.loads(report.read_text())
     viol = [v for v in data.get("violations", []) if not _within_router_grid(v)]
-    errors = [v for v in viol if v.get("severity") == "error"]
-    warnings = [v for v in viol if v.get("severity") == "warning"]
+    own = [v for v in viol if _inside_one_footprint(v)]
+    errors = [v for v in viol if v.get("severity") == "error" and v not in own]
+    warnings = [v for v in viol if v.get("severity") == "warning" or v in own]
     unconnected = data.get("unconnected_items", [])
     open_nets = sorted(
         {
@@ -345,7 +363,7 @@ def run_drc(board: Path, timeout: float = 180) -> dict:
     by_type: dict[str, int] = {}
     titles: dict[str, str] = {}
     for v in viol:
-        key = f"{v.get('severity')}:{v.get('type')}"
+        key = f"{'warning' if v in own else v.get('severity')}:{v.get('type')}"
         by_type[key] = by_type.get(key, 0) + 1
         titles.setdefault(key, str(v.get("description") or v.get("type")))
     return {
