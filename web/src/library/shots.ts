@@ -6,9 +6,11 @@ import { paths } from "../net/rest";
 import { useApp } from "../state/store";
 import { refreshLibrary } from "./library";
 
-/** The shot's frame; the device is centred in it with a margin. */
-export const SHOT_W = 1200;
-export const SHOT_H = 900;
+/** The shot's frame; the device is centred in it with a margin. Drawn at SHOT_DPR in a 1400 x 1000 frame
+ *  and scaled down, so every edge is supersampled well past the tile's size on a retina screen. */
+export const SHOT_W = 1600;
+export const SHOT_H = 1200;
+export const SHOT_DPR = 3;
 const PAD = 0.08;
 
 /** Crop a transparent render to the drawn pixels, centre them in the shot frame and encode WebP; null if empty. */
@@ -43,7 +45,7 @@ export function cropShot(src: HTMLCanvasElement): string | null {
   if (!o) return null;
   o.imageSmoothingQuality = "high";
   o.drawImage(probe, x0, y0, w, h, (SHOT_W - w * k) / 2, (SHOT_H - h * k) / 2, w * k, h * k);
-  return out.toDataURL("image/webp", 0.9);
+  return out.toDataURL("image/webp", 0.93);
 }
 
 /** How long a shot may take before it is given up (models can be slow to arrive). */

@@ -262,8 +262,9 @@ def build_router(svc: Services) -> APIRouter:
         )
 
     @api.get("/v1/library")
-    def library_list() -> JSONResponse:
-        return body({"builds": svc.engine.library.list()})
+    def library_list(hidden: bool = False) -> JSONResponse:
+        """The shown builds; ?hidden=1 lists the hidden ones, which restore can bring back."""
+        return body({"builds": svc.engine.library.list(hidden=hidden)})
 
     @api.get("/v1/library/{build_id}")
     def library_get(build_id: str) -> JSONResponse:
@@ -287,7 +288,14 @@ def build_router(svc: Services) -> APIRouter:
     def library_delete(build_id: str) -> JSONResponse:
         if not BUILD_ID_RE.fullmatch(build_id) or not svc.engine.library.delete(build_id):
             raise ApiError("E_NOT_FOUND", f"No stored build {build_id}.")
-        return body({"deleted": build_id})
+        return body({"deleted": build_id, "hidden": True})
+
+    @api.post("/v1/library/{build_id}/restore")
+    def library_restore(build_id: str) -> JSONResponse:
+        """Bring back a build that was hidden with DELETE."""
+        if not BUILD_ID_RE.fullmatch(build_id) or not svc.engine.library.restore(build_id):
+            raise ApiError("E_NOT_FOUND", f"No stored build {build_id}.")
+        return body({"restored": build_id})
 
     @api.post("/v1/builds/{build_id}/restore")
     async def restore(build_id: str, request: Request) -> JSONResponse:

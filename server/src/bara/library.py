@@ -2,8 +2,8 @@
 
 A build is two small files under <data_dir>/library: <id>.jsonl (one event per line, the same
 messages a socket receives) and <id>.meta.json (the index row, written when the build ends).
-Deleting a build removes those two files only; shared caches (boards, enclosures, hero
-renders) stay because other builds may reuse them.
+Deleting a build only hides it: the index row gets a `hidden_at` stamp, the listing leaves it out,
+and every file stays, so `restore` brings it back exactly as it was. Nothing here removes data.
 """
 
 from __future__ import annotations
@@ -11,11 +11,12 @@ from __future__ import annotations
 import json
 import re
 import threading
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 BUILD_ID_RE = re.compile(r"^b_[A-Za-z0-9]{1,32}$")
-# A product shot is a 1200 x 900 WebP, around 60 KB; anything far past that is not one.
+# A product shot is a 1600 x 1200 WebP, around 200 KB; anything far past that is not one.
 MAX_SHOT_BYTES = 4 * 1024 * 1024
 TERMINAL_STATUS = {"build.done": "done", "build.failed": "failed"}
 
@@ -82,14 +83,17 @@ class Library:
                 tmp.write_text(json.dumps(row), encoding="utf-8")
                 tmp.replace(meta)
 
-    def list(self) -> list[dict[str, Any]]:
+    def list(self, hidden: bool = False) -> list[dict[str, Any]]:
+        """The shown builds, newest first; with hidden=True the hidden ones instead."""
         rows: list[dict[str, Any]] = []
         for path in self.root.glob("b_*.meta.json") if self.root.is_dir() else []:
             try:
                 row = json.loads(path.read_text(encoding="utf-8"))
             except (OSError, ValueError):
                 continue
-            if isinstance(row, dict) and BUILD_ID_RE.fullmatch(str(row.get("build_id", ""))):
+            if not isinstance(row, dict) or bool(row.get("hidden_at")) != hidden:
+                continue
+            if BUILD_ID_RE.fullmatch(str(row.get("build_id", ""))):
                 # shots are rendered after the fact, so look for one each time rather than in the stored row
                 rows.append({**row, "shot_url": self._shot_url(row["build_id"])})
         rows.sort(key=lambda r: str(r.get("created_at") or ""), reverse=True)
@@ -106,11 +110,28 @@ class Library:
         except (OSError, ValueError):
             return None
 
-    def delete(self, build_id: str) -> bool:
-        events, meta = self._paths(build_id)
+    def _set_hidden(self, build_id: str, when: str | None) -> bool:
+        _, meta = self._paths(build_id)
         with self._lock:
-            found = meta.is_file() or events.is_file()
-            meta.unlink(missing_ok=True)
-            events.unlink(missing_ok=True)
-            self._shot_path(build_id).unlink(missing_ok=True)
-        return found
+            try:
+                row = json.loads(meta.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                return False
+            if not isinstance(row, dict):
+                return False
+            if when:
+                row["hidden_at"] = row.get("hidden_at") or when
+            else:
+                row.pop("hidden_at", None)
+            tmp = meta.with_suffix(".tmp")
+            tmp.write_text(json.dumps(row), encoding="utf-8")
+            tmp.replace(meta)
+        return True
+
+    def delete(self, build_id: str) -> bool:
+        """Hide a build from the listing. Its events, row and shot all stay; restore undoes it."""
+        return self._set_hidden(build_id, datetime.now(UTC).isoformat(timespec="seconds"))
+
+    def restore(self, build_id: str) -> bool:
+        """Show a hidden build again."""
+        return self._set_hidden(build_id, None)

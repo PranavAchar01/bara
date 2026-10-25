@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterBoards, firstSentence, packageName, scrubMakers, toPart, type OsBoard } from "./openSource";
+import { boardGlbUrls, filterBoards, firstSentence, packageName, scrubMakers, toPart, type OsBoard } from "./openSource";
 
 const b = (o: Partial<OsBoard>): OsBoard => ({ id: "x", slug: "x", title: "T", owner: "o", repo: "r", category: "iot", stars: 1, license: "MIT", copyable: true, layers: 2, size_mm: null, parts: 1, url: null, commit: null, license_url: null, description: null, topics: null, thumb: true, ...o });
 
@@ -19,5 +19,10 @@ describe("open-source boards", () => {
     expect(filterBoards(list, { q: "", category: null, copyableOnly: false, sort: "popular" }).map((x) => x.id)).toEqual(["b", "c", "a"]);
     expect(filterBoards(list, { q: "", category: null, copyableOnly: true, sort: "parts" }).map((x) => x.id)).toEqual(["a", "c"]);
     expect(filterBoards(list, { q: "c", category: "audio", copyableOnly: false, sort: "popular" }).map((x) => x.id)).toEqual(["c"]);
+  });
+  it("reads a board's 3D model from this site first, then the published library", () => {
+    const [own, published] = boardGlbUrls("kicad__demo");
+    expect(own).toBe("/explore/glb/kicad__demo.glb");
+    expect(published).toMatch(/^https:\/\/.+\/kicad__demo\/board\.glb$/);
   });
 });

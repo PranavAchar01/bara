@@ -416,6 +416,8 @@ export interface StoredBuild {
   hero_url: string | null;
   /** The finished device alone, rendered by scripts/render-shots.mjs; null until it has been. */
   shot_url?: string | null;
+  /** When the build was deleted from the library (hidden, every file kept); absent while it is shown. */
+  hidden_at?: string | null;
 }
 
 /** Stored builds, newest first. Mock mode and an engine without a library both give an empty list. */
