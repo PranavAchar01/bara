@@ -121,11 +121,11 @@ export function SelectionBar() {
       </span>
       <span className="sb-sep" aria-hidden />
       <Act icon="swap" label="Swap for another part" onClick={swap} disabled={!first.slot_id} />
-      <Act icon="colour" label="Colour" onClick={() => setColour((c) => !c)} on={colour} />
+      <Act icon="colour" label="Colour" onClick={() => { setMore(false); setColour((c) => !c); }} on={colour} />
       <Act icon="move" label="Move" onClick={move} on={moving === first.instance_id} />
       <Act icon="ask" label="Ask or change it in words" onClick={ask} />
       <Act icon="remove" label={sure ? "Click again to remove" : "Remove"} onClick={remove} danger={sure} on={sure} />
-      <Act icon="more" label="More" onClick={() => setMore((m) => !m)} on={more} />
+      <Act icon="more" label="More" onClick={() => { setColour(false); setMore((m) => !m); }} on={more} />
       {colour && (
         <div className="sb-pop">
           <ColorPicker target={{ instance_id: first.instance_id }} current={first.color ?? null} onClose={() => setColour(false)} />

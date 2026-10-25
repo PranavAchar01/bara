@@ -45,6 +45,9 @@
   filter: drop-shadow(0 3px 6px rgb(0 0 0 / 18%));
 }
 
+/* Ripple: where a pick lands. An ink ring (Bara's own colour) opens around an accent dot that pops and
+   fades; a refused pick rings in --fail. The .app selectors match shell.css's ink override so a refusal
+   still reads red. */
 .as-ripple {
   position: absolute;
   left: 0;
@@ -52,32 +55,64 @@
   width: 0;
   height: 0;
 }
+.as-ripple::before,
 .as-ripple::after {
   content: "";
   position: absolute;
+  border-radius: 50%;
+  opacity: 0;
+}
+.as-ripple::before {
+  left: -4px;
+  top: -4px;
+  width: 8px;
+  height: 8px;
+  background: var(--as-c);
+  box-shadow: 0 0 0 2px var(--paper);
+}
+.as-ripple::after {
   left: -18px;
   top: -18px;
   width: 36px;
   height: 36px;
-  border-radius: 50%;
-  border: 2px solid var(--as-c);
-  opacity: 0;
+  border: 2px solid var(--ink);
   transform: scale(0.2);
 }
+.app .agent-stage .as-ripple[data-bad="1"]::after,
 .as-ripple[data-bad="1"]::after {
   border-color: var(--fail);
 }
+.as-ripple[data-bad="1"]::before {
+  background: var(--fail);
+}
+.as-ripple.on::before {
+  animation: as-dot 520ms cubic-bezier(0.34, 1.4, 0.64, 1) forwards;
+}
 .as-ripple.on::after {
-  animation: as-ripple 560ms cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+  animation: as-ripple 560ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+@keyframes as-dot {
+  0% { opacity: 0; transform: scale(0.4); }
+  35% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.8); }
 }
 @keyframes as-ripple {
-  0% { opacity: 0.9; transform: scale(0.2); }
-  100% { opacity: 0; transform: scale(1.4); }
+  0% { opacity: 0.85; transform: scale(0.2); }
+  100% { opacity: 0; transform: scale(1.3); }
+}
+
+@keyframes as-dot-still {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .as-ripple.on::after {
     animation: none;
+  }
+  /* no motion: the dot just shows where the pick landed, briefly */
+  .as-ripple.on::before {
+    animation: as-dot-still 520ms steps(1, end) forwards;
   }
   .as-bot {
     transition: none;

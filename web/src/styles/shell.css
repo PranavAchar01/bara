@@ -2749,19 +2749,12 @@
   margin: 6px 0 0;
 }
 
-/* Bara on the canvas is a cursor all the way through: no selection boxes, scan bands or blue
-   traces, just the arrow moving and clicking (bot/AgentStage draws them; hidden here). */
+/* Bara on the canvas is the only thing that moves: no selection boxes, scan bands or blue traces
+   (bot/AgentStage draws them; hidden here). Its pick ripple is styled in bot/agentStage.css. */
 .app .agent-stage .as-box,
 .app .agent-stage .as-scan,
 .app .agent-stage .as-trace {
   display: none;
-}
-.app .agent-stage .as-cursor path {
-  fill: var(--ink);
-  stroke: var(--paper);
-}
-.app .agent-stage .as-ripple::after {
-  border-color: var(--ink);
 }
 .vp-board-status::before {
   display: none;
