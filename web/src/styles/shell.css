@@ -1176,7 +1176,8 @@
   flex: none;
 }
 
-/* Landing (Figma: Landing C2). Step 1 is the prompt; the product window plays a recorded build. */
+/* Landing (Figma: Landing C2). One view: the prompt beside the product window playing a recorded
+   build, and the four steps under both. */
 .home.landing {
   display: block;
   position: relative;
@@ -1184,39 +1185,42 @@
   padding: 0;
 }
 .landing > section,
-.landing > figure,
 .landing > .library {
   width: min(1328px, calc(100% - 64px));
   margin-left: auto;
   margin-right: auto;
 }
-.ld-head {
+.ld-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 600px);
-  gap: 48px;
-  align-items: end;
-  padding: 44px 0 30px;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  grid-template-areas:
+    "head window"
+    "steps steps";
+  column-gap: 48px;
+  padding: 40px 0 48px;
+}
+.ld-head {
+  grid-area: head;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 .ld-copy h1 {
   font-family: var(--font-display);
   font-weight: 400;
-  font-size: clamp(40px, 4.6vw, 66px);
+  font-size: clamp(38px, 3.9vw, 58px);
   line-height: 0.96;
   letter-spacing: var(--track-display);
 }
 .ld-copy p {
   margin: 14px 0 0;
-  font-size: 17px;
+  font-size: 16px;
   color: var(--text-2);
   max-width: 560px;
 }
-.ld-ask {
-  min-width: 0;
-}
-/* Where the agent rests; it roams from here (LandingAgent). */
+/* Where the agent rests, just above the prompt; it roams from here (LandingAgent). */
 .ld-home {
-  height: 176px;
-  margin-top: 8px;
+  flex: 1 0 150px;
 }
 /* The agent is the mic on this page, so the small bot inside the bar steps out. */
 .ld-field .bot-mic {
@@ -1326,14 +1330,17 @@
   font-size: 13px;
 }
 .ld-window {
-  margin-top: 6px;
-  margin-bottom: 0;
+  grid-area: window;
+  align-self: end;
+  min-width: 0;
+  margin: 0;
 }
 .ld-frame {
   position: relative;
   aspect-ratio: 16 / 10;
-  border: 1px solid #c9c9c6;
-  background: #ececec;
+  border: 1.5px solid var(--ink);
+  border-radius: 10px;
+  background: var(--paper-2);
   overflow: hidden;
   box-shadow: 0 30px 60px -40px rgba(0, 0, 0, 0.35);
   /* a recording, not a control: nothing in it can be clicked, selected or dragged */
@@ -1350,161 +1357,104 @@
   display: flex;
   justify-content: space-between;
   gap: 16px;
-  margin-top: 12px;
+  margin-top: 10px;
   font-size: 13px;
   color: var(--text-2);
 }
 .ld-steps {
-  margin-top: 64px;
-  border-top: 1.5px solid var(--ink);
-  padding-top: 16px;
-}
-.ld-sh {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-.ld-sh h2,
-.landing .lib-head h2 {
-  font-family: var(--font-display);
-  font-weight: 400;
-  font-size: clamp(32px, 3vw, 44px);
-  letter-spacing: var(--track-display);
-}
-.ld-steps ol {
+  grid-area: steps;
   list-style: none;
-  margin: 20px 0 0;
-  padding: 0;
+  margin: 36px 0 0;
+  padding: 16px 0 0;
+  border-top: 1.5px solid var(--ink);
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 18px;
+  gap: 24px;
 }
-.ld-still {
-  position: relative;
-  background: #ececec;
-  overflow: hidden;
-}
-.ld-still img {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-.ld-sel {
-  position: absolute;
-  border: 1.5px solid var(--accent);
-  background: color-mix(in srgb, var(--accent) 5%, transparent);
-  border-radius: 1px;
-}
-.ld-sel .h {
-  position: absolute;
-  width: 8px;
-  height: 8px;
-  background: var(--paper);
-  border: 1.5px solid var(--accent);
-}
-.ld-sel .tl { left: -4.75px; top: -4.75px; }
-.ld-sel .tr { right: -4.75px; top: -4.75px; }
-.ld-sel .bl { left: -4.75px; bottom: -4.75px; }
-.ld-sel .br { right: -4.75px; bottom: -4.75px; }
-.ld-chip {
-  position: absolute;
-  left: -1.5px;
-  bottom: calc(100% + 5px);
-  padding: 2px 7px;
-  border-radius: 3px;
-  background: var(--accent);
-  color: #fff;
-  font: 600 11px var(--font-sans);
-  white-space: nowrap;
-}
-.ld-chip.below {
-  bottom: auto;
-  top: calc(100% + 5px);
-}
-.ld-scan {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 46%;
-  height: 1.5px;
-  background: var(--accent);
-}
-.ld-cursor {
-  position: absolute;
-}
-.ld-trace {
-  position: absolute;
-  inset: 6px;
-  width: calc(100% - 12px);
-  height: calc(100% - 12px);
-}
-.ld-trace path {
-  fill: none;
-  stroke: var(--accent);
-  stroke-width: 2.5;
-  stroke-dasharray: 6 4;
-  vector-effect: non-scaling-stroke;
-}
-.ld-code {
-  position: absolute;
-  left: calc(100% + 8px);
-  top: 4px;
-  padding: 5px 8px;
-  border-radius: 4px;
-  background: var(--ink);
-  color: #fff;
-  font-size: 11px;
-  white-space: nowrap;
-}
-.ld-code i {
-  display: inline-block;
-  width: 6px;
-  height: 12px;
-  margin-left: 2px;
-  vertical-align: -2px;
-  background: var(--accent);
+.ld-steps li {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
 }
 .ld-st {
   display: flex;
   align-items: baseline;
   gap: 10px;
-  margin-top: 12px;
 }
 .ld-n {
-  font: 800 34px/0.8 var(--font-sans);
+  font: 800 30px/0.8 var(--font-sans);
   letter-spacing: -0.05em;
 }
 .ld-st b {
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 600;
 }
 .ld-steps li p {
-  margin: 4px 0 0;
+  margin: 6px 0 10px;
   font-size: 14px;
   color: var(--text-2);
 }
-.landing .library {
-  margin-top: 64px;
-  border-top: 1.5px solid var(--ink);
-  padding-top: 16px;
+/* The label the agent puts on its work on the canvas. */
+.ld-chip {
+  margin-top: auto;
+  padding: 2px 7px;
+  border-radius: 3px;
+  background: var(--ink);
+  color: var(--paper);
+  font: 600 11px var(--font-sans);
+  white-space: nowrap;
+}
+.drafts .library {
+  border-top: 0;
+  padding-top: 40px;
+}
+/* .home p would otherwise flatten these */
+.drafts .lib-empty,
+.drafts .lib-note {
+  margin: 20px 0 0;
+  max-width: 720px;
+}
+.drafts .lib-head h1 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(38px, 3.9vw, 58px);
+  line-height: 0.96;
+  letter-spacing: var(--track-display);
+  margin-top: 8px;
 }
 @media (max-width: 980px) {
-  .ld-head {
-    grid-template-columns: 1fr;
-    gap: 24px;
+  .ld-hero {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "head"
+      "window"
+      "steps";
+    padding-top: 28px;
   }
-  .ld-steps ol {
+  .ld-home {
+    flex-basis: 176px;
+  }
+  .ld-window {
+    margin-top: 32px;
+  }
+  .ld-steps {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 @media (max-width: 560px) {
-  .ld-steps ol {
+  .landing > section,
+  .landing > .library {
+    width: calc(100% - 32px);
+  }
+  .ld-steps {
     grid-template-columns: 1fr;
+    gap: 18px;
   }
   .ld-home {
-    height: 112px;
-    margin-top: 4px;
+    flex-basis: 112px;
+  }
+  .ld-window figcaption {
+    flex-direction: column;
+    gap: 2px;
   }
 }
