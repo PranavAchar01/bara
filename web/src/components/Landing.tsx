@@ -10,7 +10,7 @@ import { loadGallery, useGallery } from "../library/gallery";
 import { useApp } from "../state/store";
 
 // Bump V when scripts/record-hero.mjs writes a new take, so no browser plays cached bytes of the old one.
-const V = "5";
+const V = "6";
 // AV1 at 2560 wide for the 2x screens that can play it, H.264 High at 1920 for the rest; both 60 fps.
 const VIDEO = { av1: `/landing/bara-demo.av1.mp4?v=${V}`, mp4: `/landing/bara-demo.mp4?v=${V}`, poster: `/landing/bara-demo.jpg?v=${V}` };
 const FALLBACK_POSTER = "/landing/hero-poster.jpg";
