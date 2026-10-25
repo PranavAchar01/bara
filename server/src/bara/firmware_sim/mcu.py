@@ -258,7 +258,8 @@ def board_for(mcu_part: dict[str, Any] | None) -> Board:
 
 def pin_number(board: Board, pin: str) -> int:
     """The number the HAL uses: port*32+pin on nRF52, the GPIO number elsewhere."""
-    m = re.fullmatch(r"P(\d)\.(\d+)", pin)
+    # a pad name can carry a suffix after the port and pin (nice!nano marks "P0.09-LF")
+    m = re.match(r"P(\d)\.(\d+)(?!\d)", pin)
     if m:
         return int(m.group(1)) * 32 + int(m.group(2))
     m = re.search(r"(\d+)$", pin)

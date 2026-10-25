@@ -71,3 +71,13 @@ def test_a_full_battery_gauge_does_not_raise_the_alert(tmp_path: Path) -> None:
     s.set_sensor(gauge["id"], 5)
     s.run_ms(900)
     assert [e for e in s.wave.get(pin_number(s.board, pin), []) if e[0] > 1500]
+
+
+def test_a_pad_name_with_a_suffix_still_names_its_pin() -> None:
+    from bara.firmware_sim.mcu import BOARDS, pin_number
+
+    nano = BOARDS["nice_nano_v2"]
+    # nice!nano pads marked low-frequency read "P0.09-LF"; the suffix must not lose the pin
+    assert pin_number(nano, "P0.09-LF") == 9
+    assert pin_number(nano, "P1.13-LF") == 32 + 13
+    assert pin_number(nano, "P1.06") == 32 + 6
