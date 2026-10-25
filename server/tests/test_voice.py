@@ -63,8 +63,72 @@ def test_openai_speaks_when_it_is_the_only_key(monkeypatch: pytest.MonkeyPatch) 
     s = voice.settings()
     assert s["provider"] == "openai" and s["tts"] is True
     assert s["voice"] == voice.OPENAI_VOICE and s["model"] == voice.OPENAI_TTS_MODEL
+    # OpenAI keeps the job when both keys exist, unless ElevenLabs is asked for by name
     monkeypatch.setenv("ELEVENLABS_API_KEY", "k")
+    assert voice.settings()["provider"] == "openai"
+    monkeypatch.setenv("BARA_VOICE_PROVIDER", "elevenlabs")
     assert voice.settings()["provider"] == "elevenlabs"
+
+
+def test_keychain_key_is_read_into_the_environment_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setattr(voice.sys, "platform", "darwin")
+    calls: list[list[str]] = []
+
+    def fake_run(cmd: list[str], **kw: Any) -> Any:
+        calls.append(cmd)
+        found = "-a" in cmd
+
+        class R:
+            returncode = 0 if found else 44
+            stdout = "sk-from-keychain\n" if found else ""
+
+        return R()
+
+    monkeypatch.setattr(voice.subprocess, "run", fake_run)
+    assert voice.load_key_from_keychain() is True
+    assert os.environ["OPENAI_API_KEY"] == "sk-from-keychain"
+    assert voice.settings()["provider"] == "openai"
+    monkeypatch.delenv("OPENAI_API_KEY")
+
+
+def test_missing_keychain_item_means_no_voice_not_an_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("ELEVENLABS_API_KEY", raising=False)
+    monkeypatch.setattr(voice.sys, "platform", "darwin")
+
+    class R:
+        returncode = 44
+        stdout = ""
+
+    monkeypatch.setattr(voice.subprocess, "run", lambda *a, **k: R())
+    assert voice.load_key_from_keychain() is False
+    assert voice.settings()["tts"] is False
+
+
+def test_a_short_line_said_twice_is_fetched_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("ELEVENLABS_API_KEY", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    voice._phrases.clear()
+    hits: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        hits.append(str(request.url))
+        return httpx.Response(200, content=b"ID3-audio-bytes")
+
+    voice._client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    async def say(text: str) -> bytes:
+        client, resp = await voice.open_speech(text)
+        return b"".join([c async for c in voice.relay(client, resp)])
+
+    async def run() -> tuple[bytes, bytes]:
+        return await say("Routing the board."), await say("Routing the board.")
+
+    first, second = asyncio.run(run())
+    voice._client = None
+    assert first == second == b"ID3-audio-bytes"
+    assert len(hits) == 1
 
 
 def test_openai_transcribe_sends_part_names(monkeypatch: pytest.MonkeyPatch) -> None:

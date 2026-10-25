@@ -1,6 +1,6 @@
 // What the device's display shows: the snake board in game mode, the typed text in typing mode.
 // Drawn into a 2D canvas that the viewport uses as the display face's texture.
-import type { Runtime } from "./runtime";
+import type { RemoteScreen, Runtime } from "./runtime";
 import type { DisplaySpec } from "./view";
 
 interface Palette {
@@ -87,6 +87,56 @@ function drawText(ctx: CanvasRenderingContext2D, rt: Runtime, spec: DisplaySpec,
   });
 }
 
+/** Pixel values 0..3 from the engine's packed framebuffer (four pixels a byte, low bits first). */
+export function unpackFb(b64: string, w: number, h: number): Uint8Array {
+  const bin = typeof atob === "function" ? atob(b64) : Buffer.from(b64, "base64").toString("binary");
+  const out = new Uint8Array(w * h);
+  for (let i = 0; i < out.length; i++) out[i] = (bin.charCodeAt(i >> 2) >> ((i & 3) * 2)) & 3;
+  return out;
+}
+
+const SHADES_COLOR = ["#0c1624", "#4fcf86", "#ffd166", "#e8f1ff"];
+const SHADES_MONO = ["#000000", "#ffffff", "#ffffff", "#ffffff"];
+let stash: { key: string; px: Uint8Array } | null = null;
+let paint: HTMLCanvasElement | null = null;
+
+function drawRemote(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, r: RemoteScreen, spec: DisplaySpec, p: Palette): void {
+  const { width: W, height: H } = canvas;
+  ctx.textBaseline = "top";
+  const say = (lines: string[]) => {
+    const font = Math.max(8, Math.floor(H / Math.max(4, lines.length + 1)));
+    ctx.font = `${font}px ui-monospace, Menlo, monospace`;
+    ctx.fillStyle = p.text;
+    lines.forEach((l, i) => ctx.fillText(l, 4, 3 + i * (font + 2)));
+  };
+  if (!r.powered) {
+    ctx.fillStyle = "#000000";
+    ctx.fillRect(0, 0, W, H);
+    return;
+  }
+  if (r.bootloader) return say(["BOOTLOADER", "USB drive mode", "drop a .uf2 here", "reset to run the firmware"]);
+  if (!r.fb) return say(r.rows.length ? r.rows : [""]);
+  const { w, h, b64 } = r.fb;
+  const key = `${w}x${h}:${b64}`;
+  if (!stash || stash.key !== key) stash = { key, px: unpackFb(b64, w, h) };
+  paint ??= document.createElement("canvas");
+  paint.width = w;
+  paint.height = h;
+  const pctx = paint.getContext("2d");
+  if (!pctx) return;
+  const shades = spec.mono ? SHADES_MONO : SHADES_COLOR;
+  const img = pctx.createImageData(w, h);
+  const rgb = shades.map((c) => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)]);
+  for (let i = 0; i < w * h; i++) {
+    const c = rgb[stash.px[i]];
+    img.data.set([c[0], c[1], c[2], 255], i * 4);
+  }
+  pctx.putImageData(img, 0, 0);
+  const k = Math.min(W / w, H / h);
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(paint, (W - w * k) / 2, (H - h * k) / 2, w * k, h * k);
+}
+
 /** Paint the display for the runtime's mode. `now` is a millisecond clock, for the blinking caret. */
 export function drawScreen(canvas: HTMLCanvasElement, rt: Runtime, spec: DisplaySpec, now: number): void {
   const ctx = canvas.getContext("2d");
@@ -94,6 +144,7 @@ export function drawScreen(canvas: HTMLCanvasElement, rt: Runtime, spec: Display
   const p = spec.mono ? MONO : COLOR;
   ctx.fillStyle = p.bg;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  if (rt.mode === "game") drawGame(ctx, rt, spec, p);
+  if (rt.remote) drawRemote(ctx, canvas, rt.remote, spec, p);
+  else if (rt.mode === "game") drawGame(ctx, rt, spec, p);
   else drawText(ctx, rt, spec, p, now);
 }
