@@ -9,6 +9,11 @@ import { paths } from "../net/rest";
 import { serverUrl } from "../net/mode";
 import { distillEvents, type ReplayBuild } from "./replayData";
 import landing from "./landingBuilds.json";
+import { rememberDeviceName, rememberScenes, type Scene } from "../project/scenes";
+
+type Row = StoredBuild & { scene?: Scene };
+/** The combined device a stored build stands in, when it shares its board with others. */
+const sceneOfRow = (b: StoredBuild): Scene | null => (b as Row).scene ?? null;
 
 /** Product names never show on the landing; the device is described plainly instead. */
 const BRANDS =
@@ -49,6 +54,8 @@ export interface GalleryItem {
   checks: number;
   /** Listed from the bundled replays because the engine's library was not reachable. */
   offline?: boolean;
+  /** The devices on its board, when it is one of several (opened together). */
+  scene?: Scene;
 }
 
 /** Candidates per kind, in the order to try them: done builds, the ones with a picture first, newest first. */
@@ -56,7 +63,10 @@ export function candidatesByKind(builds: StoredBuild[]): StoredBuild[][] {
   const groups = new Map<string, StoredBuild[]>();
   for (const b of builds) {
     if (b.status !== "done") continue;
-    const k = deviceKind(b);
+    // a board of several devices is one combined device, shown once, by its main device
+    const sc = sceneOfRow(b);
+    if (sc && sc.builds[0] !== b.build_id) continue;
+    const k = sc ? `scene ${sc.title.toLowerCase()}` : deviceKind(b);
     if (!k) continue;
     const g = groups.get(k) ?? [];
     g.push(b);
@@ -115,8 +125,9 @@ export async function pickGallery(builds: StoredBuild[], judge: (b: StoredBuild)
     for (const b of group.slice(0, 4)) {
       const v = await judge(b).catch(() => null);
       if (!v?.ok) continue;
-      const title = capital(scrubBrands(b.device || deviceKind(b)));
-      out.push({ build_id: b.build_id, title, prompt: capital(scrubBrands(b.prompt)), shot: b.shot_url ? serverUrl(b.shot_url) : null, thumb: b.hero_url ? serverUrl(b.hero_url) : null, preview: v.preview, checks: v.checks });
+      const sc = sceneOfRow(b);
+      const title = sc ? sc.title : capital(scrubBrands(b.device || deviceKind(b)));
+      out.push({ build_id: b.build_id, title, prompt: capital(scrubBrands(b.prompt)), shot: b.shot_url ? serverUrl(b.shot_url) : null, thumb: b.hero_url ? serverUrl(b.hero_url) : null, preview: v.preview, checks: v.checks, ...(sc ? { scene: sc } : {}) });
       break;
     }
   }
@@ -144,6 +155,8 @@ export function loadGallery(): Promise<void> {
   loading ??= (async () => {
     // an engine from before hiding still lists deleted builds, stamped: they stay out of the gallery
     const builds = (await fetchLibrary().catch(() => [])).filter((b) => !b.hidden_at);
+    rememberScenes(builds.flatMap((b) => sceneOfRow(b) ?? []));
+    for (const b of builds) rememberDeviceName(b.build_id, b.device);
     const items = builds.length ? await pickGallery(builds) : [];
     useGallery.setState({ items: items.length ? items : offlineGallery(), ready: true });
   })();

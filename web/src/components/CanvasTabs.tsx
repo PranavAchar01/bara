@@ -17,6 +17,7 @@ import { Icon } from "../ui/common";
 import "./canvasTabs.css";
 import { stopReplay } from "../bot/replay";
 import { ProjectButton } from "../project/ProjectPanel";
+import { useTabTitle } from "../project/scenes";
 import { ReplayControl } from "../bot/ReplayControl";
 import { WorkTools } from "./WorkTools";
 
@@ -86,6 +87,7 @@ function CanvasTab(props: {
   const { meta, active } = props;
   const status = useApp((s) => canvasStatus(s, meta.id));
   const label = useApp((s) => canvasLabel(meta, canvasState(s, meta.id)));
+  const combined = useTabTitle(useApp((s) => canvasState(s, meta.id)?.build?.build_id));
   const [editing, setEditing] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -136,7 +138,7 @@ function CanvasTab(props: {
           }}
           onDoubleClick={() => setEditing(true)}
         >
-          {label}
+          {combined ?? label}
         </button>
       )}
       {!(props.lone && status === "empty") && (

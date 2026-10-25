@@ -149,6 +149,13 @@ export interface SimConfig {
   labels: Record<string, string>;
 }
 
+export interface SimScene {
+  title: string;
+  testing: string;
+  devices: string[];
+  flows: string[];
+}
+
 export interface SimViewData {
   build_id: string;
   prompt: string | null;
@@ -217,7 +224,9 @@ export function clientNames(map: InputMap | null): { names: Record<string, strin
 }
 
 export const sim = {
-  start: (id: string, map: InputMap | null) => call<{ sim: SimViewData }>("POST", `${base(id)}/start`, clientNames(map)).then((r) => r.sim),
+  /** `scene`: the combined device this build stands in, so the build agent knows what is tested. */
+  start: (id: string, map: InputMap | null, scene: SimScene | null = null) =>
+    call<{ sim: SimViewData }>("POST", `${base(id)}/start`, { ...clientNames(map), ...(scene ? { scene } : {}) }).then((r) => r.sim),
   view: (id: string) => call<{ sim: SimViewData }>("GET", base(id)).then((r) => r.sim),
   input: (id: string, body: { id: string; action: InputAction; value?: number | boolean; since: number }) =>
     call<{ snapshot: SimSnap }>("POST", `${base(id)}/input`, body).then((r) => r.snapshot),

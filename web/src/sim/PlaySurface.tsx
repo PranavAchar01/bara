@@ -3,7 +3,7 @@
 // (always real inputs and outputs of the build); the person can hide, reorder and rename them, set
 // sensor values, and ask the agent to change the surface. Nothing here looks at what kind of
 // device it is.
-import { useEffect, useRef, useState, type PointerEvent as RPointerEvent } from "react";
+import { useEffect, useRef, useState, type PointerEvent as RPointerEvent, type ReactNode } from "react";
 import type { InputAction, SimEvent, SimSnap, Surface } from "./remote";
 import { groupRows, move, rename, setHidden, setValue, withUnit, type Layout, type Row } from "./surface";
 
@@ -310,6 +310,8 @@ interface DockProps {
   typed: string;
   lines: { key: number; text: string; tone: string }[];
   tones: number;
+  /** Another device's output in the same combined device (CombinedDisplay). */
+  children?: ReactNode;
 }
 
 /** The device's outputs, each shown the way the surface spec says: lights, a speaker, a motor, text. */
@@ -323,7 +325,7 @@ export function OutputsDock(p: DockProps) {
   const motors = p.surface.outputs.filter((o) => o.show === "motor");
   const consoles = p.surface.outputs.some((o) => o.show === "console");
   const hasOutputs = lights.length + buzzers.length + motors.length > 0;
-  if (!hasOutputs && !consoles && !p.typed) return null;
+  if (!hasOutputs && !consoles && !p.typed && !p.children) return null;
   return (
     <section className="play-dock" aria-label="Outputs">
       {hasOutputs && (
@@ -357,6 +359,7 @@ export function OutputsDock(p: DockProps) {
           ))}
         </div>
       )}
+      {p.children}
       {(consoles || p.typed) && <Terminal lines={p.lines} typed={p.typed} powered={!!p.snap?.powered} />}
     </section>
   );
