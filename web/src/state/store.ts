@@ -80,7 +80,7 @@ export interface AppState {
   engineDetail: string | null;
   conn: ConnStatus;
   hello: ServerPayloads["hello"] | null;
-  screen: "home" | "workspace";
+  screen: "home" | "library" | "workspace";
   build: Build | null;
   view: ViewState;
   pendingStart: PendingStart | null;

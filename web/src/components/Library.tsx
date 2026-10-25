@@ -1,4 +1,4 @@
-// Your builds, at the bottom of Home (Figma 21): every build made in this browser, newest first,
+// Your builds, on the Library page (Figma 21): every build made in this browser, newest first,
 // with its canvas snapshot. Click to reopen; × (twice) to remove; type to filter.
 import { useEffect, useMemo, useState } from "react";
 import { openLibraryBuild, openSaved } from "../net/client";

@@ -35,7 +35,7 @@ export function TopBar() {
   return (
     <header className="topbar">
       <button type="button" className="brand" onClick={() => useApp.setState({ screen: "home" })} title="Home">
-        <span>Hardware builder</span>
+        <span>Bara</span>
       </button>
       {screen === "workspace" && build && (
         <div className="topbar-build">
@@ -61,7 +61,18 @@ export function TopBar() {
             <Icon name="home" /> Home
           </button>
         )}
-        <ExportMenu />
+        {screen === "workspace" ? (
+          <ExportMenu />
+        ) : (
+          <button
+            type="button"
+            className={`btn sm ${screen === "library" ? "primary" : ""}`}
+            aria-pressed={screen === "library"}
+            onClick={() => useApp.setState({ screen: screen === "library" ? "home" : "library" })}
+          >
+            <Icon name="library" /> Library
+          </button>
+        )}
       </div>
     </header>
   );

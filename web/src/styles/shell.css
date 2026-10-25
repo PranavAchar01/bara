@@ -1681,10 +1681,19 @@
   font-size: 14px;
   color: var(--text-2);
 }
-.landing .library {
-  margin-top: 64px;
-  border-top: 1.5px solid var(--ink);
-  padding-top: 16px;
+/* The Library page: the saved builds on their own, under the top bar. */
+.library-page {
+  display: block;
+  padding: 0 16px;
+}
+.library-page .library {
+  width: min(1328px, 100%);
+  margin: 0 auto;
+  padding-top: 40px;
+  border-top: 0;
+}
+.library-page .lib-head h2 {
+  font-size: clamp(32px, 3vw, 44px);
 }
 /* Narrow: the words and Bara first, the recording below them as a picture of its own. */
 @media (max-width: 760px) {

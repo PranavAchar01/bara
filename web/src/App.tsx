@@ -56,6 +56,14 @@ function Home() {
     <main className="home landing">
       <LandingHero />
       <AgentSteps />
+    </main>
+  );
+}
+
+/** Every build made here, on a page of its own (the top bar's Library button). */
+function LibraryPage() {
+  return (
+    <main className="home library-page">
       <Library />
     </main>
   );
@@ -159,10 +167,10 @@ function Main() {
   if (simOpen) return <SimView />;
   return (
     <div className="app">
-      {screen === "home" && <TopBar />}
+      {screen !== "workspace" && <TopBar />}
       <EngineNotice />
       <ConnectionBanner />
-      {screen === "home" ? <Home /> : <Workspace />}
+      {screen === "home" ? <Home /> : screen === "library" ? <LibraryPage /> : <Workspace />}
       <EventLog />
       <Toast />
     </div>
