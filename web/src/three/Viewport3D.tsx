@@ -23,6 +23,7 @@ import { LAYER_RANK, explodeZ, isKeycapPart, layerGap, layerOf, partLabel, type 
 import { elementPoses, type ElementPose } from "./layout";
 import { LabelOverlay, LabelProjector, labelOpacity } from "./labels";
 import { FocusDriver, nearFocused } from "./focus";
+import { ProjectLinkLines } from "./projectLinks";
 import { defaultColor, ghost, placeholderMaterial, presetFor, presetMaterial, tinted, usesPreset } from "./materials";
 import { registerAnchor, stage, stageBox } from "./stage";
 import { StudioEnvironment, StudioFloor, studioPalette, type StudioPalette } from "./studio";
@@ -1546,12 +1547,15 @@ function CompanionRow() {
   useEffect(() => {
     stage.settleVersion++;
   }, [slots, away]);
+  // The open device sits at its own origin; links run between it and the companions.
+  const linkSlots = useMemo(() => [{ id: activeId, build: active, offset: new THREE.Vector3() }, ...slots], [activeId, active, slots]);
   return (
     <group ref={ref}>
       {!away &&
         slots.map((sl) =>
           sl.build ? <CompanionDevice key={sl.id} canvasId={sl.id} build={sl.build} offset={sl.offset} name={shortName(names[ids.indexOf(sl.id)])} /> : null,
         )}
+      {!away && <ProjectLinkLines slots={linkSlots} />}
     </group>
   );
 }
