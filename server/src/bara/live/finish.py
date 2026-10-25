@@ -114,7 +114,11 @@ def palette_for(prompt: str, colours: list[dict[str, Any]] | None) -> dict[str, 
 
 def role(fn: str, kind: str) -> str:
     """The finish role of a part from its function id and catalog kind."""
-    if fn.startswith("display.") and fn not in ("display.led", "display.indicator_led", "display.seven_segment"):
+    if fn.startswith("display.") and fn not in (
+        "display.led",
+        "display.indicator_led",
+        "display.seven_segment",
+    ):
         return "display"
     if fn.startswith(("input.", "mech.keycap", "mech.knob")) or fn in ("power.switch",):
         return "control"
@@ -208,10 +212,19 @@ def events(
         f = fin["parts"].get(part["instance_id"])
         if f is not None:
             out.append(("part.updated", {"part": {**copy.deepcopy(part), "finish": f}}))
+    names = {
+        p["instance_id"]: (p.get("card") or {}).get("display_name")
+        for p in build.get("parts") or []
+    }
     for board in build.get("boards") or []:
         f = fin["boards"].get(board.get("board_id"))
         if f is not None:
-            out.append(("board.updated", {"board": {**copy.deepcopy(board), "finish": f}}))
+            new_board = {**copy.deepcopy(board), "finish": f}
+            # footprints read like the parts list: the generic card name, never the maker's
+            for fp in new_board.get("footprints") or []:
+                if names.get(fp.get("instance_id")):
+                    fp["label"] = names[fp["instance_id"]]
+            out.append(("board.updated", {"board": new_board}))
     for enc in build.get("enclosures") or []:
         case, nodes = fin["enclosures"][enc["enclosure_id"]]
         new = {**copy.deepcopy(enc), "finish": case, "node_finish": nodes}
