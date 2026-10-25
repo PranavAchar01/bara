@@ -73,7 +73,7 @@ export interface SimFirmware {
 export interface SimEvent {
   seq: number;
   t_ms: number;
-  type: "serial" | "hid" | "gpio" | "tone" | "input" | "power" | "fault";
+  type: "serial" | "typed" | "hid" | "gpio" | "tone" | "input" | "power" | "fault";
   text?: string;
   report?: string;
   pin?: number;
@@ -97,11 +97,16 @@ export interface SimSnap {
   events: SimEvent[];
   wave: Record<string, { name: string; edges: [number, number][] }>;
   seq: number;
+  /** Set while the chip is held in its bootloader (reset with the boot button down). */
+  bootloader?: boolean;
+  /** The display's pixels as the firmware drew them: 2 bits a pixel, base64. Null when the firmware draws no pixels. */
+  fb?: { w: number; h: number; b64: string } | null;
 }
 
 export interface SimTest {
   id: string;
-  group: "firmware" | "emulation" | "pinmap" | "ngspice";
+  group: "firmware" | "emulation" | "pinmap" | "ngspice" | "kicad";
+  violations?: { severity?: string; description?: string; type?: string }[];
   name: string;
   status: "not_run" | "pass" | "fail" | "warn" | "skip" | "unavailable";
   summary?: string;
@@ -141,7 +146,7 @@ export interface SimViewData {
   snapshot: SimSnap | null;
 }
 
-export type InputAction = "press" | "release" | "tap" | "turn" | "axis" | "power";
+export type InputAction = "press" | "release" | "tap" | "turn" | "axis" | "power" | "reset";
 
 async function call<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
   const res = await getRest().request<T>(method, path, body);
@@ -185,6 +190,8 @@ export function terminalLine(e: SimEvent): { text: string; tone: "out" | "in" | 
   switch (e.type) {
     case "serial":
       return e.text?.startsWith("HID") ? null : { text: `${t}  ${e.text ?? ""}`, tone: "out" };
+    case "typed":
+      return null;
     case "hid":
       return { text: `${t}  usb  ${e.report ?? ""}`, tone: "hid" };
     case "input": {
@@ -198,4 +205,14 @@ export function terminalLine(e: SimEvent): { text: string; tone: "out" | "in" | 
     default:
       return null;
   }
+}
+
+/** What the firmware typed over USB, as a person would see it in a text box: letters appear, backspace erases, enter breaks the line. */
+export function typedText(events: SimEvent[], prev = "", limit = 600): string {
+  let out = prev;
+  for (const e of events) {
+    if (e.type !== "typed" || !e.text) continue;
+    for (const ch of e.text) out = ch === "\b" ? out.slice(0, -1) : out + ch;
+  }
+  return out.slice(-limit);
 }

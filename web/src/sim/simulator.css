@@ -492,3 +492,162 @@
     overflow: visible;
   }
 }
+
+/* device-first layout: the stage is the screen, the console sits under it, the rest folds away */
+.sx2-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.sx2-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.sx2-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 240px;
+}
+.sx2-hint {
+  position: absolute;
+  left: 12px;
+  bottom: 8px;
+  color: #666;
+  pointer-events: none;
+}
+.sx2-leds {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  pointer-events: none;
+}
+.sx2-led {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: rgba(20, 22, 26, 0.72);
+  color: #aab0ba;
+}
+.sx2-led i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #3a3d44;
+}
+.sx2-led.on {
+  color: #fff;
+}
+.sx2-led.on i {
+  background: var(--sx-ok);
+  box-shadow: 0 0 8px var(--sx-ok);
+}
+.sx2-chip-row {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  display: flex;
+  gap: 6px;
+}
+.sx2-console {
+  flex: 0 0 auto;
+  height: 220px;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--sx-line);
+  background: var(--sx-card);
+}
+.sx2-console.folded {
+  height: auto;
+}
+.sx2-console .sx-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+}
+.sx2-term-wrap {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(180px, 0.8fr) 1.4fr;
+}
+.sx2-typed {
+  padding: 8px 12px;
+  border-right: 1px solid var(--sx-line);
+  overflow: auto;
+}
+.sx2-typed pre {
+  margin: 4px 0 0;
+  font: 600 20px/1.35 ui-monospace, Menlo, monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: #e8f1ff;
+}
+.sx2-caret {
+  display: inline-block;
+  width: 0.55em;
+  height: 1em;
+  vertical-align: text-bottom;
+  background: var(--sx-accent);
+  animation: sx2-blink 1s steps(2, start) infinite;
+}
+@keyframes sx2-blink {
+  to {
+    visibility: hidden;
+  }
+}
+.sx2-waves {
+  padding: 8px 12px;
+  overflow: auto;
+}
+.sx2-side {
+  flex: 0 0 min(400px, 38vw);
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--sx-line);
+}
+.sx2-side .sx-side-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.sx-violations {
+  margin: 0 0 8px;
+  padding-left: 16px;
+}
+.sx-violations li.error b {
+  color: var(--sx-fail);
+}
+.sx-violations li.warning b {
+  color: var(--sx-warn);
+}
+@media (max-width: 900px) {
+  .sx2-body {
+    flex-direction: column;
+  }
+  .sx2-side {
+    flex-basis: 40%;
+    border-left: 0;
+    border-top: 1px solid var(--sx-line);
+  }
+  .sx2-term-wrap {
+    grid-template-columns: 1fr;
+  }
+}
+.sx2-chip-row .sim-btn {
+  background: rgba(20, 22, 26, 0.82);
+  color: #e8ebf0;
+  border-color: rgba(255, 255, 255, 0.18);
+}
+.sx2-chip-row .sim-btn[aria-pressed="true"] {
+  background: var(--sx-accent);
+}

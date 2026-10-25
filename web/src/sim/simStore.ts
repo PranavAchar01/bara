@@ -5,8 +5,8 @@ import { create } from "zustand";
 import { focusPart, useApp, type Toggles, type ViewPreset } from "../state/store";
 import type { Build } from "../spec/types";
 import { deriveInputMap, type InputMap, type SimInput } from "./inputMap";
-import { press, release, type Runtime } from "./runtime";
-import { operatingView, type DisplaySpec, type OperatingView } from "./view";
+import { createRuntime, press, release, type RemoteScreen, type Runtime } from "./runtime";
+import { displaySpec, operatingView, type DisplaySpec, type OperatingView } from "./view";
 import { openSimPanel } from "./simPanelStore";
 
 interface Saved {
@@ -61,12 +61,54 @@ export function enterSimulation(): void {
   openSimPanel();
 }
 
+/**
+ * Where a click on the 3D device goes. The simulation screen sets these to the engine, so a press
+ * runs the real firmware instead of the local typing and game stand-ins.
+ */
+export const simHooks: { press?: (input: SimInput) => void; release?: (input: SimInput) => void } = {};
+
+/**
+ * Put the viewport in its operating pose for the simulation screen: the case shown, nothing
+ * exploded, the runtime in "pad" mode so every output comes from the engine's firmware. Returns
+ * the function that restores what the workspace had.
+ */
+export function enterBridge(build: Build): () => void {
+  const app = useApp.getState();
+  const map = deriveInputMap(build);
+  const display = build.parts.find((p) => map.displays.includes(p.instance_id) || p.card.primary_function?.startsWith("output.display"));
+  const screen = display ? displaySpec(display) : null;
+  const saved: Saved = { explode: app.explode, preset: app.preset, toggles: { ...app.toggles } };
+  useApp.setState((s) => ({ explode: 0, toggles: { ...s.toggles, case: true, labels: false }, selection: null, hoverPart: null, moving: null }));
+  useSim.setState({
+    active: true,
+    map,
+    runtime: createRuntime({ ...map, mode: "pad" }, screen ? screen.w / screen.h : 4 / 3),
+    view: operatingView(build),
+    screen,
+    byPressKey: new Map(map.inputs.map((i) => [i.pressKey, i])),
+    byId: new Map(map.inputs.map((i) => [i.id, i])),
+    hover: null,
+    saved,
+    version: 0,
+  });
+  return exitSimulation;
+}
+
 export function exitSimulation(): void {
   const { active, saved } = useSim.getState();
   if (!active) return;
   capHold.clear();
+  simHooks.press = simHooks.release = undefined;
   useSim.setState({ active: false, runtime: null, hover: null });
   if (saved) useApp.setState({ explode: saved.explode, preset: saved.preset, toggles: saved.toggles });
+}
+
+/** Mirror what the engine says the display shows, so the screen on the 3D model draws the firmware's output. */
+export function showRemote(remote: RemoteScreen): void {
+  const { runtime } = useSim.getState();
+  if (!runtime) return;
+  runtime.remote = remote;
+  useSim.setState((s) => ({ version: s.version + 1 }));
 }
 
 export function pressInput(input: SimInput): void {
@@ -74,6 +116,7 @@ export function pressInput(input: SimInput): void {
   if (!runtime || !map) return;
   capHold.set(input.pressKey, performance.now() + TAP_MS);
   press(runtime, input, map.inputs);
+  simHooks.press?.(input);
   useSim.setState((s) => ({ version: s.version + 1 }));
 }
 
@@ -81,6 +124,7 @@ export function releaseInput(input: SimInput): void {
   const { runtime } = useSim.getState();
   if (!runtime) return;
   release(runtime, input);
+  simHooks.release?.(input);
   useSim.setState((s) => ({ version: s.version + 1 }));
 }
 
