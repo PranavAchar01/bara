@@ -137,7 +137,7 @@ function nextId(canvases: CanvasMeta[]): string {
 /** Swap the top-level fields for another canvas's; the camera goes to that canvas's view. */
 function activate(s: AppState, id: string, stash: Record<string, CanvasSnapshot>): Partial<AppState> {
   const { [id]: next, ...rest } = stash;
-  return { ...(next ?? blankCanvas()), canvasStash: rest, activeCanvas: id, cameraNonce: s.cameraNonce + 1 };
+  return { ...(next ?? blankCanvas()), canvasStash: rest, activeCanvas: id, cameraNonce: s.cameraNonce + 1, agentFocus: null, hoverPart: null };
 }
 
 export function switchCanvas(id: string): void {
