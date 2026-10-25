@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Build, BuildPart, Layout } from "../spec/types";
-import { deriveInputMap, findPlus, orderByPosition } from "./inputMap";
+import { deriveInputMap, findPlus, orderByPosition, screenUp } from "./inputMap";
 import { createRuntime, press, release } from "./runtime";
 import { inputForKey } from "./physical";
 
@@ -156,6 +156,40 @@ describe("deriveInputMap: handheld from board footprints", () => {
     expect(rt.game.status).toBe("running");
     press(rt, up, map.inputs);
     expect(rt.events).toEqual(["A", "UP"]);
+  });
+});
+
+describe("screenUp: which way a handheld stands", () => {
+  const rows: [string, number, number][] = [
+    ["SW1", 20, 40],
+    ["SW2", 20, 20],
+    ["SW3", 10, 30],
+    ["SW4", 30, 30],
+    ["SW5", 80, 36],
+    ["SW6", 90, 26],
+  ];
+  const handheld = (turn: (x: number, y: number) => [number, number]) =>
+    build([part({ id: "btn", fn: "input.button", name: "Tactile switch", quantity: 6 })], {
+      boards: [{ footprints: rows.map(([ref, x, y]) => ({ ref, role: "button", center_mm: turn(x, y) })), position_mm: [0, 0, 0], rotation_deg: [0, 0, 0] }],
+    });
+
+  it("reads up from the D-pad on the left and the face buttons on the right", () => {
+    expect(screenUp(handheld((x, y) => [x, y]))).toEqual([0, 1]);
+  });
+
+  it("follows a device laid a quarter turn round, and names the D-pad as the person sees it", () => {
+    const b = handheld((x, y) => [-y, x]);
+    expect(screenUp(b)).toEqual([-1, 0]);
+    const up = deriveInputMap(b).inputs.find((i) => i.name === "UP");
+    expect(up?.pos.slice(0, 2)).toEqual([-40, 20]);
+  });
+
+  it("follows a device laid upside down", () => {
+    expect(screenUp(handheld((x, y) => [-x, -y]))).toEqual([0, -1]);
+  });
+
+  it("leaves keyboards to the long-axis rule", () => {
+    expect(screenUp(build([part({ id: "sw", fn: "input.key", quantity: 4, layout: "L" })], { layouts: [ROW] }))).toBeNull();
   });
 });
 

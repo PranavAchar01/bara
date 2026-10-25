@@ -1156,25 +1156,26 @@ function simFreeArea(cam: THREE.PerspectiveCamera): { w: number; canvasW: number
 }
 
 /**
- * The operating direction turned about the vertical so the device's long floor axis runs across
- * the screen (arrange.ts decides which axis that is). Only a view from above or below has a free
- * turn; a view from the side already shows the width.
+ * The operating direction leaned a hair so the device's own up (view.up: the screen's top on a
+ * handheld) reads as up on screen. A view from the side already has the world's up. Without a
+ * derived up, a view from above turns so the long floor axis runs across the screen (arrange.ts
+ * decides which axis that is).
  */
 function simDir(dir: THREE.Vector3): THREE.Vector3 {
-  if (!simTurned(dir)) return dir;
-  // looking down with +Y to the right: a tiny sideways lean fixes the screen's right-hand axis
-  return new THREE.Vector3(0.0001 * Math.sign(dir.z), 0, dir.z).normalize();
+  if (Math.abs(dir.z) < 0.9) return dir;
+  const [ux, uy] = simUp();
+  return new THREE.Vector3(-0.0001 * ux, -0.0001 * uy, dir.z).normalize();
 }
 
-/** Whether the operating view turns the device a quarter on screen (the input names follow it). */
-function simTurned(dir: THREE.Vector3): boolean {
-  const boxes = stageBoxes();
-  return boxes.length > 0 && Math.abs(dir.z) >= 0.9 && chooseCamera(boxes.map(toBox)).across !== "x";
-}
-screenFrame.turned = () => {
+/** Build-floor direction shown as up in the operating view. */
+function simUp(): [number, number] {
   const { view } = useSim.getState();
-  return view.dir[2] > 0.9 && simTurned(new THREE.Vector3(...view.dir).normalize());
-};
+  if (view.up) return view.up;
+  const boxes = stageBoxes();
+  const turned = boxes.length > 0 && Math.abs(view.dir[2]) >= 0.9 && chooseCamera(boxes.map(toBox)).across !== "x";
+  return turned ? [-1, 0] : [0, 1];
+}
+screenFrame.up = simUp;
 
 function stageBoxes(): THREE.Box3[] {
   return [stage.root, ...(stage.companions?.children ?? [])].filter((o): o is THREE.Object3D => !!o).map((o) => new THREE.Box3().setFromObject(o)).filter((b) => !b.isEmpty());

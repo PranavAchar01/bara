@@ -1,12 +1,18 @@
 // Operating view and display geometry for the simulation, both read from the build's geometry
 // and part records.
 import type { Build, BuildPart } from "../spec/types";
+import { screenUp } from "./inputMap";
 
 export interface OperatingView {
   /** Face of the case the controls are on: "pos_z" (up), "neg_y" (front), ... */
   face: string;
   /** Unit direction from the device toward the camera, build space (Z up, -Y is the front). */
   dir: [number, number, number];
+  /**
+   * Build-floor direction that reads as up on screen for a handheld seen from above (the screen's
+   * top), from where its screen and buttons sit; null keeps the long-axis rule.
+   */
+  up: [number, number] | null;
 }
 
 const FACE_DIRS: Record<string, [number, number, number]> = {
@@ -20,6 +26,8 @@ const FACE_DIRS: Record<string, [number, number, number]> = {
 
 /** Case openings for things the user operates or reads; edge ports and vents say nothing about the control face. */
 const CONTROL_FEATURES = /button|dpad|d_pad|key|switch|screen|display|window|knob|encoder|trackball|joystick/i;
+
+const SCREEN_FEATURES = /screen|display|window/i;
 
 /**
  * The face a person operates the device from, by the case's own cutouts: the face with the most
@@ -43,7 +51,11 @@ export function operatingView(build: Build | null): OperatingView {
       top = n;
     }
   }
-  return { face, dir: FACE_DIRS[face] };
+  // the screen's own window decides: the device is seen along the screen's normal
+  const screenFace = (build?.enclosures ?? []).flatMap((e) => e.cutouts ?? []).find((c) => SCREEN_FEATURES.test(c.feature ?? "") && FACE_DIRS[c.face])?.face;
+  if (screenFace) face = screenFace;
+  const up = face === "pos_z" ? screenUp(build) : null;
+  return { face, dir: FACE_DIRS[face], up };
 }
 
 export interface DisplaySpec {

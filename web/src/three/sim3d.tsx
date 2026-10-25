@@ -9,7 +9,7 @@ import { clearCaps, caps, stepCaps, TRAVEL_MM } from "../sim/press";
 import { drawScreen } from "../sim/screenDraw";
 import { tick } from "../sim/runtime";
 import { pressInput, releaseInput, setHover, useSim } from "../sim/simStore";
-import type { SimInput } from "../sim/inputMap";
+import { screenFrame, type SimInput } from "../sim/inputMap";
 import { screenSizeMm } from "../sim/view";
 import { isDrag } from "./explode";
 import { partWorldBox } from "./agentTargets";
@@ -309,11 +309,22 @@ function ScreenPlane(props: { instanceId: string }) {
     const b = partWorldBox(props.instanceId, box);
     g.visible = !!b;
     if (!b) return;
-    const face: [number, number] = [b.max.x - b.min.x, b.max.y - b.min.y];
-    // a landscape panel on a part lying portrait is turned a quarter, as the module sits on the board
-    const turn = face[0] < face[1] !== spec.w < spec.h;
-    const [w, h] = screenSizeMm(spec, turn ? [face[1], face[0]] : face);
-    if (turned.current) turned.current.rotation.z = turn ? Math.PI / 2 : 0;
+    const flat: [number, number] = [b.max.x - b.min.x, b.max.y - b.min.y];
+    let face = flat;
+    let angle = 0;
+    if (useSim.getState().view.up) {
+      // a handheld: the picture stands upright for the person, its top toward the screen's top,
+      // never mirrored, fitted inside the panel as measured across and up that view
+      const [ux, uy] = screenFrame.up();
+      if (Math.abs(ux) > Math.abs(uy)) face = [flat[1], flat[0]];
+      angle = Math.atan2(-ux, uy);
+    } else if (flat[0] < flat[1] !== spec.w < spec.h) {
+      // a landscape panel on a part lying portrait is turned a quarter, as the module sits on the board
+      face = [flat[1], flat[0]];
+      angle = Math.PI / 2;
+    }
+    const [w, h] = screenSizeMm(spec, face);
+    if (turned.current) turned.current.rotation.z = angle;
     const top = caseTop();
     const z = Math.max(b.max.z, top ?? -Infinity) + 0.2;
     g.position.set((b.min.x + b.max.x) / 2, (b.min.y + b.max.y) / 2, z);

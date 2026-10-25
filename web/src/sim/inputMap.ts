@@ -10,11 +10,17 @@ import { elementPoses, rotateZ, type V3 } from "../three/layout";
 import { charOf, isBackspace, isShift, keyCodes, keyLabel, parseKeymap } from "./keymap";
 
 /**
- * How the operating view lies on screen, set by the viewport: a device whose long axis runs along
- * the build's y axis is turned a quarter so it fills the screen, and a button is up, left or right
- * as the person sees it, not as the build frame has it.
+ * How the operating view lies on screen, set by the viewport: the build-floor direction that reads
+ * as "up" to the person (unit [x, y]; [0, 1] is the build's +y). A button is up, left or right as
+ * the person sees it, not as the build frame has it, and the live picture is drawn upright.
  */
-export const screenFrame: { turned: () => boolean } = { turned: () => false };
+export const screenFrame: { up: () => [number, number] } = { up: () => [0, 1] };
+
+/** A floor-plane position in the person's frame: x to their right, y up (screen-right is up turned a quarter clockwise). */
+export function inFrame(pos: V3, up: [number, number]): V3 {
+  const [ux, uy] = up;
+  return [pos[0] * uy - pos[1] * ux, pos[0] * ux + pos[1] * uy, pos[2]];
+}
 
 export type InputRole = "key" | "dpad" | "action" | "system";
 
@@ -211,11 +217,10 @@ interface Named {
 }
 
 /** Names for buttons without a keymap, from where they sit on the control face (plus shape, then position). */
-function nameButtons(all: Raw[]): Named[] {
+function nameButtons(all: Raw[], up: [number, number]): Named[] {
   const out: Named[] = [];
-  // names follow the screen: turned a quarter, screen-right is the build's +y and screen-up its -x
-  const turned = screenFrame.turned();
-  const raws = turned ? all.map((r) => ({ ...r, pos: [r.pos[1], -r.pos[0], r.pos[2]] as V3 })) : all;
+  // names follow the screen: positions are read in the person's frame (right, up), not the build's
+  const raws = all.map((r) => ({ ...r, pos: inFrame(r.pos, up) }));
   const back = new Map(raws.map((r, i) => [r, all[i]]));
   const system = raws.filter((r) => isSystemPart(r.part));
   const shoulders = raws.filter((r) => !isSystemPart(r.part) && isShoulderPart(r.part));
@@ -249,6 +254,53 @@ function nameButtons(all: Raw[]): Named[] {
   return out.map((n) => ({ ...n, raw: back.get(n.raw) ?? n.raw }));
 }
 
+function centroid(points: V3[]): [number, number] {
+  const n = Math.max(1, points.length);
+  return [points.reduce((s, p) => s + p[0], 0) / n, points.reduce((s, p) => s + p[1], 0) / n];
+}
+
+/** Nearest build-floor axis to a direction, or null for a direction too short to trust. */
+function snapAxis(v: [number, number], minMm: number): [number, number] | null {
+  if (Math.hypot(v[0], v[1]) < minMm) return null;
+  return Math.abs(v[0]) > Math.abs(v[1]) ? [Math.sign(v[0]), 0] : [0, Math.sign(v[1])];
+}
+
+/**
+ * Which way is up on a handheld's control face, read from where its parts sit rather than from a
+ * fixed turn: the D-pad is on the person's left and the face buttons on their right, so up is that
+ * left-to-right line turned a quarter anticlockwise; the screen is never below the controls, which
+ * settles a face whose two button clusters are both pluses. Without a D-pad, up runs from the
+ * controls to the screen. A unit build-floor axis, or null for a device that is not a button
+ * handheld (keyboards and macropads keep the long-axis rule).
+ */
+export function screenUp(build: Build | null): [number, number] | null {
+  if (!build || build.parts.some(isKeyPart)) return null;
+  const raws = collect(build, build.parts.filter(isButtonPart)).filter((r) => !isSystemPart(r.part) && !isShoulderPart(r.part));
+  if (!raws.length) return null;
+  const display = build.parts.find((p) => fn(p).startsWith("display.") && fn(p) !== "display.indicator_led");
+  const screen = display ? (display.placement.position_mm as V3) : null;
+  const controls = centroid(raws.map((r) => r.pos));
+  const toScreen: [number, number] | null = screen ? [screen[0] - controls[0], screen[1] - controls[1]] : null;
+  const plus = findPlus(raws.map((r) => ({ x: r.pos[0], y: r.pos[1] })));
+  if (plus) {
+    const inPlus = new Set([plus.up, plus.down, plus.left, plus.right]);
+    const dpad = centroid([...inPlus].map((i) => raws[i].pos));
+    const rest = raws.filter((_, i) => !inPlus.has(i));
+    if (rest.length) {
+      const face = centroid(rest.map((r) => r.pos));
+      const right: [number, number] = [face[0] - dpad[0], face[1] - dpad[1]];
+      const up = snapAxis([-right[1], right[0]], 3);
+      if (up) {
+        // both clusters are pluses, so which is the D-pad is a guess: the screen never sits under the controls
+        const twoPluses = rest.length >= 4 && findPlus(rest.map((r) => ({ x: r.pos[0], y: r.pos[1] }))) !== null;
+        if (twoPluses && toScreen && toScreen[0] * up[0] + toScreen[1] * up[1] < -5) return [-up[0], -up[1]];
+        return up;
+      }
+    }
+  }
+  return toScreen ? snapAxis(toScreen, 5) : null;
+}
+
 function keymapOf(build: Build): string | null {
   const file = build.firmware?.files.find((f) => /\.keymap$/.test(f.path) && f.content);
   return file?.content ?? null;
@@ -280,7 +332,7 @@ export function deriveInputMap(build: Build | null): InputMap {
     if (content) named.push(...nameKeys(keyRaws, content));
     else orderByPosition(keyRaws).forEach((raw, i) => named.push({ raw, name: `K${i + 1}`, role: "key", code: null }));
   }
-  named.push(...nameButtons(buttonRaws));
+  named.push(...nameButtons(buttonRaws, screenUp(build) ?? screenFrame.up()));
   const inputs: SimInput[] = named.map((n) => ({
     id: `${n.raw.part.instance_id}#${n.raw.element}`,
     name: n.name,
