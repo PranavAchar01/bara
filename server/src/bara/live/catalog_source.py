@@ -14,7 +14,6 @@ import logging
 from pathlib import Path
 from typing import Any, Protocol
 
-from bara import naming
 from bara.catalog import Catalog
 from bara.live.fetch import stock_symbol
 
@@ -268,7 +267,7 @@ def card_for(part: dict[str, Any], catalog: Catalog | None = None) -> dict[str, 
     """SPEC PartCard for a part record (the catalog's own card when it has one)."""
     pid = part["part_id"]
     if catalog is not None and pid in catalog.cards:
-        return naming.neutral(copy.deepcopy(catalog.cards[pid]), part)
+        return copy.deepcopy(catalog.cards[pid])
     functions = part.get("functions", [])
     primary = next((f["function_id"] for f in functions if f.get("primary")), None)
     if primary is None and functions:
@@ -290,14 +289,13 @@ def card_for(part: dict[str, Any], catalog: Catalog | None = None) -> dict[str, 
     }
     if primary:
         card["primary_function"] = primary
-    return naming.neutral(card, part)
+    return card
 
 
 def _key_specs(part: dict[str, Any]) -> list[dict[str, Any]]:
     specs: list[dict[str, Any]] = []
     facets = part.get("facets") or {}
-    # no family chips: their values are maker and product names (the record keeps them)
-    for key in ("display_type", "wireless", "v_logic_v"):
+    for key in ("mcu_family", "switch_family", "display_type", "wireless", "v_logic_v"):
         value = facets.get(key)
         if value is None or isinstance(value, list | dict):
             continue

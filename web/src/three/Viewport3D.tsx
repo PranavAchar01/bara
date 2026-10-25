@@ -11,7 +11,7 @@ import { useShallow } from "zustand/react/shallow";
 import { GizmoHelper, GizmoViewcube, Html, OrbitControls, TransformControls } from "@react-three/drei";
 import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
-import { focusPart, pickPart, select, setView, useApp, type ViewPreset } from "../state/store";
+import { focusPart, select, setView, useApp, type ViewPreset } from "../state/store";
 import { switchCanvas } from "../state/canvases";
 import { applyEdit } from "../net/client";
 import { fetchPart } from "../components/Overlays";
@@ -19,18 +19,12 @@ import type { BBox, Board, Build, BuildPart, Enclosure, Layout } from "../spec/t
 import { failingByInstance } from "../ui/format";
 import { groupPieces, modelAsset, onModelsChanged, preloadModels, useModel, type LoadedModel, type MeshGroup } from "./assets";
 import { placeholderBox, type Box } from "./bbox";
-import { boardMatrix, matchComponents, type BoardCandidate } from "./boardgeom";
-import { LAYER_RANK, explodeZ, isKeycapPart, layerGap, layerOf, layerOffsets, partLabel, type LayerExtent, type LayerId, type PartLabel } from "./explode";
+import { LAYER_RANK, explodeZ, isKeycapPart, layerGap, layerOf, partLabel, type LayerId, type PartLabel } from "./explode";
 import { elementPoses, type ElementPose } from "./layout";
-import { arrangeDevices, chooseCamera, type Box as FloorBox } from "./arrange";
 import { LabelOverlay, LabelProjector, labelOpacity } from "./labels";
-import { FocusDriver, meshBox, nearFocused } from "./focus";
-import { setLook, type Look } from "./look";
-import { ProjectLinkLines } from "./projectLinks";
-import { AutoLinker } from "../project/project";
-import { caseMaterial, useCasePreview } from "./caseFinish";
-import { defaultColor, finishMaterial, ghost, placeholderMaterial, presetFor, presetMaterial, tinted, usesPreset, wearsFinish } from "./materials";
-import { focusAmount, registerAnchor, stage, stageBox } from "./stage";
+import { FocusDriver, nearFocused } from "./focus";
+import { defaultColor, ghost, placeholderMaterial, presetFor, presetMaterial, tinted, usesPreset } from "./materials";
+import { registerAnchor, stage, stageBox } from "./stage";
 import { StudioEnvironment, StudioFloor, studioPalette, type StudioPalette } from "./studio";
 import { DemandDriver, StudioPost, postEnabled } from "./post";
 import { BoardPlaceholder, BoardStatus, FootprintHover, footprintBoxes } from "./board";
@@ -160,27 +154,8 @@ function useLayerGroup(layer: LayerId, anchorKey: string | null, anchorLocal: TH
   useFrame(() => {
     const g = ref.current;
     if (!g) return;
-    // each layer lifts by its measured height so layers stand clear of one another; the plain
-    // rank-times-gap stack stands in until they are measured
-    const lifted = stage.layerZ?.[layer];
-    let z = lifted !== undefined ? lifted * stage.explode : explodeZ(layer, stage.gap, stage.explode);
+    const z = explodeZ(layer, stage.gap, stage.explode);
     g.userData.restZ = z;
-    // pick view: the picked part lifts a little out of its layer, every other part fades to a ghost;
-    // otherwise the part under the pointer is tinted
-    const mine = !!focusKey && focusKey === stage.pickKey;
-    let look: Look = "none";
-    let amount = 0;
-    if (stage.pickK > 0.002 && stage.pickKey) {
-      if (mine) z += pickLift() * stage.pickK;
-      else {
-        look = "ghost";
-        amount = stage.pickK;
-      }
-    } else if (focusKey && stage.hoverKey === focusKey && stage.explode > 0.5) look = "hover";
-    if (look !== "none" || g.userData.look) {
-      setLook(g, look, amount);
-      g.userData.look = look === "none" ? undefined : look;
-    }
     const pose = stage.focusK > 0 ? stage.focusPose.get(g) : undefined;
     if (!pose) {
       g.position.set(0, 0, z);
@@ -193,17 +168,8 @@ function useLayerGroup(layer: LayerId, anchorKey: string | null, anchorLocal: TH
   });
   useEffect(() => {
     const g = ref.current;
-    if (!g) return;
-    stage.layerGroups.set(g, layer);
-    return () => {
-      stage.layerGroups.delete(g);
-    };
-  }, [layer]);
-  useEffect(() => {
-    const g = ref.current;
     if (!g || !focusKey) return;
     stage.focusGroups.set(g, focusKey);
-    g.userData.fkey = focusKey;
     return () => {
       stage.focusGroups.delete(g);
       stage.focusPose.delete(g);
@@ -346,10 +312,6 @@ function PartNode(props: PartNodeProps) {
   useEffect(() => () => placeholderGeom?.dispose(), [placeholderGeom]);
   const groups = useMemo<MeshGroup[]>(() => {
     if (loaded) {
-      if (wearsFinish(part.finish)) {
-        const mat = finishMaterial(part.finish);
-        return loaded.groups.map((g) => ({ ...g, material: mat }));
-      }
       // Keycaps, knobs and balls take the studio preset in the part's colour.
       if (usesPreset(preset)) {
         const mat = presetMaterial(preset, color);
@@ -365,7 +327,7 @@ function PartNode(props: PartNodeProps) {
     }
     // No model: a faint neutral shell with its edges drawn, labelled, so it never reads as the part.
     return placeholderGeom ? [{ geometry: placeholderGeom, material: placeholderMaterial(), weight: 0 }] : [];
-  }, [loaded, part.color?.hex, part.finish, preset, color, placeholderGeom]);
+  }, [loaded, part.color?.hex, preset, color, placeholderGeom]);
   const placeholderEdges = useMemo(() => (placeholderGeom ? new THREE.EdgesGeometry(placeholderGeom, 25) : null), [placeholderGeom]);
   useEffect(() => () => placeholderEdges?.dispose(), [placeholderEdges]);
   const assembled = useApp((s) => s.explode < 0.8);
@@ -392,7 +354,7 @@ function PartNode(props: PartNodeProps) {
   const onClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
     select(part.instance_id);
-    pickPart(partLabel(part).key);
+    focusPart(partLabel(part).key);
   };
   const simActive = useSim((s) => s.active);
   const simInputs = useSim((s) => s.byPressKey);
@@ -525,8 +487,6 @@ function upCoverage(geoms: THREE.BufferGeometry[]): number {
 }
 
 /** A case piece: its geometries, and whether it is the lid that lifts off in the explode. */
-const CLEAR_MAX = 0.42;
-
 interface CasePiece {
   geoms: THREE.BufferGeometry[];
   lid: boolean;
@@ -550,8 +510,6 @@ function CasePieceNode(props: {
   piece: CasePiece;
   enc: Enclosure;
   material: THREE.MeshStandardMaterial;
-  /** The user chose a finish: show the real material assembled, not the ghost shell. */
-  real: boolean;
   edge: string | null;
   anchorKey: string | null;
   focusKey: string;
@@ -573,9 +531,7 @@ function CasePieceNode(props: {
   }, [piece, pos, rot]);
   const ref = useLayerGroup(piece.lid ? "lid" : "case", props.anchorKey, anchorLocal, props.focusKey);
   // Assembled, every case piece is a translucent shell with its edges drawn, so
-  // the board inside stays in view; pieces turn solid as the explode opens. A
-  // finish the user picked is shown as it is instead: see-through finishes pass
-  // light (transmission) and show the board for real, opaque ones are solid.
+  // the board inside stays in view; pieces turn solid as the explode opens.
   const material = useMemo(() => {
     const m = props.material.clone();
     m.transparent = true;
@@ -589,14 +545,12 @@ function CasePieceNode(props: {
   useEffect(() => () => edgeMat.dispose(), [edgeMat]);
   const base = props.material.opacity;
   const floor = piece.lid ? 0.16 : 0.24;
-  const real = props.real;
   useFrame(() => {
-    const k = real ? 1 : Math.min(1, stage.explode / 0.6);
-    // A chosen real material carries its own opacity; otherwise clear plastic, a little denser when pulled apart, never opaque.
-    const o = real ? base : (floor + (CLEAR_MAX - floor) * k) * base;
+    const k = Math.min(1, stage.explode / 0.6);
+    const o = (floor + (1 - floor) * k) * base;
     material.opacity = o;
     // Creases stay drawn when pulled apart, like the outlines the library parts carry in their own geometry.
-    edgeMat.opacity = real ? 0.12 : 0.3 + 0.25 * k;
+    edgeMat.opacity = 0.3 + 0.25 * k;
     const solid = k >= 0.999 && base >= 0.999;
     if (material.depthWrite !== solid) {
       material.depthWrite = solid;
@@ -616,12 +570,7 @@ function CasePieceNode(props: {
             key={g.uuid}
             geometry={g}
             material={material}
-            onClick={(e) => {
-              if (useApp.getState().explode > 0.5 && !useSim.getState().active) {
-                e.stopPropagation();
-                pickPart(props.focusKey);
-              } else props.onClick(e);
-            }}
+            onClick={props.onClick}
             renderOrder={2}
           />
         ))}
@@ -645,8 +594,7 @@ function EnclosureNode(props: { enc: Enclosure; theme: Theme; selected: boolean;
   const size = enc.outer_size_mm;
   const loaded = model.status === "ready" && model.model.groups.length > 0 ? model.model : null;
   const pending = enc.status === "pending";
-  const preview = useCasePreview((s) => s.byId[enc.enclosure_id]);
-  const hex = preview?.hex ?? caseHex(enc);
+  const hex = caseHex(enc);
   const pieces = useMemo<CasePiece[]>(() => {
     if (loaded) return casePieces(loaded);
     if (!size || size.length < 3) return [];
@@ -656,12 +604,11 @@ function EnclosureNode(props: { enc: Enclosure; theme: Theme; selected: boolean;
   useEffect(() => () => {
     if (!loaded) for (const p of pieces) for (const g of p.geoms) g.dispose();
   }, [loaded, pieces]);
-  const finish = preview ? preview.finish : enc.color?.finish;
   const material = useMemo(() => {
-    const base = caseMaterial(hex, finish);
+    const base = presetMaterial("case", hex);
     if (pending) return ghost(base, 0.35);
     return loaded ? base : ghost(base, 0.6);
-  }, [hex, finish, loaded, pending]);
+  }, [hex, loaded, pending]);
   if (enc.kind === "none" || !pieces.length) return null;
   const edge = props.failing ? theme.fail : props.selected ? theme.accent : null;
   const onClick = (e: ThreeEvent<MouseEvent>) => {
@@ -677,7 +624,6 @@ function EnclosureNode(props: { enc: Enclosure; theme: Theme; selected: boolean;
           piece={p}
           enc={enc}
           material={material}
-          real={!!finish}
           edge={edge}
           onClick={onClick}
           anchorKey={props.labelled ? (p.lid && pieces.length > 1 ? "e:case_top" : "e:case") : null}
@@ -693,6 +639,63 @@ function boardModelUrl(board: Board): string | null {
   return modelAsset(board.assets, false)?.url ?? null;
 }
 
+/** A part the board GLB may already show: its layer and element origins in build space. */
+interface BoardCandidate {
+  instanceId: string;
+  layer: LayerId;
+  points: THREE.Vector3[];
+}
+
+function boardMatrix(board: Board): THREE.Matrix4 {
+  const pos = board.position_mm ?? [0, 0, 0];
+  const rot = board.rotation_deg ?? [0, 0, 0];
+  return new THREE.Matrix4().compose(
+    new THREE.Vector3(pos[0], pos[1], pos[2]),
+    new THREE.Quaternion().setFromEuler(new THREE.Euler(rot[0] * DEG, rot[1] * DEG, rot[2] * DEG, "XYZ")),
+    new THREE.Vector3(1, 1, 1),
+  );
+}
+
+/**
+ * The routed board GLB is the assembly: kicad-cli exports every footprint's
+ * model (switches, MCU, display, encoder) in place. Each small component
+ * whose footprint holds a part's origin is that part; the part then draws no
+ * mesh of its own, and the component lifts with the part's layer when the
+ * view explodes. The largest component is the bare board.
+ */
+function matchComponents(loaded: LoadedModel, board: Board, candidates: BoardCandidate[]) {
+  const m = boardMatrix(board);
+  const whole = loaded.bbox.clone().applyMatrix4(m);
+  const boardArea = (whole.max.x - whole.min.x) * (whole.max.y - whole.min.y);
+  const owner = new Map<number, BoardCandidate>();
+  let substrate = -1;
+  let biggest = 0;
+  loaded.components.forEach((c, i) => {
+    if (c.bbox.isEmpty()) return;
+    const b = c.bbox.clone().applyMatrix4(m);
+    const area = (b.max.x - b.min.x) * (b.max.y - b.min.y);
+    if (area > biggest) {
+      biggest = area;
+      substrate = i;
+    }
+    if (area > boardArea * 0.25) return;
+    const centre = b.getCenter(new THREE.Vector3());
+    let best: BoardCandidate | null = null;
+    let bestD = Infinity;
+    for (const cand of candidates)
+      for (const p of cand.points) {
+        if (p.x < b.min.x - 0.5 || p.x > b.max.x + 0.5 || p.y < b.min.y - 0.5 || p.y > b.max.y + 0.5) continue;
+        if (p.z < b.min.z - 2.5 || p.z > b.max.z + 2.5) continue;
+        const d = Math.hypot(p.x - centre.x, p.y - centre.y);
+        if (d < bestD) {
+          bestD = d;
+          best = cand;
+        }
+      }
+    if (best) owner.set(i, best);
+  });
+  return { owner, substrate };
+}
 
 function BoardPiece(props: {
   groups: MeshGroup[];
@@ -780,7 +783,7 @@ function BoardNode(props: {
   const onBoardClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
     if (board.part_instance_id) select(board.part_instance_id);
-    pickPart("b:board");
+    focusPart("b:board");
   };
   if (!pieces) {
     // No GLB yet (routing, exporting or loading): the board drawn from its record.
@@ -817,7 +820,7 @@ function BoardNode(props: {
             onClick={(e) => {
               e.stopPropagation();
               select(cand.instanceId);
-              pickPart(key);
+              focusPart(key);
             }}
           />
         );
@@ -962,35 +965,10 @@ export function sizedFill(box: THREE.Box3, fill: number): number {
   return fill * Math.min(1, Math.max(0.55, Math.sqrt(diag / FULL_SIZE_DIAG_MM)));
 }
 
-/** Share of the view (its tighter axis) the framed device or devices may span: room all round. */
-const FIT_MIN = 0.55;
-const FIT_MAX = 0.65;
-
-/** 55% of the view for a thumb-sized device up to 65% for a full-size keyboard or bigger. */
-export function sceneFill(box: THREE.Box3): number {
-  const diag = box.getSize(new THREE.Vector3()).length();
-  return FIT_MIN + (FIT_MAX - FIT_MIN) * Math.min(1, Math.max(0, diag / FULL_SIZE_DIAG_MM));
-}
-
-const toBox = (b: THREE.Box3): FloorBox => ({ min: [b.min.x, b.min.y, b.min.z], max: [b.max.x, b.max.y, b.max.z] });
-
-/**
- * Where the camera goes for the devices on stage: one rule over their boxes (arrange.ts). Flat,
- * wide devices are seen from high up, near top-down, with the long side across the screen; tall or
- * handheld ones from a 3/4 view.
- */
-function sceneDir(): THREE.Vector3 | null {
-  if (!stage.root) return null;
-  const boxes = [stage.root, ...(stage.companions?.children ?? [])].map((o) => new THREE.Box3().setFromObject(o)).filter((b) => !b.isEmpty());
-  if (!boxes.length) return null;
-  const [x, y, z] = chooseCamera(boxes.map(toBox)).dir;
-  return new THREE.Vector3(x, y, z);
-}
-
 function framePose(kind: FrameKind, cam: THREE.PerspectiveCamera, predictExplode: number | null) {
   const box = stageBox() ?? fallbackBox();
-  if (predictExplode !== null) box.max.z += (stage.layerZ ? stage.lift : stage.gap * maxRank()) * (predictExplode - stage.explode);
-  if (kind === "exploded") return fitPose(box, EXPLODED_DIR, cam, LABEL_MODEL_WIDTH, Math.max(0.62, sizedFill(box, 0.8)), 0.04);
+  if (predictExplode !== null) box.max.z += stage.gap * maxRank() * (predictExplode - stage.explode);
+  if (kind === "exploded") return fitPose(box, EXPLODED_DIR, cam, LABEL_MODEL_WIDTH, Math.max(0.7, sizedFill(box, 0.88)), 0.04);
   if (kind === "sim") {
     // The operating view: straight at the control face, the device filling most of the viewport.
     // A typing device leaves room above for the terminal; a handheld, a narrow strip.
@@ -998,9 +976,8 @@ function framePose(kind: FrameKind, cam: THREE.PerspectiveCamera, predictExplode
     const typing = map?.mode === "typing";
     return fitPose(box, new THREE.Vector3(...view.dir).normalize(), cam, 1, typing ? 0.58 : 0.8, typing ? -0.1 : 0.05);
   }
-  if (kind === "hero" || kind === "iso" || kind === "scene") {
-    return fitPose(box, sceneDir() ?? HERO_DIR.clone().normalize(), cam, 1, sceneFill(box), 0.05);
-  }
+  const row = kind === "hero" || kind === "iso" || kind === "scene" ? rowDir() : null;
+  if (row) return fitPose(box, row, cam, 1, sizedFill(box, 0.78), 0.05);
   const dir =
     kind === "top"
       ? new THREE.Vector3(0, -0.0001, 1)
@@ -1009,125 +986,28 @@ function framePose(kind: FrameKind, cam: THREE.PerspectiveCamera, predictExplode
           new THREE.Vector3(0, -0.0001, -1)
         : kind === "front"
         ? new THREE.Vector3(0, -1, 0.18)
-        : new THREE.Vector3(1, 0, 0.18);
-  return fitPose(box, dir.normalize(), cam, 1, sizedFill(box, 0.7), 0.05);
-}
-
-/** How far the picked part lifts out of its layer, mm. */
-function pickLift(): number {
-  return Math.max(6, stage.gap * 0.4);
+        : kind === "side"
+          ? new THREE.Vector3(1, 0, 0.18)
+          : HERO_DIR;
+  // Hero: a full-size device spans about half of the tighter axis; smaller ones less (sizedFill).
+  return fitPose(box, dir.clone().normalize(), cam, 1, sizedFill(box, kind === "hero" || kind === "iso" || kind === "scene" ? 0.5 : 0.7), 0.05);
 }
 
 /**
- * Measures how tall each exploded layer really is (as built), a few times a second, and works out
- * how far each lifts so no two layers overlap. Idle while a part is out in focus or picked.
+ * Several devices on one canvas stand in a row along x, so they are looked at from the front with
+ * the row across the screen, the way they would sit on a desk. Flat devices (a keyboard, a mouse)
+ * are seen from higher up so their tops read; tall ones from lower, so their faces do.
  */
-function LayerMeasure() {
-  const { invalidate } = useThree();
-  const n = useRef(0);
-  useFrame(() => {
-    if (++n.current % 12 !== 0 || stage.focusK > 0 || stage.pickK > 0.002) return;
-    const ext: Partial<Record<LayerId, LayerExtent>> = {};
-    for (const [g, layer] of stage.layerGroups) {
-      if (!g.visible) continue;
-      g.updateMatrixWorld(true);
-      const b = meshBox(g);
-      if (b.isEmpty()) continue;
-      const dz = g.matrixWorld.elements[14];
-      const cur = ext[layer];
-      ext[layer] = [Math.min(cur?.[0] ?? Infinity, b.min.z - dz), Math.max(cur?.[1] ?? -Infinity, b.max.z - dz)];
-    }
-    const next = layerOffsets(ext, Math.max(6, stage.gap * 0.45));
-    const same = stage.layerZ && Object.keys(next).length === Object.keys(stage.layerZ).length && (Object.keys(next) as LayerId[]).every((l) => Math.abs((stage.layerZ?.[l] ?? NaN) - (next[l] ?? 0)) < 0.05);
-    if (same) return;
-    stage.layerZ = Object.keys(next).length ? next : null;
-    stage.lift = Math.max(0, ...Object.values(next));
-    stage.settleVersion++;
-    invalidate();
-  });
-  return null;
-}
-
-/** The exploded view's hover: the part under the pointer (by focus key) is tinted. */
-function HoverDriver() {
-  const { gl, camera, invalidate } = useThree();
-  useEffect(() => {
-    const el = gl.domElement;
-    const ray = new THREE.Raycaster();
-    const ndc = new THREE.Vector2();
-    let last: PointerEvent | null = null;
-    let raf = 0;
-    const set = (key: string | null) => {
-      if (stage.hoverKey === key) return;
-      stage.hoverKey = key;
-      invalidate();
-    };
-    const run = () => {
-      raf = 0;
-      if (!last || !stage.root || useApp.getState().explode <= 0.5 || useSim.getState().active) return set(null);
-      const r = el.getBoundingClientRect();
-      ndc.set(((last.clientX - r.left) / r.width) * 2 - 1, -((last.clientY - r.top) / r.height) * 2 + 1);
-      ray.setFromCamera(ndc, camera);
-      for (const hit of ray.intersectObject(stage.root, true)) {
-        for (let o: THREE.Object3D | null = hit.object; o; o = o.parent) {
-          const key = stage.layerGroups.has(o as THREE.Group) ? stage.focusGroups.get(o as THREE.Group) : undefined;
-          if (key) return set(key);
-        }
-      }
-      set(null);
-    };
-    const move = (e: PointerEvent) => {
-      last = e;
-      if (!raf) raf = requestAnimationFrame(run);
-    };
-    const leave = () => {
-      last = null;
-      set(null);
-    };
-    el.addEventListener("pointermove", move);
-    el.addEventListener("pointerleave", leave);
-    return () => {
-      el.removeEventListener("pointermove", move);
-      el.removeEventListener("pointerleave", leave);
-      cancelAnimationFrame(raf);
-      stage.hoverKey = null;
-    };
-  }, [gl, camera, invalidate]);
-  return null;
-}
-
-/** The picked part's name and what it does, floating beside it in the exploded view. */
-function PickTag() {
-  const key = useApp((s) => s.focusKey);
-  const exploded = useApp((s) => s.explode > 0.5);
-  const build = useApp((s) => s.build);
-  const info = useMemo(() => {
-    const row = labelRows(build).find((r) => r.key === key);
-    const part = build?.parts.find((p) => partLabel(p).key === key);
-    if (!row) return null;
-    const what = part?.card.summary ?? row.detail;
-    return { title: row.title, what: what && what.length > 96 ? `${what.slice(0, 93)}...` : what, qty: row.quantity };
-  }, [build, key]);
-  const ref = useRef<THREE.Group>(null);
-  const box = useMemo(() => new THREE.Box3(), []);
-  useFrame(() => {
-    const g = ref.current;
-    if (!g || !key) return;
-    box.makeEmpty();
-    for (const [grp, k] of stage.focusGroups) if (k === key) box.union(meshBox(grp));
-    if (!box.isEmpty()) g.position.set(box.max.x, (box.min.y + box.max.y) / 2, (box.min.z + box.max.z) / 2);
-  });
-  if (!key || !exploded || !info) return null;
-  return (
-    <group ref={ref}>
-      <Html zIndexRange={[24, 0]} style={{ pointerEvents: "none" }}>
-        <div className="pick-tag">
-          <b>{info.qty > 1 ? `${info.title} x${info.qty}` : info.title}</b>
-          {info.what && <span>{info.what}</span>}
-        </div>
-      </Html>
-    </group>
-  );
+function rowDir(): THREE.Vector3 | null {
+  const side = stage.companions;
+  if (!stage.root || !side?.children.length) return null;
+  const boxes = [new THREE.Box3().setFromObject(stage.root), ...side.children.map((c) => new THREE.Box3().setFromObject(c))].filter((b) => !b.isEmpty());
+  if (boxes.length < 2) return null;
+  const size = new THREE.Vector3();
+  const ratio = boxes.reduce((sum, b) => (b.getSize(size), sum + size.z / Math.max(1, Math.min(size.x, size.y))), 0) / boxes.length;
+  const t = Math.min(1, Math.max(0, (ratio - 0.15) / 0.45));
+  const elev = (55 - 35 * t) * DEG;
+  return new THREE.Vector3(0, -Math.cos(elev), Math.sin(elev));
 }
 
 let rankMax = LAYER_RANK.keycaps;
@@ -1173,7 +1053,6 @@ function CameraRig() {
   const buildId = useApp((s) => s.build?.build_id ?? null);
   const partsCount = useApp((s) => s.build?.parts.length ?? 0);
   const explodeTarget = useApp((s) => s.explode);
-  const sceneDevices = useApp((s) => s.companions.join(","));
   const content = useApp((s) => `${s.build?.parts.length ?? 0}:${s.build?.enclosures?.length ?? 0}:${s.build?.boards?.length ?? 0}:${s.build?.revision ?? 0}`);
   const anim = useRef<{ fromP: THREE.Vector3; fromT: THREE.Vector3; toP: THREE.Vector3; toT: THREE.Vector3; t: number } | null>(null);
   const userMoved = useRef(false);
@@ -1225,16 +1104,6 @@ function CameraRig() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nonce]);
   useEffect(() => {
-    // A device added to (or taken from) the scene: ease the camera to the new arrangement, even
-    // if the view was orbited, so the new arrangement is always seen whole.
-    if (framedFor.current === null) return;
-    userMoved.current = false;
-    // after the new device has slid into place, so it is framed where it ends up
-    const id = window.setTimeout(() => start(mode.current === "exploded" ? "exploded" : heroOrPreset()), 450);
-    return () => window.clearTimeout(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sceneDevices]);
-  useEffect(() => {
     // Frame the first parts of a new build before scene.ready arrives.
     if (!buildId || partsCount === 0 || framedFor.current === buildId) return;
     framedFor.current = buildId;
@@ -1276,7 +1145,7 @@ function CameraRig() {
   useFrame((_, dt) => {
     // Label column room: shift the projection, not the camera, so orbit stays centred on the model.
     // no label column while a part is in focus, so the view centres again
-    const want = labelOpacity(stage.explode) * (1 - focusAmount()) * LABEL_SHIFT;
+    const want = labelOpacity(stage.explode) * (1 - stage.focusK) * LABEL_SHIFT;
     if (Math.abs(want - shift.current) > 1e-4) {
       shift.current = want;
       if (want > 0) cam.setViewOffset(size.width, size.height, size.width * want, 0, size.width, size.height);
@@ -1505,6 +1374,9 @@ const NO_COVER = new Set<string>();
 
 // ---------------------------------------------------------------- companion devices
 
+/** Space between devices standing side by side on one canvas. */
+const COMPANION_GAP_MM = 40;
+
 function assemblyBox(build: Build | null): THREE.Box3 | null {
   const bb = build?.scene?.assembly_bbox_mm;
   if (!bb?.min || !bb?.max) return null;
@@ -1564,7 +1436,7 @@ function CompanionCase(props: { enc: Enclosure; pick: CompanionPick }) {
   const material = useMemo(() => {
     const m = presetMaterial("case", hex).clone();
     m.transparent = true;
-    m.opacity = 0.24;
+    m.opacity = 0.3;
     m.depthWrite = false;
     return m;
   }, [hex]);
@@ -1610,24 +1482,9 @@ function CompanionDevice(props: { canvasId: string; build: Build; offset: THREE.
   // with the routed board drawn, what it already carries (its parts, the bare PCB) is not drawn twice
   const parts = build.parts.filter((p) => !hiddenPcbs.has(p.instance_id) && !(boardGlb && (layerOf(p) === "board_parts" || layerOf(p) === "pcb" || layerOf(p) === "under")));
   const box = assemblyBox(build);
-  // a device added to the scene slides in from the side to its place, and moves to a new one when the row changes
-  const slide = useRef<THREE.Group>(null);
-  const { invalidate } = useThree();
-  const entered = useRef(false);
-  useLayoutEffect(() => {
-    if (entered.current || !slide.current) return;
-    entered.current = true;
-    slide.current.position.copy(props.offset).add(new THREE.Vector3(70, 0, 0));
-  }, [props.offset]);
-  useFrame((_, dt) => {
-    const g = slide.current;
-    if (!g || g.position.distanceToSquared(props.offset) < 0.01) return;
-    g.position.lerp(props.offset, reducedMotion() ? 1 : 1 - Math.exp(-dt * 6));
-    invalidate();
-  });
   const tag = box ? new THREE.Vector3((box.min.x + box.max.x) / 2, (box.min.y + box.max.y) / 2, box.max.z + 6) : new THREE.Vector3(0, 0, 30);
   return (
-    <group ref={slide} position={props.offset} userData={{ companion: props.canvasId }}>
+    <group position={props.offset} userData={{ companion: props.canvasId }}>
       {parts.map((p) => (
         <CompanionPart key={p.instance_id} part={p} build={build} pick={pick} />
       ))}
@@ -1665,32 +1522,36 @@ function CompanionRow() {
     };
   }, []);
   const activeId = useApp((s) => s.activeCanvas);
+  const order = useApp(useShallow((s) => s.canvases.map((c) => c.id)));
   const slots = useMemo(() => {
-    // arrange.ts stands the devices on the floor by their sizes; the open one stays at its origin,
-    // so switching tabs never moves the device being worked on
+    // the row keeps tab order whichever device is open, so switching never swaps their places
     const here = assemblyBox(active) ?? fallbackBox();
-    const guess = new THREE.Box3(new THREE.Vector3(-40, -40, 0), new THREE.Vector3(40, 40, 20));
-    const boxes = [here, ...ids.map((_, i) => assemblyBox(others[i]) ?? guess)].map(toBox);
-    const at = arrangeDevices(boxes);
-    return ids.map((id, i) => ({
-      id,
-      build: others[i],
-      offset: new THREE.Vector3(at[i + 1][0] - at[0][0], at[i + 1][1] - at[0][1], at[i + 1][2] - at[0][2]),
-    }));
-  }, [ids, others, active]);
+    const cy = (here.min.y + here.max.y) / 2;
+    const rank = (id: string) => order.indexOf(id);
+    const sized = ids.map((id, i) => ({ id, build: others[i], bb: assemblyBox(others[i]) ?? new THREE.Box3(new THREE.Vector3(-40, -40, 0), new THREE.Vector3(40, 40, 20)) }));
+    const place = (d: (typeof sized)[number], x: number) => new THREE.Vector3(x, cy - (d.bb.min.y + d.bb.max.y) / 2, here.min.z - d.bb.min.z);
+    const out: { id: string; build: Build | null; offset: THREE.Vector3 }[] = [];
+    let right = here.max.x + COMPANION_GAP_MM;
+    for (const d of sized.filter((d) => rank(d.id) > rank(activeId)).sort((a, b) => rank(a.id) - rank(b.id))) {
+      out.push({ id: d.id, build: d.build, offset: place(d, right - d.bb.min.x) });
+      right += d.bb.max.x - d.bb.min.x + COMPANION_GAP_MM;
+    }
+    let left = here.min.x - COMPANION_GAP_MM;
+    for (const d of sized.filter((d) => rank(d.id) < rank(activeId)).sort((a, b) => rank(b.id) - rank(a.id))) {
+      out.push({ id: d.id, build: d.build, offset: place(d, left - d.bb.max.x) });
+      left -= d.bb.max.x - d.bb.min.x + COMPANION_GAP_MM;
+    }
+    return out;
+  }, [ids, others, active, activeId, order]);
   useEffect(() => {
     stage.settleVersion++;
   }, [slots, away]);
-  // The open device sits at its own origin; links run between it and the companions.
-  const linkSlots = useMemo(() => [{ id: activeId, build: active, offset: new THREE.Vector3() }, ...slots], [activeId, active, slots]);
   return (
     <group ref={ref}>
       {!away &&
         slots.map((sl) =>
           sl.build ? <CompanionDevice key={sl.id} canvasId={sl.id} build={sl.build} offset={sl.offset} name={shortName(names[ids.indexOf(sl.id)])} /> : null,
         )}
-      {!away && <ProjectLinkLines slots={linkSlots} />}
-      <AutoLinker />
     </group>
   );
 }
@@ -1796,9 +1657,6 @@ function SceneContents(props: {
       <StudioEnvironment palette={props.palette} post={props.post} />
       {preset !== "bottom" && <StudioFloor palette={props.palette} revision={revision} grid />}
       <ExplodeDriver />
-      <LayerMeasure />
-      <HoverDriver />
-      <PickTag />
       <FocusDriver />
       <SimDriver />
       <group ref={rootRef}>

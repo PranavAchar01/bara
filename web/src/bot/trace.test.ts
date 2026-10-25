@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Build, Candidate, Decision, PartCard, Slot } from "../spec/types";
 import type { LogEntry } from "../state/store";
 import { emptyView, type ViewState } from "../state/view";
-import { buildTrace, fmtDur, nowLine } from "./trace";
+import { buildTrace, fmtDur } from "./trace";
 
 const label = (id: string) => ({ classify: "Understand", compose: "Choose parts", place: "Place", board: "Board" })[id] ?? id;
 
@@ -194,25 +194,5 @@ describe("buildTrace", () => {
     });
     expect(t.final).toEqual({ text: "Stopped: No switch fits", tone: "fail" });
     expect(t.groups[0].summary).toBe("Choose parts: failed");
-  });
-});
-
-describe("nowLine", () => {
-  it("is the newest step of the stage that is working", () => {
-    const tr = buildTrace({
-      build: build(),
-      view: view({ classify: { status: "ok" }, compose: { status: "active" } }),
-      log: [],
-      label,
-    });
-    const now = nowLine(tr);
-    expect(now?.live).toBe(true);
-    expect(now?.stage).toBe("Choose parts");
-  });
-  it("says nothing before anything has started", () => {
-    expect(nowLine({ groups: [], final: null })).toBeNull();
-  });
-  it("is the closing line once the build is over", () => {
-    expect(nowLine({ groups: [], final: { text: "Done: 3 parts", tone: "ok" } })).toMatchObject({ stage: "", text: "Done: 3 parts", live: false });
   });
 });

@@ -442,17 +442,6 @@
             "unknown"
           ],
           "default": "ok"
-        },
-        "finish": {
-          "oneOf": [
-            {
-              "$ref": "#/$defs/Finish"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Finishing-pass material; null or absent before finishing."
         }
       }
     },
@@ -742,24 +731,6 @@
           ],
           "default": "default",
           "description": "default: neutral gray #9E9E9E, no decoration (every generated case unless the user asked for a colour). user: the user asked for this colour in the prompt or an edit. design: colour taken from the open design."
-        },
-        "finish": {
-          "oneOf": [
-            {
-              "$ref": "#/$defs/Finish"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Finishing-pass material; null or absent before finishing."
-        },
-        "node_finish": {
-          "type": "object",
-          "additionalProperties": {
-            "$ref": "#/$defs/Finish"
-          },
-          "description": "Finish per GLB node of the case (tray, bezel, caps, glass), keyed by node name."
         }
       }
     },
@@ -1008,17 +979,6 @@
         "revision": {
           "type": "integer",
           "minimum": 0
-        },
-        "finish": {
-          "oneOf": [
-            {
-              "$ref": "#/$defs/Finish"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Finishing-pass material; null or absent before finishing."
         }
       }
     },
@@ -1349,100 +1309,6 @@
             "type": "string"
           },
           "description": "Asset urls to fetch first, in priority order."
-        },
-        "finish": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "description": "Finishing-pass summary: palette (role or group name -> hex) and the case finish.",
-          "properties": {
-            "palette": {
-              "type": "object",
-              "additionalProperties": {
-                "$ref": "common.schema.json#/$defs/HexColor"
-              }
-            },
-            "palette_name": {
-              "type": "string"
-            },
-            "case": {
-              "$ref": "#/$defs/Finish"
-            }
-          }
-        }
-      }
-    },
-    "Finish": {
-      "type": "object",
-      "description": "Render material chosen by the finishing pass (after industrial design). Maps one to one onto a physical material: color, opacity (transparent when below 1), roughness, metalness, transmission, ior, emissive.",
-      "required": [
-        "role",
-        "color",
-        "opacity",
-        "roughness",
-        "metalness",
-        "transmission"
-      ],
-      "properties": {
-        "role": {
-          "type": "string",
-          "enum": [
-            "case",
-            "control",
-            "display",
-            "pcb",
-            "metal",
-            "connector",
-            "other"
-          ]
-        },
-        "name": {
-          "type": "string",
-          "maxLength": 60
-        },
-        "color": {
-          "$ref": "common.schema.json#/$defs/HexColor"
-        },
-        "opacity": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1
-        },
-        "roughness": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1
-        },
-        "metalness": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1
-        },
-        "transmission": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1
-        },
-        "ior": {
-          "type": "number",
-          "minimum": 1,
-          "maximum": 3
-        },
-        "emissive": {
-          "oneOf": [
-            {
-              "$ref": "common.schema.json#/$defs/HexColor"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "emissive_intensity": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 10
         }
       }
     }

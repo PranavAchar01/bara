@@ -5,9 +5,8 @@ import { create } from "zustand";
 import { focusPart, useApp, type Toggles, type ViewPreset } from "../state/store";
 import type { Build } from "../spec/types";
 import { deriveInputMap, type InputMap, type SimInput } from "./inputMap";
-import { press, release, type Runtime } from "./runtime";
-import { operatingView, type DisplaySpec, type OperatingView } from "./view";
-import { openSimPanel } from "./simPanelStore";
+import { createRuntime, press, release, type Runtime } from "./runtime";
+import { displaySpec, operatingView, type DisplaySpec, type OperatingView } from "./view";
 
 interface Saved {
   explode: number;
@@ -49,16 +48,38 @@ export const capHold = new Map<string, number>();
 const TAP_MS = 110;
 
 export function canSimulate(build: Build | null): boolean {
-  if (!build || (build.status !== "done" && build.status !== "failed")) return false;
-  return build.parts.some((p) => p.card.primary_function === "compute.mcu") || deriveInputMap(build).inputs.length > 0;
+  return !!build && build.status === "done" && deriveInputMap(build).inputs.length > 0;
 }
 
-/** Simulation is its own screen: the engine builds the firmware and runs it (SimView). */
 export function enterSimulation(): void {
-  const build = useApp.getState().build;
-  if (!canSimulate(build)) return;
+  const app = useApp.getState();
+  const build = app.build;
+  if (useSim.getState().active || !build || build.status !== "done") return;
+  const map = deriveInputMap(build);
+  if (!map.inputs.length) return;
+  const display = build.parts.find((p) => map.displays.includes(p.instance_id));
+  const screen = display ? displaySpec(display) : null;
+  const saved: Saved = { explode: app.explode, preset: app.preset, toggles: { ...app.toggles } };
   focusPart(null);
-  openSimPanel();
+  useApp.setState((s) => ({
+    explode: 0,
+    toggles: { ...s.toggles, case: true, labels: false },
+    selection: null,
+    hoverPart: null,
+    moving: null,
+  }));
+  useSim.setState({
+    active: true,
+    map,
+    runtime: createRuntime(map, screen ? screen.w / screen.h : 4 / 3),
+    view: operatingView(build),
+    screen,
+    byPressKey: new Map(map.inputs.map((i) => [i.pressKey, i])),
+    byId: new Map(map.inputs.map((i) => [i.id, i])),
+    hover: null,
+    saved,
+    version: 0,
+  });
 }
 
 export function exitSimulation(): void {

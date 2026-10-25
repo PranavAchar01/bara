@@ -146,11 +146,6 @@ def apply(prompt: str, brief: dict[str, Any], source: PartSource, path: Path) ->
     for fn in arch.get("functions", []):
         options = fn.get("any_of") or [fn["function_id"]]
         have = next((f for f in options if f in functions), None)
-        if have is None and all(o.startswith("display.") for o in options):
-            # the archetype's screen is the device's screen: one the prompt named takes the
-            # role, with its own count and face (four digits are not four panels)
-            if any(f.startswith("display.") for f in functions):
-                continue
         if have is None:
             have = next((f for f in options if _supported(source, f)), None)
             if have is None:
