@@ -210,33 +210,42 @@ export function ChecksPanel() {
     return g;
   }, [checks]);
   if (!checks.length) return <Panel title="Checks"><Empty>Checks run after placement.</Empty></Panel>;
+  const row = (c: CheckResult) => {
+    const inst = checkInstances(c);
+    return (
+      <button
+        key={c.check_key}
+        data-agent={`check:${c.check_key}`}
+        type="button"
+        className={`check-row tone-${checkTone(c)}`}
+        title={`${vlabel(vocab, "check_rules", c.rule_id)}${c.measured !== undefined && c.measured !== null ? ` · ${fmtValue(c.measured, c.unit)}${c.limit !== undefined && c.limit !== null ? ` / ${fmtValue(c.limit, c.unit)}` : ""}` : ""}`}
+        onClick={() => inst[0] && select(inst[0])}
+      >
+        <span className="dot" />
+        <span className="check-main">
+          <span>{c.message}</span>
+          {c.fix_hint && c.status === "fail" && <span className="fix-hint small">{c.fix_hint}</span>}
+        </span>
+      </button>
+    );
+  };
+  const rest = [...grouped.unknown, ...grouped.pass];
   return (
-    <Panel title="Checks" meta={`${grouped.pass.length} pass, ${grouped.fail.length} fail, ${grouped.unknown.length} unknown`}>
-      {CHECK_GROUPS.map((grp) =>
-        grouped[grp.id].length ? (
-          <div className="check-group" key={grp.id}>
-            <h3>{grp.label}</h3>
-            {grouped[grp.id].map((c) => {
-              const inst = checkInstances(c);
-              return (
-                <button key={c.check_key} data-agent={`check:${c.check_key}`} type="button" className={`check-row tone-${checkTone(c)}`} onClick={() => inst[0] && select(inst[0])}>
-                  <span className="dot" />
-                  <span className="check-main">
-                    <span className="check-rule small muted">{vlabel(vocab, "check_rules", c.rule_id)}</span>
-                    <span>{c.message}</span>
-                    {c.fix_hint && c.status === "fail" && <span className="fix-hint small">{c.fix_hint}</span>}
-                  </span>
-                  {c.measured !== undefined && c.measured !== null && (
-                    <span className="mono small muted">
-                      {fmtValue(c.measured, c.unit)}
-                      {c.limit !== undefined && c.limit !== null ? ` / ${fmtValue(c.limit, c.unit)}` : ""}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        ) : null,
+    <Panel title="Checks" meta={<span className="mono small muted">{grouped.pass.length}/{checks.length}</span>}>
+      {/* One bar shows the health at a glance: green passing, red failing, grey not known */}
+      <div className="check-bar" role="img" aria-label={`${grouped.pass.length} pass, ${grouped.fail.length} fail, ${grouped.unknown.length} unknown`}>
+        {CHECK_GROUPS.map((grp) =>
+          grouped[grp.id].length ? <span key={grp.id} className={`cb-${grp.id}`} style={{ flexGrow: grouped[grp.id].length }} /> : null,
+        )}
+      </div>
+      {grouped.fail.length > 0 && <div className="check-group">{grouped.fail.map(row)}</div>}
+      {rest.length > 0 && (
+        <details className="fold">
+          <summary className="muted small">
+            {grouped.pass.length} passing{grouped.unknown.length ? ` · ${grouped.unknown.length} not known` : ""}
+          </summary>
+          <div className="check-group">{rest.map(row)}</div>
+        </details>
       )}
     </Panel>
   );

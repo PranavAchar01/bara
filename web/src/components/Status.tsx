@@ -1,73 +1,50 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useApp } from "../state/store";
 import { applyEdit, startBuild } from "../net/client";
-import type { CheckResult, Suggestion, Warning } from "../spec/types";
+import type { CheckResult, Suggestion } from "../spec/types";
 import { STAGE_IDS } from "../spec/types";
 import { Chip, Icon, Panel, useNow } from "../ui/common";
-import { buildProgress, fmtDuration, fmtLeft } from "../state/progress";
+import { buildProgress, fmtLeft } from "../state/progress";
 import { checkTone, fmtMs, fmtValue, known, severityTone, vlabel } from "../ui/format";
 
-/** How long a notification stays before it closes itself. */
-const AUTO_CLOSE_MS = 8000;
-
-/** Whole-build progress bar with time left while running, then a done confirmation. */
+/** Thin whole-build progress bar while running; the finished model on the canvas is the done signal. */
 export function BuildProgress() {
-  const status = useApp((s) => s.build?.status);
-  const buildId = useApp((s) => s.build?.build_id ?? null);
+  const running = useApp((s) => s.build?.status === "running");
   const stages = useApp((s) => s.view.stages);
   const startAt = useApp((s) => s.view.startAt);
-  const total = useApp((s) => s.view.done?.total_ms ?? s.view.doneMs);
-  const warnings = useApp((s) => s.build?.warnings?.length ?? 0);
-  const [closed, setClosed] = useState<string | null>(null);
-  const running = status === "running";
   const now = useNow(running, 1000);
-  useEffect(() => {
-    if (status !== "done" || !buildId) return;
-    const h = setTimeout(() => setClosed(buildId), AUTO_CLOSE_MS);
-    return () => clearTimeout(h);
-  }, [status, buildId]);
-  if (running) {
-    const p = buildProgress(stages, startAt, now);
-    const pct = Math.round(p.fraction * 100);
-    return (
-      <div className="build-progress" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-label="Build progress">
-        <div className="bp-head">
-          <span className="mono">{pct}%</span>
-          {p.leftMs !== null && <span className="muted">{fmtLeft(p.leftMs)}</span>}
-        </div>
-        <div className="bp-track">
-          <span style={{ width: `${Math.max(2, pct)}%` }} />
-        </div>
-      </div>
-    );
-  }
-  if (status !== "done" || closed === buildId) return null;
+  if (!running) return null;
+  const p = buildProgress(stages, startAt, now);
+  const pct = Math.round(p.fraction * 100);
   return (
-    <div className="build-done" role="status" aria-live="polite">
-      <span className="bd-check" aria-hidden>
-        ✓
-      </span>
-      <strong>Build done</strong>
-      {total !== null && total !== undefined && <span className="muted">in {fmtDuration(total)}</span>}
-      {warnings > 0 && <span className="muted">· {warnings} warning{warnings > 1 ? "s" : ""} to look at</span>}
-      <button type="button" className="btn ghost sm icon" aria-label="Close" onClick={() => setClosed(buildId)}>
-        <Icon name="x" />
-      </button>
+    <div
+      className="build-progress"
+      role="progressbar"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={pct}
+      aria-label="Build progress"
+      title={p.leftMs !== null ? `${pct}% · ${fmtLeft(p.leftMs)}` : `${pct}%`}
+    >
+      <div className="bp-track">
+        <span style={{ width: `${Math.max(2, pct)}%` }} />
+      </div>
     </div>
   );
 }
 
-/** C05 LatencyHUD: time to first part, per stage, total, model calls. */
+/** C05 LatencyHUD: time to first part, per stage, total, model calls. A debugging aid, shown with the event log (L). */
 export function LatencyHUD() {
   const view = useApp((s) => s.view);
   const focused = useApp((s) => s.focusKey !== null);
+  const debug = useApp((s) => s.logOpen);
   const decisions = useApp((s) => s.build?.decisions ?? []);
   const vocab = useApp((s) => s.vocab);
   const models = decisions.filter((d) => d.model);
   const modelMs = models.reduce((a, d) => a + (d.model?.latency_ms ?? 0), 0);
   const total = view.done?.total_ms ?? view.doneMs;
   // the part in focus has the canvas to itself
-  if (focused) return null;
+  if (focused || !debug) return null;
   return (
     <div className="hud" aria-label="Latency">
       <div className="hud-row">
@@ -101,95 +78,32 @@ export function LatencyHUD() {
   );
 }
 
-/** How long a note stays up (a critical one a little longer); hovering the stack holds them. */
-const TOAST_MS = 5200;
-const TOAST_CRITICAL_MS = 9000;
-/** At most this many notes on screen; an older one slides away when a new one comes in. */
-const MAX_TOASTS = 3;
-const LEAVE_MS = 220;
-
-interface ToastItem {
-  w: Warning;
-  leaving: boolean;
-}
-
-function NoteToast(props: { item: ToastItem; paused: boolean; onDone: (id: string) => void }) {
-  const { w } = props.item;
-  const vocab = useApp((s) => s.vocab);
-  const left = useRef(w.severity === "critical" ? TOAST_CRITICAL_MS : TOAST_MS);
-  const { onDone, paused } = props;
-  useEffect(() => {
-    if (paused || props.item.leaving) return;
-    const from = performance.now();
-    const h = window.setTimeout(() => onDone(w.warning_id), left.current);
-    return () => {
-      window.clearTimeout(h);
-      left.current = Math.max(600, left.current - (performance.now() - from));
-    };
-  }, [paused, props.item.leaving, onDone, w.warning_id]);
-  return (
-    <div className={`note-toast tone-${severityTone(w.severity ?? "warning")} ${props.item.leaving ? "leaving" : ""}`} role="status">
-      <span className="note-code mono small">{vlabel(vocab, "warning_codes", w.code)}</span>
-      <span className="note-msg">{w.message}</span>
-      <button type="button" className="btn ghost sm icon" aria-label="Dismiss" onClick={() => onDone(w.warning_id)}>
-        <Icon name="x" />
-      </button>
-    </div>
-  );
-}
-
-/**
- * C18 warnings as passing notes: each slides in as it arrives, at most three stack, and each goes
- * by itself after a few seconds (hover holds them). Warnings a build already had when it was
- * opened are not replayed as notes; every warning stays listed in the event log (L).
- */
+/** C18 WarningBanner: only critical warnings interrupt; the rest live in the checks and tab badges. */
 export function WarningBanner() {
-  const buildId = useApp((s) => s.build?.build_id ?? null);
-  const warnings = useApp((s) => s.build?.warnings ?? EMPTY_WARNINGS);
-  const [items, setItems] = useState<ToastItem[]>([]);
-  const [paused, setPaused] = useState(false);
-  const seen = useRef<{ build: string | null; ids: Set<string> }>({ build: null, ids: new Set() });
-  useEffect(() => {
-    const s = seen.current;
-    if (s.build !== buildId) {
-      seen.current = { build: buildId, ids: new Set(warnings.map((w) => w.warning_id)) };
-      setItems([]);
-      return;
-    }
-    const fresh = warnings.filter((w) => !s.ids.has(w.warning_id));
-    if (!fresh.length) return;
-    for (const w of fresh) s.ids.add(w.warning_id);
-    setItems((cur) => {
-      const live = [...cur.filter((i) => !i.leaving), ...fresh.map((w) => ({ w, leaving: false }))];
-      const drop = new Set(live.slice(0, Math.max(0, live.length - MAX_TOASTS)).map((i) => i.w.warning_id));
-      return [...cur.filter((i) => i.leaving), ...live.map((i) => (drop.has(i.w.warning_id) ? { ...i, leaving: true } : i))];
-    });
-  }, [buildId, warnings]);
-  // a note marked leaving plays its exit, then goes
-  const leavingIds = items
-    .filter((i) => i.leaving)
-    .map((i) => i.w.warning_id)
-    .join("|");
-  useEffect(() => {
-    if (!leavingIds) return;
-    const h = window.setTimeout(() => setItems((cur) => cur.filter((i) => !i.leaving)), LEAVE_MS);
-    return () => window.clearTimeout(h);
-  }, [leavingIds]);
-  const done = useCallback((id: string) => {
-    setItems((cur) => cur.map((i) => (i.w.warning_id === id ? { ...i, leaving: true } : i)));
-    useApp.setState((s) => (s.dismissedWarnings.includes(id) ? {} : { dismissedWarnings: [...s.dismissedWarnings, id] }));
-  }, []);
-  if (!items.length) return null;
+  const warnings = useApp((s) => s.build?.warnings ?? []);
+  const dismissed = useApp((s) => s.dismissedWarnings);
+  const vocab = useApp((s) => s.vocab);
+  const shown = warnings.filter((w) => w.severity === "critical" && !dismissed.includes(w.warning_id));
+  if (!shown.length) return null;
   return (
-    <div className="note-stack" onPointerEnter={() => setPaused(true)} onPointerLeave={() => setPaused(false)} aria-live="polite">
-      {items.map((i) => (
-        <NoteToast key={i.w.warning_id} item={i} paused={paused} onDone={done} />
+    <div className="warnings" role="status">
+      {shown.map((w) => (
+        <div key={w.warning_id} className={`warning tone-${severityTone(w.severity ?? "warning")}`}>
+          <span className="warning-code mono small">{vlabel(vocab, "warning_codes", w.code)}</span>
+          <span className="warning-msg">{w.message}</span>
+          <button
+            type="button"
+            className="btn ghost sm icon"
+            aria-label="Dismiss"
+            onClick={() => useApp.setState((s) => ({ dismissedWarnings: [...s.dismissedWarnings, w.warning_id] }))}
+          >
+            <Icon name="x" />
+          </button>
+        </div>
       ))}
     </div>
   );
 }
-
-const EMPTY_WARNINGS: Warning[] = [];
 
 function runSuggestion(s: Suggestion) {
   const kind = known(s.kind, ["prompt", "edit", "design"] as const);
@@ -251,7 +165,7 @@ export function EditStatus() {
       : edit.phase === "applying"
         ? "Applying edit"
         : edit.phase === "applied"
-          ? `Edit applied${edit.duration_ms !== undefined ? ` in ${fmtMs(edit.duration_ms)}` : ""}`
+          ? "Edit applied"
           : "Edit rejected";
   return (
     <div className={`edit-status ph-${edit.phase}`} role="status" aria-live="polite">
@@ -259,7 +173,6 @@ export function EditStatus() {
         {(edit.phase === "pending" || edit.phase === "applying") && <span className="spinner" aria-hidden />}
         <strong>{text}</strong>
         {edit.label && <span className="muted">{edit.label}</span>}
-        {edit.edit_id && <span className="mono small muted">{edit.edit_id}</span>}
         <button type="button" className="btn ghost sm icon" aria-label="Close" onClick={close}>
           <Icon name="x" />
         </button>
@@ -330,8 +243,6 @@ export function EventLog() {
     if (open && ref.current) ref.current.scrollTop = ref.current.scrollHeight;
   }, [open, log.length]);
   const rows = useMemo(() => log.slice(-400), [log]);
-  const notes = useApp((s) => s.build?.warnings ?? EMPTY_WARNINGS);
-  const vocab = useApp((s) => s.vocab);
   if (!open) return null;
   return (
     <aside className="eventlog" aria-label="Event log">
@@ -342,20 +253,6 @@ export function EventLog() {
           <Icon name="x" />
         </button>
       </header>
-      {notes.length > 0 && (
-        <details className="eventlog-notes">
-          <summary>
-            {notes.length} note{notes.length > 1 ? "s" : ""} from this build
-          </summary>
-          <ul>
-            {notes.map((w) => (
-              <li key={w.warning_id} className={`tone-${severityTone(w.severity ?? "warning")}`}>
-                <span className="mono small">{vlabel(vocab, "warning_codes", w.code)}</span> {w.message}
-              </li>
-            ))}
-          </ul>
-        </details>
-      )}
       <div className="eventlog-b" ref={ref}>
         {rows.map((e) => (
           <div key={e.id} className={`log-line dir-${e.dir} ${e.unknown ? "unknown" : ""}`} title={e.raw}>

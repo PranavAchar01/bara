@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { ShoppingListButton } from "./ShoppingList";
 import { useApp } from "../state/store";
 import { paths } from "../net/rest";
 import { serverUrl, storeKey } from "../net/mode";
@@ -7,7 +6,6 @@ import { Icon } from "../ui/common";
 import { ReplayControl } from "../bot/ReplayControl";
 import type { ConnStatus } from "../net/connection";
 import { SimulateButton } from "../sim/SimulateButton";
-import { useLibrary } from "../library/library";
 
 const CONN_LABEL: Record<ConnStatus, string> = {
   connecting: "Connecting",
@@ -50,12 +48,11 @@ export function TopBar() {
       )}
       <div className="topbar-right">
         {(mock || hello?.mock) && <span className="badge tone-info">mock</span>}
-        {health?.llm?.provider && (
-          <span className="muted small" title={`Fallback: ${health.llm_fallback?.provider ?? "none"} ${health.llm_fallback?.model ?? ""}`}>
-            {health.llm.provider} {health.llm.model}
-          </span>
-        )}
-        <span className={`conn-pill tone-${CONN_TONE[conn]}`} aria-live="polite">
+        <span
+          className={`conn-pill tone-${CONN_TONE[conn]}`}
+          aria-live="polite"
+          title={health?.llm?.provider ? `${health.llm.provider} ${health.llm.model}. Fallback: ${health.llm_fallback?.provider ?? "none"} ${health.llm_fallback?.model ?? ""}` : undefined}
+        >
           <span className="dot" />
           {CONN_LABEL[conn]}
         </span>
@@ -64,33 +61,13 @@ export function TopBar() {
             <Icon name="home" /> Home
           </button>
         )}
-        {screen === "workspace" && <ShoppingListButton />}
         <ExportMenu />
-        {screen !== "workspace" && <DraftsButton />}
       </div>
     </header>
   );
 }
 
-/** Top right of Home: opens the Library page (finished builds plus this browser's drafts); on Library it goes back. */
-function DraftsButton() {
-  const screen = useApp((s) => s.screen);
-  const count = useLibrary((s) => s.cards.length);
-  const on = screen === "drafts";
-  return (
-    <button
-      type="button"
-      className={`btn sm drafts-btn ${on ? "on" : ""}`}
-      aria-current={on ? "page" : undefined}
-      onClick={() => useApp.setState({ screen: on ? "home" : "drafts" })}
-    >
-      Library
-      {count > 0 && <span className="drafts-n mono">{count}</span>}
-    </button>
-  );
-}
-
-/** Left panel header in the workspace (Figma file header): Builds / prompt, build id + status, connection · model. */
+/** Left panel header in the workspace (Figma file header): Builds / prompt, then a status dot and Replay. */
 export function FileHeader() {
   const conn = useApp((s) => s.conn);
   const hello = useApp((s) => s.hello);
@@ -116,31 +93,22 @@ export function FileHeader() {
           {build?.prompt ?? "New build"}
         </span>
       </div>
-      {build && (
-        <div className="file-meta">
-          <span className="mono">{build.build_id}</span>
-          <span className={`status-pill st-${String(status)}`}>{String(status).replace("_", " ")}</span>
-          {(mock || hello?.mock) && <span className="status-pill">mock</span>}
-        </div>
-      )}
-      <ReplayControl />
       <div className="file-meta">
-        <span className={`conn-dot tone-${CONN_TONE[conn]}`} aria-hidden />
-        <span aria-live="polite">{CONN_LABEL[conn]}</span>
-        {health?.llm?.model && (
-          <>
-            <span className="sep">·</span>
-            {switched ? (
-              <span className="file-model switched" title={`${why} Configured: ${health.llm.provider} ${health.llm.model}. ${fallback}`}>
-                <s>{health.llm.model}</s> → {usedName} <span className="file-why">backup</span>
-              </span>
-            ) : (
-              <span className="file-model" title={`${health.llm.provider} ${health.llm.model}. ${fallback}`}>
-                {health.llm.model}
-              </span>
-            )}
-          </>
-        )}
+        {/* One dot says it all: green connected, amber when the build fell back to another model, red offline. Details on hover. */}
+        <span
+          className={`conn-dot tone-${switched && conn === "open" ? "warn" : CONN_TONE[conn]}`}
+          role="img"
+          aria-label={CONN_LABEL[conn]}
+          title={[
+            `${CONN_LABEL[conn]}${build ? ` · ${build.build_id} · ${String(status).replace("_", " ")}` : ""}`,
+            health?.llm?.model ? (switched ? `${why} Used ${usedName} instead of ${health.llm.model}.` : `${health.llm.provider} ${health.llm.model}. ${fallback}`) : "",
+          ]
+            .filter(Boolean)
+            .join("\n")}
+        />
+        {conn !== "open" && <span aria-live="polite">{CONN_LABEL[conn]}</span>}
+        {(mock || hello?.mock) && <span className="status-pill">mock</span>}
+        <ReplayControl />
       </div>
     </header>
   );
@@ -164,7 +132,6 @@ export function PanelToolbar() {
       </button>
       <span className="spacer" />
       <SimulateButton />
-      <ShoppingListButton compact />
       <ExportMenu primary />
     </div>
   );

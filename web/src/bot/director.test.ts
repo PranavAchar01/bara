@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Build, BuildPart } from "../spec/types";
 import type { Beat } from "./agent";
-import { beatsFor, DWELL_MS, enqueue, paceFor, QUEUE_MAX } from "./director";
+import { beatsFor, DWELL_MS, enqueue, once, paceFor, QUEUE_MAX } from "./director";
 
 let seq = 0;
 const ev = (type: string, payload: unknown, s = ++seq) => ({
@@ -9,14 +9,14 @@ const ev = (type: string, payload: unknown, s = ++seq) => ({
   raw: JSON.stringify({ spec_version: "0.1", type, seq: s, build_id: "b_compose01A", ts: "2026-10-24T09:00:00Z", payload }),
 });
 
-const bp = (instance_id: string, part_id: string, label: string, display_name: string): BuildPart => ({
+const bp = (instance_id: string, part_id: string, label: string, display_name: string, kind = "module", slot_id: string | null = null): BuildPart => ({
   instance_id,
   part_id,
   label,
   quantity: 1,
-  slot_id: null,
+  slot_id,
   placement: { mode: "single", position_mm: [0, 0, 0], rotation_deg: [0, 0, 0] },
-  card: { part_id, display_name, kind: "module" },
+  card: { part_id, display_name, kind },
 });
 
 const build = {
@@ -45,27 +45,17 @@ const one = (type: string, payload: unknown, b: Build | null = build) => {
 };
 
 describe("director beats", () => {
-  it("reads the request", () => {
-    const b = one("spec.ready", { spec: { spec_id: "sp_compose01", prompt: "a wireless split keyboard" } });
-    expect(b).toMatchObject({ target: { kind: "dom", key: "prompt" }, action: "scan", label: "Reading your request" });
-  });
-
-  it("looks at each stage and opens the panel that follows it", () => {
-    const s = (stage: string, label?: string) => one("stage.started", { stage, label, budget_ms: 100 });
-    expect(s("classify", "Understanding the request")).toMatchObject({
-      target: { kind: "dom", key: "stage:classify" },
-      action: "look",
-      label: "Understanding the request",
-    });
-    expect(s("classify").open).toBeUndefined();
-    expect(s("reuse").open).toEqual({ rightTab: "build" });
-    expect(s("compose", "Choosing parts").open).toEqual({ rightTab: "build" });
-    expect(s("place").open).toEqual({ rightTab: "design" });
-    expect(s("enclose").open).toEqual({ rightTab: "design" });
-    expect(s("board").open).toEqual({ rightTab: "code", codeTab: "board" });
-    expect(s("firmware").open).toEqual({ rightTab: "code", codeTab: "firmware" });
-    // No label from the server: a sensible default.
-    expect(s("board").label).toBe("Routing the board");
+  it("ignores minor steps", () => {
+    const minor: [string, unknown][] = [
+      ["spec.ready", { spec: { spec_id: "sp_compose01", prompt: "a wireless split keyboard" } }],
+      ["stage.started", { stage: "board", label: "Routing the board", budget_ms: 100 }],
+      ["candidates.ready", { slot_id: "switches", step: 4, filters: [], count_before: 160, count_after: 112, survivors: [{}, {}] }],
+      ["decision.made", { decision: { decision_id: "d2", slot_id: "controller", method: "model_pick", chosen_part_id: "mod:nice_nano_v2", reason: "" } }],
+      ["placement.updated", { placements: [{ instance_id: "u_pcb_l", placement: {} }] }],
+      ["connection.added", { connection: { connection_id: "c1", from: { instance_id: "u_pcb_l" }, to: { instance_id: "u_mcu_l" } } }],
+      ["warning", { warning: { warning_id: "w1", code: "licence_unknown", message: "No licence", subjects: [{ instance_id: "u_mcu_l" }] } }],
+    ];
+    for (const [type, payload] of minor) expect(beatsFor(ev(type, payload), build)).toEqual([]);
   });
 
   it("notices an open design to start from", () => {
@@ -74,93 +64,77 @@ describe("director beats", () => {
     expect(one("reuse.decided", { tier: "compose", design_id: null, considered: [], unmet_hard: [], reason: "" }).label).toBe("Designing from scratch");
   });
 
-  it("compares the options that survived the filters", () => {
-    // survivors is truncated; count_after is the real count.
-    const b = one("candidates.ready", { slot_id: "switches", step: 4, filters: [], count_before: 160, count_after: 112, survivors: [{}, {}] });
-    expect(b).toMatchObject({ target: { kind: "dom", key: "tab:build" }, action: "scan", label: "Comparing 112 options" });
-  });
-
-  it("picks the decision, by name when the part is known", () => {
-    const d = (chosen_part_id: string) => ({ decision: { decision_id: "d2", slot_id: "controller", method: "model_pick", chosen_part_id, reason: "" } });
-    expect(one("decision.made", d("mod:nice_nano_v2"))).toMatchObject({
-      target: { kind: "dom", key: "decision:d2" },
-      action: "pick",
-      label: "Chose nice!nano v2",
-    });
-    // Decisions land before their parts: fall back to the slot.
-    expect(one("decision.made", d("mod:xiao_ble")).label).toBe("Picking the Controller");
-  });
-
-  it("drops each part as it lands", () => {
-    const b = one("part.added", { part: bp("u_oled_l", "disp:ssd1306", "OLED left", "SSD1306 OLED 128x32 (I2C)") });
+  it("flies to the first major part per slot only", () => {
+    const b = one("part.added", { part: bp("u_oled_l", "disp:ssd1306", "OLED left", "SSD1306 OLED 128x32 (I2C)", "module", "display") });
     expect(b).toMatchObject({ target: { kind: "part", id: "u_oled_l" }, action: "drop", label: "Placing OLED left", dwellMs: DWELL_MS.drop });
-    const noLabel = { ...bp("u_x", "p", "", "Gateron Yellow (MX)"), label: undefined };
+    const noLabel = { ...bp("u_x", "p", "", "Gateron Yellow (MX)", "component"), label: undefined };
     expect(one("part.added", { part: noLabel }).label).toBe("Placing Gateron Yellow (MX)");
+
+    // The other half of a split, or a second copy, is not news once its slot is on the build.
+    const withLeft = { ...build, parts: [...build.parts, bp("u_oled_l", "disp:ssd1306", "OLED left", "SSD1306", "module", "display")] } as Build;
+    expect(beatsFor(ev("part.added", { part: bp("u_oled_r", "disp:ssd1306", "OLED right", "SSD1306", "module", "display") }), withLeft)).toEqual([]);
+    // The part that is itself already on the build does not count as another instance.
+    expect(beatsFor(ev("part.added", { part: bp("u_oled_l", "disp:ssd1306", "OLED left", "SSD1306", "module", "display") }), withLeft)).toHaveLength(1);
+    // A different slot still gets its visit.
+    expect(beatsFor(ev("part.added", { part: bp("u_bat_l", "bat:lipo", "Battery left", "LiPo", "component", "battery") }), withLeft)).toHaveLength(1);
   });
 
-  it("scans once for a whole placement pass", () => {
-    const placements = ["u_pcb_l", "u_mcu_l", "u_sw_l"].map((instance_id) => ({ instance_id, placement: {} }));
-    expect(one("placement.updated", { placements })).toMatchObject({ target: { kind: "dom", key: "viewport" }, action: "scan", label: "Arranging parts" });
+  it("skips plates, PCBs and caps", () => {
+    for (const kind of ["plate", "pcb", "cap", "cable", "switch_cap"]) {
+      expect(beatsFor(ev("part.added", { part: bp(`u_${kind}`, `p:${kind}`, kind, kind, kind) }), build)).toEqual([]);
+    }
   });
 
-  it("traces a connection with short names and opens connections", () => {
-    const b = one("connection.added", {
-      connection: { connection_id: "c_mcu_pcb_l", type: "module_footprint", kind: "mechanical", from: { instance_id: "u_pcb_l", interface_id: "mcu_socket" }, to: { instance_id: "u_mcu_l", interface_id: "footprint" } },
-    });
-    expect(b.target).toEqual({ kind: "part", id: "u_pcb_l" });
-    expect(b.action).toBe("trace");
-    expect(b.label).toMatch(/^Wiring PCB left → Control/);
-    expect(b.label.length).toBeLessThan(32);
-    expect(b.open).toEqual({ rightTab: "code", codeTab: "connections" });
-  });
-
-  it("shapes the case, routes the board, writes firmware", () => {
-    expect(one("enclosure.updated", { enclosure: { enclosure_id: "e_case_l" } })).toMatchObject({ action: "scan", label: "Shaping the case" });
-    expect(one("board.updated", { board: { board_id: "pcb_l" } })).toMatchObject({
-      target: { kind: "dom", key: "viewport" },
-      action: "trace",
-      open: { rightTab: "code", codeTab: "board" },
-    });
+  it("visits board/firmware/case once by id", () => {
+    const c = one("enclosure.updated", { enclosure: { enclosure_id: "e_case_l" } });
+    expect(c).toMatchObject({ id: once("case"), target: { kind: "dom", key: "viewport" }, action: "scan", label: "Shaping the case", open: { rightTab: "design" } });
+    const bd = one("board.updated", { board: { board_id: "pcb_l" } });
+    expect(bd).toMatchObject({ id: once("board"), target: { kind: "dom", key: "viewport" }, action: "trace", open: { rightTab: "code", codeTab: "board" } });
     for (const type of ["firmware.progress", "firmware.ready"]) {
       expect(one(type, { firmware_id: "fw_main", phase: "compiling" })).toMatchObject({
+        id: once("firmware"),
         target: { kind: "dom", key: "codetab:firmware" },
         action: "type",
         label: "Writing firmware",
         dwellMs: DWELL_MS.type,
+        open: { rightTab: "code", codeTab: "firmware" },
       });
     }
+    // Repeated events carry the same id, so the stage plays each visit once.
+    expect(one("board.updated", { board: { board_id: "pcb_r" } }).id).toBe(bd.id);
+    expect(enqueue(enqueue([], [bd]), [one("board.updated", {})])).toHaveLength(1);
   });
 
-  it("checks results, failures first, at most two", () => {
-    const r = (check_key: string, status: string, subjects: unknown[]) => ({ check_key, rule_id: check_key, status, severity: "error", message: `${check_key} ${status}`, subjects });
+  it("only a failing check is worth a beat", () => {
+    const r = (check_key: string, status: string, subjects: unknown[], severity = "error") => ({ check_key, rule_id: check_key, status, severity, message: `${check_key} ${status}`, subjects });
+    const passing = beatsFor(
+      ev("check.result", {
+        results: [r("mech.fit.enclosure:e_case_l", "pass", [{ enclosure_id: "e_case_l" }]), r("elec.i2c.address_clash:u_mcu_l", "pass", [{ instance_id: "u_mcu_l" }])],
+      }),
+      build,
+    );
+    expect(passing).toEqual([]);
+
     const beats = beatsFor(
       ev("check.result", {
         results: [
           r("mech.fit.enclosure:e_case_l", "pass", [{ enclosure_id: "e_case_l" }]),
-          r("elec.i2c.address_clash:u_mcu_l", "pass", [{ instance_id: "u_mcu_l", interface_id: "i2c0" }]),
-          r("slot.optional_missing:foam", "fail", []),
+          r("slot.optional_missing:foam", "fail", [], "info"),
+          r("licence.unknown:u_mcu_l", "fail", [], "warning"),
+          r("elec.i2c.address_clash:u_mcu_l", "fail", [{ instance_id: "u_mcu_l" }], "critical"),
+          r("mech.fit.enclosure:e_case_r", "fail", []),
         ],
       }),
       build,
     );
-    expect(beats).toHaveLength(2);
-    expect(beats[0]).toMatchObject({ target: { kind: "dom", key: "check:slot.optional_missing:foam" }, action: "check", bad: true });
-    expect(beats[1]).toMatchObject({ target: { kind: "dom", key: "check:mech.fit.enclosure:e_case_l" }, action: "check" });
-    expect(beats[1].bad).toBeUndefined();
-    expect(new Set(beats.map((b) => b.id)).size).toBe(2);
+    // Info and warning fails are skipped; only the first error/critical failure gets a beat.
+    expect(beats).toHaveLength(1);
+    expect(beats[0]).toMatchObject({ target: { kind: "part", id: "u_mcu_l" }, action: "check", bad: true });
+    expect(beatsFor(ev("check.result", { results: [r("slot.optional_missing:foam", "fail", [], "info"), r("licence.unknown:x", "fail", [], "warning")] }), build)).toEqual([]);
 
-    const onPart = beatsFor(ev("check.result", { results: [r("elec.i2c.address_clash:u_mcu_l", "pass", [{ instance_id: "u_mcu_l" }])] }), build);
+    const onPart = beatsFor(ev("check.result", { results: [r("elec.i2c.address_clash:u_mcu_l", "fail", [{ instance_id: "u_mcu_l" }])] }), build);
     expect(onPart[0].target).toEqual({ kind: "part", id: "u_mcu_l" });
     expect(beatsFor(ev("check.result", { results: [] }), build)).toEqual([]);
-  });
-
-  it("frowns at warnings", () => {
-    const b = one("warning", {
-      warning: { warning_id: "w1", code: "licence_unknown", severity: "warning", message: "nice!nano v2 has no declared hardware licence.", subjects: [{ part_id: "mod:nice_nano_v2", instance_id: "u_mcu_l" }] },
-    });
-    expect(b).toMatchObject({ target: { kind: "part", id: "u_mcu_l" }, action: "look", bad: true });
-    expect(b.label.length).toBeLessThan(32);
-    expect(one("warning", { warning: { warning_id: "w2", code: "x", message: "Case foam left out", subjects: [{ slot_id: "foam" }] } }).target).toEqual({ kind: "dom", key: "viewport" });
   });
 
   it("cheers when done and looks worried when it fails", () => {
@@ -172,35 +146,27 @@ describe("director beats", () => {
     expect(beatsFor(ev("slots.ready", { slots: [] }), build)).toEqual([]);
     expect(beatsFor(ev("hello", {}), null)).toEqual([]);
     expect(beatsFor({ type: "part.added", raw: "not json" }, null)).toEqual([]);
-    expect(beatsFor({ type: "placement.updated" }, null)).toHaveLength(1);
+    expect(beatsFor({ type: "placement.updated" }, null)).toEqual([]);
   });
 
   it("keys beats by seq so they are stable and unique", () => {
-    const a = beatsFor(ev("placement.updated", {}, 75), build)[0];
-    const again = beatsFor(ev("placement.updated", {}, 75), build)[0];
-    const next = beatsFor(ev("placement.updated", {}, 76), build)[0];
-    expect(a.id).toBe("placement.updated:75");
-    expect(again.id).toBe(a.id);
-    expect(next.id).not.toBe(a.id);
+    const part = (seq: number) => beatsFor(ev("part.added", { part: bp("u_oled_l", "disp:ssd1306", "OLED left", "SSD1306", "module", "display") }, seq), build)[0];
+    const a = part(75);
+    expect(a.id).toBe("part.added:75");
+    expect(part(75).id).toBe(a.id);
+    expect(part(76).id).not.toBe(a.id);
   });
 
-  it("traces board routing and every new connection", () => {
+  it("keeps the board visit through a long queue", () => {
     const routed = beatsFor(ev("board.updated", { board: { board_id: "pcb_l" } }), build);
-    const wired = beatsFor(
-      ev("connection.added", { connection: { connection_id: "c1", from: { instance_id: "u_mcu_l", interface_id: "i2c" }, to: { instance_id: "u_pcb_l", interface_id: "i2c" } } }),
-      build,
-    );
-    for (const beats of [routed, wired]) {
-      expect(beats).toHaveLength(1);
-      expect(beats[0].action).toBe("trace");
-      expect(beats[0].dwellMs).toBe(DWELL_MS.trace);
-    }
-    expect(wired[0].target).toEqual({ kind: "part", id: "u_mcu_l" });
+    expect(routed).toHaveLength(1);
+    expect(routed[0].action).toBe("trace");
+    expect(routed[0].dwellMs).toBe(DWELL_MS.trace);
     // Real work: traces survive a long queue that drops glances.
     let q: Beat[] = [];
     for (let i = 0; i < 12; i++) q = enqueue(q, [mk(`l${i}`, "look", `stage:s${i}`)]);
-    q = enqueue(q, [...routed, ...wired]);
-    expect(q.filter((b) => b.action === "trace")).toHaveLength(2);
+    q = enqueue(q, routed);
+    expect(q.filter((b) => b.action === "trace")).toHaveLength(1);
   });
 
   it("acts an applied edit out on the parts it touched", () => {
@@ -254,7 +220,7 @@ describe("director beats", () => {
   });
 
   it("keeps every label on the chip", () => {
-    const b = one("stage.started", { stage: "compose", label: "x".repeat(80) });
+    const b = one("part.added", { part: bp("u_long", "p", "", "x".repeat(80), "module", "long") });
     expect(b.label.length).toBeLessThan(32);
   });
 });
@@ -314,10 +280,10 @@ describe("director queue", () => {
     expect(ids(q)).toEqual(["other", "p", "new"]);
   });
 
-  it("defaults to ten beats", () => {
+  it("defaults to six beats", () => {
     const many = Array.from({ length: 14 }, (_, i) => mk(`p${i}`, "pick", `decision:d${i}`));
-    expect(QUEUE_MAX).toBe(10);
-    expect(enqueue([], many)).toHaveLength(10);
+    expect(QUEUE_MAX).toBe(6);
+    expect(enqueue([], many)).toHaveLength(6);
     expect(enqueue([], many, 3)).toHaveLength(3);
   });
 
@@ -329,11 +295,14 @@ describe("director queue", () => {
       ...["u_pcb_l", "u_mcu_l", "u_bat_l", "u_oled_l", "u_sw_l"].map((id) => ev("part.added", { part: bp(id, id, id, id) })),
       ev("warning", { warning: { warning_id: "w1", message: "No licence" } }),
       ev("placement.updated", {}),
+      ev("check.result", { results: [{ check_key: "slot.optional_missing:foam", rule_id: "r", status: "fail", severity: "error", message: "m", subjects: [] }] }),
       ev("build.done", {}),
     ];
     for (const e of stream) q = enqueue(q, beatsFor(e, build));
     expect(q.length).toBeLessThanOrEqual(QUEUE_MAX);
     expect(q[q.length - 1].action).toBe("cheer");
+    // Minor steps added nothing: only drops, the failing check and the cheer remain.
+    expect(q.every((b) => ["drop", "check", "cheer"].includes(b.action))).toBe(true);
     expect(q.some((b) => b.bad)).toBe(true);
   });
 
@@ -344,12 +313,13 @@ describe("director queue", () => {
 });
 
 describe("director pacing", () => {
-  it("gives full dwell to a short queue and hurries a long one, never below 35%", () => {
+  it("gives full dwell to a short queue and hurries a long one, never below 60%", () => {
     const b = { dwellMs: 1000 };
     expect(paceFor(b, 0)).toBe(1000);
     expect(paceFor(b, 3)).toBe(1000);
-    expect(paceFor(b, 6)).toBe(500);
-    expect(paceFor(b, 10)).toBe(350);
-    expect(paceFor(b, Infinity)).toBe(350);
+    expect(paceFor(b, 4)).toBe(750);
+    expect(paceFor(b, 6)).toBe(600);
+    expect(paceFor(b, 10)).toBe(600);
+    expect(paceFor(b, Infinity)).toBe(600);
   });
 });

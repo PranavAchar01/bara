@@ -2,17 +2,14 @@ import { useEffect } from "react";
 import { useApp } from "./state/store";
 import { ConnectionBanner, EngineNotice, FileHeader, TopBar } from "./components/TopBar";
 import { ExampleChips, PromptBar } from "./components/PromptBar";
-import { BuildDialog } from "./components/BuildDialog";
-import { useRouteSync } from "./pages/routes";
-import { BaraBot } from "./bot/BaraBot";
 import { StepPlayer } from "./components/LeftColumn";
 import { BuildProgress, EditStatus, EventLog, FailureCard, LatencyHUD, Toast, WarningBanner } from "./components/Status";
 import { PartsList, RightColumn } from "./components/RightColumn";
 import { AddPartPicker, ConnectDialog, PartInspector, ResizePanel, SwapDrawer } from "./components/Overlays";
 import { FocusCard, FocusExit } from "./components/FocusCard";
 import { bindVoiceKeys } from "./voice/voice";
-import { LibraryPage } from "./components/Library";
-import { LandingHero } from "./components/Landing";
+import { Library } from "./components/Library";
+import { AgentSteps, LandingHero } from "./components/Landing";
 import { startAutosave } from "./library/autosave";
 import { Viewport3D } from "./three/Viewport3D";
 import { BotLab } from "./bot/BotLab";
@@ -58,14 +55,8 @@ function Home() {
   return (
     <main className="home landing">
       <LandingHero />
-    </main>
-  );
-}
-
-function Drafts() {
-  return (
-    <main className="home libmain">
-      <LibraryPage />
+      <AgentSteps />
+      <Library />
     </main>
   );
 }
@@ -85,7 +76,6 @@ function RightOverlay() {
 /** A canvas with no build yet (or one still being fetched after a reload): just the prompt. */
 function EmptyCanvas() {
   const restoring = useApp((s) => s.canvasRestoring.includes(s.activeCanvas));
-  const starting = useApp((s) => s.pendingStart?.prompt ?? null);
   return (
     <main className="workspace">
       <aside className="leftcol" aria-label="Layers">
@@ -96,12 +86,6 @@ function EmptyCanvas() {
         <div className="canvas-empty">
           {restoring ? (
             <p className="muted">Loading this canvas's build again…</p>
-          ) : starting ? (
-            <div className="canvas-empty-inner canvas-starting" role="status">
-              <BaraBot size={72} mood="thinking" />
-              <h2>{starting}</h2>
-              <p className="muted">Starting the build…</p>
-            </div>
           ) : (
             <div className="canvas-empty-inner">
               <h2>Describe a device for this canvas.</h2>
@@ -167,7 +151,6 @@ export function App() {
 
 function Main() {
   useKeys();
-  useRouteSync();
   useEffect(() => bindVoiceKeys(), []);
   useEffect(() => startAutosave(), []);
   useEffect(() => startCanvasPersist(), []);
@@ -176,13 +159,12 @@ function Main() {
   if (simOpen) return <SimView />;
   return (
     <div className="app">
-      {screen !== "workspace" && <TopBar />}
+      {screen === "home" && <TopBar />}
       <EngineNotice />
       <ConnectionBanner />
-      {screen === "home" ? <Home /> : screen === "drafts" ? <Drafts /> : <Workspace />}
+      {screen === "home" ? <Home /> : <Workspace />}
       <EventLog />
       <Toast />
-      <BuildDialog />
     </div>
   );
 }
