@@ -83,6 +83,8 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean; fresh?
   const caption = useVoice((s) => s.caption);
   const replies = useVoice((s) => s.replies);
   const voiceError = useVoice((s) => s.error);
+  const voiceMode = useVoice((s) => s.mode);
+  const sendHint = voiceMode === "hold" ? "let go to send" : "pause to send";
   const focusOpen = focusKey !== null;
   const sayN = useRef(0);
   const say = useMemo(() => (caption ? { text: caption, n: ++sayN.current } : null), [caption]);
@@ -114,13 +116,13 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean; fresh?
         onPointerDown={(e) => {
           e.preventDefault();
           if (!props.docked) {
-            void startListening();
+            void startListening("hold");
             return;
           }
           window.clearTimeout(hold.current);
           hold.current = window.setTimeout(() => {
             hold.current = 0;
-            void startListening();
+            void startListening("hold");
           }, HOLD_MS);
         }}
         onPointerUp={() => {
@@ -168,8 +170,8 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean; fresh?
         placeholder={
           listening
             ? focusOpen
-              ? "Listening… ask about this part"
-              : "Listening… describe the device"
+              ? `Listening… ask about this part, ${sendHint}`
+              : `Listening… describe the device, ${sendHint}`
             : transcribing
               ? "Writing down what you said…"
               : voiceError

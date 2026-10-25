@@ -171,6 +171,30 @@ export function summarize(build: Build, view: ViewState): string {
   return [design ?? kind, parts ? `${parts} parts` : null].filter(Boolean).join(" · ");
 }
 
+/** True when a picture is one flat colour: a canvas grabbed before the 3D view had drawn anything. */
+export function isFlat(src: CanvasImageSource, w: number, h: number): boolean {
+  const c = document.createElement("canvas");
+  c.width = 32;
+  c.height = 20;
+  const ctx = c.getContext("2d", { willReadFrequently: true });
+  if (!ctx || !w || !h) return false;
+  try {
+    ctx.drawImage(src, 0, 0, w, h, 0, 0, 32, 20);
+    const d = ctx.getImageData(0, 0, 32, 20).data;
+    let min = 255;
+    let max = 0;
+    for (let i = 0; i < d.length; i += 4) {
+      const v = (d[i] + d[i + 1] + d[i + 2]) / 3;
+      if (v < min) min = v;
+      if (v > max) max = v;
+    }
+    return max - min < 6;
+  } catch {
+    // a picture from elsewhere that can't be read back: trust it
+    return false;
+  }
+}
+
 /** A small JPEG of the 3D canvas, cropped to the card's 16:10, or null when there is nothing drawn. */
 export function snapshotCanvas(canvas: HTMLCanvasElement | null, width = 480, height = 300): string | null {
   if (!canvas || !canvas.width || !canvas.height) return null;
@@ -187,6 +211,7 @@ export function snapshotCanvas(canvas: HTMLCanvasElement | null, width = 480, he
     ctx.fillStyle = "#f6f6f5";
     ctx.fillRect(0, 0, width, height);
     ctx.drawImage(canvas, (canvas.width - sw) / 2, (canvas.height - sh) / 2, sw, sh, 0, 0, width, height);
+    if (isFlat(out, width, height)) return null;
     return out.toDataURL("image/jpeg", 0.82);
   } catch {
     return null;

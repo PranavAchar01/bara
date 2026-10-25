@@ -1,16 +1,22 @@
-// Bara's voice (Figma 19 Voice · talk to Bara). Hold Space or tap the eyes to talk; Bara answers
-// out loud through the engine's streamed speech (OpenAI when the engine has its key), with the
-// words shown under the eyes. Without the engine's voice, the browser's own speech fills in, so
-// nothing depends on one service. Replies are cut to one or two short sentences, the first one
-// starts playing while the next downloads, talking again stops it (barge-in), and the time from
-// the end of your speech to the first sound is kept in `latencyMs`.
+// Bara's voice (Figma 19 Voice · talk to Bara). Hold Space to talk and let go to send, or tap Space (or
+// the mic) and just talk: a pause at the end of what you said sends it. Ums and stutters are taken out
+// before Bara sees it. Bara answers out loud through the engine's streamed speech (OpenAI when the
+// engine has its key), with the words shown under the eyes; without it, the browser's own speech fills
+// in, so nothing depends on one service. Replies are cut to one or two short sentences, the first one
+// starts playing while the next downloads, talking again stops it (barge-in), and the time from the
+// end of your speech to the first sound is kept in `latencyMs`.
 import { create } from "zustand";
 import { authHeaders, serverUrl } from "../net/mode";
 import { showToast, useApp } from "../state/store";
+import { cleanTranscript, endOfTurnMs } from "./turn";
+
+/** hold: Space (or the bot) is held and letting go sends. auto: a pause at the end sends. */
+export type ListenMode = "hold" | "auto";
 
 export interface VoiceState {
   /** The mic is open. */
   listening: boolean;
+  mode: ListenMode | null;
   /** Words heard so far while listening (live captions where the browser can). */
   heard: string;
   /** Sending the recording to be written down. */
@@ -35,6 +41,7 @@ function storedReplies(): boolean {
 
 export const useVoice = create<VoiceState>(() => ({
   listening: false,
+  mode: null,
   heard: "",
   transcribing: false,
   caption: null,
@@ -129,6 +136,7 @@ export function stopSpeaking(): void {
   }
   audio = null;
   upNext = null;
+  afterSpeech = null;
   if (typeof speechSynthesis !== "undefined") speechSynthesis.cancel();
   useVoice.setState({ caption: null });
 }
@@ -141,9 +149,19 @@ function browserVoice(): SpeechSynthesisVoice | null {
   return voices.sort((a, b) => rank(b) - rank(a))[0] ?? null;
 }
 
+/** Runs once a reply has been said all the way through (not when it is cut off). */
+let afterSpeech: (() => void) | null = null;
+
+function finished(): void {
+  useVoice.setState({ caption: null });
+  const then = afterSpeech;
+  afterSpeech = null;
+  then?.();
+}
+
 function speakInBrowser(text: string): void {
   if (typeof speechSynthesis === "undefined") {
-    useVoice.setState({ caption: null });
+    finished();
     return;
   }
   const u = new SpeechSynthesisUtterance(text);
@@ -151,16 +169,18 @@ function speakInBrowser(text: string): void {
   if (v) u.voice = v;
   u.rate = 1.02;
   u.onstart = markFirstSound;
-  u.onend = () => useVoice.setState({ caption: null });
+  u.onend = finished;
   u.onerror = () => useVoice.setState({ caption: null });
   speechSynthesis.speak(u);
 }
 
-/** Says a reply when replies are on (or `force`); the caption shows while it plays. */
-export function speak(text: string, force = false): void {
+/** Says a reply when replies are on (or `force`); the caption shows while it plays. `then` runs
+ *  when it has been said through, which is how a spoken conversation hands the turn back. */
+export function speak(text: string, force = false, then?: () => void): void {
   const clean = trimReply(text);
   if (!clean || (!force && !useVoice.getState().replies)) return;
   stopSpeaking();
+  afterSpeech = then ?? null;
   useVoice.setState({ caption: clean });
   void engineCanSpeak().then((ok) => {
     if (useVoice.getState().caption !== clean) return;
@@ -176,7 +196,7 @@ export function speak(text: string, force = false): void {
       a.onended = () => {
         if (audio !== a) return;
         if (upNext) play(i + 1, upNext);
-        else useVoice.setState({ caption: null });
+        else finished();
       };
       a.onerror = () => {
         if (audio !== a) return;
@@ -209,26 +229,64 @@ type Recognition = {
   onerror: ((e: { error: string }) => void) | null;
 };
 
+/** A Space press shorter than this is a tap: listen hands-free instead of while held. */
+const TAP_MS = 260;
+/** Hands-free with nothing said for this long: let it go quietly. */
+const QUIET_MS = 7000;
+/** After letting go, how long to wait for the recogniser's final words before sending what it has. */
+const FINAL_WAIT_MS = 300;
+/** Recording without a recogniser: a silence this long after speech ends the turn. */
+const VAD_SILENCE_MS = 900;
+
 let recognition: Recognition | null = null;
 let recorder: MediaRecorder | null = null;
 let chunks: Blob[] = [];
 let cancelled = false;
+/** One number per listening turn, so a late callback from an old turn does nothing. */
+let turn = 0;
+let delivered = 0;
+let endTimer = 0;
+let quietTimer = 0;
+let finalTimer = 0;
+let quietMs = QUIET_MS;
+/** When the last spoken turn was sent hands-free; replies to it hand the mic straight back. */
+let lastHandsFree = 0;
 
 function recognitionClass(): (new () => Recognition) | null {
   const w = window as unknown as { SpeechRecognition?: new () => Recognition; webkitSpeechRecognition?: new () => Recognition };
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 }
 
+function clearTimers(): void {
+  window.clearTimeout(endTimer);
+  window.clearTimeout(quietTimer);
+  window.clearTimeout(finalTimer);
+}
+
 /** Where a finished utterance goes: the part in focus if there is one, otherwise the prompt. */
-function deliver(text: string): void {
-  const t = text.trim();
+function deliver(text: string, id: number, handsFree: boolean): void {
+  if (delivered === id) return;
+  delivered = id;
+  const t = cleanTranscript(text);
   if (!t) return;
+  lastHandsFree = handsFree ? performance.now() : 0;
   if (!useVoice.getState().replies) setReplies(true);
   const target = useApp.getState().focusKey ? "bara:ask" : "bara:prompt";
   window.dispatchEvent(new CustomEvent(target, { detail: t }));
 }
 
-async function transcribe(blob: Blob): Promise<void> {
+/** Hands-free: (re)start the clock that ends the turn once the speaker pauses. */
+function armEndOfTurn(): void {
+  const s = useVoice.getState();
+  if (!s.listening || s.mode !== "auto") return;
+  window.clearTimeout(endTimer);
+  window.clearTimeout(quietTimer);
+  const wait = endOfTurnMs(s.heard);
+  if (wait === null) quietTimer = window.setTimeout(cancelListening, quietMs);
+  else endTimer = window.setTimeout(stopListening, wait);
+}
+
+async function transcribe(blob: Blob, id: number, handsFree: boolean): Promise<void> {
   useVoice.setState({ transcribing: true });
   try {
     const build = useApp.getState().build?.build_id;
@@ -239,8 +297,8 @@ async function transcribe(blob: Blob): Promise<void> {
     });
     if (!res.ok) throw new Error(`Couldn't write that down (${res.status}).`);
     const text = ((await res.json()) as { text?: string }).text ?? "";
-    useVoice.setState({ heard: text });
-    deliver(text);
+    useVoice.setState({ heard: cleanTranscript(text) });
+    deliver(text, id, handsFree);
   } catch (e) {
     useVoice.setState({ error: e instanceof Error ? e.message : "Couldn't hear that." });
   } finally {
@@ -248,21 +306,68 @@ async function transcribe(blob: Blob): Promise<void> {
   }
 }
 
-async function record(): Promise<void> {
+/** Watches the mic level so a recording (no recogniser) can tell speech from silence. */
+function watchLevel(stream: MediaStream, id: number): () => void {
+  const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!Ctx) return () => {};
+  const ctx = new Ctx();
+  const analyser = ctx.createAnalyser();
+  analyser.fftSize = 1024;
+  ctx.createMediaStreamSource(stream).connect(analyser);
+  const buf = new Float32Array(analyser.fftSize);
+  const started = performance.now();
+  let floor = 0.01;
+  let spoke = false;
+  let lastLoud = started;
+  const tick = window.setInterval(() => {
+    if (turn !== id) return;
+    analyser.getFloatTimeDomainData(buf);
+    let sum = 0;
+    for (const v of buf) sum += v * v;
+    const rms = Math.sqrt(sum / buf.length);
+    const now = performance.now();
+    // the first moment is room noise; after that the floor only drifts down
+    if (now - started < 250) floor = Math.max(floor, rms);
+    else if (rms < floor) floor = floor * 0.95 + rms * 0.05;
+    if (rms > Math.max(0.02, floor * 2.5)) {
+      spoke = true;
+      lastLoud = now;
+      useVoice.setState({ heard: useVoice.getState().heard || "…" });
+    }
+    if (useVoice.getState().mode !== "auto") return;
+    if (spoke && now - lastLoud > VAD_SILENCE_MS) stopListening();
+    else if (!spoke && now - started > quietMs) cancelListening();
+  }, 50);
+  return () => {
+    window.clearInterval(tick);
+    void ctx.close();
+  };
+}
+
+async function record(id: number): Promise<void> {
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    if (turn !== id) {
+      stream.getTracks().forEach((t) => t.stop());
+      return;
+    }
+    // the level watcher below decides when a hands-free recording ends
+    clearTimers();
     const rec = new MediaRecorder(stream);
+    const unwatch = watchLevel(stream, id);
     recorder = rec;
     chunks = [];
     rec.ondataavailable = (e) => {
       if (e.data.size) chunks.push(e.data);
     };
     rec.onstop = () => {
+      unwatch();
       stream.getTracks().forEach((t) => t.stop());
-      recorder = null;
+      if (recorder === rec) recorder = null;
       markSpeechEnd();
-      useVoice.setState({ listening: false });
-      if (!cancelled && chunks.length) void transcribe(new Blob(chunks, { type: rec.mimeType || "audio/webm" }));
+      const handsFree = useVoice.getState().mode === "auto";
+      useVoice.setState({ listening: false, mode: null, heard: "" });
+      if (!cancelled && chunks.length) void transcribe(new Blob(chunks, { type: rec.mimeType || "audio/webm" }), id, handsFree);
     };
     rec.start();
     // released before the mic opened: stop right away and send what there is
@@ -272,13 +377,18 @@ async function record(): Promise<void> {
   }
 }
 
-export async function startListening(): Promise<void> {
+/** Opens the mic. Hands-free ("auto") sends when the speaker pauses; "hold" sends when let go. */
+export async function startListening(mode: ListenMode = "auto", opts: { quietMs?: number } = {}): Promise<void> {
   if (useVoice.getState().listening) return;
   // barge-in: talking while Bara talks stops it at once, before the mic even opens
   stopSpeaking();
   speechEndedAt = null;
+  clearTimers();
   cancelled = false;
-  useVoice.setState({ listening: true, heard: "", error: null });
+  quietMs = opts.quietMs ?? QUIET_MS;
+  const id = ++turn;
+  useVoice.setState({ listening: true, mode, heard: "", error: null });
+  armEndOfTurn();
   const Rec = recognitionClass();
   if (Rec) {
     const r = new Rec();
@@ -287,27 +397,36 @@ export async function startListening(): Promise<void> {
     r.interimResults = true;
     r.lang = navigator.language || "en-US";
     r.onresult = (e) => {
+      if (recognition !== r) return;
       let text = "";
       for (let i = 0; i < e.results.length; i++) text += e.results[i][0].transcript;
-      useVoice.setState({ heard: text.trim() });
+      useVoice.setState({ heard: cleanTranscript(text) });
+      armEndOfTurn();
     };
     r.onerror = (e) => {
       if (recognition !== r) return;
       recognition = null;
       if (e.error === "not-allowed") {
-        useVoice.setState({ listening: false, error: "Microphone access is blocked." });
+        clearTimers();
+        useVoice.setState({ listening: false, mode: null, error: "Microphone access is blocked." });
+        return;
+      }
+      if (e.error === "aborted" || e.error === "no-speech") {
+        clearTimers();
+        useVoice.setState({ listening: false, mode: null });
         return;
       }
       // no recognition service here (common outside Chrome): record and let the engine listen
-      if (e.error !== "aborted" && e.error !== "no-speech" && useVoice.getState().listening) void record();
+      if (useVoice.getState().listening) void record(id);
     };
     r.onend = () => {
       if (recognition !== r) return;
       recognition = null;
-      const heard = useVoice.getState().heard;
+      clearTimers();
       markSpeechEnd();
-      useVoice.setState({ listening: false });
-      if (!cancelled) deliver(heard);
+      const { heard, mode } = useVoice.getState();
+      useVoice.setState({ listening: false, mode: null });
+      if (!cancelled) deliver(heard, id, mode === "auto");
     };
     try {
       r.start();
@@ -316,53 +435,111 @@ export async function startListening(): Promise<void> {
       recognition = null;
     }
   }
-  await record();
+  await record(id);
+}
+
+/** A held press turned out to be a tap: keep listening, hands-free. */
+export function keepListening(): void {
+  if (!useVoice.getState().listening) return;
+  useVoice.setState({ mode: "auto" });
+  armEndOfTurn();
 }
 
 /** Stop and send what was said. */
 export function stopListening(): void {
-  if (recognition) recognition.stop();
-  else if (recorder && recorder.state !== "inactive") recorder.stop();
-  else useVoice.setState({ listening: false });
+  clearTimers();
+  const r = recognition;
+  if (r) {
+    // the recogniser can take a moment to settle its last words; don't make the speaker wait on it
+    const id = turn;
+    r.stop();
+    finalTimer = window.setTimeout(() => {
+      if (recognition !== r || turn !== id) return;
+      recognition = null;
+      const { heard, mode } = useVoice.getState();
+      useVoice.setState({ listening: false, mode: null });
+      r.abort();
+      deliver(heard, id, mode === "auto");
+    }, FINAL_WAIT_MS);
+  } else if (recorder && recorder.state !== "inactive") recorder.stop();
+  else useVoice.setState({ listening: false, mode: null });
 }
 
 /** Stop and throw it away (Esc). */
 export function cancelListening(): void {
   cancelled = true;
+  clearTimers();
   const r = recognition;
   recognition = null;
   r?.abort();
   if (recorder && recorder.state !== "inactive") recorder.stop();
-  useVoice.setState({ listening: false, heard: "" });
+  useVoice.setState({ listening: false, mode: null, heard: "" });
 }
 
-/** Space belongs to the page here: a text field, or a control reached by keyboard (Space presses it). */
+/** For a reply's `then`: if the question was asked hands-free, listen for the next one. */
+export function listenForFollowUp(): void {
+  if (!lastHandsFree || performance.now() - lastHandsFree > 60_000 || useVoice.getState().listening) return;
+  void startListening("auto", { quietMs: 5000 });
+}
+
+/** The mic is already allowed, so opening it won't put a permission prompt in front of anyone. */
+export async function micAllowed(): Promise<boolean> {
+  try {
+    return (await navigator.permissions.query({ name: "microphone" as PermissionName })).state === "granted";
+  } catch {
+    return false;
+  }
+}
+
+/** Space belongs to the page here: a text field with something in it, or a control reached by
+ *  keyboard (Space presses it). An empty field gives Space to the voice, since a leading space types nothing. */
 function typing(t: EventTarget | null): boolean {
   const el = t as HTMLElement | null;
   if (!el) return false;
-  if (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable) return true;
+  if (el.tagName === "INPUT" || el.tagName === "TEXTAREA") return (el as HTMLInputElement).value !== "";
+  if (el.tagName === "SELECT" || el.isContentEditable) return true;
   return (el.tagName === "BUTTON" || el.tagName === "A" || el.getAttribute("role") === "button") && el.matches(":focus-visible");
 }
 
-/** Hold Space to talk, Esc to stop talking or cancel, V for spoken replies. Returns an unbind. */
+/** Hold Space to talk (let go to send), tap Space to talk hands-free, Space again to send now,
+ *  Esc to stop talking or cancel, V for spoken replies. Returns an unbind. */
 export function bindVoiceKeys(): () => void {
+  let pressedAt = 0;
   const down = (e: KeyboardEvent) => {
-    if (typing(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const s = useVoice.getState();
+    // while listening Space and Esc are always the voice's, even in a field
+    if (e.code === "Space" && s.listening) {
+      e.preventDefault();
+      if (!e.repeat && s.mode === "auto") stopListening();
+      return;
+    }
+    if (e.key === "Escape" && s.listening) {
+      cancelListening();
+      return;
+    }
+    if (typing(e.target)) return;
     if (e.code === "Space") {
       e.preventDefault();
-      if (!e.repeat) void startListening();
+      if (e.repeat) return;
+      pressedAt = performance.now();
+      void startListening("hold");
     } else if (e.key === "Escape") {
-      if (useVoice.getState().listening) cancelListening();
+      if (s.listening) cancelListening();
       stopSpeaking();
     } else if (e.key === "v" || e.key === "V") {
-      setReplies(!useVoice.getState().replies, true);
+      setReplies(!s.replies, true);
     }
   };
   const up = (e: KeyboardEvent) => {
-    if (e.code === "Space" && useVoice.getState().listening) {
-      e.preventDefault();
-      stopListening();
-    }
+    if (e.code !== "Space" || !pressedAt) return;
+    const held = performance.now() - pressedAt;
+    pressedAt = 0;
+    const s = useVoice.getState();
+    if (!s.listening || s.mode !== "hold") return;
+    e.preventDefault();
+    if (held < TAP_MS) keepListening();
+    else stopListening();
   };
   window.addEventListener("keydown", down);
   window.addEventListener("keyup", up);
