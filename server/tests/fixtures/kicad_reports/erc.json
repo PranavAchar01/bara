@@ -1,0 +1,35 @@
+{
+  "$schema": "https://schemas.kicad.org/erc.v1.json",
+  "coordinate_units": "mm",
+  "kicad_version": "10.0.7",
+  "source": "main.kicad_sch",
+  "sheets": [
+    {
+      "path": "/",
+      "uuid_path": "/root",
+      "violations": [
+        {
+          "description": "Input Power pin not driven by any Output Power pins",
+          "items": [{"description": "Symbol #PWR001 Pin 1 [Power input, Line]", "pos": {"x": 26.67, "y": 66.04}, "uuid": "g1"}],
+          "severity": "error",
+          "type": "power_pin_not_driven"
+        },
+        {
+          "description": "Pins of type Output and Output are connected",
+          "items": [
+            {"description": "Symbol U1 Pin 5 [Output, Line]", "pos": {"x": 50.0, "y": 50.0}, "uuid": "h1"},
+            {"description": "Symbol U2 Pin 2 [Output, Line]", "pos": {"x": 60.0, "y": 50.0}, "uuid": "h2"}
+          ],
+          "severity": "error",
+          "type": "pin_to_pin"
+        },
+        {
+          "description": "Symbol 'R1' has been modified in library 'Device'",
+          "items": [{"description": "Symbol R1 [10k]", "pos": {"x": 70.0, "y": 50.0}, "uuid": "i1"}],
+          "severity": "warning",
+          "type": "lib_symbol_issues"
+        }
+      ]
+    }
+  ]
+}

@@ -1019,6 +1019,21 @@
             }
           ],
           "description": "Finishing-pass material; null or absent before finishing."
+        },
+        "evaluation": {
+          "type": "object",
+          "description": "Routing benchmark summary: DRC counts, net integrity, copper and router timings."
+        },
+        "kicad_checks": {
+          "type": "object",
+          "description": "kicad-cli's own report on this board: status (ok, not_installed, failed), drc / erc / parity sections with counts by severity, every violation with its rule, message and refs (mapped to instance_ids), board stats and timings."
+        },
+        "timings_s": {
+          "type": "object",
+          "description": "Seconds per board step (pcbnew, route, import, DRC, GLB, KiCad checks).",
+          "additionalProperties": {
+            "type": "number"
+          }
         }
       }
     },

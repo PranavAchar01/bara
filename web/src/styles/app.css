@@ -1466,6 +1466,63 @@ select {
 .fix-hint {
   color: var(--text-2);
 }
+/* KiCad's own checks inside the Checks panel */
+.kicad-checks {
+  border-top: 1px solid var(--line);
+  margin-top: 8px;
+  padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.kicad-checks h3 {
+  margin: 0;
+}
+.kicad-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+.kicad-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.kicad-rule > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+}
+.kicad-rule[open] {
+  padding-bottom: 4px;
+}
+.kicad-viol:disabled {
+  cursor: default;
+}
+.kicad-viol:disabled:hover {
+  background: none;
+}
+.kicad-viol .check-main {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.kicad-stages {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 6px;
+}
+.kicad-stages th,
+.kicad-stages td {
+  text-align: left;
+  padding: 2px 4px;
+  border-bottom: 1px solid var(--line);
+  white-space: pre;
+}
+.kicad-stages td:last-child,
+.kicad-stages th:last-child {
+  text-align: right;
+}
 
 /* connections (C14) */
 .conn-row {

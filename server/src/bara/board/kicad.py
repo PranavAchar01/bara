@@ -325,25 +325,23 @@ def _inside_one_footprint(violation: dict) -> bool:
     return len(owners) == 1 and len(violation.get("items", [])) >= 2
 
 
-def run_drc(board: Path, timeout: float = 180) -> dict:
-    report = board.with_suffix(".drc.json")
-    proc = _run(
-        [
-            KICAD_CLI,
-            "pcb",
-            "drc",
-            "--format",
-            "json",
-            "--severity-all",
-            "--units",
-            "mm",
-            "-o",
-            str(report),
-            str(board),
-        ],
-        timeout,
-        cwd=board.parent,
-    )
+def run_drc(
+    board: Path,
+    timeout: float = 180,
+    *,
+    schematic_parity: bool = False,
+    report: Path | None = None,
+    cli: str | None = None,
+) -> dict:
+    """kicad-cli DRC on `board`. With schematic_parity the board is also checked against the
+    schematic of the same name beside it (the final KiCad checks run it that way); the full
+    JSON report is at result["report"] either way."""
+    report = report or board.with_suffix(".drc.json")
+    report.unlink(missing_ok=True)
+    cmd = [cli or KICAD_CLI, "pcb", "drc", "--format", "json", "--severity-all", "--units", "mm"]
+    if schematic_parity:
+        cmd.append("--schematic-parity")
+    proc = _run([*cmd, "-o", str(report), str(board)], timeout, cwd=board.parent)
     if not report.exists():
         raise ToolError(f"kicad-cli drc failed: {proc.stderr[-1500:]}")
     data = json.loads(report.read_text())

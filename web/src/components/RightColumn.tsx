@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { focusPart, select, useApp, type CodeTab, type RightTab } from "../state/store";
 import { focusKeyOf } from "../three/Viewport3D";
 import { ClarifyCard, DecisionTrace, ReuseCard, SpecCard, StageTimeline } from "./LeftColumn";
+import { KicadChecks } from "./KicadChecks";
 import { PanelToolbar } from "./TopBar";
 import { applyEdit } from "../net/client";
 import { serverUrl } from "../net/mode";
@@ -254,6 +255,7 @@ export function ChecksPanel() {
           <div className="check-group">{rest.map(row)}</div>
         </details>
       )}
+      <KicadChecks />
     </Panel>
   );
 }

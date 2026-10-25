@@ -1,0 +1,61 @@
+{
+  "$schema": "https://schemas.kicad.org/drc.v1.json",
+  "coordinate_units": "mm",
+  "date": "2026-10-25T01:53:11",
+  "kicad_version": "10.0.7",
+  "source": "main.kicad_pcb",
+  "violations": [
+    {
+      "description": "Clearance violation (netclass 'Default' clearance 0.1500 mm; actual 0.1000 mm)",
+      "items": [
+        {"description": "Track [SDA] on F.Cu, length 3.2000 mm", "pos": {"x": 410.5, "y": 402.0}, "uuid": "a1"},
+        {"description": "SMD pad 3 [GND] of U1", "pos": {"x": 410.6, "y": 402.1}, "uuid": "a2"}
+      ],
+      "severity": "error",
+      "type": "clearance"
+    },
+    {
+      "description": "Clearance violation (netclass 'Default' clearance 0.1500 mm; actual 0.1492 mm)",
+      "items": [
+        {"description": "Track [SCL] on B.Cu, length 1.0000 mm", "pos": {"x": 420.0, "y": 400.0}, "uuid": "b1"},
+        {"description": "PTH pad 1 [VCC] of J1", "pos": {"x": 420.1, "y": 400.0}, "uuid": "b2"}
+      ],
+      "severity": "error",
+      "type": "clearance"
+    },
+    {
+      "description": "Clearance violation (netclass 'Default' clearance 0.1500 mm; actual 0.1200 mm)",
+      "items": [
+        {"description": "SMD pad 1 [GND] of U2", "pos": {"x": 430.0, "y": 400.0}, "uuid": "c1"},
+        {"description": "SMD pad 2 [VCC] of U2", "pos": {"x": 430.3, "y": 400.0}, "uuid": "c2"}
+      ],
+      "severity": "error",
+      "type": "clearance"
+    },
+    {
+      "description": "The current configuration does not include the footprint library 'C910544'",
+      "items": [{"description": "Footprint U1", "pos": {"x": 439.0, "y": 386.0}, "uuid": "d1"}],
+      "severity": "warning",
+      "type": "lib_footprint_issues"
+    }
+  ],
+  "unconnected_items": [
+    {
+      "description": "Missing connection between items",
+      "items": [
+        {"description": "SMD pad 4 [SDA] of U1", "pos": {"x": 411.0, "y": 403.0}, "uuid": "e1"},
+        {"description": "PTH pad 2 [SDA] of J1", "pos": {"x": 421.0, "y": 401.0}, "uuid": "e2"}
+      ],
+      "severity": "error",
+      "type": "unconnected_items"
+    }
+  ],
+  "schematic_parity": [
+    {
+      "description": "Pad missing net given by schematic (unconnected-(DS1-Pad1))",
+      "items": [{"description": "PTH pad 1 [<no net>] of DS1", "pos": {"x": 375.87, "y": 331.74}, "uuid": "f1"}],
+      "severity": "warning",
+      "type": "net_conflict"
+    }
+  ]
+}
