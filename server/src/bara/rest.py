@@ -253,12 +253,14 @@ def build_router(svc: Services) -> APIRouter:
             raise ApiError("E_BAD_MESSAGE", "Send prompt.")
         names = data.get("part_names")
         build_prompt = data.get("build_prompt")
+        style = data.get("parent_style")
         return body(
             await intent.classify(
                 prompt,
                 bool(data.get("has_build")),
                 build_prompt if isinstance(build_prompt, str) else "",
                 [n for n in names if isinstance(n, str)] if isinstance(names, list) else None,
+                style if isinstance(style, dict) else None,
             )
         )
 

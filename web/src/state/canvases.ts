@@ -147,12 +147,15 @@ export function switchCanvas(id: string): void {
   });
 }
 
+/** What a new canvas starts out as besides its id: a name, the device kind, what it pairs with. */
+export type NewCanvas = Partial<Omit<CanvasMeta, "id">>;
+
 /** A new empty canvas after the active one, switched to. Returns its id. */
-export function addCanvas(): string {
+export function addCanvas(meta: NewCanvas = {}): string {
   const s = useApp.getState();
   const id = nextId(s.canvases);
   const at = s.canvases.findIndex((c) => c.id === s.activeCanvas) + 1;
-  const canvases = [...s.canvases.slice(0, at), { id, name: null }, ...s.canvases.slice(at)];
+  const canvases = [...s.canvases.slice(0, at), { name: null, ...meta, id }, ...s.canvases.slice(at)];
   useApp.setState({
     canvases,
     ...activate(s, id, { ...s.canvasStash, [s.activeCanvas]: snapshotOf(s), [id]: blankCanvas() }),
@@ -165,10 +168,10 @@ export function addCanvas(): string {
  * A second device next to the one on screen: a new canvas, switched to, linked both ways with
  * every canvas already in this one's scene. Returns its id.
  */
-export function addCompanionCanvas(): string {
+export function addCompanionCanvas(meta: NewCanvas = {}): string {
   const from = useApp.getState().activeCanvas;
   const scene = [from, ...useApp.getState().companions];
-  const id = addCanvas();
+  const id = addCanvas(meta);
   useApp.setState((s) => {
     const stash = { ...s.canvasStash };
     for (const c of scene) if (stash[c]) stash[c] = { ...stash[c], companions: [...stash[c].companions.filter((x) => x !== id), id] };
@@ -246,6 +249,8 @@ export interface StoredCanvas {
   build_id: string | null;
   prompt: string | null;
   companions?: string[];
+  kind?: string | null;
+  pairs_with?: string | null;
 }
 
 export interface StoredCanvases {
@@ -258,7 +263,15 @@ export function serializeCanvases(s: AppState): StoredCanvases {
     active: s.activeCanvas,
     canvases: s.canvases.map((m) => {
       const c = canvasState(s, m.id);
-      return { id: m.id, name: m.name, build_id: c?.build?.build_id ?? null, prompt: c?.build?.prompt ?? null, companions: c?.companions ?? [] };
+      return {
+        id: m.id,
+        name: m.name,
+        build_id: c?.build?.build_id ?? null,
+        prompt: c?.build?.prompt ?? null,
+        companions: c?.companions ?? [],
+        kind: m.kind ?? null,
+        pairs_with: m.pairsWith ?? null,
+      };
     }),
   };
 }
@@ -277,6 +290,8 @@ export function parseCanvases(raw: string | null): StoredCanvases | null {
         build_id: typeof c.build_id === "string" ? c.build_id : null,
         prompt: typeof c.prompt === "string" ? c.prompt : null,
         companions: Array.isArray(c.companions) ? c.companions.filter((x): x is string => typeof x === "string") : [],
+        kind: typeof c.kind === "string" ? c.kind : null,
+        pairs_with: typeof c.pairs_with === "string" ? c.pairs_with : null,
       }));
     if (canvases.length === 0) return null;
     const active = canvases.some((c) => c.id === v.active) ? (v.active as string) : canvases[0].id;
@@ -296,7 +311,7 @@ export function applyStoredCanvases(stored: StoredCanvases): void {
   useApp.setState({
     ...blankCanvas(),
     companions: active ? linked(active) : [],
-    canvases: stored.canvases.map((c) => ({ id: c.id, name: c.name })),
+    canvases: stored.canvases.map((c) => ({ id: c.id, name: c.name, kind: c.kind ?? null, pairsWith: c.pairs_with && ids.has(c.pairs_with) ? c.pairs_with : null })),
     activeCanvas: stored.active,
     canvasStash: stash,
     canvasRestoring: stored.canvases.filter((c) => c.build_id).map((c) => c.id),

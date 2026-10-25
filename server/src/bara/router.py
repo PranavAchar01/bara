@@ -42,6 +42,22 @@ def normalize(text: str) -> str:
     return " ".join(words)
 
 
+# "a mouse that pairs with the keyboard; case colours the same as the keyboard": the device asked
+# for is the part before the pairing words. The rest names another device, which must not pick the
+# design.
+_PAIRING = re.compile(
+    r"\s+(?:(?:that|which)\s+)?(?:pairs?|goes|matches)\s+with\b.*$"
+    r"|\s+(?:to\s+(?:go|pair)\s+with|to\s+match|paired\s+with)\b.*$",
+    re.IGNORECASE,
+)
+
+
+def own_part(prompt: str) -> str:
+    """The device a prompt asks for, without what it pairs with or takes its look from."""
+    head = prompt.split(";", 1)[0]
+    return _PAIRING.sub("", head).strip() or head
+
+
 def _tokens(text: str) -> set[str]:
     return {w for w in normalize(text).split() if w not in _STOP}
 
@@ -246,9 +262,10 @@ class Router:
             )
             return Route("match_prompt", hit, None, patch_prompt=not same, reason="match_prompts")
 
-        name = self.name_match(norm)
+        own = normalize(own_part(prompt))
+        name = self.name_match(own)
         name_hit = name[0] if name else None
-        shortlist = self.shortlist(norm, name_hit)
+        shortlist = self.shortlist(own, name_hit)
         schema = llm.classify_schema(
             self.catalog.function_ids(), self.catalog.device_classes(), self.catalog.facet_keys()
         )
@@ -283,7 +300,7 @@ class Router:
                     }
                 )
         else:
-            c = self.keyword_classify(norm)
+            c = self.keyword_classify(own)
             classifier = {
                 "stage": "rules",
                 "confidence": 0.5,

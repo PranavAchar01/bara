@@ -17,7 +17,7 @@ from typing import Any
 from bara.catalog import Catalog
 from bara.live.layout import KEYBOARD_STYLES, keyboard_product
 from bara.live.llm_json import call_json
-from bara.router import Router, normalize
+from bara.router import Router, normalize, own_part
 
 log = logging.getLogger(__name__)
 
@@ -232,13 +232,17 @@ def _side_near(text: str, word: str) -> tuple[str | None, str | None]:
 
 
 def rules_brief(prompt: str, router: Router, catalog: Catalog) -> dict[str, Any]:
-    norm = normalize(prompt)
+    # what the device is comes from its own words, never from the device it pairs with ("a mouse
+    # that pairs with the keyboard; case colours the same as the keyboard" is a mouse); colours,
+    # radio and power still read the whole line
+    norm = normalize(own_part(prompt))
     text = " " + prompt.lower().replace("-", " ") + " "
+    own = " " + own_part(prompt).lower().replace("-", " ") + " "
     c = router.keyword_classify(norm)
     known = set(catalog.function_ids())
     functions: list[str] = list(c["functions"])
     for word, fids in EXTRA_FUNCTION_WORDS.items():
-        if re.search(rf"\b{word}\b", text):
+        if re.search(rf"\b{word}\b", own):
             functions += [f for f in fids if f in known and f not in functions]
     if functions and c["blocking_facet"] == "primary_function":
         c["blocking_facet"] = None
@@ -246,7 +250,7 @@ def rules_brief(prompt: str, router: Router, catalog: Catalog) -> dict[str, Any]
 
     # No model answered: only a product named as a keyboard takes the keyboard path. Keys or a
     # grid on some other device are its buttons (the block diagram designs them).
-    is_keyboard = bool(re.search(r"\b(keyboard|keypad|macro ?pad|numpad)s?\b", text))
+    is_keyboard = bool(re.search(r"\b(keyboard|keypad|macro ?pad|numpad)s?\b", own))
     layout_style = "none"
     if is_keyboard:
         layout_style = "split" if re.search(r"\bsplit\b", text) else "unibody"
