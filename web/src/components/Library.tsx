@@ -1,12 +1,12 @@
 // Your builds, on the Library page (Figma 21), in Bara's own language: a small Bara keeps the shelf, the
-// newest build sits large on a gridded plate like the hero's, and the rest stand on a shelf by day. A build
-// with no picture gets a blueprint drawn from what was asked for. Click to reopen; × (twice) to remove;
+// newest build sits large on a plate, and the rest stand on a shelf by day. Each shows the finished product
+// alone, rendered by scripts/render-shots.mjs; one not rendered yet gets a blueprint drawn from what was asked for. Click to reopen; × (twice) to remove;
 // type to filter.
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { openLibraryBuild, openSaved } from "../net/client";
 import { showToast, useApp } from "../state/store";
 import { Icon } from "../ui/common";
-import { deleteEntry, isFlat, loadEntry, useLibrary, type LibraryCard } from "../library/library";
+import { deleteEntry, loadEntry, useLibrary, type LibraryCard } from "../library/library";
 
 const DAY = 86_400_000;
 
@@ -111,20 +111,11 @@ function Blueprint(props: { prompt: string }) {
   );
 }
 
-/** The picture of a build: its canvas snapshot, or a blueprint drawn from the request. */
+/** The picture of a build: the rendered product alone (scripts/render-shots.mjs), or a blueprint drawn from the
+ *  request until it has one. Never the workspace snapshot: that one stands on the studio floor and grid. */
 function Picture(props: { card: LibraryCard }) {
   const [broken, setBroken] = useState(false);
-  if (props.card.thumb && !broken)
-    return (
-      <img
-        src={props.card.thumb}
-        alt=""
-        loading="lazy"
-        onError={() => setBroken(true)}
-        // an empty snapshot (taken before the model drew) gets the blueprint instead
-        onLoad={(e) => isFlat(e.currentTarget, e.currentTarget.naturalWidth, e.currentTarget.naturalHeight) && setBroken(true)}
-      />
-    );
+  if (props.card.shot && !broken) return <img className="lib-shot" src={props.card.shot} alt="" loading="lazy" onError={() => setBroken(true)} />;
   return <Blueprint prompt={props.card.prompt} />;
 }
 

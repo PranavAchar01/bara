@@ -968,13 +968,19 @@
   outline: none;
 }
 
-/* the gridded backdrop every picture stands on, like the hero plate's */
+/* every picture stands on clean paper under a soft light: the product, nothing else around it */
 .lib-latest-pic,
 .lib-pic {
   background:
-    linear-gradient(var(--line) 1px, transparent 1px) 0 0 / 22px 22px,
-    linear-gradient(90deg, var(--line) 1px, transparent 1px) 0 0 / 22px 22px,
+    radial-gradient(70% 60% at 50% 42%, var(--paper) 0%, transparent 70%),
     var(--paper-2);
+}
+/* the rendered product keeps its own shape: contained, never cropped */
+.lib-latest-pic img.lib-shot,
+.lib-pic img.lib-shot {
+  object-fit: contain;
+  padding: 6%;
+  filter: drop-shadow(0 22px 24px rgb(20 28 40 / 0.16)) drop-shadow(0 2px 3px rgb(20 28 40 / 0.1));
 }
 .lib-latest-pic img,
 .lib-pic img {
@@ -1727,15 +1733,13 @@
 .ai-mic:hover:not(:disabled) {
   border-color: var(--ink);
 }
+/* the ring grows with the voice (--mic-level, 0 to 1, set by voice/voice.ts), so a dead mic is plain to see */
 .ai-mic.on {
   border-color: var(--accent);
   background: var(--accent);
   color: #fff;
-  animation: ai-mic 1.2s ease-in-out infinite;
-}
-@keyframes ai-mic {
-  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent); }
-  50% { box-shadow: 0 0 0 8px color-mix(in srgb, var(--accent) 0%, transparent); }
+  box-shadow: 0 0 0 calc(3px + var(--mic-level, 0) * 12px) color-mix(in srgb, var(--accent) 28%, transparent);
+  transition: box-shadow 60ms linear, background 160ms ease, color 160ms ease;
 }
 .ai-send {
   border: 0;
@@ -1967,4 +1971,14 @@
   .ld-steps ol {
     grid-template-columns: 1fr;
   }
+}
+
+/* Product-shot page (ShotPage.tsx): the canvas alone, the page around it transparent. */
+.shot-page,
+.shot-page body {
+  background: transparent;
+}
+.shot-stage {
+  position: fixed;
+  inset: 0;
 }

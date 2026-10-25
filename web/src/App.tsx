@@ -21,6 +21,8 @@ import { Explainer } from "./bot/Explainer";
 import { CandidateFlyby } from "./bot/CandidateFlyby";
 import { SimView } from "./sim/SimView";
 import { useSimPanel } from "./sim/simPanelStore";
+import { ShotPage } from "./components/ShotPage";
+import { SHOT_ID } from "./three/shot";
 
 function useKeys() {
   useEffect(() => {
@@ -154,6 +156,7 @@ const BOTLAB = new URLSearchParams(window.location.search).get("botlab") === "1"
 
 export function App() {
   if (BOTLAB) return <BotLab />;
+  if (SHOT_ID) return <ShotPage buildId={SHOT_ID} />;
   return <Main />;
 }
 

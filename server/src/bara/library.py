@@ -35,6 +35,14 @@ class Library:
                 return f"/assets/cache/hero/{build_id}{suffix}.png"
         return None
 
+    def _shot_url(self, build_id: str) -> str | None:
+        """The product shot scripts/render-shots.mjs writes: the finished device alone, transparent around it."""
+        path = self.assets_dir / "cache" / "shots" / f"{build_id}.webp"
+        try:
+            return f"/assets/cache/shots/{build_id}.webp?v={int(path.stat().st_mtime)}"
+        except OSError:
+            return None
+
     def record(self, run: Any, msg: dict[str, Any]) -> None:
         """Append one outgoing event; on build.done or build.failed write the index row."""
         events, meta = self._paths(run.build_id)
@@ -64,7 +72,8 @@ class Library:
             except (OSError, ValueError):
                 continue
             if isinstance(row, dict) and BUILD_ID_RE.fullmatch(str(row.get("build_id", ""))):
-                rows.append(row)
+                # shots are rendered after the fact, so look for one each time rather than in the stored row
+                rows.append({**row, "shot_url": self._shot_url(row["build_id"])})
         rows.sort(key=lambda r: str(r.get("created_at") or ""), reverse=True)
         return rows
 

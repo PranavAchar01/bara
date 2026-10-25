@@ -87,3 +87,14 @@ def test_library_rejects_traversal_directly(tmp_path: Path) -> None:
     for bad in ("../x", "b_/../x", "b_a/b"):
         with pytest.raises(ValueError):
             lib.delete(bad)
+
+
+def test_list_carries_product_shot_once_rendered(client) -> None:
+    lib = client.app.state.services.engine.library
+    _finish(_run("b_cccc3333", lib, "2026-10-03T00:00:00Z"))
+    assert client.get("/v1/library").json()["builds"][0]["shot_url"] is None
+    shot = lib.assets_dir / "cache" / "shots" / "b_cccc3333.webp"
+    shot.parent.mkdir(parents=True, exist_ok=True)
+    shot.write_bytes(b"RIFF0000WEBP")
+    url = client.get("/v1/library").json()["builds"][0]["shot_url"]
+    assert url.startswith("/assets/cache/shots/b_cccc3333.webp?v=")
