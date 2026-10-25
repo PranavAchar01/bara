@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { CaseFinishPicker } from "./CaseFinish";
 import { useApp } from "../state/store";
 import { applyEdit, getRest } from "../net/client";
 import { paths } from "../net/rest";
@@ -400,6 +399,7 @@ export function ResizePanel() {
   const enc = build?.enclosures.find((e) => e.enclosure_id === target?.enclosure_id) ?? build?.enclosures.find((e) => e.kind !== "none");
   const [vals, setVals] = useState<Record<string, number>>({});
   const [split, setSplit] = useState<string>(enc?.params.split ?? "lid_top");
+  const [colorOpen, setColorOpen] = useState(false);
   useEffect(() => {
     setVals({});
     setSplit(enc?.params.split ?? "lid_top");
@@ -460,7 +460,10 @@ export function ResizePanel() {
             ))}
           </select>
         </label>
-        <CaseFinishPicker enc={enc} />
+        <button type="button" className="btn sm" onClick={() => setColorOpen((o) => !o)}>
+          Case color
+        </button>
+        {colorOpen && <ColorPicker target={{ enclosure_id: enc.enclosure_id }} current={enc.color ?? null} onClose={() => setColorOpen(false)} />}
       </div>
     </aside>
   );

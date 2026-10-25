@@ -13,7 +13,6 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from bara import voice
 from bara.access import AccessTokenMiddleware
 from bara.config import Settings, load_dotenv, load_settings
 from bara.rest import ApiError, build_router, error_response
@@ -98,7 +97,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
 def main() -> None:
     load_dotenv()
-    voice.load_key_from_keychain()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     settings = load_settings()
     uvicorn.run(create_app(settings), host=settings.host, port=settings.port, log_level="info")

@@ -59,30 +59,6 @@ export function explodeZ(layer: LayerId, gapMm: number, factor: number): number 
   return LAYER_RANK[layer] * gapMm * factor;
 }
 
-/** Lowest and highest z (mm) a layer's content reaches as built. */
-export type LayerExtent = [number, number];
-
-/**
- * How far each layer lifts at full explode so the layers stand apart with `clearance` between the
- * top of one and the bottom of the next, whatever their real heights. Layers keep their build
- * order and never move down. Layers without an extent are left out. Parts that ride another
- * (keycaps on their switches) only ever move along z with it, so they stay over it.
- */
-export function layerOffsets(ext: Partial<Record<LayerId, LayerExtent>>, clearance: number): Partial<Record<LayerId, number>> {
-  const out: Partial<Record<LayerId, number>> = {};
-  const order = (Object.keys(LAYER_RANK) as LayerId[]).filter((l) => ext[l]).sort((a, b) => LAYER_RANK[a] - LAYER_RANK[b]);
-  let top = -Infinity; // highest point of everything below, in its lifted position
-  let prev = 0;
-  for (const l of order) {
-    const [lo, hi] = ext[l]!;
-    const off = top === -Infinity ? 0 : Math.max(prev, top + clearance - lo);
-    out[l] = off;
-    prev = off;
-    top = Math.max(top, hi + off);
-  }
-  return out;
-}
-
 const GROUP_NAME: Record<LayerId, string> = {
   case: "Case",
   under: "",

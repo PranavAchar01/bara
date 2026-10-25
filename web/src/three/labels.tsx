@@ -5,7 +5,7 @@
 import { useEffect, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
-import { focusAmount, stage } from "./stage";
+import { stage } from "./stage";
 import { focusPart, useApp } from "../state/store";
 
 export interface LabelRow {
@@ -158,7 +158,7 @@ export function LabelProjector() {
     const el = overlayEl;
     if (!el) return;
     // labels step aside while a part is in focus
-    const alpha = labelOpacity(stage.explode) * (1 - focusAmount());
+    const alpha = labelOpacity(stage.explode) * (1 - stage.focusK);
     el.style.opacity = String(alpha);
     // rows take clicks only while the explode is held open, never as invisible hit areas
     const live = alpha > 0.5 ? "auto" : "none";
