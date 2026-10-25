@@ -14,11 +14,11 @@ describe("open-source boards", () => {
     const p = toPart(["D1", "", "ComboDiode", "", "top", [1, 2], 0]);
     expect(p.what).toBe("A ComboDiode part.");
   });
-  it("filters by category, licence switch and search, and sorts", () => {
+  it("filters by category and search, and sorts", () => {
     const list = [b({ id: "a", title: "A", stars: 5, parts: 9 }), b({ id: "b", title: "B", stars: 9, parts: 2, copyable: false }), b({ id: "c", title: "C", category: "audio", stars: 7, parts: 3 })];
-    expect(filterBoards(list, { q: "", category: null, copyableOnly: false, sort: "popular" }).map((x) => x.id)).toEqual(["b", "c", "a"]);
-    expect(filterBoards(list, { q: "", category: null, copyableOnly: true, sort: "parts" }).map((x) => x.id)).toEqual(["a", "c"]);
-    expect(filterBoards(list, { q: "c", category: "audio", copyableOnly: false, sort: "popular" }).map((x) => x.id)).toEqual(["c"]);
+    expect(filterBoards(list, { q: "", category: null, sort: "popular" }).map((x) => x.id)).toEqual(["b", "c", "a"]);
+    expect(filterBoards(list, { q: "", category: null, sort: "parts" }).map((x) => x.id)).toEqual(["a", "c", "b"]);
+    expect(filterBoards(list, { q: "c", category: "audio", sort: "popular" }).map((x) => x.id)).toEqual(["c"]);
   });
   it("reads a board's 3D model from this site first, then the published library", () => {
     const [own, published] = boardGlbUrls("kicad__demo");

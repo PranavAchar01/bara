@@ -89,11 +89,10 @@ export function toPart(r: OsPartRow): OsPart {
 
 export type OsSort = "popular" | "parts";
 
-export function filterBoards(boards: OsBoard[], o: { q: string; category: string | null; copyableOnly: boolean; sort: OsSort }): OsBoard[] {
+export function filterBoards(boards: OsBoard[], o: { q: string; category: string | null; sort: OsSort }): OsBoard[] {
   const q = o.q.trim().toLowerCase();
   const out = boards.filter((b) => {
     if (o.category && b.category !== o.category) return false;
-    if (o.copyableOnly && !b.copyable) return false;
     if (!q) return true;
     return [b.title, b.owner, b.repo, b.license ?? "", b.description ?? ""].join(" ").toLowerCase().includes(q);
   });
