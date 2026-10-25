@@ -43,6 +43,7 @@ CORNER_R = 2.0
 REG_CAP = "1 uF 0805"
 DECOUPLE_CAP = "100 nF 0805"
 PULLUP = "4.7 k 0805"
+SET_RES = "2 k 0805"  # charge-current set resistor (TP4056 PROG 1.2 k, MCP73831 2 k, BQ2407x ~1 k)
 RES_FP = "kicad/Resistor_SMD:R_0805_2012Metric"
 # The SMD PH footprint in the registry has no STEP in the installed KiCad 3D library, so the
 # generic board uses the through-hole vertical PH header, whose model ships with KiCad.
@@ -71,6 +72,9 @@ BUS = {
 }
 PER_PART = {"CS", "NCS", "SS", "CSB", "INT", "IRQ", "RST", "RESET", "NRST", "DC", "BUSY"}
 GPIO_NAME = re.compile(r"^(P\d\.\d+|P[A-H]\d+|GPIO\d+|IO\d+|GP\d+|D\d+|A\d+|[B-H][0-7])(-.*)?$")
+# a charger's current, limit and timer pins take a resistor to ground, never a controller pin
+SET_PINS = {"ILIM", "ISET", "ISET1", "ISET2", "PROG", "RPROG", "IPROG", "TMR", "ITERM"}
+POWER_ROLES = ("charger", "regulator")
 SKIP_NAME = re.compile(r"^(NC|DNC|N/?C|~|EP|SHIELD|MP|PAD)\d*$")
 
 
@@ -322,7 +326,10 @@ def plan_device_board(
                 for it in items
                 if it is not mcu
                 for v in it.pads.values()
-                if v and power_net(v) is None and v != "RST_MCU" and not v.startswith("MX_")
+                if v
+                and power_net(v) is None
+                and v != "RST_MCU"
+                and not v.startswith(("MX_", "SET_"))
             }
         )
         gpio = [num for num, name in mcu.meta["pins"].items() if GPIO_NAME.match(_clean(name))]
@@ -369,6 +376,10 @@ def _pads_from_pins(items: list[Item], log: list[str]) -> None:
             if not clean or SKIP_NAME.match(clean):
                 continue
             net = power_net(clean)
+            if net is None and it.role in POWER_ROLES and clean == "IN":
+                net = "VBUS"  # a charger's or regulator's supply input, left as a GPIO before
+            if net is None and it.role == "charger" and clean in SET_PINS:
+                net = f"SET_{clean}_{it.ref}"
             if net is None and it.role == "mcu":
                 if clean in ("RST", "RESET", "NRST"):
                     net = "RST_MCU"
@@ -416,7 +427,7 @@ def _matrix_inputs(items: list[Item], mcu: Item | None, log: list[str]) -> None:
             for it in of
             if it is not mcu
             for v in it.pads.values()
-            if v and power_net(v) is None and v != "RST_MCU"
+            if v and power_net(v) is None and v != "RST_MCU" and not v.startswith("SET_")
         }
 
     need = len(signals(items))
@@ -494,6 +505,8 @@ def _support_parts(items: list[Item], log: list[str]) -> list[Item]:
         elif not it.meta.get("module") and it.role not in ("mcu", "battery", "passive"):
             if "GND" in nets and "3V3" in nets:
                 out.append(passive("C", "3V3", "GND", DECOUPLE_CAP, it))
+        for v in sorted(v for v in nets if v.startswith("SET_")):
+            out.append(passive("R", v, "GND", SET_RES, it))
     all_nets = {v for it in items for v in it.pads.values()}
     if {"SDA", "SCL"} <= all_nets and not any(it.meta.get("i2c_pullups_onboard") for it in items):
         host = next((it for it in items if "SDA" in it.pads.values()), items[0])

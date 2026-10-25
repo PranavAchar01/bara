@@ -51,6 +51,7 @@ BY_PREFIX: dict[str, list[tuple[str, str]]] = {
 }
 # canonical power nets (generic.power_net) -> stock power symbol and its drawn direction
 POWER = {"GND": ("GND", 270), "3V3": ("+3V3", 90), "VBUS": ("VBUS", 90), "VBAT": ("+BATT", 90)}
+GROUND_PIN = re.compile(r"^[AD]?GND\w*$|^VSS\w*$|^PGND$|^EP$")
 KEEP_PROPS = {'"Reference"', '"Value"', '"Footprint"'}
 
 
@@ -218,6 +219,9 @@ def _symbol_from(node: Node, lib: str, source: str) -> Symbol | None:
                 at, num = _kid(c, "at"), _kid(c, "number")
                 if at is None or num is None:
                     continue
+                name = _kid(c, "name")
+                if c[1:2] == ["power_out"] and name and GROUND_PIN.match(_uq(name[1]).upper()):
+                    c[1] = "power_in"  # imported symbols type GND as an output; two then clash
                 pins.append(
                     Pin(
                         _uq(num[1]),

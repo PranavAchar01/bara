@@ -57,16 +57,16 @@ def test_suffix_rule(query: str, name: str, ok: bool) -> None:
 
 
 @pytest.mark.parametrize(
-    ("label", "recipe"),
+    ("label", "function_id", "recipe"),
     [
-        ("charge status led", "indicator LED"),
-        ("power/standby status led (bicolor)", "bicolor LED"),
-        ("Shoulder bumper switches", "tactile switch"),
-        ("Face buttons A/B/X/Y", "tactile switch"),
+        ("charge status led", "display.indicator_led", "indicator LED"),
+        ("power/standby status led (bicolor)", "display.indicator_led", "bicolor LED"),
+        ("Shoulder bumper switches", "input.button", "tactile switch"),
+        ("Face buttons A/B/X/Y", "input.button", "tactile switch"),
     ],
 )
-def test_generic_parts_are_stock_first(label: str, recipe: str) -> None:
-    need = Need("k", "x", label)
+def test_generic_parts_are_stock_first(label: str, function_id: str, recipe: str) -> None:
+    need = Need("k", function_id, label)
     assert recipe_for(need)[0] == recipe
     assert stock_primitive(need)
 
