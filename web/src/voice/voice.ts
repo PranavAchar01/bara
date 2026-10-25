@@ -7,7 +7,7 @@ import { speechFor } from "../bot/mood";
 import { answerClarify } from "../net/client";
 import { authHeaders, serverUrl } from "../net/mode";
 import { showToast, useApp } from "../state/store";
-import { cleanTranscript, endOfTurnMs, pickOption } from "./turn";
+import { cleanTranscript, endOfTurnMs, isNoise, pickOption } from "./turn";
 
 /** hold: Space (or the bot) is held and letting go sends. auto: a pause at the end sends. */
 export type ListenMode = "hold" | "auto";
@@ -63,6 +63,17 @@ let audio: HTMLAudioElement | null = null;
 /** The next sentence, already downloading while the current one plays. */
 let upNext: HTMLAudioElement | null = null;
 let engineVoice: boolean | null = null;
+/** Engine lines that failed in a row: one network blip shouldn't hand the rest of the session to
+ *  the browser's voice, three in a row should. */
+let engineFails = 0;
+/** One number per thing said, so a late callback from something already stopped does nothing (two
+ *  identical lines in a row must not both play). */
+let speechGen = 0;
+/** If a line never reports its end (a stalled stream, Chrome's speech that just stops), let it go,
+ *  or every line after it would wait forever. */
+let stuckTimer = 0;
+/** Chrome drops an utterance's end event if nothing holds on to the utterance. */
+let utterance: SpeechSynthesisUtterance | null = null;
 
 /** Sentences to speak one by one: the first starts sooner than the whole reply would, and the
  *  rest are fetched while it plays. Very short pieces ride with the next so it doesn't sound clipped. */
@@ -101,6 +112,10 @@ async function engineCanSpeak(): Promise<boolean> {
 }
 
 export function stopSpeaking(): void {
+  speechGen++;
+  window.clearTimeout(stuckTimer);
+  if (utterance) utterance.onend = null;
+  utterance = null;
   for (const a of [audio, upNext]) {
     if (!a) continue;
     a.pause();
@@ -126,6 +141,8 @@ function browserVoice(): SpeechSynthesisVoice | null {
 let afterSpeech: (() => void) | null = null;
 
 function finished(): void {
+  speechGen++;
+  window.clearTimeout(stuckTimer);
   useVoice.setState({ caption: null });
   const then = afterSpeech;
   const next = waiting;
@@ -171,17 +188,19 @@ export function bindBuildVoice(): () => void {
   });
 }
 
-function speakInBrowser(text: string): void {
+function speakInBrowser(text: string, gen: number): void {
   if (typeof speechSynthesis === "undefined") {
     finished();
     return;
   }
   const u = new SpeechSynthesisUtterance(text);
+  utterance = u;
   const v = browserVoice();
   if (v) u.voice = v;
   u.rate = 1.1;
-  u.onend = finished;
-  u.onerror = () => useVoice.setState({ caption: null });
+  u.onend = () => gen === speechGen && finished();
+  // blocked (no click on the page yet) or failed: move on, so the next line isn't stuck behind it
+  u.onerror = () => gen === speechGen && finished();
   speechSynthesis.speak(u);
 }
 
@@ -190,13 +209,23 @@ function speakInBrowser(text: string): void {
 export function speak(text: string, force = false, then?: () => void): void {
   const clean = text.trim();
   if (!clean || (!force && !useVoice.getState().replies)) return;
+  // the mic is open: talking now would talk over the person and into the mic
+  if (useVoice.getState().listening) return;
   stopSpeaking();
+  const gen = speechGen;
   afterSpeech = then ?? null;
   useVoice.setState({ caption: clean });
+  // generous: about 13 characters a second, plus time for the first audio to arrive
+  stuckTimer = window.setTimeout(() => {
+    if (gen !== speechGen) return;
+    for (const a of [audio, upNext]) a?.pause();
+    if (typeof speechSynthesis !== "undefined") speechSynthesis.cancel();
+    finished();
+  }, 6000 + clean.length * 75);
   void engineCanSpeak().then((ok) => {
-    if (useVoice.getState().caption !== clean) return;
+    if (gen !== speechGen) return;
     if (!ok) {
-      speakInBrowser(clean);
+      speakInBrowser(clean, gen);
       return;
     }
     // GET, so the audio element plays the stream as it arrives instead of waiting for the file
@@ -205,17 +234,18 @@ export function speak(text: string, force = false, then?: () => void): void {
       audio = a;
       upNext = i + 1 < lines.length ? ttsAudio(lines[i + 1]) : null;
       a.onended = () => {
-        if (audio !== a) return;
+        if (audio !== a || gen !== speechGen) return;
+        engineFails = 0;
         if (upNext) play(i + 1, upNext);
         else finished();
       };
       a.onerror = () => {
-        if (audio !== a) return;
-        engineVoice = false;
-        speakInBrowser(lines.slice(i).join(" "));
+        if (audio !== a || gen !== speechGen) return;
+        if (++engineFails >= 3) engineVoice = false;
+        speakInBrowser(lines.slice(i).join(" "), gen);
       };
       void a.play().catch(() => {
-        if (audio === a) speakInBrowser(lines.slice(i).join(" "));
+        if (audio === a && gen === speechGen) speakInBrowser(lines.slice(i).join(" "), gen);
       });
     };
     play(0, ttsAudio(lines[0]));
@@ -250,6 +280,15 @@ const FINAL_WAIT_MS = 300;
 const VAD_SILENCE_MS = 900;
 /** Below this the mic is giving nothing at all: muted, or the wrong input picked. */
 const DEAD_MIC_RMS = 0.002;
+/** Less speech than this is a cough or a bump, not words: not worth sending to be written down
+ *  (speech-to-text models tend to invent a "Thank you." for near-silence). */
+const MIN_SPEECH_MS = 250;
+/** A turn this long ends by itself (a stuck key, a forgotten mic), well under the 8 MB upload cap. */
+const MAX_TURN_MS = 45_000;
+const STT_TIMEOUT_MS = 15_000;
+/** The mic stays open this long after a turn, so the next turn starts recording at once instead of
+ *  clipping its first words while the browser reopens the mic. */
+const WARM_MS = 20_000;
 
 /** One turn of listening. The browser's recogniser gives live words where it works; the mic is
  *  recorded alongside, so when the recogniser hears nothing (it can fail without a word, offline or
@@ -264,13 +303,22 @@ interface Turn {
   spoke: boolean;
   lastLoud: number;
   loudest: number;
+  /** How long the mic was loud in all, to tell words from a cough. */
+  loudMs: number;
   /** The level watcher is running (the mic opened). */
   metered: boolean;
   unwatch: () => void;
+  /** Ended: no more listening. Words may still come in until it is sent (see finish). */
   done: boolean;
+  sent: boolean;
+  maxTimer: number;
 }
 
 let cur: Turn | null = null;
+/** The turn whose recording is being written down (only it may clear the spinner). */
+let sttFor = 0;
+/** The open mic kept warm between turns (WARM_MS). */
+let warm: { stream: MediaStream; timer: number } | null = null;
 let turns = 0;
 let delivered = 0;
 let endTimer = 0;
@@ -309,24 +357,34 @@ function deliver(text: string, id: number, handsFree: boolean): void {
   window.dispatchEvent(new CustomEvent(target, { detail: t }));
 }
 
-async function transcribe(blob: Blob, id: number, handsFree: boolean): Promise<void> {
+async function transcribe(blob: Blob, t: Turn, handsFree: boolean): Promise<void> {
+  // a newer turn has the screen; this one's words, errors and spinner must not land on it
+  const stale = () => turns !== t.id;
+  sttFor = t.id;
   useVoice.setState({ transcribing: true });
+  const abort = new AbortController();
+  const timer = window.setTimeout(() => abort.abort(), STT_TIMEOUT_MS);
   try {
     const build = useApp.getState().build?.build_id;
     const res = await fetch(serverUrl(`/v1/stt${build ? `?build_id=${encodeURIComponent(build)}` : ""}`), {
       method: "POST",
       headers: { ...authHeaders(), "content-type": blob.type || "audio/webm" },
       body: blob,
+      signal: abort.signal,
     });
     if (!res.ok) throw new Error(`Couldn't write that down (${res.status}).`);
     const text = ((await res.json()) as { text?: string }).text ?? "";
-    useVoice.setState({ heard: cleanTranscript(text) });
-    if (!cleanTranscript(text)) useVoice.setState({ error: "Didn't catch that. Try again?" });
-    deliver(text, id, handsFree);
+    const words = isNoise(text, t.loudMs) ? "" : cleanTranscript(text);
+    // still the person's words, but a newer turn owns the field, so leave what it shows alone
+    if (!stale()) useVoice.setState({ heard: words, ...(words ? {} : { error: "Didn't catch that. Try again?" }) });
+    if (words) deliver(words, t.id, handsFree);
   } catch (e) {
-    useVoice.setState({ error: e instanceof Error ? e.message : "Couldn't hear that." });
+    if (stale()) return;
+    const timedOut = e instanceof DOMException && e.name === "AbortError";
+    useVoice.setState({ error: timedOut ? "Writing that down took too long. Try again?" : e instanceof Error ? e.message : "Couldn't hear that." });
   } finally {
-    useVoice.setState({ transcribing: false });
+    window.clearTimeout(timer);
+    if (sttFor === t.id) useVoice.setState({ transcribing: false });
   }
 }
 
@@ -382,6 +440,7 @@ function watchLevel(stream: MediaStream, t: Turn): () => void {
     if (loud) {
       t.spoke = true;
       t.lastLoud = now;
+      t.loudMs += 50;
     }
     setLevel(Math.min(1, rms * 12));
     // hands-free with no words from the recogniser: the level alone ends the turn
@@ -394,11 +453,37 @@ function watchLevel(stream: MediaStream, t: Turn): () => void {
   };
 }
 
+function liveStream(): MediaStream | null {
+  if (!warm) return null;
+  window.clearTimeout(warm.timer);
+  const s = warm.stream;
+  warm = null;
+  return s.getAudioTracks().some((x) => x.readyState === "live") ? s : null;
+}
+
+/** Done with the mic for now: keep it open a little in case another turn follows, then let it go. */
+function releaseMic(stream: MediaStream): void {
+  if (warm && warm.stream !== stream) {
+    window.clearTimeout(warm.timer);
+    warm.stream.getTracks().forEach((x) => x.stop());
+  }
+  warm = { stream, timer: window.setTimeout(closeMic, WARM_MS) };
+}
+
+/** Lets go of the mic now (leaving the page, or the warm time ran out). */
+export function closeMic(): void {
+  if (!warm) return;
+  window.clearTimeout(warm.timer);
+  warm.stream.getTracks().forEach((x) => x.stop());
+  warm = null;
+}
+
 async function openMic(t: Turn): Promise<void> {
+  let stream: MediaStream | null = null;
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    stream = liveStream() ?? (await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }));
     if (t.done) {
-      stream.getTracks().forEach((x) => x.stop());
+      releaseMic(stream);
       return;
     }
     const rec = new MediaRecorder(stream);
@@ -406,13 +491,16 @@ async function openMic(t: Turn): Promise<void> {
       if (e.data.size) t.chunks.push(e.data);
     };
     const unwatch = watchLevel(stream, t);
+    const s = stream;
     t.unwatch = () => {
       unwatch();
-      stream.getTracks().forEach((x) => x.stop());
+      releaseMic(s);
     };
     t.recorder = rec;
     rec.start();
   } catch {
+    // never leave the mic on when recording couldn't start
+    stream?.getTracks().forEach((x) => x.stop());
     // no recording; the recogniser may still hear, and if there is none either, say so
     if (!t.recognition && !t.done) {
       useVoice.setState({ error: "Microphone access is blocked." });
@@ -445,6 +533,7 @@ async function finish(t: Turn, send: boolean): Promise<void> {
   t.done = true;
   window.clearTimeout(endTimer);
   window.clearTimeout(quietTimer);
+  window.clearTimeout(t.maxTimer);
   if (cur === t) cur = null;
   const handsFree = useVoice.getState().mode === "auto";
   useVoice.setState({ listening: false, mode: null, ...(send ? {} : { heard: "" }) });
@@ -452,6 +541,7 @@ async function finish(t: Turn, send: boolean): Promise<void> {
   t.recognition = null;
   const recording = stopRecording(t);
   if (!send) {
+    t.sent = true;
     r?.abort();
     void recording;
     return;
@@ -467,10 +557,11 @@ async function finish(t: Turn, send: boolean): Promise<void> {
     }
     r.abort();
   }
+  t.sent = true;
   const heard = useVoice.getState().heard;
   const blob = await recording;
   if (heard) deliver(heard, t.id, handsFree);
-  else if (t.spoke && blob) await transcribe(blob, t.id, handsFree);
+  else if (t.loudMs >= MIN_SPEECH_MS && blob) await transcribe(blob, t, handsFree);
   else if (t.metered && t.loudest < DEAD_MIC_RMS) useVoice.setState({ error: "No sound from your mic. Check which input is selected." });
 }
 
@@ -479,8 +570,24 @@ export async function startListening(mode: ListenMode = "auto", opts: { quietMs?
   if (useVoice.getState().listening) return;
   stopSpeaking();
   quietMs = opts.quietMs ?? QUIET_MS;
-  const t: Turn = { id: ++turns, recognition: null, recorder: null, chunks: [], started: performance.now(), spoke: false, lastLoud: 0, loudest: 0, metered: false, unwatch: () => {}, done: false };
+  const t: Turn = {
+    id: ++turns,
+    recognition: null,
+    recorder: null,
+    chunks: [],
+    started: performance.now(),
+    spoke: false,
+    lastLoud: 0,
+    loudest: 0,
+    loudMs: 0,
+    metered: false,
+    unwatch: () => {},
+    done: false,
+    sent: false,
+    maxTimer: 0,
+  };
   cur = t;
+  t.maxTimer = window.setTimeout(() => void finish(t, true), MAX_TURN_MS);
   useVoice.setState({ listening: true, mode, heard: "", error: null });
   armQuiet(t);
   const Rec = recognitionClass();
@@ -490,7 +597,8 @@ export async function startListening(mode: ListenMode = "auto", opts: { quietMs?
     r.interimResults = true;
     r.lang = navigator.language || "en-US";
     r.onresult = (e) => {
-      if (t.done) return;
+      // the last words can arrive just after the turn ended (finish waits for them); after it's sent, none
+      if (t.sent) return;
       let text = "";
       for (let i = 0; i < e.results.length; i++) text += e.results[i][0].transcript;
       useVoice.setState({ heard: cleanTranscript(text) });
@@ -559,10 +667,10 @@ export async function micAllowed(): Promise<boolean> {
 
 /** Space belongs to the page here: a text field with something in it, or a control reached by
  *  keyboard (Space presses it). An empty field gives Space to the voice, since a leading space types nothing. */
-function typing(t: EventTarget | null): boolean {
+function typing(t: EventTarget | null, space: boolean): boolean {
   const el = t as HTMLElement | null;
   if (!el) return false;
-  if (el.tagName === "INPUT" || el.tagName === "TEXTAREA") return (el as HTMLInputElement).value !== "";
+  if (el.tagName === "INPUT" || el.tagName === "TEXTAREA") return !space || (el as HTMLInputElement).value !== "";
   if (el.tagName === "SELECT" || el.isContentEditable) return true;
   return (el.tagName === "BUTTON" || el.tagName === "A" || el.getAttribute("role") === "button") && el.matches(":focus-visible");
 }
@@ -572,7 +680,8 @@ function typing(t: EventTarget | null): boolean {
 export function bindVoiceKeys(): () => void {
   let pressedAt = 0;
   const down = (e: KeyboardEvent) => {
-    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    // mid-composition (Japanese, Chinese…) keys belong to the input method
+    if (e.metaKey || e.ctrlKey || e.altKey || e.isComposing) return;
     const s = useVoice.getState();
     // while listening Space and Esc are always the voice's, even in a field
     if (e.code === "Space" && s.listening) {
@@ -584,7 +693,11 @@ export function bindVoiceKeys(): () => void {
       cancelListening();
       return;
     }
-    if (typing(e.target)) return;
+    if (typing(e.target, e.code === "Space")) {
+      // typing now: a reply shouldn't reopen the mic as if the conversation were still spoken
+      if (e.key.length === 1) lastHandsFree = 0;
+      return;
+    }
     if (e.code === "Space") {
       e.preventDefault();
       if (e.repeat) return;
@@ -607,10 +720,25 @@ export function bindVoiceKeys(): () => void {
     if (held < TAP_MS) keepListening();
     else stopListening();
   };
+  // Space held when the window loses focus (Cmd-Tab, a click into another app) never sends its keyup:
+  // treat leaving as letting go, or the mic would stay open with nobody holding it
+  const away = () => {
+    if (!pressedAt && useVoice.getState().mode !== "hold") return;
+    pressedAt = 0;
+    if (useVoice.getState().mode === "hold") stopListening();
+  };
+  const hidden = () => document.hidden && away();
   window.addEventListener("keydown", down);
   window.addEventListener("keyup", up);
+  window.addEventListener("blur", away);
+  document.addEventListener("visibilitychange", hidden);
+  window.addEventListener("pagehide", closeMic);
   return () => {
     window.removeEventListener("keydown", down);
     window.removeEventListener("keyup", up);
+    window.removeEventListener("blur", away);
+    document.removeEventListener("visibilitychange", hidden);
+    window.removeEventListener("pagehide", closeMic);
+    closeMic();
   };
 }

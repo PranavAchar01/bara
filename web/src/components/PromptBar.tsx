@@ -102,6 +102,12 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean }) {
             toggleTrace();
           } else stopListening();
         }}
+        onPointerCancel={() => {
+          // a touch taken over by the browser (a scroll, a system gesture) never sends pointerup
+          window.clearTimeout(hold.current);
+          hold.current = 0;
+          if (listening) stopListening();
+        }}
         onPointerLeave={() => {
           window.clearTimeout(hold.current);
           hold.current = 0;
