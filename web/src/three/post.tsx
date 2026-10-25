@@ -12,12 +12,10 @@ import { ToneMappingMode } from "postprocessing";
 import { useApp } from "../state/store";
 import { onModelsChanged } from "./assets";
 import { stage } from "./stage";
-import { SHOT_ID } from "./shot";
 
 /** `?post=0` turns the pass off, for comparison and for weak GPUs. */
 export function postEnabled(): boolean {
-  // the post pass draws an opaque frame, which a transparent product shot cannot have
-  return !SHOT_ID && new URLSearchParams(window.location.search).get("post") !== "0";
+  return new URLSearchParams(window.location.search).get("post") !== "0";
 }
 
 export function StudioPost(props: { dark: boolean }) {

@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../state/store";
 import { applyEdit, startBuild } from "../net/client";
-import type { CheckResult, Suggestion } from "../spec/types";
+import type { CheckResult, Suggestion, Warning } from "../spec/types";
 import { STAGE_IDS } from "../spec/types";
 import { Chip, Icon, Panel, useNow } from "../ui/common";
 import { buildProgress, fmtLeft } from "../state/progress";
@@ -78,32 +78,95 @@ export function LatencyHUD() {
   );
 }
 
-/** C18 WarningBanner: only critical warnings interrupt; the rest live in the checks and tab badges. */
-export function WarningBanner() {
-  const warnings = useApp((s) => s.build?.warnings ?? []);
-  const dismissed = useApp((s) => s.dismissedWarnings);
+/** How long a note stays up (a critical one a little longer); hovering the stack holds them. */
+const TOAST_MS = 5200;
+const TOAST_CRITICAL_MS = 9000;
+/** At most this many notes on screen; an older one slides away when a new one comes in. */
+const MAX_TOASTS = 3;
+const LEAVE_MS = 220;
+
+interface ToastItem {
+  w: Warning;
+  leaving: boolean;
+}
+
+function NoteToast(props: { item: ToastItem; paused: boolean; onDone: (id: string) => void }) {
+  const { w } = props.item;
   const vocab = useApp((s) => s.vocab);
-  const shown = warnings.filter((w) => w.severity === "critical" && !dismissed.includes(w.warning_id));
-  if (!shown.length) return null;
+  const left = useRef(w.severity === "critical" ? TOAST_CRITICAL_MS : TOAST_MS);
+  const { onDone, paused } = props;
+  useEffect(() => {
+    if (paused || props.item.leaving) return;
+    const from = performance.now();
+    const h = window.setTimeout(() => onDone(w.warning_id), left.current);
+    return () => {
+      window.clearTimeout(h);
+      left.current = Math.max(600, left.current - (performance.now() - from));
+    };
+  }, [paused, props.item.leaving, onDone, w.warning_id]);
   return (
-    <div className="warnings" role="status">
-      {shown.map((w) => (
-        <div key={w.warning_id} className={`warning tone-${severityTone(w.severity ?? "warning")}`}>
-          <span className="warning-code mono small">{vlabel(vocab, "warning_codes", w.code)}</span>
-          <span className="warning-msg">{w.message}</span>
-          <button
-            type="button"
-            className="btn ghost sm icon"
-            aria-label="Dismiss"
-            onClick={() => useApp.setState((s) => ({ dismissedWarnings: [...s.dismissedWarnings, w.warning_id] }))}
-          >
-            <Icon name="x" />
-          </button>
-        </div>
+    <div className={`note-toast tone-${severityTone(w.severity ?? "warning")} ${props.item.leaving ? "leaving" : ""}`} role="status">
+      <span className="note-code mono small">{vlabel(vocab, "warning_codes", w.code)}</span>
+      <span className="note-msg">{w.message}</span>
+      <button type="button" className="btn ghost sm icon" aria-label="Dismiss" onClick={() => onDone(w.warning_id)}>
+        <Icon name="x" />
+      </button>
+    </div>
+  );
+}
+
+/**
+ * C18 warnings as passing notes: each slides in as it arrives, at most three stack, and each goes
+ * by itself after a few seconds (hover holds them). Warnings a build already had when it was
+ * opened are not replayed as notes; every warning stays listed in the event log (L).
+ */
+export function WarningBanner() {
+  const buildId = useApp((s) => s.build?.build_id ?? null);
+  const warnings = useApp((s) => s.build?.warnings ?? EMPTY_WARNINGS);
+  const [items, setItems] = useState<ToastItem[]>([]);
+  const [paused, setPaused] = useState(false);
+  const seen = useRef<{ build: string | null; ids: Set<string> }>({ build: null, ids: new Set() });
+  useEffect(() => {
+    const s = seen.current;
+    if (s.build !== buildId) {
+      seen.current = { build: buildId, ids: new Set(warnings.map((w) => w.warning_id)) };
+      setItems([]);
+      return;
+    }
+    const fresh = warnings.filter((w) => !s.ids.has(w.warning_id));
+    if (!fresh.length) return;
+    for (const w of fresh) s.ids.add(w.warning_id);
+    setItems((cur) => {
+      const live = [...cur.filter((i) => !i.leaving), ...fresh.map((w) => ({ w, leaving: false }))];
+      const drop = new Set(live.slice(0, Math.max(0, live.length - MAX_TOASTS)).map((i) => i.w.warning_id));
+      return [...cur.filter((i) => i.leaving), ...live.map((i) => (drop.has(i.w.warning_id) ? { ...i, leaving: true } : i))];
+    });
+  }, [buildId, warnings]);
+  // a note marked leaving plays its exit, then goes
+  const leavingIds = items
+    .filter((i) => i.leaving)
+    .map((i) => i.w.warning_id)
+    .join("|");
+  useEffect(() => {
+    if (!leavingIds) return;
+    const h = window.setTimeout(() => setItems((cur) => cur.filter((i) => !i.leaving)), LEAVE_MS);
+    return () => window.clearTimeout(h);
+  }, [leavingIds]);
+  const done = useCallback((id: string) => {
+    setItems((cur) => cur.map((i) => (i.w.warning_id === id ? { ...i, leaving: true } : i)));
+    useApp.setState((s) => (s.dismissedWarnings.includes(id) ? {} : { dismissedWarnings: [...s.dismissedWarnings, id] }));
+  }, []);
+  if (!items.length) return null;
+  return (
+    <div className="note-stack" onPointerEnter={() => setPaused(true)} onPointerLeave={() => setPaused(false)} aria-live="polite">
+      {items.map((i) => (
+        <NoteToast key={i.w.warning_id} item={i} paused={paused} onDone={done} />
       ))}
     </div>
   );
 }
+
+const EMPTY_WARNINGS: Warning[] = [];
 
 function runSuggestion(s: Suggestion) {
   const kind = known(s.kind, ["prompt", "edit", "design"] as const);
@@ -243,6 +306,8 @@ export function EventLog() {
     if (open && ref.current) ref.current.scrollTop = ref.current.scrollHeight;
   }, [open, log.length]);
   const rows = useMemo(() => log.slice(-400), [log]);
+  const notes = useApp((s) => s.build?.warnings ?? EMPTY_WARNINGS);
+  const vocab = useApp((s) => s.vocab);
   if (!open) return null;
   return (
     <aside className="eventlog" aria-label="Event log">
@@ -253,6 +318,20 @@ export function EventLog() {
           <Icon name="x" />
         </button>
       </header>
+      {notes.length > 0 && (
+        <details className="eventlog-notes">
+          <summary>
+            {notes.length} note{notes.length > 1 ? "s" : ""} from this build
+          </summary>
+          <ul>
+            {notes.map((w) => (
+              <li key={w.warning_id} className={`tone-${severityTone(w.severity ?? "warning")}`}>
+                <span className="mono small">{vlabel(vocab, "warning_codes", w.code)}</span> {w.message}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
       <div className="eventlog-b" ref={ref}>
         {rows.map((e) => (
           <div key={e.id} className={`log-line dir-${e.dir} ${e.unknown ? "unknown" : ""}`} title={e.raw}>

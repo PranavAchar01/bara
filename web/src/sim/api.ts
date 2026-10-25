@@ -1,7 +1,7 @@
 // Programmatic handle on the running simulation, for anything that wants to demo the device
 // (the on-screen bot): list the keys with where they sit on screen, press and release them, and
 // follow what the device outputs. Everything is a no-op while simulation mode is closed.
-import type { SimMachine, SimSnapshot } from "./machine";
+import type { SimMachine } from "./machine";
 import { legend } from "./machine";
 import { closeSimPanel, openSimPanel, useSimPanel } from "./simPanelStore";
 
@@ -16,12 +16,41 @@ export interface SimKeyInfo {
   rect: DOMRect | null;
 }
 
-let active: SimMachine | null = null;
-const listeners = new Set<(snap: SimSnapshot | null) => void>();
+/** What the demo needs from a running device: its controls, press and release, and what it has typed. */
+export interface DemoSnapshot {
+  /** Everything the device has typed to its host (or printed), as plain text. */
+  text: string;
+}
+
+export interface DemoMachine {
+  keys(): { id: string; label: string; side: string; pos: number }[];
+  press(id: string): void;
+  release(id: string): void;
+  /** Where a control is on screen (CSS px), for devices whose controls are drawn in 3D. */
+  rectOf?(id: string): DOMRect | null;
+  snapshot(): DemoSnapshot;
+  subscribe(fn: () => void): () => void;
+}
+
+/** The local keyboard model seen as a demo machine. */
+function fromMachine(m: SimMachine): DemoMachine {
+  const names = m.device.layers.map((l) => l.name);
+  return {
+    keys: () => m.device.keys.map((k) => ({ id: k.id, label: legend(m.bindingFor(k.pos), names), side: k.side, pos: k.pos })),
+    press: (id) => m.press(id),
+    release: (id) => m.release(id),
+    snapshot: () => m.snapshot(),
+    subscribe: (fn) => m.subscribe(fn),
+  };
+}
+
+let active: DemoMachine | null = null;
+const listeners = new Set<(snap: DemoSnapshot | null) => void>();
 let unsubscribe: (() => void) | null = null;
 
 /** SimView registers its machine here while it runs (null when it goes away). */
-export function setActiveMachine(m: SimMachine | null): void {
+export function setActiveMachine(machine: SimMachine | DemoMachine | null): void {
+  const m = machine && "device" in machine ? fromMachine(machine) : machine;
   unsubscribe?.();
   unsubscribe = null;
   active = m;
@@ -29,7 +58,7 @@ export function setActiveMachine(m: SimMachine | null): void {
   emit(m ? m.snapshot() : null);
 }
 
-function emit(snap: SimSnapshot | null): void {
+function emit(snap: DemoSnapshot | null): void {
   for (const fn of listeners) fn(snap);
 }
 
@@ -42,10 +71,9 @@ export { openSimPanel as simOpen, closeSimPanel as simClose };
 export function simKeys(): SimKeyInfo[] {
   const m = active;
   if (!m) return [];
-  const names = m.device.layers.map((l) => l.name);
-  return m.device.keys.map((k) => {
+  return m.keys().map((k) => {
     const el = typeof document !== "undefined" ? document.querySelector(`[data-sim-key="${CSS.escape(k.id)}"]`) : null;
-    return { id: k.id, label: legend(m.bindingFor(k.pos), names), side: k.side, pos: k.pos, rect: el ? el.getBoundingClientRect() : null };
+    return { ...k, rect: el ? el.getBoundingClientRect() : (m.rectOf?.(k.id) ?? null) };
   });
 }
 
@@ -75,12 +103,12 @@ export function simTap(keyId: string, holdMs = 90): Promise<void> {
 }
 
 /** Current state: host text, display lines by instance id, active layer, console. Null when closed. */
-export function simSnapshot(): SimSnapshot | null {
+export function simSnapshot(): DemoSnapshot | null {
   return active?.snapshot() ?? null;
 }
 
 /** Called on every visible change (key output, display, layer, console); null when the sim closes. */
-export function simSubscribe(fn: (snap: SimSnapshot | null) => void): () => void {
+export function simSubscribe(fn: (snap: DemoSnapshot | null) => void): () => void {
   listeners.add(fn);
   return () => listeners.delete(fn);
 }

@@ -303,3 +303,23 @@ export function buildTrace(input: TraceInput): Trace {
   }
   return { groups, final };
 }
+
+export interface NowLine {
+  /** The stage it belongs to, "" for the closing line. */
+  stage: string;
+  /** What the agent is on, in its own steps' words. */
+  text: string;
+  detail?: string;
+  tone: TraceTone;
+  live: boolean;
+}
+
+/** The one line at the top of the popover: the newest thing the working stage did (or, when
+ *  nothing is working, the closing line, or the last stage's newest step). */
+export function nowLine(trace: Trace): NowLine | null {
+  const g = trace.groups.find((x) => x.live) ?? (trace.final ? undefined : trace.groups[trace.groups.length - 1]);
+  if (!g) return trace.final ? { stage: "", text: trace.final.text, tone: trace.final.tone, live: false } : null;
+  const last = g.rows[g.rows.length - 1];
+  if (!last) return { stage: g.label, text: g.live ? "Working on it" : g.summary, tone: "accent", live: g.live };
+  return { stage: g.label, text: last.title, detail: last.detail, tone: last.tone, live: g.live };
+}

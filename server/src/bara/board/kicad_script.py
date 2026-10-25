@@ -112,6 +112,44 @@ def _rule_area(board, outer: list, holes: list, layers: list, name: str) -> None
 _DROPPED: list = []
 
 
+COURTYARD_MARGIN_MM = 0.25  # IPC-7351 nominal courtyard excess
+
+
+def _close_courtyard(fp) -> None:
+    """A courtyard that does not close (an EasyEDA conversion draws two loose lines) is no
+    courtyard: DRC fails it and the packer cannot trust it. It is redrawn as the rectangle
+    around the footprint's pads and body outline, with the IPC nominal margin."""
+    fp.BuildCourtyardCaches()
+    for layer, flag, body in (
+        (pcbnew.F_CrtYd, pcbnew.MALFORMED_F_COURTYARD, pcbnew.F_Fab),
+        (pcbnew.B_CrtYd, pcbnew.MALFORMED_B_COURTYARD, pcbnew.B_Fab),
+    ):
+        if not fp.GetFlags() & flag:
+            continue
+        box = None
+        for item in list(fp.Pads()) + [
+            g for g in fp.GraphicalItems() if g.GetLayer() in (body, layer)
+        ]:
+            bb = item.GetBoundingBox()
+            if box is None:
+                box = pcbnew.BOX2I(bb.GetPosition(), bb.GetSize())
+            else:
+                box.Merge(bb)
+        for g in [g for g in fp.GraphicalItems() if g.GetLayer() == layer]:
+            fp.Remove(g)
+            _DROPPED.append(g)
+        if box is None:
+            continue
+        m = _mm(COURTYARD_MARGIN_MM)
+        rect = pcbnew.PCB_SHAPE(fp, pcbnew.SHAPE_T_RECT)
+        rect.SetStart(pcbnew.VECTOR2I(box.GetLeft() - m, box.GetTop() - m))
+        rect.SetEnd(pcbnew.VECTOR2I(box.GetRight() + m, box.GetBottom() + m))
+        rect.SetLayer(layer)
+        rect.SetWidth(_mm(0.05))
+        fp.Add(rect)
+    fp.BuildCourtyardCaches()
+
+
 def _fit_holes(board, fp) -> None:
     """Bring a footprint's plated holes inside the board's hole rules.
 
@@ -159,6 +197,7 @@ def _place_footprint(board, nets: dict, spec: dict) -> None:
     for zone in list(fp.Zones()):
         if zone.GetIsRuleArea() and not zone.GetDoNotAllowTracks():
             fp.Remove(zone)
+            _DROPPED.append(zone)  # freed by Python, it crashes SaveBoard (Pico "USB Cable")
     # Edge.Cuts that do not close (a jack drawn to splice into the board edge) are not
     # a cutout on our outline; keep them as a drawing so the outline stays closed.
     if not spec.get("edge_cuts", True):
@@ -180,6 +219,7 @@ def _place_footprint(board, nets: dict, spec: dict) -> None:
         models.push_back(mod)
     board.Add(fp)
     _fit_holes(board, fp)
+    _close_courtyard(fp)
     bottom = spec.get("side") == "bottom"
     if bottom:
         fp.Flip(fp.GetPosition(), pcbnew.FLIP_DIRECTION_LEFT_RIGHT)
@@ -200,15 +240,21 @@ def _place_footprint(board, nets: dict, spec: dict) -> None:
         if pad.GetNumber() or pad.GetAttribute() != pcbnew.PAD_ATTRIB_PTH:
             continue
         host = [p for p in fp.Pads() if p.GetNumber() and p.HitTest(pad.GetPosition())]
-        if host and host[0].GetNetCode() > 0:
-            pad.SetNet(host[0].GetNet())
+        if not host:
+            continue
+        if host[0].GetNetCode() <= 0:
+            # an exposed pad no pin is wired to still joins its own vias: one local net, the
+            # name KiCad gives an unconnected pin, so the pad and its vias are not shorts
+            name = f"unconnected-({spec['ref']}-Pad{host[0].GetNumber()})"
+            host[0].SetNet(_net(board, nets, name))
+        pad.SetNet(host[0].GetNet())
 
 
 def build(plan_path: str) -> None:
     with open(plan_path) as fh:
         plan = json.load(fh)
     board = pcbnew.NewBoard(plan["board_path"])
-    board.SetCopperLayerCount(2)
+    board.SetCopperLayerCount(int(plan.get("copper_layers", 2)))
     _set_rules(board, plan["rules"])
     nets: dict = {}
     for name in plan.get("nets", []):
@@ -294,6 +340,14 @@ def _repair_necks(board) -> int:
     return fixed
 
 
+def export_dsn(board_path: str, dsn_path: str) -> None:
+    """A routed board back to Specctra: its tracks and vias go in as the wiring, so the
+    router continues from them and only has the connections still open to find."""
+    board = pcbnew.LoadBoard(board_path)
+    if not pcbnew.ExportSpecctraDSN(board, dsn_path):
+        raise RuntimeError("DSN export failed")
+
+
 def import_ses(board_path: str, ses_path: str) -> None:
     board = pcbnew.LoadBoard(board_path)
     ok = pcbnew.ImportSpecctraSES(board, ses_path)
@@ -308,5 +362,7 @@ if __name__ == "__main__":
         build(sys.argv[2])
     elif sys.argv[1] == "import":
         import_ses(sys.argv[2], sys.argv[3])
+    elif sys.argv[1] == "dsn":
+        export_dsn(sys.argv[2], sys.argv[3])
     else:
         raise SystemExit("unknown command " + sys.argv[1])

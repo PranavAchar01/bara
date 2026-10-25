@@ -10,6 +10,7 @@ import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
 import * as THREE from "three";
 import { select } from "../state/store";
+import { useSim } from "../sim/simStore";
 import type { Board, BoardFootprint, BuildPart } from "../spec/types";
 import { courtyard, type HoverBox } from "./boardgeom";
 
@@ -120,6 +121,7 @@ const _hit = new THREE.Vector3();
  */
 export function FootprintHover(props: { boxes: HoverBox[]; parts: BuildPart[]; accent: string }) {
   const { boxes, parts, accent } = props;
+  const simActive = useSim((s) => s.active);
   const [hover, setHover] = useState<HoverBox | null>(null);
   const proxyRef = useRef<THREE.Mesh>(null);
   const bounds = useMemo(() => {
@@ -167,7 +169,8 @@ export function FootprintHover(props: { boxes: HoverBox[]; parts: BuildPart[]; a
     return g;
   }, [hover]);
   useEffect(() => () => edges?.dispose(), [edges]);
-  if (!proxy) return null;
+  // while the device is being operated its parts are controls, not something to inspect
+  if (!proxy || simActive) return null;
   const centre = hover ? hover.box.getCenter(new THREE.Vector3()) : null;
   const name = hover ? (partName(hover.footprint) ?? hover.footprint?.label ?? null) : null;
   // The KiCad footprint only when it says more than the name (labels often are the footprint).

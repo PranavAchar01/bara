@@ -15,7 +15,7 @@ const tmpMat = new THREE.Matrix4();
  * World box of the meshes under a group, instance by instance. Box3.setFromObject trusts an
  * InstancedMesh's cached bounds, which can be stale (empty) after the mesh remounts.
  */
-function meshBox(root: THREE.Object3D): THREE.Box3 {
+export function meshBox(root: THREE.Object3D): THREE.Box3 {
   const out = new THREE.Box3();
   root.traverseVisible((o) => {
     const mesh = o as THREE.Mesh;
@@ -162,17 +162,32 @@ export function FocusDriver() {
   const revision = useApp((s) => `${s.build?.revision ?? 0}:${s.build?.parts.length ?? 0}`);
   const { camera, invalidate } = useThree();
   focusCamera = camera;
+  // Focus while exploded is a pick: the part stays in its layer (lifted a little), the rest ghost.
+  const picking = key !== null && explode > 0.5;
   useEffect(() => {
-    if (key) {
+    if (key && picking) {
+      stage.focusPose = new Map();
+      stage.pickKey = key;
+    } else if (key) {
+      stage.pickKey = null;
       stage.focusPose = focusPoses(key, camera);
       // nothing to pull out (its group isn't drawn): drop the focus rather than move everything
       if (stage.focusPose.size === 0) focusPart(null);
     }
     invalidate();
     // the shelf is laid out again when the explode slider moves under the focus
-  }, [key, explode, revision, camera, invalidate]);
+  }, [key, picking, explode, revision, camera, invalidate]);
   useFrame((_, dt) => {
-    const target = key && stage.focusPose.size ? 1 : 0;
+    const pt = picking ? 1 : 0;
+    const pd = pt - stage.pickK;
+    if (Math.abs(pd) < 0.002) {
+      if (stage.pickK !== pt) stage.pickK = pt;
+      if (pt === 0 && stage.pickKey && !key) stage.pickKey = null;
+    } else {
+      stage.pickK = reducedMotion() ? pt : stage.pickK + pd * (1 - Math.exp(-dt * (pt ? 9 : 12)));
+      invalidate();
+    }
+    const target = key && !picking && stage.focusPose.size ? 1 : 0;
     const d = target - stage.focusK;
     if (Math.abs(d) < 0.001) {
       if (stage.focusK !== target) stage.focusK = target;
