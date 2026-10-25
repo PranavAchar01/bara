@@ -151,7 +151,14 @@ function perch(r: Rect, fromX: number): { x: number; y: number } {
   const W = window.innerWidth;
   const H = window.innerHeight;
   const half = BOT / 2;
-  const fits = (x: number, y: number) => x - half >= 8 && x + half <= W - 8 && y - half >= 8 && y + half <= H - 8;
+  // The side panels the target is not in stay clear: perching on a canvas part never covers the Layers header.
+  const cx = r.x + r.w / 2;
+  const cy = r.y + r.h / 2;
+  const panels = [...document.querySelectorAll<HTMLElement>(".leftcol, .rightcol-wrap")]
+    .map((el) => el.getBoundingClientRect())
+    .filter((p) => !(cx >= p.left && cx <= p.right && cy >= p.top && cy <= p.bottom));
+  const covers = (x: number, y: number) => panels.some((p) => x + half > p.left && x - half < p.right && y + half > p.top && y - half < p.bottom);
+  const fits = (x: number, y: number) => x - half >= 8 && x + half <= W - 8 && y - half >= 8 && y + half <= H - 8 && !covers(x, y);
   const left = { x: r.x - GAP - half, y: r.y + half };
   const right = { x: r.x + r.w + GAP + half, y: r.y + half };
   const leftLow = { x: left.x, y: r.y + r.h - half };
