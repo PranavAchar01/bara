@@ -54,29 +54,6 @@ def _safe_rel(path: str) -> str | None:
     return "/".join(parts)
 
 
-# What each case finish is printed or cut from (Color.finish.preset, SPEC common types).
-FINISH_MAKES = {
-    "matte": "PLA",
-    "satin": "PETG",
-    "gloss": "moulded ABS",
-    "silk": "silk PLA",
-    "frosted": "translucent PETG",
-    "clear": "clear acrylic or resin",
-    "smoke": "tinted acrylic",
-    "metal": "anodised aluminium",
-}
-
-
-def case_material_note(enc: dict[str, Any]) -> str:
-    """', frosted: translucent PETG, #7FB5E6' for the BOM, or '' when no finish was chosen."""
-    color = enc.get("color") or {}
-    preset = (color.get("finish") or {}).get("preset")
-    if preset not in FINISH_MAKES:
-        return ""
-    hex_ = color.get("hex")
-    return f", {preset}: {FINISH_MAKES[preset]}" + (f", {hex_}" if hex_ else "")
-
-
 def asset_path(url: str | None) -> Path | None:
     """Local file behind an /assets/ URL, or None when it is not on this server."""
     if not url or not url.startswith("/assets/"):
@@ -221,7 +198,7 @@ def bom_csv(build: dict[str, Any]) -> str:
         if enc.get("kind") == "generated":
             rows[enc["enclosure_id"]] = {
                 "part_id": enc["enclosure_id"],
-                "name": "Generated case (tray + bezel)" + case_material_note(enc),
+                "name": "Generated case (tray + bezel)",
                 "quantity": 1,
                 "instances": [enc["enclosure_id"]],
                 "lib_id": "",

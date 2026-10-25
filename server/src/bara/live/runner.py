@@ -19,15 +19,11 @@ from typing import TYPE_CHECKING, Any
 from shapely.geometry import Polygon
 
 from bara.board.evaluate import evaluate as evaluate_board
-from bara.board.generic import board_footprint_mm
 from bara.live import adapters as A
-from bara.live import archetype, completeness, hero, open_designs, retrieval, websearch
+from bara.live import archetype, completeness, hero, open_designs, websearch
 from bara.live import blocks as blocks_mod
-from bara.live import concept as concept_mod
-from bara.live import finish as finish_mod
 from bara.live import form as form_mod
 from bara.live import identity as identity_mod
-from bara.live import reference_design as reference_mod
 from bara.live.brief import BriefResult, normalise_brief, spec_from_brief, write_brief
 from bara.live.catalog_source import PartSource, merge_into_catalog, model_asset
 from bara.live.compose import ASSETS_DIR, Composer, ComposeResult, Slot
@@ -327,30 +323,6 @@ def _spans(product: form_mod.Form, size: tuple[float, float]) -> bool:
     )
 
 
-def _form_sig(product: form_mod.Form) -> tuple[Any, ...]:
-    """What a redraw can change: the outline (to the mm), the thickness and the anchors."""
-    return (
-        tuple((round(x), round(y)) for x, y in product.silhouette),
-        round(product.thickness_mm),
-        tuple(
-            (a.get("slot_id"), round(float(a["centre"][0])), round(float(a["centre"][1])))
-            for a in product.anchors
-        ),
-    )
-
-
-def _measured(run: BuildRun, product: form_mod.Form | None) -> tuple[float, float, float] | None:
-    """The built case's plan width, depth and height in mm (the form's when no case yet)."""
-    for enc in run.state.get("enclosures") or []:
-        size = enc.get("outer_size_mm")
-        if size and len(size) == 3:
-            return float(size[0]), float(size[1]), float(size[2])
-    if product is None:
-        return None
-    w, h = product.size_mm
-    return float(w), float(h), float(product.thickness_mm)
-
-
 def _extent(product: form_mod.Form) -> tuple[float, float, float]:
     """Overall width, height and area of the silhouette."""
     xs = [p[0] for p in product.silhouette]
@@ -422,22 +394,10 @@ class LiveRunner:
         self.firmware(run, brief, plan, result, board)
         self.render(run, result, board, ctx)
         failure = await self.repair(run, brief, plan, result, board, ctx)
-        self.finishing(run, brief)
         if failure is not None:
             run.emit("build.failed", {"error": failure})
             return
         run.emit("build.done", self.engine._done_payload(run, {}))
-
-    def finishing(self, run: BuildRun, brief: dict[str, Any]) -> None:
-        """After industrial design: colours and materials on purpose (clear tinted case,
-        opaque controls in one palette, dark-glass screen, real board and metal finishes),
-        written as `finish` on parts, boards and the case and summarised on scene.finish."""
-        st = self._stage(run, "render", "Choosing colours and materials")
-        msgs = finish_mod.events(run.state, list(brief.get("colours") or []))
-        for msg_type, payload in msgs:
-            st.emit(msg_type, payload)
-        pal = ((run.state.get("scene") or {}).get("finish") or {}).get("palette_name", "")
-        st.done(message=f"Clear case, {pal} palette, {len(msgs)} finishes"[:200])
 
     MAX_REPAIRS = 3
 
@@ -472,8 +432,6 @@ class LiveRunner:
                 f"Repair round {n}: sending back {notes}",
             )  # fmt: skip
             run.repair = f"The last attempt failed these checks; fix them: {notes}"  # type: ignore[attr-defined]
-            if any(rid == "board.routing.complete" for rid, _ in bad):
-                ctx["route_effort"] = n  # the router searches further, never the same input
             board = await self.place(run, brief, plan, result, ctx)
             await self.enclose(run, brief, plan, result, board, ctx)
             board = await self.board_stage(run, board, result, ctx)
@@ -523,7 +481,6 @@ class LiveRunner:
         "mech.fit.enclosure": "E_ENCLOSURE_FAILED",
         "mech.fit.collision": "E_ENCLOSURE_FAILED",
         "mech.fit.floating": "E_ENCLOSURE_FAILED",
-        "mech.access.clipped": "E_ENCLOSURE_FAILED",
     }
 
     def gate(self, run: BuildRun) -> dict[str, Any] | None:
@@ -610,7 +567,6 @@ class LiveRunner:
                 "the mains side is the module's job.",
             )
         if res.brief["scope"] == "in_scope":
-            res.brief = await self.understand(run, prompt, res.brief, st)
             arch = archetype.apply(
                 prompt, res.brief, self.source, self.settings.data_dir / "archetypes.json"
             )
@@ -638,42 +594,6 @@ class LiveRunner:
         st.done()
         run.live_brief = res.brief  # type: ignore[attr-defined]
         return spec, res.brief
-
-    async def understand(
-        self, run: BuildRun, prompt: str, brief: dict[str, Any], st: _Stage
-    ) -> dict[str, Any]:
-        """Retrieve real references for this kind of device, then have the model write the
-        device concept from them: what it is, its form, layout and parts, and which build path
-        fits. The concept is a reading grounded in what was retrieved, never a fixed label."""
-        st.progress("Retrieving real products and open designs of this device", 0.5)
-        # a generic product class, never a brand or a model name the request may have typed
-        ret = await retrieval.gather(str(brief.get("device") or "") or _product_name(run, brief))
-        run.retrieval = ret  # type: ignore[attr-defined]
-        run.web_photos = ret.photos  # type: ignore[attr-defined]
-        run.web_sources = ret.photo_sources  # type: ignore[attr-defined]
-        st.progress("Working out what the device is from the references", 0.7)
-        concept, note = await concept_mod.derive(
-            prompt, self.catalog.function_ids(), self.catalog.device_classes(), brief, ret
-        )
-        run.device_concept = concept  # type: ignore[attr-defined]
-        log.info(
-            "device concept %s (%s; %s): %s",
-            run.build_id, note, "; ".join(ret.notes), json.dumps(concept, sort_keys=True),
-        )  # fmt: skip
-        if concept is None:
-            self._warn(
-                run, "classify", "w_concept", "llm_degraded", "warning",
-                f"No device concept ({note}); the brief's own reading picks the build path.",
-            )  # fmt: skip
-            return brief
-        path = "keyboard pipeline" if concept_mod.is_keyboard(concept) else "device path"
-        self._warn(
-            run, "classify", "w_concept", "assumption_made", "info",
-            f"Read as a {concept['device_name']} ({path}: {concept['build_path_reason']}) from "
-            f"{len(ret.designs)} open design(s), {len(ret.pages)} page(s), "
-            f"{len(ret.photos)} photo(s).",
-        )  # fmt: skip
-        return concept_mod.apply(brief, concept)
 
     def _log_brief(self, run: BuildRun, prompt: str, res: BriefResult) -> None:
         record = {"build_id": run.build_id, "prompt": prompt, "brief": res.brief,
@@ -754,45 +674,10 @@ class LiveRunner:
         )
         st.done()
 
-    REFERENCE_BUDGET_S = 25.0
-
-    async def _reference_design(self, run: BuildRun, st: Any, composer: Composer) -> None:
-        """Match the open KiCad projects the build already retrieved against its function
-        blocks; a reusable match's footprints are preferred when parts are chosen, and the
-        project is recorded with its licence."""
-        ret = getattr(run, "retrieval", None)
-        designs = list(getattr(ret, "designs", None) or [])
-        if not designs:
-            return
-        st.progress("Matching open reference designs by function block", None)
-        try:
-            ref = await asyncio.wait_for(
-                reference_mod.match(designs, [s.function_id for s in composer.slots]),
-                self.REFERENCE_BUDGET_S,
-            )
-        except TimeoutError:
-            ref = None
-        run.reference_design = ref.json() if ref else None  # type: ignore[attr-defined]
-        if ref is None:
-            return
-        composer.reference_fps = reference_mod.preferred(ref)  # type: ignore[attr-defined]
-        if composer.reference_fps:  # type: ignore[attr-defined]
-            how = "its footprints are preferred for those blocks."
-        elif not ref.reusable:
-            how = "compared only (its licence does not allow reuse)."
-        else:
-            how = "compared only (too few blocks in common)."
-        self._warn(
-            run, "compose", "w_reference", "other", "info",
-            f"Reference design {ref.repo} ({ref.licence}) builds {len(ref.matched)} of this "
-            f"device's function blocks ({ref.coverage:.0%}); {how}",
-        )  # fmt: skip
-
     def _write_chain(self, run: BuildRun, record: dict[str, Any]) -> None:
         """Keep the jobs -> functions -> blocks -> parts chain next to the build's artefacts."""
         out = self.settings.data_dir / "cache" / "chains"
         out.mkdir(parents=True, exist_ok=True)
-        record = {**record, "reference_design": getattr(run, "reference_design", None)}
         (out / f"{run.build_id}.json").write_text(json.dumps(record, indent=1))
 
     # ---- compose -------------------------------------------------------------------------
@@ -808,11 +693,7 @@ class LiveRunner:
         blocks = getattr(run, "live_blocks", None)
         if plan is None and blocks is None:
             for _ in range(2):  # the diagram sets every part and quantity; one retry on failure
-                blocks, note = await blocks_mod.derive(
-                    run.prompt,
-                    self.catalog.function_ids(),
-                    concept_mod.concept_text(getattr(run, "device_concept", None)),
-                )
+                blocks, note = await blocks_mod.derive(run.prompt, self.catalog.function_ids())
                 if blocks is not None:
                     break
             if blocks is None:  # no silent defaults: guessed parts and counts are not a design
@@ -824,7 +705,6 @@ class LiveRunner:
             self.source, spec, brief, plan, self.settings, controllers, blocks=blocks
         )
         st.emit("slots.ready", {"slots": [s.json() for s in composer.slots]})
-        await self._reference_design(run, st, composer)
         if plan is not None:
             for half in plan.halves:
                 lid = {"left": "lay_l", "right": "lay_r"}.get(half.side, "lay_main")
@@ -949,13 +829,11 @@ class LiveRunner:
         return out
 
     async def _photos(self, run: BuildRun) -> list[bytes]:
-        """Web pictures of this kind of device (its generic class plus "3d model"), searched once
-        per build and shared by the form and the identity judge as visual reference only."""
+        """Web pictures of the product (its name plus "3d model"), searched once per build and
+        shared by the form and the identity judge."""
         if not hasattr(run, "web_photos"):
             brief = getattr(run, "live_brief", None) or {}
-            # the brief's generic device class, never a brand or model name the request typed
-            kind = str(brief.get("device") or "") or _product_name(run, brief)
-            photos, sources, note = await websearch.reference_photos(kind)
+            photos, sources, note = await websearch.reference_photos(_product_name(run, brief))
             run.web_photos = photos  # type: ignore[attr-defined]
             run.web_sources = sources  # type: ignore[attr-defined]
             log.info("web reference photos for %s: %d (%s)", run.build_id, len(photos), note)
@@ -982,9 +860,8 @@ class LiveRunner:
             )
         photos = await self._photos(run)
         product, note = await form_mod.derive(
-            run.prompt, touches, previous if (repair or fit) else None, repair, fit, photos,
-            concept=concept_mod.concept_text(getattr(run, "device_concept", None)),
-        )  # fmt: skip
+            run.prompt, touches, previous if (repair or fit) else None, repair, fit, photos
+        )
         if repair and not fit and floor and product is not None and previous is not None:
             w, h, area = _extent(product)
             if w < 0.98 * floor[0] or h < 0.98 * floor[1] or area < 0.97 * floor[2]:
@@ -1072,17 +949,7 @@ class LiveRunner:
                     break
         verdict: dict[str, Any] | None = None
         note = "no form" if product is None else "nothing to render"
-        # a redraw that left the form as it was, or a re-judge that objects to the same things,
-        # cannot converge: the earlier verdict and message stand (so a repair round that sends
-        # it back sees the same failure and stops) instead of judging and redrawing again
-        last = getattr(run, "identity_last", None)
-        sig = _form_sig(product) if product is not None else None
-        stuck = bool(
-            final and last and not last["ok"] and (last["sig"] == sig or last.get("stuck"))
-        )
-        if stuck and last:
-            verdict, note = last["verdict"], "unchanged"
-        elif product is not None and meshes:
+        if product is not None and meshes:
             if product.rest_pose == "upright":
                 meshes = hero.stand_up(meshes)
             eye, target = hero.hero_camera(meshes, product.rest_pose)
@@ -1092,23 +959,8 @@ class LiveRunner:
             run.hero_png = out / f"{run.build_id}{'_repaired' if final else ''}.png"  # type: ignore[attr-defined]
             run.hero_png.write_bytes(png)  # type: ignore[attr-defined]
             verdict, note = await identity_mod.judge(
-                run.prompt,
-                product.description,
-                product.reference,
-                png,
-                await self._photos(run),
-                device_class=str(product.device_class or getattr(run, "device", "") or ""),
-                measured=_measured(run, product),
+                run.prompt, product.description, product.reference, png, await self._photos(run)
             )
-            if (
-                final
-                and last
-                and not last["ok"]
-                and verdict is not None
-                and not verdict["reads_as_device"]
-                and identity_mod.same_objection(last["verdict"], verdict)
-            ):
-                stuck = True
         run.identity = verdict  # type: ignore[attr-defined]
         ok = verdict is not None and bool(verdict["reads_as_device"])
         message = (
@@ -1122,21 +974,6 @@ class LiveRunner:
         )
         if verdict and not ok and verdict["mismatches"]:
             message += " | " + "; ".join(verdict["mismatches"])
-        if stuck and last:
-            message = last["message"]
-            if not last.get("stuck"):
-                self._warn(
-                    run, "render", "w_identity_stuck", "other", "warning",
-                    "The redraw did not change what the look reviewer objected to; no further "
-                    "identity redraws. Last verdict: " + message[:200],
-                )  # fmt: skip
-        run.identity_last = {  # type: ignore[attr-defined]
-            "sig": sig,
-            "ok": ok,
-            "verdict": verdict,
-            "message": message,
-            "stuck": stuck,
-        }
         st.emit(
             "check.result",
             {
@@ -1157,7 +994,7 @@ class LiveRunner:
         )
         st.done()
         if verdict is not None and not ok and not final:
-            return identity_mod.critique(verdict, _measured(run, product))
+            return identity_mod.critique(verdict)
         return None
 
     def _form_fit_check(
@@ -1211,63 +1048,6 @@ class LiveRunner:
             )  # fmt: skip
             brief["body_thickness_mm"] = stack
 
-    MAX_SWAPS = 3
-
-    async def _swap_to_fit(
-        self,
-        run: BuildRun,
-        st: Any,
-        gb: dict[str, Any],
-        result: ComposeResult,
-        parts: list[dict[str, Any]],
-        board: dict[str, Any] | None,
-        err: str | None,
-    ) -> tuple[dict[str, Any] | None, str | None, list[dict[str, Any]]]:
-        """A part with no free spot in the product is swapped for its slot's best candidate
-        with a smaller footprint (or none: wired off the board, under it) before the product is
-        redrawn bigger: the form stays what was asked for, the part follows the volume."""
-        composer = getattr(run, "live_composer", None)
-        for _ in range(self.MAX_SWAPS):
-            report = (gb.get("product_form") or {}).get("fit_report") or {}
-            stuck = report.get("stuck")
-            if composer is None or board is None or report.get("ok", True) or not stuck:
-                break
-            longest, area = max(stuck["mm"]), float(stuck["mm2"])
-
-            def fits(cand: dict[str, Any], longest: float = longest, area: float = area) -> bool:
-                try:
-                    record = self.source.get_part(cand["part_id"])
-                except Exception:  # noqa: BLE001 - a part the source cannot serve is not a fit
-                    return False
-                ext = board_footprint_mm(record)
-                if ext is None:  # off the board: its own body must still be smaller
-                    box_ = (record.get("mechanical") or {}).get("bbox_mm") or {}
-                    lo, hi = box_.get("min"), box_.get("max")
-                    if not (lo and hi):
-                        return True
-                    ext = (hi[0] - lo[0], hi[1] - lo[1])
-                return max(ext) < longest and ext[0] * ext[1] < area
-
-            mm = "x".join(f"{v:.0f}" for v in stuck["mm"])
-            why = f"{mm} mm, no free spot in the product"
-            part = composer.resize(str(stuck["instance_id"]), fits, why, st.emit)
-            if part is None:
-                break
-            self._warn(
-                run, "place", f"w_swap_{part['part_id']}"[:60], "other", "info",
-                f"{stuck['part']} ({mm} mm) does not fit the product; swapped for "
-                f"{part.get('display_name') or part['part_id']}.",
-            )  # fmt: skip
-            parts = []
-            for p in result.parts:
-                try:
-                    record = self.source.get_part(p["part_id"])
-                except Exception:  # a part the source no longer has stays off the board
-                    record = {}
-                parts.append({**p, "record": record})
-            board, err = await asyncio.to_thread(A.plan_board, gb, parts, run.build_id)
-        return board, err, parts
-
     async def _place_generic(
         self, run: BuildRun, brief: dict[str, Any], result: ComposeResult, ctx: dict[str, Any]
     ) -> dict[str, Any] | None:
@@ -1293,7 +1073,6 @@ class LiveRunner:
             brief["edge_thickness_mm"] = product.edge_thickness_mm
             brief["anchors"] = product.anchors
         board, err = await asyncio.to_thread(A.plan_board, gb, parts, run.build_id)
-        board, err, parts = await self._swap_to_fit(run, st, gb, result, parts, board, err)
         grown = False
         for _ in range(
             1 if getattr(run, "repair", "") else self.FIT_REPAIRS
@@ -1554,7 +1333,7 @@ class LiveRunner:
                 preview["position_mm"] = [round(v, 3) for v in pos]
                 preview["rotation_deg"] = [round(v, 3) for v in rot]
             st.emit("board.updated", {"board": preview})
-        routed, err = await A.route_board(board, st.progress, effort=ctx.get("route_effort", 0))
+        routed, err = await A.route_board(board, st.progress)
         if routed is None:
             self._warn(run, "board", "w_board", "other", "warning", f"No KiCad board: {err}")
             st.emit(
