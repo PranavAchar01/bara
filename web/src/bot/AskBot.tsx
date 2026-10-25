@@ -93,7 +93,7 @@ export function AskBot(props: { instance: BuildPart }) {
       return;
     }
     // The director adds the beats for edit.applied; this is the bot going to pick the part up.
-    agentDo({ source: "ask", say: `On it — ${out.short}`.slice(0, 60), beats: [{ id: `ask-${nextId + 1}`, target, action: "pick", label: out.label.slice(0, 32), dwellMs: 900 }] });
+    agentDo({ source: "ask", say: `On it: ${out.short}`.slice(0, 60), beats: [{ id: `ask-${nextId + 1}`, target, action: "pick", label: out.label.slice(0, 32), dwellMs: 900 }] });
     applyEdit(out.ops, out.label);
     push(q, out.reply, useApp.getState().view.edit?.msg_id ?? null);
   };

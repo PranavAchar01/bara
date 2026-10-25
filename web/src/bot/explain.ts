@@ -52,11 +52,11 @@ export function partName(part: BuildPart): string {
   return part.label || part.card.display_name || part.instance_id;
 }
 
-/** "Picked X — a, b" with tags dropped from the end until it fits. */
+/** "Picked X: a, b" with tags dropped from the end until it fits. */
 function withTags(head: string, tags: string[]): string {
   const t = tags.filter(Boolean);
   while (t.length > 0) {
-    const s = `${head} — ${t.join(", ")}`;
+    const s = `${head}: ${t.join(", ")}`;
     if (s.length <= SHORT_MAX) return s;
     t.pop();
   }
@@ -138,13 +138,13 @@ export function explainPart(build: Build | null, view: View, instanceId: string)
   if (fromDesign && designShort) {
     short =
       build.tier === "exact"
-        ? `${name} — straight from the ${designShort}`
+        ? `${name}, straight from the ${designShort}`
         : `Kept ${name} from the ${designShort}`;
     if (short.length > SHORT_MAX) short = `From the ${designShort} design`;
   } else if (dec?.method === "user" || (!dec && part.origin === "user")) {
     short = clip(`You picked ${name}`, SHORT_MAX);
   } else if (dec?.method === "only_survivor") {
-    short = clip(`${name} — the only one that fit`, SHORT_MAX);
+    short = clip(`${name}, the only one that fit`, SHORT_MAX);
   } else if (dec && dec.method !== "none") {
     // The most telling filter (what you asked for first), then the design it fits.
     const best = [...(last?.filters ?? [])].sort(
@@ -156,7 +156,7 @@ export function explainPart(build: Build | null, view: View, instanceId: string)
     short = withTags(`Picked ${name}`, tags);
   } else {
     const fn = part.card.primary_function?.split(".").pop();
-    short = clip(fn ? `${name} — the ${fn.replace(/_/g, " ")}` : name, SHORT_MAX);
+    short = clip(fn ? `${name}, the ${fn.replace(/_/g, " ")}` : name, SHORT_MAX);
   }
 
   // ---- long facts, most telling first ----
