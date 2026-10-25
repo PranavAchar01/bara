@@ -2,14 +2,16 @@
 // the mic) and just talk: a pause at the end of what you said sends it. Ums and stutters are taken out
 // before Bara sees it. Bara answers out loud through the engine's streamed speech (OpenAI when the
 // engine has its key), with the words shown under the eyes; without it, the browser's own speech fills
-// in, so nothing depends on one service. Replies are cut to one or two short sentences, the first one
-// starts playing while the next downloads, talking again stops it (barge-in), and the time from the
-// end of your speech to the first sound is kept in `latencyMs`.
+// in, so nothing depends on one service. Replies are cut to one or two short sentences, each played
+// piece by piece as its audio streams in (pcm.ts) while the next one downloads; talking again stops it
+// (barge-in). The moment you stop talking Bara shows and sounds that it heard (`thinking`), and the
+// time from the end of your speech to the first sound is kept in `latencyMs`.
 import { create } from "zustand";
-import { speechFor } from "../bot/mood";
+import { speechFor, speechMoodFor, type SpeechMood } from "../bot/mood";
 import { answerClarify } from "../net/client";
 import { authHeaders, serverUrl } from "../net/mode";
 import { showToast, useApp } from "../state/store";
+import { Clip, hearCue } from "./pcm";
 import { cleanTranscript, endOfTurnMs, isNoise, pickOption } from "./turn";
 import { registerKey, useVoiceKey, withVoiceSid } from "./voiceKey";
 
@@ -24,6 +26,9 @@ export interface VoiceState {
   heard: string;
   /** Sending the recording to be written down. */
   transcribing: boolean;
+  /** You finished talking and the answer is on its way: shown (and sounded) at once, so the wait
+   *  for the first word never feels like Bara missed it. */
+  thinking: boolean;
   /** What Bara is saying right now, shown as a caption. */
   caption: string | null;
   /** Replies are spoken. Turns on the first time you talk; V toggles it. */
@@ -47,6 +52,7 @@ export const useVoice = create<VoiceState>(() => ({
   mode: null,
   heard: "",
   transcribing: false,
+  thinking: false,
   caption: null,
   replies: storedReplies(),
   error: null,
@@ -79,13 +85,39 @@ export function setReplies(on: boolean, announce = false): void {
 
 // ---------------------------------------------------------------- speaking
 
-let audio: HTMLAudioElement | null = null;
+let audio: Clip | null = null;
 /** The next sentence, already downloading while the current one plays. */
-let upNext: HTMLAudioElement | null = null;
+let upNext: Clip | null = null;
 let engineVoice: boolean | null = null;
 /** Engine lines that failed in a row: one network blip shouldn't hand the rest of the session to
- *  the browser's voice, three in a row should. */
+ *  the browser's voice, three in a row should, and even then only for a while. */
 let engineFails = 0;
+const ENGINE_RETRY_MS = 30_000;
+function engineFailed(): void {
+  if (++engineFails < 3 || engineVoice === false) return;
+  engineVoice = false;
+  window.setTimeout(() => {
+    engineVoice = null;
+    engineFails = 0;
+  }, ENGINE_RETRY_MS);
+}
+/** How long to wait before asking the engine again for a line that failed once. */
+const RETRY_MS = 300;
+
+/** "Heard you" lasts until Bara starts answering, or this long if no spoken answer comes. */
+const THINKING_MS = 8000;
+let thinkingTimer = 0;
+/** Bara heard the end of what you said: a soft cue and the thinking face, straight away. */
+function acknowledge(): void {
+  window.clearTimeout(thinkingTimer);
+  useVoice.setState({ thinking: true });
+  hearCue();
+  thinkingTimer = window.setTimeout(() => useVoice.setState({ thinking: false }), THINKING_MS);
+}
+function stopThinking(): void {
+  window.clearTimeout(thinkingTimer);
+  if (useVoice.getState().thinking) useVoice.setState({ thinking: false });
+}
 /** One number per thing said, so a late callback from something already stopped does nothing (two
  *  identical lines in a row must not both play). */
 let speechGen = 0;
@@ -127,11 +159,10 @@ export function trimReply(text: string, askedWords = 12): string {
   return `${said.slice(0, 197).replace(/\s+\S*$/, "")}...`;
 }
 
-function ttsAudio(line: string): HTMLAudioElement {
-  const a = new Audio(serverUrl(withVoiceSid(`/v1/tts?text=${encodeURIComponent(line)}`)));
-  a.preload = "auto";
-  a.addEventListener("playing", markFirstSound, { once: true });
-  return a;
+/** A line from the engine's voice, downloading from the moment it is made. */
+function ttsAudio(line: string, mood: SpeechMood): Clip {
+  const q = `/v1/tts?text=${encodeURIComponent(line)}&mood=${mood}`;
+  return new Clip(serverUrl(withVoiceSid(q)), `${mood} ${line}`);
 }
 
 async function engineCanSpeak(): Promise<boolean> {
@@ -160,11 +191,7 @@ export function stopSpeaking(): void {
   window.clearTimeout(stuckTimer);
   if (utterance) utterance.onend = null;
   utterance = null;
-  for (const a of [audio, upNext]) {
-    if (!a) continue;
-    a.pause();
-    a.src = "";
-  }
+  for (const a of [audio, upNext]) a?.pause();
   audio = null;
   upNext = null;
   afterSpeech = null;
@@ -193,20 +220,20 @@ function finished(): void {
   afterSpeech = null;
   waiting = null;
   then?.();
-  if (next && !useVoice.getState().listening) speak(next.text, false, next.then);
+  if (next && !useVoice.getState().listening) speak(next.text, false, next.then, next.mood);
 }
 
 /** A line that came in while another was being said: it waits its turn instead of cutting in. */
-let waiting: { text: string; then?: () => void } | null = null;
+let waiting: { text: string; then?: () => void; mood: SpeechMood } | null = null;
 
 /** Says a line from the build. If Bara is mid-sentence the line waits, and only the newest waiting
  *  line is kept, so the voice never falls behind the build or talks over itself. An `urgent` line (a
  *  question for the person, done, failed) cuts in instead of waiting behind progress chatter. */
-export function narrate(text: string, then?: () => void, urgent = false): void {
+export function narrate(text: string, then?: () => void, urgent = false, mood: SpeechMood = "progress"): void {
   const s = useVoice.getState();
   if (!s.replies || s.listening || !text.trim()) return;
-  if (s.caption && !urgent) waiting = { text, then };
-  else speak(text, false, then);
+  if (s.caption && !urgent) waiting = { text, then, mood };
+  else speak(text, false, then, mood);
 }
 
 /** Lines of a build said out loud: the same lines the bot shows, one now and then, never one per
@@ -228,7 +255,7 @@ export function bindBuildVoice(): () => void {
       const now = performance.now();
       if (!line || (!ALWAYS_SAY.has(e.type) && now - lastSaid < SPEECH_GAP_MS)) continue;
       lastSaid = now;
-      narrate(line, e.type === "clarify.request" ? listenForFollowUp : undefined, ALWAYS_SAY.has(e.type));
+      narrate(line, e.type === "clarify.request" ? listenForFollowUp : undefined, ALWAYS_SAY.has(e.type), speechMoodFor(e.type));
     }
   });
 }
@@ -252,7 +279,7 @@ function speakInBrowser(text: string, gen: number): void {
 
 /** Says a reply when replies are on (or `force`); the caption shows while it plays. `then` runs
  *  when it has been said through, which is how a spoken conversation hands the turn back. */
-export function speak(text: string, force = false, then?: () => void): void {
+export function speak(text: string, force = false, then?: () => void, mood: SpeechMood = "reply"): void {
   const clean = trimReply(text, askedWords);
   if (!clean || (!force && !useVoice.getState().replies)) return;
   // the mic is open: talking now would talk over the person and into the mic
@@ -260,7 +287,8 @@ export function speak(text: string, force = false, then?: () => void): void {
   stopSpeaking();
   const gen = speechGen;
   afterSpeech = then ?? null;
-  useVoice.setState({ caption: clean });
+  window.clearTimeout(thinkingTimer);
+  useVoice.setState({ caption: clean, thinking: false });
   // generous: about 13 characters a second, plus time for the first audio to arrive
   stuckTimer = window.setTimeout(() => {
     if (gen !== speechGen) return;
@@ -274,45 +302,64 @@ export function speak(text: string, force = false, then?: () => void): void {
       speakInBrowser(clean, gen);
       return;
     }
-    // GET, so the audio element plays the stream as it arrives instead of waiting for the file
+    // streamed PCM, played piece by piece as it arrives; the next sentence downloads meanwhile
     const lines = sentences(clean);
-    // a failed line reports twice (the element's error and the rejected play()); fall back once
+    // a failed line can report twice (its error and a rejected play()); fall back once
     let fellBack = false;
     const fallBack = (i: number) => {
       if (fellBack) return;
       fellBack = true;
       speakInBrowser(lines.slice(i).join(" "), gen);
     };
-    const play = (i: number, a: HTMLAudioElement) => {
+    // the engine's voice gets one more try at a failed line before the browser's voice says it
+    let retried = false;
+    const play = (i: number, a: Clip) => {
       audio = a;
-      upNext = i + 1 < lines.length ? ttsAudio(lines[i + 1]) : null;
-      // some browsers (Safari) report nothing at all when the audio request fails: if the line hasn't
-      // started within a few seconds, say it with the browser's voice rather than leave a silence
+      if (!upNext || upNext === a) upNext = i + 1 < lines.length ? ttsAudio(lines[i + 1], mood) : null;
+      // a request that stalls without failing: if the line hasn't started within a few seconds, say
+      // it with the browser's voice rather than leave a silence
       const late = window.setTimeout(() => {
         if (audio !== a || gen !== speechGen) return;
         a.pause();
-        if (++engineFails >= 3) engineVoice = false;
+        engineFailed();
         fallBack(i);
       }, START_WAIT_MS);
-      a.onplaying = () => window.clearTimeout(late);
+      a.onplaying = () => {
+        window.clearTimeout(late);
+        markFirstSound();
+      };
       a.onended = () => {
         window.clearTimeout(late);
         if (audio !== a || gen !== speechGen) return;
         engineFails = 0;
-        if (upNext) play(i + 1, upNext);
+        const next = upNext;
+        upNext = null;
+        if (next) play(i + 1, next);
         else finished();
       };
-      a.onerror = () => {
+      const failed = () => {
         window.clearTimeout(late);
         if (audio !== a || gen !== speechGen) return;
-        if (++engineFails >= 3) engineVoice = false;
+        a.pause();
+        if (!retried) {
+          retried = true;
+          window.setTimeout(() => gen === speechGen && audio === a && play(i, ttsAudio(lines[i], mood)), RETRY_MS);
+          return;
+        }
+        engineFailed();
         fallBack(i);
       };
+      a.onerror = failed;
       void a.play().catch(() => {
-        if (audio === a && gen === speechGen) fallBack(i);
+        // sound can't play at all here (nothing on the page touched yet): the browser's voice
+        if (audio === a && gen === speechGen) {
+          window.clearTimeout(late);
+          a.pause();
+          fallBack(i);
+        }
       });
     };
-    play(0, ttsAudio(lines[0]));
+    play(0, ttsAudio(lines[0], mood));
   });
 }
 
@@ -445,8 +492,10 @@ async function transcribe(blob: Blob, t: Turn, handsFree: boolean): Promise<void
     // still the person's words, but a newer turn owns the field, so leave what it shows alone
     if (!stale()) useVoice.setState({ heard: words, ...(words ? {} : { error: "Didn't catch that. Try again?" }) });
     if (words) deliver(words, t.id, handsFree);
+    else if (!stale()) stopThinking();
   } catch (e) {
     if (stale()) return;
+    stopThinking();
     const timedOut = e instanceof DOMException && e.name === "AbortError";
     useVoice.setState({ error: timedOut ? "Writing that down took too long. Try again?" : e instanceof Error ? e.message : "Couldn't hear that." });
   } finally {
@@ -603,6 +652,8 @@ async function finish(t: Turn, send: boolean): Promise<void> {
   window.clearTimeout(t.maxTimer);
   if (cur === t) cur = null;
   if (send) markSpeechEnd();
+  // something was said: show and sound that it was heard now, not when the answer arrives
+  if (send && (useVoice.getState().heard || t.loudMs >= MIN_SPEECH_MS)) acknowledge();
   const handsFree = useVoice.getState().mode === "auto";
   useVoice.setState({ listening: false, mode: null, ...(send ? {} : { heard: "" }) });
   const r = t.recognition;
@@ -638,6 +689,7 @@ export async function startListening(mode: ListenMode = "auto", opts: { quietMs?
   if (useVoice.getState().listening) return;
   // barge-in: talking while Bara talks stops it at once, before the mic even opens
   stopSpeaking();
+  stopThinking();
   speechEndedAt = null;
   quietMs = opts.quietMs ?? QUIET_MS;
   const t: Turn = {

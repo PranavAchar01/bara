@@ -17,7 +17,11 @@ import { armHandoff } from "./Handoff";
 import { cancelListening, micAllowed, speak, startListening, stopListening, stopSpeaking, useVoice } from "../voice/voice";
 
 const IDEAS = ["a macropad with one big knob", "a wireless split keyboard with an OLED", "a 60% keyboard with Choc switches", "something cool for my desk"];
-const GREETING = "Hey! What's up?";
+/** What Bara says when it arrives: a different hello each time, so it never sounds canned. Short
+ *  enough to sit on one line under Bara on a laptop screen. */
+const GREETINGS = ["Hey! What's the idea?", "Oh hi! What's new?", "Hey you! Got an idea?", "Hi! Ooh, what's next?"];
+let greeted = Math.floor(Math.random() * GREETINGS.length);
+const nextGreeting = () => GREETINGS[greeted++ % GREETINGS.length];
 const TYPE_MS = 45;
 const SHOW_MS = 2400;
 /** The wash and the glide, in ms. */
@@ -156,8 +160,9 @@ export function AgentIntro(props: { open: IntroOpen; onClose: () => void }) {
   const { from, seed } = props.open;
   const still = reducedMotion();
   const [phase, setPhase] = useState<Phase>(still ? "here" : "wash");
+  const [greeting] = useState(nextGreeting);
   const [text, setText] = useState(seed);
-  const [asked, setAsked] = useState(still ? GREETING : "");
+  const [asked, setAsked] = useState(still ? greeting : "");
   const [emote, setEmote] = useState<{ kind: Emote; n: number } | null>(null);
   const [keys, setKeys] = useState(0);
   const wash = useRef<HTMLDivElement>(null);
@@ -171,6 +176,7 @@ export function AgentIntro(props: { open: IntroOpen; onClose: () => void }) {
   const listening = useVoice((s) => s.listening);
   const heard = useVoice((s) => s.heard);
   const transcribing = useVoice((s) => s.transcribing);
+  const thinking = useVoice((s) => s.thinking);
   const voiceMode = useVoice((s) => s.mode);
   const voiceError = useVoice((s) => s.error);
   const { ghost, idea } = useIdeaGhost(phase === "here" && !text && !listening && !transcribing && !pending);
@@ -196,9 +202,9 @@ export function AgentIntro(props: { open: IntroOpen; onClose: () => void }) {
       html.style.overflow = was;
       // only the intro's own greeting: the intro also closes because a build started, and what the
       // build says (a question for you, and the mic it hands back) must carry on. Back (close) stops all.
-      if (useVoice.getState().caption === GREETING) stopSpeaking();
+      if (useVoice.getState().caption === greeting) stopSpeaking();
     };
-  }, []);
+  }, [greeting]);
 
   // Wash out from the button; the button glides to the middle as it turns into Bara.
   useLayoutEffect(() => {
@@ -238,7 +244,7 @@ export function AgentIntro(props: { open: IntroOpen; onClose: () => void }) {
       emoteNow("surprise");
       at(380, () => emoteNow("hop"));
       at(760, () => emoteNow("delight"));
-      for (let i = 1; i <= GREETING.length; i++) at(420 + i * 38, () => setAsked(GREETING.slice(0, i)));
+      for (let i = 1; i <= greeting.length; i++) at(420 + i * 38, () => setAsked(greeting.slice(0, i)));
     }
     // voice first: once it has asked, it listens for the answer, when the mic is already allowed
     // (never a permission prompt out of nowhere) and nothing has been typed yet
@@ -247,10 +253,10 @@ export function AgentIntro(props: { open: IntroOpen; onClose: () => void }) {
           if (ok && !input.current?.value) void startListening("auto");
         });
     };
-    at(still ? 0 : 420, () => speak(GREETING, true, listen));
+    at(still ? 0 : 420, () => speak(greeting, true, listen, "greeting"));
     at(still ? 0 : 900, () => input.current?.focus({ preventScroll: true }));
     return () => timers.forEach((t) => window.clearTimeout(t));
-  }, [phase, still]);
+  }, [phase, still, greeting]);
 
   const close = () => {
     if (phase === "leaving") return;
@@ -291,7 +297,7 @@ export function AgentIntro(props: { open: IntroOpen; onClose: () => void }) {
     };
   });
 
-  const state = pending ? "sending" : listening ? "listening" : transcribing ? "hearing" : text ? "typing" : "idle";
+  const state = pending ? "sending" : listening ? "listening" : transcribing || thinking ? "hearing" : text ? "typing" : "idle";
   // Its face answers the reader only, never a build running on some canvas behind the page.
   const mood: Mood =
     conn === "offline" ? "offline" : conn === "connecting" || conn === "reconnecting" ? "connecting" : state === "sending" ? "happy" : state === "idle" ? "idle" : "listening";

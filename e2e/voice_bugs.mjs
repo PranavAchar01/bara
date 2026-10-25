@@ -4,7 +4,7 @@
 // Run: node e2e/voice_bugs.mjs        (BARA_WEB=http://localhost:5185/ to point elsewhere)
 // Add --long to also run the 45 s "forgotten mic" check.
 import { createRequire } from "node:module";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18,7 +18,15 @@ const LONG = process.argv.includes("--long");
 /** --browser=firefox|webkit runs the checks that don't need a recorded mic (Chromium alone can play a
  *  file as the microphone): speaking, keys, and turns driven by a stand-in recogniser. */
 const ENGINE = (process.argv.find((a) => a.startsWith("--browser=")) ?? "--browser=chromium").split("=")[1];
-const MP3 = readFileSync(resolve(here, "../voice-samples/cedar.mp3"));
+const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+
+/** What the engine's /v1/tts sends: raw 24 kHz 16-bit PCM, here 0.6 s of a soft hum. */
+const PCM = (() => {
+  const n = Math.round(0.6 * 24000);
+  const buf = Buffer.alloc(n * 2);
+  for (let i = 0; i < n; i++) buf.writeInt16LE(Math.round(6000 * Math.sin((2 * Math.PI * 220 * i) / 24000)), i * 2);
+  return buf;
+})();
 
 const rows = [];
 const check = (name, ok, detail = "") => {
@@ -93,7 +101,7 @@ async function open(browser, { stt = () => ({ text: "" }), tts = "ok", fakeRecog
     net.tts.push(text);
     if (tts === "hang") return;
     if (tts === "fail-first" && net.tts.length === 1) return r.fulfill({ status: 500, body: "no" });
-    await r.fulfill({ status: 200, contentType: "audio/mpeg", body: MP3 });
+    await r.fulfill({ status: 200, contentType: "audio/pcm;rate=24000", body: PCM });
   });
   await page.addInitScript(([fake, pass]) => {
     window.__sent = [];
@@ -199,7 +207,8 @@ async function withMic(mic, fn) {
         ? await playwright.webkit.launch({ headless: true })
         : await playwright.chromium.launch({
             headless: true,
-            args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream", `--use-file-for-fake-audio-capture=${mic}`, "--autoplay-policy=no-user-gesture-required"],
+            ...(existsSync(CHROME) ? { executablePath: CHROME } : {}),
+            args: ["--mute-audio", "--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream", `--use-file-for-fake-audio-capture=${mic}`, "--autoplay-policy=no-user-gesture-required"],
           });
   try {
     await fn(browser);
@@ -223,8 +232,18 @@ await withMic(MICS.speech, async (browser) => {
   {
     const p = await open(browser, { stt: () => ({ text: "um I I want a 12 mm knob" }) });
     const t0 = Date.now();
-    await p.v(() => window.__v.startListening("auto"));
+    await p.v(() => {
+      // when the turn ends (the mic closes), and when Bara first shows that it heard
+      window.__ack = {};
+      window.__v.useVoice.subscribe((s, was) => {
+        if (was.listening && !s.listening && window.__ack.end == null) window.__ack.end = performance.now();
+        if ((s.thinking || s.transcribing) && window.__ack.shown == null) window.__ack.shown = performance.now();
+      });
+      return window.__v.startListening("auto");
+    });
     const sent = await p.until(() => window.__sent.length > 0, 8000);
+    const ack = await p.v(() => (window.__ack.end != null && window.__ack.shown != null ? window.__ack.shown - window.__ack.end : null));
+    check("Bara shows it heard within 200 ms of the end of speech", ack != null && ack <= 200, `${ack == null ? "never" : Math.round(ack)} ms`);
     const said = await p.v(() => window.__sent[0]);
     check("hands-free: a pause after speaking sends it, with no key or click", sent, `${((Date.now() - t0) / 1000).toFixed(1)} s`);
     check("ums and repeats dropped, millimetres kept", said === "I want a 12 mm knob", said);
@@ -386,6 +405,30 @@ await withMic(MICS.silence, async (browser) => {
     await p.ctx.close();
   }
   {
+    // the engine's streamed voice is what plays, start to end, and a line said again needs no request
+    const p = await open(browser);
+    await p.v(() => window.__v.setReplies(true));
+    await p.v(() => {
+      window.__said = [];
+      window.__pieces = 0;
+      speechSynthesis.speak = (u) => window.__said.push(u.text);
+      const start = AudioBufferSourceNode.prototype.start;
+      AudioBufferSourceNode.prototype.start = function (...a) {
+        window.__pieces++;
+        return start.apply(this, a);
+      };
+      window.__v.speak("Routing the board now.");
+    });
+    const ended = await p.until(() => window.__v.useVoice.getState().caption === null, 6000);
+    const first = await p.v(() => ({ pieces: window.__pieces, said: window.__said.length }));
+    check("the engine's voice plays the line through, never the browser's", ended && first.pieces > 0 && first.said === 0, JSON.stringify(first));
+    await p.v(() => window.__v.speak("Routing the board now."));
+    await p.until(() => window.__v.useVoice.getState().caption === null, 6000);
+    const n = p.net.tts.filter((t) => t === "Routing the board now.").length;
+    check("a line said again plays from memory, with no new request", n === 1, `${n} requests`);
+    await p.ctx.close();
+  }
+  {
     const p = await open(browser);
     await p.v(() => window.__v.setReplies(true));
     await p.v(() => window.__v.startListening("hold"));
@@ -479,7 +522,7 @@ await withMic(MICS.silence, async (browser) => {
   await p.page.click(".hero-cta");
   await p.page.waitForSelector(".agent-intro .ai-field input");
   // the greeting is said, then Bara listens by itself (the mic is already allowed here)
-  check("after 'What's up?' Bara listens without a click", await p.until(() => window.__v.useVoice.getState().listening, 9000));
+  check("after its hello Bara listens without a click", await p.until(() => window.__v.useVoice.getState().listening, 9000));
   await app(() => window.__rec.say("um make me a gadget"));
   const started = await p.until(() => window.__store.useApp.getState().build?.status === "awaiting_input", 15000);
   check("spoken prompt starts the build", started);
