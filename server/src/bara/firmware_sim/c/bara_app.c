@@ -246,6 +246,20 @@ static void axis(int i, u32 now) {
   }
 }
 
+/* The smallest cores have no divide instruction and the image links no runtime library, so divide by
+ * shift and subtract. */
+static u32 udiv_(u32 n, u32 d) {
+  u32 q = 0, r = 0;
+  for (int b = 31; b >= 0; b--) {
+    r = (r << 1) | ((n >> b) & 1u);
+    if (r >= d) {
+      r -= d;
+      q |= 1u << b;
+    }
+  }
+  return q;
+}
+
 static void put_tenths(int v, char *out) {
   int n = 0;
   if (v < 0) {
@@ -253,10 +267,11 @@ static void put_tenths(int v, char *out) {
     v = -v;
   }
   char t[12];
-  utoa_((u32)(v / 10), t);
+  u32 whole = udiv_((u32)v, 10u);
+  utoa_(whole, t);
   for (int i = 0; t[i]; i++) out[n++] = t[i];
   out[n++] = '.';
-  out[n++] = (char)('0' + v % 10);
+  out[n++] = (char)('0' + ((u32)v - whole * 10u));
   out[n] = 0;
 }
 
@@ -268,10 +283,11 @@ static void sensor(int i, u32 now) {
   for (int j = 0; j < i; j++)
     if (BARA_INPUTS[j].kind == IN_SENSOR) k++;
   int raw = (int)hal_adc(in->adc);
-  int v10 = in->lo10 + (int)(((long)(in->hi10 - in->lo10) * raw) / 4095);
   int span = in->hi10 - in->lo10;
+  int v10 = in->lo10 + (int)udiv_((u32)span * (u32)raw, 4095u);
   int d = v10 - sensorv[i];
-  int step = span / 100 > 1 ? span / 100 : 1;
+  int step = (int)udiv_((u32)span, 100u);
+  if (step < 1) step = 1;
   if (!sensor_init[i] || d >= step || d <= -step) {
     sensor_init[i] = 1;
     sensorv[i] = v10;
@@ -287,7 +303,7 @@ static void sensor(int i, u32 now) {
     hal_putc('\n');
     if (k + 1 < SCREEN_ROWS) line_set3(k + 1, n, in->unit, "");
   }
-  int pct = (int)(((long)(v10 - in->lo10) * 100) / (span ? span : 1));
+  int pct = (int)udiv_((u32)(v10 - in->lo10) * 100u, (u32)(span ? span : 1));
   if (pct <= 10 || pct >= 90) alert |= (u8)(1u << (k & 7));
   else alert &= (u8)~(1u << (k & 7));
 }
@@ -368,7 +384,7 @@ void app_tick(u32 now) {
     hal_write(LED_PIN, LED_ACTIVE_LOW ? !on : on);
   }
   if (TONE_PIN != PIN_NONE) {
-    if ((int)(tone_until - now) > 0 || (alert && (now / 250) % 2 == 0)) tone_level = (u8)!tone_level; /* 500 Hz square at a 1 ms tick */
+    if ((int)(tone_until - now) > 0 || (alert && ((now >> 8) & 1u) == 0)) tone_level = (u8)!tone_level; /* 500 Hz square at a 1 ms tick */
     else tone_level = 0;
     hal_write(TONE_PIN, tone_level);
   }

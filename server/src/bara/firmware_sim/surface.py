@@ -102,7 +102,7 @@ _BRANDS = re.compile(
 )
 
 
-def clean(text: Any, n: int = 32) -> str:
+def clean(text: Any, n: int = 44) -> str:
     """UI copy: printable ASCII plus the degree and micro signs, no dashes used as punctuation, no
     brand names."""
     s = str(text or "").replace("—", ", ").replace("–", "-")
