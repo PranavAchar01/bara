@@ -22,14 +22,14 @@ export function KicadChecks() {
       ) : (
         <>
           <div className="chips">
-            <Chip tone="ok" title="KiCad check runs with no errors and no warnings">
-              {summary.pass} pass
+            <Chip tone="ok" title="KiCad check runs with no errors (warnings allowed, as in the rows below)">
+              {summary.pass + summary.warn} pass
+            </Chip>
+            <Chip tone="fail" title="KiCad check runs with at least one error">
+              {summary.fail} fail
             </Chip>
             <Chip tone="warn" title="Warnings across DRC, ERC and schematic parity">
-              {summary.warnings} warn
-            </Chip>
-            <Chip tone="fail" title="Errors across DRC, ERC and schematic parity">
-              {summary.errors} error
+              {summary.warnings} warnings
             </Chip>
           </div>
           <div className="kicad-tools small">
