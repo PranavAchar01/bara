@@ -795,10 +795,42 @@ def form_region(pf: dict[str, Any], scale: float) -> Polygon:
     return Polygon(region.exterior).simplify(0.05)
 
 
+def _keep_cross_inside(
+    spots: list[tuple[float, float]], reach: float, region: Polygon
+) -> list[tuple[float, float]]:
+    """A D-pad's switches move together: slide the whole cross inward until every switch,
+    `reach` mm of body around its centre, is on the board. One switch pushed out alone lands
+    beside the cross instead of at its arm."""
+    room = region.buffer(-EDGE_COPPER_MM, join_style="mitre")
+    inside = prepared.prep(room)
+    cx = sum(x for x, _ in spots) / len(spots)
+    cy = sum(y for _, y in spots) / len(spots)
+    hub = region.representative_point()
+    dx, dy = hub.x - cx, hub.y - cy
+    norm = math.hypot(dx, dy)
+    if norm < 1e-6:
+        return spots
+    ux, uy = dx / norm, dy / norm
+
+    def fits(t: float) -> bool:
+        return all(
+            inside.contains(
+                box(x + ux * t - reach, y + uy * t - reach, x + ux * t + reach, y + uy * t + reach)
+            )
+            for x, y in spots
+        )
+
+    t = 0.0
+    while not fits(t) and t < norm:
+        t += 0.5
+    return [(x + ux * t, y + uy * t) for x, y in spots]
+
+
 def _anchor_targets(
-    pf: dict[str, Any], items: list[Item], scale: float
+    pf: dict[str, Any], items: list[Item], scale: float, region: Polygon | None = None
 ) -> dict[int, tuple[float, float, str]]:
     """Target centre (board coords) and mount for every item that has an anchor."""
+    from bara.geometry.shell import classify
     from bara.live.form import expand
 
     by_slot: dict[str, list[Item]] = {}
@@ -817,6 +849,12 @@ def _anchor_targets(
             take = []
         used[a["slot_id"]] = k0 + len(take)
         spots = expand(a, max(1, len(take)))
+        if region is not None and len(take) >= 3 and classify(a) == "dpad":
+            board_spots = [(x * scale, -y * scale) for x, y in spots]
+            reach = max(max(_extent(it)) for it in take) / 2
+            spots = [
+                (x / scale, -y / scale) for x, y in _keep_cross_inside(board_spots, reach, region)
+            ]
         for k, it in enumerate(take):
             x, y = spots[k % len(spots)]
             out[id(it)] = (x * scale, -y * scale, a["mount"])
@@ -939,7 +977,13 @@ def _attempt(
     return None
 
 
-CABLE_ROLES = ("usb_in", "jack", "usb_device", "usb_host")  # a plug enters from outside
+CABLE_ROLES = (
+    "usb_in",
+    "jack",
+    "usb_device",
+    "usb_host",
+    "sd_card",
+)  # a plug or card enters from outside
 SCREEN_LONG_MM = 20.0  # a screen this long has a landscape or portrait sense; an LED does not
 
 
@@ -1040,7 +1084,7 @@ def place_in_form(
     region = form_region(pf, scale)
     for it in on_board:
         _screen_along(it, region)
-    anchored = _anchor_targets(pf, on_board, scale)
+    anchored = _anchor_targets(pf, on_board, scale, region)
     centre = region.representative_point()
     hub = (centre.x, centre.y)
     targets: dict[int, tuple[float, float]] = {}

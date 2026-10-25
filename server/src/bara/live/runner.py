@@ -1054,7 +1054,10 @@ class LiveRunner:
             if slot.chosen is None or not slot.quantity:
                 continue
             fid = slot.function_id
-            plain = fid.split(".")[0] in ("input", "output", "display") or fid == "power.usb_in"
+            plain = fid.split(".")[0] in ("input", "output", "display") or fid in (
+                "power.usb_in",
+                "storage.sd_card",
+            )
             if (slot.need is not None and slot.need.touch) or (slot.need is None and plain):
                 groups = slot.need.groups if slot.need is not None else ()
                 out.append(

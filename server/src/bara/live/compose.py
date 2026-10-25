@@ -126,6 +126,24 @@ def wrong_size(part: dict[str, Any], want_in: float | None) -> bool:
     return bool(want_in and have_in and abs(have_in - want_in) / want_in > SCREEN_TOLERANCE)
 
 
+def is_screen_fn(function_id: str) -> bool:
+    """A display function that frames a viewing area (not an indicator light)."""
+    return function_id.startswith("display.") and function_id != "display.indicator_led"
+
+
+def closest_size(parts: list[dict[str, Any]], want_in: float | None) -> dict[str, Any]:
+    """The panel whose stated diagonal is nearest the asked size (the first when none is asked
+    or none states one): a 2.4 in ask takes 3.2 in glass before 4.3 in glass."""
+    if not want_in:
+        return parts[0]
+
+    def gap(p: dict[str, Any]) -> float:
+        have = cp.display_inches(p)
+        return abs(have - want_in) if have else float("inf")
+
+    return min(parts, key=gap)
+
+
 def _function_names(part: dict[str, Any], facet: str, op: str, value: Any) -> bool:
     """A part with no value for a typed facet whose own primary function names it: a
     seven-segment digit from the KiCad library is display_type seven_segment by what it is."""
@@ -1477,6 +1495,7 @@ class Composer:
                     and (
                         o.function_id == slot.function_id
                         or slot.function_id in part_functions(o.chosen)
+                        or (is_screen_fn(slot.function_id) and is_screen_fn(o.function_id))
                     )
                 ),
                 None,
@@ -1548,6 +1567,11 @@ class Composer:
         if not near or slot.need is None:
             return
         part = near[0]
+        if slot.function_id.startswith("display."):
+            want_in = self.comp.numbers.get("screen_in") or cp.parse_numbers(
+                f"{slot.need.label} {slot.need.requirement}"
+            ).get("screen_in")
+            part = closest_size(near, want_in)
         self.resolver.rejected.discard(part["part_id"])
         self.extra.setdefault(slot.slot_id, []).append(part)
         emit(

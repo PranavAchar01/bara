@@ -380,7 +380,11 @@ def _shaped(
 
 KIND_WORDS: list[tuple[str, str]] = [
     ("screen", r"screen|display|lcd|oled|e-?ink|epaper|tft|panel"),
-    ("port", r"usb|connector|charg|jack|socket|plug|cable|hdmi|ethernet|\bport"),
+    (
+        "port",
+        r"usb|connector|charg|jack|socket|plug|cable|hdmi|ethernet|\bport|"
+        r"micro-?sd|\bsd\b|\btf\b|memory card|card slot",
+    ),
     # a sensor that looks or listens out of the product (a parking sensor's ultrasonic eyes, a
     # PIR dome, a range finder): round windows show it, it is what the product is known by
     (
@@ -503,7 +507,7 @@ def sites_from_anchors(
                     continue
                 if f.role == "sensor" and kind != "eye":
                     continue  # only a sensor that looks out gets a window over it
-                if (kind == "port") != (f.role in ("usb", "mcu")):
+                if (kind == "port") != (f.role in ("usb", "mcu", "sd_card")):
                     continue
                 if (kind == "screen") != (f.role == "screen"):
                     continue  # a window opens over a panel, a button over a button
@@ -1154,6 +1158,12 @@ def _shoulder(out: Features, group: list[Site], body: Body, seat: float, clear: 
     out.cutouts.append(_cut("shoulder", px, py, zt, 2 * half, "rect", 2 * r))
 
 
+def window_size(w: float, d: float, rot_deg: float) -> tuple[float, float]:
+    """A window's width and depth as it lies on the face: a panel turned a quarter on the board
+    is wide where its footprint is deep."""
+    return (d, w) if round(rot_deg / 90.0) % 2 else (w, d)
+
+
 def _screen(out: Features, s: Site, body: Body, seat: float, zmax: float, clear: float) -> None:
     w, d = (s.w or 30.0), (s.d or 20.0)
     zc = body.top_at(s.x, s.y)
@@ -1170,7 +1180,8 @@ def _screen(out: Features, s: Site, body: Body, seat: float, zmax: float, clear:
     lip = ledge.offset(1.4, mf.JoinType.Round) - ledge.offset(0.2, mf.JoinType.Round)
     out.adds.append(_prism(lip, zc - 1.6, zc + 0.5))
     out.glass.append(_prism(ledge.offset(-0.4, mf.JoinType.Round), zc - 1.0, zc - 0.3))
-    out.cutouts.append(_cut("screen_window", s.x, s.y, zc, w, "rect", d))
+    ow, od = window_size(w, d, s.rot)
+    out.cutouts.append(_cut("screen_window", s.x, s.y, zc, ow, "rect", od))
 
 
 def _port(

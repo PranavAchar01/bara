@@ -945,7 +945,7 @@ def enclose_report(
                 "face": "pos_z",
                 "shape": "rect",
                 "center_mm": [round(f.x, 3), round(f.y, 3), round(bezel_top, 3)],
-                "size_mm": [round(f.w, 3), round(f.d, 3)],
+                "size_mm": [round(v, 3) for v in shell.window_size(f.w, f.d, f.rot_deg)],
             }
         )
     for g in ball_geo:
