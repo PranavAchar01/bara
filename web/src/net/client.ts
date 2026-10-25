@@ -26,6 +26,7 @@ import { readMode, readStoredKey, serverUrl, setAccessToken, setServer, socketUr
 import { discoverEngine } from "./engine";
 import { DefaultLoadingManager } from "three";
 import { RestClient, httpFetcher, stubFetcher, paths } from "./rest";
+import { linkWhenBuilt } from "../project/awaiting";
 import { loadFixtures } from "../spec/fixtures";
 
 let conn: Connection | null = null;
@@ -311,9 +312,16 @@ export function isReady(): boolean {
 export async function routePrompt(prompt: string): Promise<void> {
   const s = useApp.getState();
   if (s.build?.status === "done" && !s.mode.mock) {
-    const res = await getRest().request<{ kind: string; prompt: string }>("POST", "/v1/intent", { prompt, has_build: true });
+    // The engine's language model reads the request with the open device in view: a second
+    // device beside it (told what it pairs with), a change to it, or something else entirely.
+    const res = await getRest().request<{ kind: string; prompt: string }>("POST", "/v1/intent", {
+      prompt,
+      has_build: true,
+      build_prompt: s.build.prompt,
+      part_names: s.build.parts.map((p) => p.label ?? p.card.display_name),
+    });
     if (res.ok && res.body.kind === "companion") {
-      addCompanionCanvas();
+      linkWhenBuilt(addCompanionCanvas());
       startBuild(res.body.prompt);
       return;
     }
@@ -396,8 +404,6 @@ export interface StoredBuild {
   created_at: string | null;
   status: "done" | "failed";
   hero_url: string | null;
-  /** The finished device alone, rendered by scripts/render-shots.mjs; null until it has been. */
-  shot_url?: string | null;
 }
 
 /** Stored builds, newest first. Mock mode and an engine without a library both give an empty list. */

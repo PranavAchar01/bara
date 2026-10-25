@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanTranscript, endOfTurnMs, pickOption } from "./turn";
+import { cleanTranscript, endOfTurnMs } from "./turn";
 
 describe("cleanTranscript", () => {
   it("drops fillers", () => {
@@ -31,20 +31,5 @@ describe("endOfTurnMs", () => {
   it("waits longer when the sentence is hanging", () => {
     expect(endOfTurnMs("a keyboard with")!).toBeGreaterThan(endOfTurnMs("a keyboard with an OLED")!);
     expect(endOfTurnMs("a keyboard um")!).toBeGreaterThan(endOfTurnMs("a keyboard with an OLED")!);
-  });
-});
-
-describe("pickOption", () => {
-  const options = [
-    { option_id: "a", label: "Wireless" },
-    { option_id: "b", label: "USB cable" },
-  ];
-  it("matches by words or by place", () => {
-    expect(pickOption("the wireless one please", options)).toBe("a");
-    expect(pickOption("usb cable", options)).toBe("b");
-    expect(pickOption("the second one", options)).toBe("b");
-  });
-  it("leaves anything else as free text", () => {
-    expect(pickOption("make it glow in the dark", options)).toBeNull();
   });
 });

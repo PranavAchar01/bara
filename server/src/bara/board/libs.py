@@ -99,6 +99,7 @@ class FootprintInfo:
     # rule areas over both copper faces that no other footprint may enter (an RF module's
     # antenna clearance), as polygons in the footprint frame
     keepouts: list[list[tuple[float, float]]] = field(default_factory=list)
+    fab: tuple[float, float, float, float] | None = None  # bbox of F.Fab: the physical body
 
     @property
     def lib_id(self) -> str:
@@ -286,6 +287,7 @@ def load_footprint(lib: str, pretty: str, name: str) -> FootprintInfo:
         cutout=_bbox(cuts) if _edges_close(cut_items) else None,
         extra={"model_xforms": xforms},
         keepouts=keepouts,
+        fab=_bbox(fab),
     )
 
 

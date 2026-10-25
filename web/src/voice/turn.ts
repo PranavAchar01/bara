@@ -38,25 +38,3 @@ export function endOfTurnMs(heard: string): number | null {
   if (HANGING.has(last) || FILLER_WORD.test(last)) return 1700;
   return words.length < 3 ? 1100 : 850;
 }
-
-// "the second one": the place word wins over the "one" that rides along with it
-const ORDINALS = [/\b(first|1st)\b/, /\b(second|2nd)\b/, /\b(third|3rd)\b/, /\b(fourth|4th)\b/];
-const NUMBERS = [/\b(one|1)\b/, /\b(two|2)\b/, /\b(three|3)\b/, /\b(four|4)\b/];
-
-/** Which of Bara's offered answers a spoken reply means: by its words ("the wireless one") or its
- *  place ("the second one"). Null when it is neither, so it goes as free text. */
-export function pickOption(spoken: string, options: { option_id: string; label: string }[]): string | null {
-  const said = spoken.toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
-  if (!said) return null;
-  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
-  const byLabel = options.find((o) => {
-    const l = norm(o.label);
-    return l && (said.includes(l) || (said.length > 3 && l.includes(said)));
-  });
-  if (byLabel) return byLabel.option_id;
-  for (const list of [ORDINALS, NUMBERS]) {
-    const at = list.slice(0, options.length).findIndex((re) => re.test(said));
-    if (at >= 0) return options[at].option_id;
-  }
-  return null;
-}

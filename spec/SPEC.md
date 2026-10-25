@@ -205,7 +205,7 @@ Source: `common.schema.json`.
 | `BBox` | object |  | Axis aligned box in mm. |
 | `HexColor` | string | pattern `^#[0-9a-fA-F]{6}$` |  |
 | `Material` | enum | `plastic`, `metal`, `pcb`, `rubber`, `glass`, `fabric`, `wood`, `unknown` |  |
-| `Color` | object |  |  |
+| `Color` | object |  | hex, material, node, and an optional finish: `finish.preset` (matte, satin, gloss, silk, frosted, clear, smoke, metal, unknown), `finish.clarity` (0 to 1, how much light a see-through finish passes) and `finish.frost` (0 polished to 1 frosted). Cases use the finish for printable and cut materials, including see-through ones. |
 | `StageId` | enum | `classify`, `reuse`, `compose`, `place`, `enclose`, `board`, `firmware`, `render`, `edit`, `unknown` |  |
 | `Tier` | enum | `exact`, `substitute`, `compose`, `unknown` | exact: an open design satisfies every hard requirement and there are no soft ones. substitute: hard requirements met, soft ones applied as whitelisted transforms. compose: built from parts. |
 | `Severity` | enum | `info`, `warning`, `error`, `critical`, `unknown` |  |
@@ -1181,7 +1181,7 @@ Base URL is the backend origin (the tunnel URL in the demo). Every JSON response
 | GET | `/v1/builds/{build_id}` |  | BuildResponse | Current Build. Equal to reducing every event so far. |
 | GET | `/v1/builds/{build_id}/events` | after_seq (default 0), limit (default 500) | EventsPage | Event log replay; the same messages the WebSocket sent. |
 | GET | `/v1/builds/{build_id}/slots/{slot_id}/alternatives` | instance_id (optional), limit (default 8) | Alternatives | SwapDrawer contents, already checked against the current build. |
-| GET | `/v1/builds/{build_id}/export` | format = bom_csv \| stl \| 3mf \| step \| kicad \| firmware_zip \| zip | file download | Content-Disposition attachment. 409 E_BUILD_NOT_READY before build.done. |
+| GET | `/v1/builds/{build_id}/export` | format = bom_csv \| bom_json \| stl \| 3mf \| step \| kicad \| firmware_zip \| zip | file download | Content-Disposition attachment. 409 E_BUILD_NOT_READY before build.done. |
 | GET | `/assets/...` |  | static file | GLB, PNG, STL and other assets. Immutable: a changed file gets a new URL (revision suffix). |
 | GET | `/v1/ws` |  | WebSocket upgrade | The only streaming channel (section 8). |
 

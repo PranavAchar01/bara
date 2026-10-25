@@ -7,7 +7,7 @@ import { useApp } from "../state/store";
 import { vlabel } from "../ui/format";
 import type { Rect } from "./agent";
 import { agentPos } from "./agentBus";
-import { buildTrace, type TraceGroup, type TraceKind, type TraceRow, type TraceTarget } from "./trace";
+import { buildTrace, nowLine, type TraceGroup, type TraceKind, type TraceRow, type TraceTarget } from "./trace";
 import { closeTrace, useTrace } from "./traceState";
 import { clamp } from "./spring";
 import "./thoughtTrace.css";
@@ -216,6 +216,7 @@ function Panel() {
   }, []);
 
   const live = running && trace.groups.some((g) => g.live);
+  const now = nowLine(trace);
   return (
     <div ref={root} className="thought-trace" role="dialog" aria-label="What the agent is thinking" style={{ width: WIDTH, visibility: "hidden" }}>
       <header className="tt-top">
@@ -234,6 +235,13 @@ function Panel() {
           stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
         }}
       >
+        {now && (
+          <div className={`tt-now tone-${now.tone}`} data-live={live ? "1" : "0"} aria-live="polite">
+            <span className="tt-now-k">{now.stage ? (live ? `Now · ${now.stage}` : now.stage) : "Finished"}</span>
+            <span className="tt-now-t">{now.text}</span>
+            {now.detail && <span className="tt-now-d">{now.detail}</span>}
+          </div>
+        )}
         {trace.groups.length === 0 && <p className="tt-empty">Nothing yet. Thoughts show up as the build runs.</p>}
         {trace.groups.map((g) => (
           <Group key={g.id} group={g} open={isOpen(g)} onToggle={() => setFolds((f) => ({ ...f, [g.id]: !isOpen(g) }))} />

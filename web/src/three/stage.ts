@@ -2,6 +2,7 @@
 // out of React state so the explode animation and the label projection run
 // every frame without re-rendering the tree.
 import * as THREE from "three";
+import type { LayerId } from "./explode";
 
 export interface LabelAnchor {
   /** Label key: one label per catalog part (both halves share one label). */
@@ -34,7 +35,22 @@ export const stage = {
   focusK: 0,
   /** Where each group sits at focusK = 1 (position, uniform scale). */
   focusPose: new Map<THREE.Group, { pos: THREE.Vector3; scale: number }>(),
+  /** Pick view (focus while exploded): the part stays in its layer, lifts a little, the rest ghost. */
+  pickKey: null as string | null,
+  /** 0 = nothing picked, 1 = the pick fully in (eased). */
+  pickK: 0,
+  /** The part under the pointer in the exploded view (focus key), or null. */
+  hoverKey: null as string | null,
+  /** Every layer group by its layer, so their real heights can be measured. */
+  layerGroups: new Map<THREE.Group, LayerId>(),
+  /** Measured exploded offset per layer in mm at explode = 1, or null until measured. */
+  layerZ: null as Partial<Record<LayerId, number>> | null,
+  /** Height of the tallest exploded offset (mm at explode = 1), for framing. */
+  lift: 0,
 };
+
+/** How far the focus or pick view has taken the scene away from the plain build, 0 to 1. */
+export const focusAmount = (): number => Math.max(stage.focusK, stage.pickK);
 
 export function registerAnchor(a: LabelAnchor): () => void {
   const list = stage.anchors.get(a.key) ?? [];

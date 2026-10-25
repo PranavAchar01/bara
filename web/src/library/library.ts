@@ -19,8 +19,6 @@ export interface LibraryCard {
   updatedAt: number;
   /** JPEG data URL of the canvas, or null before the 3D view has drawn the build. */
   thumb: string | null;
-  /** The product alone on transparency (the engine's rendered shot), preferred over the canvas snapshot. */
-  shot?: string | null;
   mock: boolean;
   /** Listed from the engine's shared library, so it may have no copy in this browser. */
   remote?: boolean;
@@ -78,7 +76,6 @@ export function remoteCard(b: StoredBuild): LibraryCard {
     createdAt: at,
     updatedAt: at,
     thumb: b.hero_url ? serverUrl(b.hero_url) : null,
-    shot: b.shot_url ? serverUrl(b.shot_url) : null,
     mock: false,
     remote: true,
   };
@@ -89,7 +86,7 @@ export function mergeCards(local: LibraryCard[], remote: StoredBuild[]): Library
   const have = new Map(local.map((c) => [c.build_id, c]));
   const out = local.map((c) => {
     const r = remote.find((x) => x.build_id === c.build_id);
-    return r ? { ...c, remote: true, thumb: c.thumb ?? (r.hero_url ? serverUrl(r.hero_url) : null), shot: r.shot_url ? serverUrl(r.shot_url) : null } : c;
+    return r ? { ...c, remote: true, thumb: c.thumb ?? (r.hero_url ? serverUrl(r.hero_url) : null) } : c;
   });
   for (const r of remote) if (!have.has(r.build_id)) out.push(remoteCard(r));
   return out.sort((a, b) => b.updatedAt - a.updatedAt);

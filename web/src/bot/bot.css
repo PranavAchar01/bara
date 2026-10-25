@@ -111,11 +111,9 @@
   font-size: 13px;
   font-weight: 500;
   line-height: 1.3;
-  /* long lines wrap inside the bubble (up to four lines, see .bb-speech-text) instead of running out of it */
-  width: max-content;
-  max-width: min(300px, 70vw);
-  white-space: normal;
-  overflow-wrap: break-word;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   pointer-events: none;
   transform-origin: 12px 100%;
   transform: scale(0.3) translateY(6px);
@@ -129,14 +127,6 @@
 .bb-speech.on {
   transform: scale(1) translateY(0);
   opacity: 1;
-}
-/* clipped here, not on the bubble, so the tail below it still shows */
-.bb-speech-text {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 4;
-  line-clamp: 4;
-  overflow: hidden;
 }
 .bb-speech::after {
   content: "";

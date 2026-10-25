@@ -3,9 +3,9 @@
 //
 //   node scripts/record-demo.mjs [--url http://localhost:5173/] [--prompt "…"] [--out public/landing] [--headed]
 //
-// Point --url at a dev server that reaches a live engine (BARA_SERVER=auto pnpm dev), ideally one
-// with the agent stage on, so the video shows Bara working the canvas. The script types the
-// prompt, records from the moment the workspace opens through the whole build, pulls the exploded
+// Point --url at a dev server: a mock one (VITE_MOCK=1 pnpm dev, replaying spec/fixtures) or one
+// that reaches a live engine (BARA_SERVER=auto pnpm dev). The script records from the home page as
+// it types the prompt, then through the whole build in the workspace, pulls the exploded
 // view open, focuses a part, then encodes bara-demo.mp4 and .webm (1440×900, 30 fps) and a poster
 // frame. Pauses longer than half a second (waiting on the engine) are shortened so the video keeps
 // moving; nothing else is sped up or edited.
@@ -23,7 +23,7 @@ const arg = (name, fallback) => {
   return i > 0 && process.argv[i + 1] ? process.argv[i + 1] : fallback;
 };
 const URL = arg("url", "http://localhost:5173/");
-const PROMPT = arg("prompt", "a macropad with one big knob and a little screen");
+const PROMPT = arg("prompt", "a wireless split keyboard with an OLED");
 const OUT = resolve(arg("out", "public/landing"));
 const HEADED = process.argv.includes("--headed");
 const MAX_HOLD_S = 0.5;
@@ -36,12 +36,11 @@ await page.goto(URL);
 const input = page.locator(".prompt-input").first();
 await input.waitFor({ state: "visible", timeout: 30000 });
 await page.waitForFunction(() => !document.querySelector(".prompt-input")?.hasAttribute("disabled"), null, { timeout: 60000 });
-await input.click();
-await input.pressSequentially(PROMPT, { delay: 45 });
-await input.press("Enter");
-await page.locator(".workspace").waitFor({ timeout: 30000 });
+// The hero holds this very video: hide it (and the steps under it) so the recording doesn't show itself.
+await page.addStyleTag({ content: ".ld-window, .ld-steps { display: none !important; } .ld-hero { grid-template-columns: minmax(0, 600px); }" });
+await sleep(800);
 
-// Record from the first frame of the workspace.
+// Record from the home page, so the video opens on the prompt being typed.
 const dir = mkdtempSync(join(tmpdir(), "bara-demo-"));
 const frames = [];
 const cdp = await page.context().newCDPSession(page);
@@ -52,6 +51,13 @@ cdp.on("Page.screencastFrame", async (f) => {
   await cdp.send("Page.screencastFrameAck", { sessionId: f.sessionId }).catch(() => undefined);
 });
 await cdp.send("Page.startScreencast", { format: "jpeg", quality: 92, maxWidth: 1440, maxHeight: 900, everyNthFrame: 1 });
+
+await sleep(600);
+await input.click();
+await input.pressSequentially(PROMPT, { delay: 55 });
+await sleep(500);
+await input.press("Enter");
+await page.locator(".workspace").waitFor({ timeout: 30000 });
 
 // The build, until done or failed.
 await page.waitForFunction(() => /done|failed/i.test(document.querySelector(".status-pill")?.textContent ?? ""), null, { timeout: 240000 });
