@@ -356,6 +356,16 @@ def _measured(run: BuildRun, product: form_mod.Form | None) -> tuple[float, floa
     return float(w), float(h), float(product.thickness_mm)
 
 
+def _part_height(record: dict[str, Any]) -> float | None:
+    """A part's own height in mm from its 3D extents or facets; None when nothing says."""
+    box_ = (record.get("mechanical") or {}).get("bbox_mm") or {}
+    lo, hi = box_.get("min"), box_.get("max")
+    if lo and hi:
+        return float(hi[2]) - float(lo[2])
+    h = (record.get("facets") or {}).get("height_mm")
+    return float(h) if isinstance(h, int | float) else None
+
+
 def _extent(product: form_mod.Form) -> tuple[float, float, float]:
     """Overall width, height and area of the silhouette."""
     xs = [p[0] for p in product.silhouette]
@@ -1211,17 +1221,8 @@ class LiveRunner:
     ) -> None:
         """The body is at least as thick as the real stack: the board, the tallest part on each
         side (off-board modules count by their own thickness) and a wall on each face."""
-        top = bottom = 0.0
-        thick = 1.6
-        for entry in board["boards"]:
-            thick = float(entry.get("thickness_mm") or thick)
-            for pl in entry["placements"]:
-                h = float(pl.get("height_mm") or 0.0)
-                if pl.get("side") == "bottom":
-                    bottom = max(bottom, h)
-                else:
-                    top = max(top, h)
-        stack = top + thick + bottom + 2 * self.WALL_STACK_MM + self.STACK_CLEARANCE_MM
+        stack, tall = self._stack_mm(board)
+        top, bottom = tall["top"][1], tall["bottom"][1]
         if stack > product.thickness_mm:
             self._warn(
                 run, "place", "w_stack", "other", "info",
@@ -1229,6 +1230,85 @@ class LiveRunner:
                 f"{top:.1f} mm above and {bottom:.1f} mm below the board.",
             )  # fmt: skip
             brief["body_thickness_mm"] = stack
+
+    def _stack_mm(self, board: dict[str, Any]) -> tuple[float, dict[str, tuple[str, float]]]:
+        """The body thickness the parts need (board, tallest part on each side, a wall on each
+        face) and, per side, the tallest placed part as (instance id, height)."""
+        tall: dict[str, tuple[str, float]] = {"top": ("", 0.0), "bottom": ("", 0.0)}
+        thick = 1.6
+        for entry in board["boards"]:
+            thick = float(entry.get("thickness_mm") or thick)
+            for pl in entry["placements"]:
+                h = float(pl.get("height_mm") or 0.0)
+                side = "bottom" if pl.get("side") == "bottom" else "top"
+                if h > tall[side][1]:
+                    tall[side] = (str(pl.get("for_instance_id") or ""), h)
+        stack = (
+            tall["top"][1] + thick + tall["bottom"][1]
+            + 2 * self.WALL_STACK_MM + self.STACK_CLEARANCE_MM
+        )  # fmt: skip
+        return stack, tall
+
+    THICK_SLACK = 1.4  # a stack this much over the product's own thickness is a part problem
+
+    async def _swap_to_thickness(
+        self,
+        run: BuildRun,
+        st: Any,
+        gb: dict[str, Any],
+        result: ComposeResult,
+        parts: list[dict[str, Any]],
+        board: dict[str, Any] | None,
+        err: str | None,
+        product: form_mod.Form | None,
+    ) -> tuple[dict[str, Any] | None, str | None, list[dict[str, Any]]]:
+        """A part whose height alone would make the body far thicker than the product is
+        swapped for its slot's best candidate that stands lower (a pouch cell for a 9 V clip),
+        before the body is thickened round it: the product keeps its real proportions."""
+        composer = getattr(run, "live_composer", None)
+        for _ in range(self.MAX_SWAPS):
+            if composer is None or board is None or product is None:
+                break
+            stack, tall = self._stack_mm(board)
+            budget = max(product.thickness_mm * self.THICK_SLACK, product.thickness_mm + 4.0)
+            iid, h = max(tall.values(), key=lambda t: t[1])
+            if stack <= budget or not iid:
+                break
+            old = next((p for p in parts if p.get("instance_id") == iid), None)
+            area = None
+            if old is not None:
+                ext = board_footprint_mm(old.get("record") or {})
+                area = ext[0] * ext[1] if ext else None
+
+            def fits(cand: dict[str, Any], h: float = h, area: float | None = area) -> bool:
+                try:
+                    record = self.source.get_part(cand["part_id"])
+                except Exception:  # noqa: BLE001 - a part the source cannot serve is not a fit
+                    return False
+                hh = _part_height(record)
+                ext = board_footprint_mm(record)
+                if area is not None and ext is not None and ext[0] * ext[1] > 1.5 * area:
+                    return False
+                return hh is None or hh < h - 1.0
+
+            why = f"{h:.0f} mm tall, the product is {product.thickness_mm:.0f} mm thick"
+            part = composer.resize(iid, fits, why, st.emit)
+            if part is None:
+                break
+            label = (old or {}).get("label") or iid
+            self._warn(
+                run, "place", f"w_thin_{part['part_id']}"[:60], "other", "info",
+                f"{label} ({why}) swapped for {part.get('display_name') or part['part_id']}.",
+            )  # fmt: skip
+            parts = []
+            for p in result.parts:
+                try:
+                    record = self.source.get_part(p["part_id"])
+                except Exception:  # a part the source no longer has stays off the board
+                    record = {}
+                parts.append({**p, "record": record})
+            board, err = await asyncio.to_thread(A.plan_board, gb, parts, run.build_id)
+        return board, err, parts
 
     MAX_SWAPS = 3
 
@@ -1313,6 +1393,9 @@ class LiveRunner:
             brief["anchors"] = product.anchors
         board, err = await asyncio.to_thread(A.plan_board, gb, parts, run.build_id)
         board, err, parts = await self._swap_to_fit(run, st, gb, result, parts, board, err)
+        board, err, parts = await self._swap_to_thickness(
+            run, st, gb, result, parts, board, err, product
+        )
         grown = False
         for _ in range(
             1 if getattr(run, "repair", "") else self.FIT_REPAIRS
