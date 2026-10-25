@@ -1,15 +1,31 @@
-// The strip along the top of the canvas: Bara (home) and the live dot on the left, and the workspace
-// tools on the right (WorkTools). One workspace, so there are no canvas tabs.
+// The strip along the top of the canvas: Bara (home) and the live dot on the left, then one tab per
+// canvas (click to switch, double-click to rename, x to close) and "New canvas" for an empty one, and
+// the workspace tools on the right (WorkTools). A device made for another ("add a mouse to this
+// keyboard") opens as a tab right after its parent's, marked as pairing with it.
 import { useEffect, useRef, useState } from "react";
-import { useApp } from "../state/store";
+import { useApp, type CanvasMeta } from "../state/store";
+import { addCanvas, canvasLabel, canvasState, canvasStatus, renameCanvas, switchCanvas, type CanvasStatus } from "../state/canvases";
+import { closeCanvasTab } from "../net/client";
 import { Icon } from "../ui/common";
 import "./canvasTabs.css";
 import { ReplayControl } from "../bot/ReplayControl";
 import { WorkTools } from "./WorkTools";
 import { Glyph } from "../ui/glyphs";
-import { SPEEDS, canReplay, setReplaySpeed, startReplay, useReplay } from "../bot/replay";
+import { SPEEDS, canReplay, setReplaySpeed, startReplay, stopReplay, useReplay } from "../bot/replay";
 import { setProjectOpen, useProject, useProjectDevices } from "../project/project";
 import { ProjectButton } from "../project/ProjectPanel";
+import { useTabTitle } from "../project/scenes";
+
+const STATUS_TITLE: Record<CanvasStatus, string> = {
+  empty: "Empty",
+  starting: "Starting",
+  restoring: "Loading the build again",
+  running: "Building",
+  awaiting_input: "Waiting for your answer",
+  done: "Done",
+  failed: "Failed",
+  cancelled: "Cancelled",
+};
 
 /** Closes a small menu on an outside press or Esc. */
 function useDismiss(open: boolean, close: () => void, box: React.RefObject<HTMLElement>) {
@@ -35,19 +51,111 @@ function useDismiss(open: boolean, close: () => void, box: React.RefObject<HTMLE
 export function CanvasTabs() {
   const conn = useApp((s) => s.conn);
   const replaying = useApp((s) => s.replaying);
+  const canvases = useApp((s) => s.canvases);
+  const active = useApp((s) => s.activeCanvas);
   return (
     <nav className="canvas-tabs" aria-label="Canvases">
       <button type="button" className="ct-home" onClick={() => useApp.setState({ screen: "home" })} title="Home">
         Bara
         <span className={`ct-conn ${conn === "open" ? "ok" : conn === "offline" ? "off" : "wait"}`} title={conn === "open" ? "Connected" : conn} aria-hidden />
       </button>
-      {/* one workspace: no canvas tabs; a device added from the prompt joins this canvas */}
-      <div className="ct-strip" />
+      <div className="ct-list" role="tablist">
+        {canvases.map((m) => (
+          <CanvasTab key={m.id} meta={m} active={m.id === active} lone={canvases.length === 1} />
+        ))}
+      </div>
+      <button
+        type="button"
+        className="ct-add ct-add-new"
+        data-agent="new-canvas"
+        onClick={() => {
+          // a replay re-performs this canvas's build; stop it so the real one is what gets stashed
+          stopReplay();
+          addCanvas();
+        }}
+        title="New canvas"
+      >
+        <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden>
+          <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        </svg>
+        <span>New canvas</span>
+      </button>
+      <span className="ct-spacer" />
       <ProjectWhenMany />
       {replaying && <ReplayControl />}
       <WorkTools />
       <MoreMenu />
     </nav>
+  );
+}
+
+function CanvasTab(props: { meta: CanvasMeta; active: boolean; lone: boolean }) {
+  const { meta, active } = props;
+  const status = useApp((s) => canvasStatus(s, meta.id));
+  const label = useApp((s) => canvasLabel(meta, canvasState(s, meta.id)));
+  const parent = useApp((s) => {
+    const p = meta.pairsWith ? s.canvases.find((c) => c.id === meta.pairsWith) : undefined;
+    return p ? canvasLabel(p, canvasState(s, p.id)) : null;
+  });
+  const combined = useTabTitle(useApp((s) => canvasState(s, meta.id)?.build?.build_id));
+  const [editing, setEditing] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (editing) input.current?.select();
+  }, [editing]);
+  const live = status === "running" || status === "awaiting_input" || status === "starting";
+  const commit = (v: string | null) => {
+    if (v !== null) renameCanvas(meta.id, v);
+    setEditing(false);
+  };
+  const name = combined ?? label;
+  return (
+    <div className={`ct-tab ${active ? "active" : ""}`} data-canvas={meta.id} data-kind={meta.kind ?? undefined} title={`${name}${parent ? `, pairs with ${parent}` : ""} · ${STATUS_TITLE[status]}`}>
+      <span className={`ct-dot st-${status}`} aria-label={STATUS_TITLE[status]} />
+      {editing ? (
+        <input
+          ref={input}
+          className="ct-name-input"
+          defaultValue={meta.name ?? label}
+          aria-label="Canvas name"
+          onBlur={(e) => commit(e.currentTarget.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commit(e.currentTarget.value);
+            if (e.key === "Escape") {
+              e.stopPropagation();
+              commit(null);
+            }
+          }}
+        />
+      ) : (
+        <button
+          type="button"
+          role="tab"
+          aria-selected={active}
+          className="ct-name"
+          onClick={() => {
+            stopReplay();
+            switchCanvas(meta.id);
+          }}
+          onDoubleClick={() => setEditing(true)}
+        >
+          {name}
+        </button>
+      )}
+      {parent && (
+        <span className="ct-pair" aria-label={`Pairs with ${parent}`}>
+          <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden>
+            <rect x="1.5" y="4.5" width="6" height="7" rx="1.6" fill="none" stroke="currentColor" strokeWidth="1.3" />
+            <rect x="9.5" y="6" width="5" height="5" rx="1.6" fill="none" stroke="currentColor" strokeWidth="1.3" />
+          </svg>
+        </span>
+      )}
+      {!(props.lone && status === "empty") && (
+        <button type="button" className="ct-close" onClick={() => closeCanvasTab(meta.id)} title={live ? "Close canvas (stops its build)" : "Close canvas"} aria-label={`Close ${label}`}>
+          <Icon name="x" size={10} />
+        </button>
+      )}
+    </div>
   );
 }
 

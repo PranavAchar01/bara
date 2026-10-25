@@ -1,7 +1,8 @@
-// The thinking trace: click the bot and a panel unfolds beside it with what the
-// build did, stage by stage (bot/trace.ts builds the rows from the store). The
-// stage still working is open and followed; finished stages fold to one line
-// that opens on a click. It rides along with the bot, on stage or at home.
+// The thinking trace: click the bot and a speech bubble unfolds beside it with
+// what the build did, stage by stage (bot/trace.ts builds the rows from the store).
+// The stage still working is open and followed; finished stages fold to one line
+// that opens on a click, and the whole bubble folds to the step it is on now. It
+// rides along with the bot, on stage or at home, and hides itself once idle.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../state/store";
 import { vlabel } from "../ui/format";
@@ -130,38 +131,45 @@ function homeRect(): Rect | null {
   return { x: r.left, y: r.top, w: r.width, h: r.height };
 }
 
-/** The popover for the bot's thoughts, for a canvas with no build yet; once there is a build the
- *  thoughts open at the top of the Design tab instead (ThoughtCard). Renders nothing while closed. */
+/** The bot's thoughts: a speech bubble anchored to the bot, the one place they show. Renders
+ *  nothing while closed. */
 export function ThoughtTrace() {
   const open = useTrace((s) => s.open);
   const screen = useApp((s) => s.screen);
-  const inline = useApp((s) => s.build !== null);
-  if (!open || screen !== "workspace" || inline) return null;
+  if (!open || screen !== "workspace") return null;
   return <Panel />;
 }
 
-/** The thoughts at the top of the Design tab: shown while open, closed with its x or Esc, and capped
- *  in height so the spec below stays in view. */
-export function ThoughtCard() {
-  const open = useTrace((s) => s.open);
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closeTrace();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
-  if (!open) return null;
-  return (
-    <section className="thought-trace inline" aria-label="What the agent is thinking">
-      <TraceBody />
-    </section>
-  );
-}
+/** How long the bubble stays up once the build has nothing more to say and nobody is reading it. */
+export const IDLE_HIDE_MS = 9000;
 
 function Panel() {
   const root = useRef<HTMLDivElement>(null);
+  const [folded, setFolded] = useState(false);
+  const running = useApp((s) => s.build?.status === "running" || s.build?.status === "awaiting_input");
+  const hovered = useRef(false);
+
+  // Idle (nothing building) and nobody pointing at it: it hides itself after a while.
+  useEffect(() => {
+    if (running) return;
+    let timer = 0;
+    const arm = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        if (hovered.current) arm();
+        else closeTrace();
+      }, IDLE_HIDE_MS);
+    };
+    arm();
+    const el = root.current;
+    el?.addEventListener("pointermove", arm);
+    el?.addEventListener("wheel", arm, { passive: true });
+    return () => {
+      window.clearTimeout(timer);
+      el?.removeEventListener("pointermove", arm);
+      el?.removeEventListener("wheel", arm);
+    };
+  }, [running]);
 
   // Esc and a press anywhere else close it; the bots toggle it themselves.
   useEffect(() => {
@@ -218,14 +226,22 @@ function Panel() {
   }, []);
 
   return (
-    <div ref={root} className="thought-trace" role="dialog" aria-label="What the agent is thinking" style={{ width: WIDTH, visibility: "hidden" }}>
-      <TraceBody />
+    <div
+      ref={root}
+      className={`thought-trace ${folded ? "folded" : ""}`}
+      role="dialog"
+      aria-label="What the agent is thinking"
+      style={{ width: WIDTH, visibility: "hidden" }}
+      onPointerEnter={() => (hovered.current = true)}
+      onPointerLeave={() => (hovered.current = false)}
+    >
+      <TraceBody folded={folded} onFold={() => setFolded((f) => !f)} />
     </div>
   );
 }
 
-/** The header and the stage list, shared by the popover and the Design tab card. */
-function TraceBody() {
+/** The header, the line it is on now and the stage list; folded, only the header and that line. */
+function TraceBody(props: { folded: boolean; onFold: () => void }) {
   const build = useApp((s) => s.build);
   const view = useApp((s) => s.view);
   const log = useApp((s) => s.log);
@@ -244,7 +260,7 @@ function TraceBody() {
   useLayoutEffect(() => {
     const el = scroller.current;
     if (el && stick.current) el.scrollTop = el.scrollHeight;
-  }, [rowCount, trace.final]);
+  }, [rowCount, trace.final, props.folded]);
 
   const live = running && trace.groups.some((g) => g.live);
   const now = nowLine(trace);
@@ -252,6 +268,18 @@ function TraceBody() {
     <>
       <header className="tt-top">
         <span className="tt-title">{live ? "Thinking" : "How it was built"}</span>
+        <button
+          type="button"
+          className="tt-x tt-fold"
+          onClick={props.onFold}
+          aria-expanded={!props.folded}
+          aria-label={props.folded ? "Show every step" : "Fold to the current step"}
+          title={props.folded ? "Show every step" : "Fold to the current step"}
+        >
+          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden>
+            <path d={props.folded ? "M4.5 6.5L8 10l3.5-3.5" : "M4.5 9.5L8 6l3.5 3.5"} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
         <button type="button" className="tt-x" onClick={closeTrace} aria-label="Close">
           <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden>
             <path d="M4.5 4.5l7 7M11.5 4.5l-7 7" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
@@ -273,11 +301,15 @@ function TraceBody() {
             {now.detail && <span className="tt-now-d">{now.detail}</span>}
           </div>
         )}
-        {trace.groups.length === 0 && <p className="tt-empty">Nothing yet. Thoughts show up as the build runs.</p>}
-        {trace.groups.map((g) => (
-          <Group key={g.id} group={g} open={isOpen(g)} onToggle={() => setFolds((f) => ({ ...f, [g.id]: !isOpen(g) }))} />
-        ))}
-        {trace.final && <p className={`tt-final tone-${trace.final.tone}`}>{trace.final.text}</p>}
+        {!props.folded && (
+          <>
+            {trace.groups.length === 0 && <p className="tt-empty">Nothing yet. Thoughts show up as the build runs.</p>}
+            {trace.groups.map((g) => (
+              <Group key={g.id} group={g} open={isOpen(g)} onToggle={() => setFolds((f) => ({ ...f, [g.id]: !isOpen(g) }))} />
+            ))}
+            {trace.final && <p className={`tt-final tone-${trace.final.tone}`}>{trace.final.text}</p>}
+          </>
+        )}
       </div>
     </>
   );

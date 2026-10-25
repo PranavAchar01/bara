@@ -8,14 +8,16 @@ names here are placeholders; nothing in the engine knows them.
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
 from bara.catalog import load_catalog
 from bara.live import concept as concept_mod
-from bara.live.brief import normalise_brief
+from bara.live.brief import normalise_brief, rules_brief
 from bara.live.layout import keyboard_product, plan_keyboard
+from bara.router import Router
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -119,3 +121,16 @@ def test_concept_text_carries_the_layout() -> None:
     text = concept_mod.concept_text(c)
     assert "portrait" in text and "button grid below" in text and "grid 4 x 3" in text
     assert concept_mod.concept_text(None) == ""
+
+
+def test_a_device_made_to_pair_is_read_from_its_own_words(catalog) -> None:
+    router = Router(catalog, SimpleNamespace(data_dir=ROOT / "data"))  # type: ignore[arg-type]
+    line = (
+        "a mouse that pairs with the keyboard; case colours the same as the keyboard"
+        " (body #1f2a44); Bluetooth like the keyboard."
+    )
+    brief = rules_brief(line, router, catalog)
+    assert brief["layout_style"] == "none"
+    assert "keyboard" not in brief["device"]
+    assert brief["wireless"]  # the look and the radio still come from the whole line
+    assert rules_brief("a split keyboard", router, catalog)["layout_style"] == "split"

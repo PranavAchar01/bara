@@ -1,8 +1,9 @@
 // What a line typed (or said) in the workspace does, so the one prompt does everything and never throws
 // a build away. In order: a change to a part (swap, recolour, move, rotate, remove) goes to the part in
 // focus or the one the line names; a question gets a short answer; "add a knob" adds a part from the
-// catalog; "a mouse next to it" starts a second device beside this one; anything else is a new device on
-// a new canvas. Bara answers each in one short line (baraSay) and acts edits out on the canvas.
+// catalog; "a mouse next to it", "add a mouse to this keyboard", "make a matching mouse" start a second
+// device made for this one, on a new canvas tab beside it with both devices on it and this one's look
+// (project/companion.ts); anything else is a new device on a new canvas. Bara answers each in one short line (baraSay) and acts edits out on the canvas.
 import { addCanvas, addCompanionCanvas } from "../state/canvases";
 import { baraSay, useApp } from "../state/store";
 import { applyEdit, getRest, startBuild } from "../net/client";
@@ -13,6 +14,7 @@ import { speak } from "../voice/voice";
 import { loadOptions } from "./AskBot";
 import { parseAsk, resolveAsk } from "./ask";
 import { relation } from "./relation";
+import { addDeviceCanvas, styleOf, type IntentRead } from "../project/companion";
 
 /** Words that point at what is already on the canvas ("make it blue", "the keycaps"). */
 const REFERS = /\b(it|its|this|that|these|those|the|my)\b/;
@@ -108,7 +110,9 @@ export async function act(raw: string): Promise<void> {
     return;
   }
 
-  const intent = parseAsk(text);
+  // "add a mouse to this keyboard" names a device, not a part to change: it never goes to the edit path
+  const shape = relation(text);
+  const intent = shape?.kind === "companion" ? ({ kind: "unknown" } as const) : parseAsk(text);
   const target = targetOf(build, text);
   if (target && intent.kind !== "unknown") {
     const options = intent.kind === "swap" ? await loadOptions(build.build_id, target.inst) : [];
@@ -122,22 +126,26 @@ export async function act(raw: string): Promise<void> {
 
   // a second device, or a part to add: the engine's model reads the line against the open device; with no
   // model answering (no key), the shape of the sentence decides ("a mouse next to it", "add a knob to it")
-  const r = await getRest().request<{ kind: string; thing: string | null; prompt: string; note?: string }>("POST", "/v1/intent", {
+  const style = styleOf(build);
+  const r = await getRest().request<IntentRead>("POST", "/v1/intent", {
     prompt: text,
     has_build: true,
     build_prompt: build.prompt,
     part_names: build.parts.map((p) => p.label ?? p.card.display_name),
+    parent_style: style,
   });
   const answered = r.ok && !(r.body.kind === "new" && r.body.note);
-  const read = answered ? { kind: r.body.kind, thing: r.body.thing, prompt: r.body.prompt } : relation(text);
+  const read: IntentRead | null = answered
+    ? r.body
+    : shape && { ...shape, prompt: shape.kind === "companion" ? `a ${shape.thing} that pairs with the ${style.device}` : shape.prompt };
   if (read?.kind === "companion") {
-    addCompanionCanvas();
+    addDeviceCanvas(read, style);
     startBuild(read.prompt);
-    say(`Starting ${read.thing ? `a ${read.thing}` : "it"} next to this one.`);
+    say(`Making ${read.thing ? `a ${read.thing}` : "it"} to match the ${style.device}.`);
     return;
   }
   // the model says "modify" without naming the part; the sentence usually does ("add a knob to it")
-  const thing = read?.kind === "modify" ? (read.thing ?? relation(text)?.thing ?? null) : null;
+  const thing = read?.kind === "modify" ? (read.thing ?? shape?.thing ?? null) : null;
   if (thing) {
     if (await addPart(thing)) return;
     say(`A ${thing} isn't among the parts I can add yet.`);

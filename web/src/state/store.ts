@@ -44,6 +44,10 @@ export interface PendingStart {
 export interface CanvasMeta {
   id: string;
   name: string | null;
+  /** What the canvas's device is laid out as ("keyboard", "mouse", ...), when it was made for another. */
+  kind?: string | null;
+  /** The canvas whose device this one was made for ("a mouse for this keyboard"). */
+  pairsWith?: string | null;
 }
 
 /** What each canvas keeps for itself; the active canvas's copy lives in the top-level fields (state/canvases.ts). */

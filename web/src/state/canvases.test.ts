@@ -153,8 +153,8 @@ describe("canvas tabs", () => {
     expect(stored).toEqual({
       active: b,
       canvases: [
-        { id: "c1", name: null, build_id: "bld_1", prompt: "one", companions: [] },
-        { id: b, name: "Second", build_id: null, prompt: null, companions: [] },
+        { id: "c1", name: null, build_id: "bld_1", prompt: "one", companions: [], kind: null, pairs_with: null },
+        { id: b, name: "Second", build_id: null, prompt: null, companions: [], kind: null, pairs_with: null },
       ],
     });
     const parsed = parseCanvases(JSON.stringify(stored));
@@ -165,8 +165,8 @@ describe("canvas tabs", () => {
     const s = useApp.getState();
     expect(s.activeCanvas).toBe(b);
     expect(s.canvases).toEqual([
-      { id: "c1", name: null },
-      { id: b, name: "Second" },
+      { id: "c1", name: null, kind: null, pairsWith: null },
+      { id: b, name: "Second", kind: null, pairsWith: null },
     ]);
     expect(s.canvasRestoring).toEqual(["c1"]);
     expect(canvasStatus(s, "c1")).toBe("restoring");
@@ -197,7 +197,7 @@ describe("canvas tabs", () => {
     expect(parseCanvases(JSON.stringify({ canvases: [] }))).toBeNull();
     expect(parseCanvases(JSON.stringify({ active: "zz", canvases: [{ id: "c4", build_id: 3 }, { id: "bad" }] }))).toEqual({
       active: "c4",
-      canvases: [{ id: "c4", name: null, build_id: null, prompt: null, companions: [] }],
+      canvases: [{ id: "c4", name: null, build_id: null, prompt: null, companions: [], kind: null, pairs_with: null }],
     });
   });
 });
