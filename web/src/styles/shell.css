@@ -1143,7 +1143,7 @@
   flex: none;
 }
 
-/* Landing (Figma: Landing C2). Step 1 is the prompt; the product window plays a recorded build. */
+/* Landing (Figma: Landing C2). The first screen is one plate: a recorded build plays behind, Bara talks in front. */
 .home.landing {
   display: block;
   position: relative;
@@ -1152,202 +1152,29 @@
 }
 .landing > section,
 .landing > figure,
-.landing > .library,
-.ld-hero > section,
-.ld-hero > figure {
-  width: min(1328px, calc(100% - 64px));
+.landing > .library {
+  width: min(1328px, calc(100% - 32px));
   margin-left: auto;
   margin-right: auto;
 }
-/* The whole first screen: head, then the plate takes what is left of the viewport so the recording plays unscrolled. */
 .ld-hero {
-  display: flex;
-  flex-direction: column;
   height: calc(100svh - 48px);
-  min-height: 560px;
+  min-height: 520px;
+  padding: clamp(10px, 2vh, 20px) 0;
 }
-.ld-head {
-  flex: none;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 520px);
-  gap: 48px;
-  align-items: end;
-  padding: clamp(16px, 3.4vh, 36px) 0 clamp(14px, 2.6vh, 26px);
-}
-.ld-copy h1 {
-  font-family: var(--font-display);
-  font-weight: 400;
-  font-size: clamp(32px, min(3.6vw, 5.4vh), 56px);
-  line-height: 0.98;
-  letter-spacing: var(--track-display);
-}
-.ld-copy p {
-  margin: 12px 0 0;
-  font-size: 16px;
-  color: var(--text-2);
-  max-width: 520px;
-}
-.ld-ask {
-  min-width: 0;
-}
-/* Where the agent rests; it roams from here (LandingAgent). Wide: the plate's left gutter. Narrow: under the copy. */
-.ld-home-plate {
-  position: absolute;
-  left: clamp(14px, 3vh, 32px);
-  bottom: clamp(14px, 3vh, 32px);
-  width: 172px;
-  height: 150px;
-}
-.ld-home-narrow {
-  display: none;
-  height: 112px;
-  margin-top: 4px;
-}
-/* The agent is the mic on this page, so the small bot inside the bar steps out. */
-.ld-field .bot-mic {
-  display: none;
-}
-.ld-agent {
-  position: absolute;
-  left: 0;
-  top: 0;
-  z-index: 20;
-  pointer-events: none;
-  opacity: 0;
-  will-change: transform;
-}
-.ld-agent.ready {
-  opacity: 1;
-  transition: opacity 500ms ease;
-}
-.ld-agent.m-chip .ld-agent-btn {
-  pointer-events: none;
-}
-/* A ring in the page colour keeps the oval readable over the light demo in dark mode. */
-.ld-agent .bb-oval {
-  stroke: var(--surface);
-  stroke-width: 3;
-}
-.ld-agent .bb-speech {
-  box-shadow: 0 0 0 1.5px var(--surface), 0 4px 14px rgb(0 0 0 / 0.18);
-}
-.ld-agent-lean {
-  width: 100%;
-  height: 100%;
-}
-.ld-agent-btn {
-  display: block;
-  width: 100%;
-  height: 100%;
-  padding: 0;
-  border: 0;
-  background: none;
-  border-radius: 50%;
-  cursor: pointer;
-  pointer-events: auto;
-  touch-action: manipulation;
-}
-.ld-agent-btn:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -14px;
-}
-.ld-agent-float {
-  display: block;
-  line-height: 0;
-  animation: ld-float 5.2s ease-in-out infinite;
-}
-@keyframes ld-float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-5px); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .ld-agent-float { animation: none; }
-  .ld-agent.ready { transition: none; }
-}
-.ld-field .promptbar {
-  border: 1.5px solid var(--ink);
-  border-radius: 2px;
-  background: var(--paper);
-  padding: 8px;
-  gap: 10px;
-}
-.ld-field .promptbar .prompt-input {
-  border: 0;
-  background: transparent;
-  font-family: var(--font-display);
-  font-size: 21px;
-  letter-spacing: -0.02em;
-  height: 44px;
-  padding: 0 4px;
-}
-.ld-field .promptbar .prompt-input:focus {
-  box-shadow: none;
-  outline: none;
-}
-.ld-field .promptbar .btn.primary {
-  border-radius: 2px;
-  height: 40px;
-}
-.ld-foot {
-  display: flex;
-  justify-content: space-between;
-  border: 1.5px solid var(--ink);
-  border-top: 1px solid var(--line);
-  margin-top: -1.5px;
-  padding: 6px 12px;
-  font-size: 12px;
-  color: var(--text-2);
-}
-.ld-field .example-chips {
-  margin-top: 12px;
-  gap: 6px 14px;
-}
-.ld-field .example-chip {
-  border: 0;
-  border-bottom: 1px solid var(--ink-faint);
-  border-radius: 0;
-  background: none;
-  padding: 0 0 1px;
-  font-size: 13px;
-}
-/* The plate (after tryclean.ai's hero, in Bara's paper and grid): a rounded backdrop with the product window inset. */
+/* After tryclean.ai's hero plate, in Bara's paper: rounded, the recording as its backdrop. */
 .ld-plate {
-  flex: 1 1 auto;
-  min-height: 0;
-  margin-top: 0;
-  margin-bottom: clamp(12px, 2.4vh, 24px);
   position: relative;
-  display: grid;
-  place-items: center;
-  padding: clamp(14px, 3vh, 32px);
+  height: 100%;
   border-radius: 24px;
   overflow: hidden;
-  background:
-    radial-gradient(120% 90% at 50% 120%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 60%),
-    linear-gradient(var(--line) 1px, transparent 1px) 0 0 / 28px 28px,
-    linear-gradient(90deg, var(--line) 1px, transparent 1px) 0 0 / 28px 28px,
-    var(--paper-2);
+  border: 1px solid var(--line);
+  background: var(--paper-2);
 }
-/* soften the grid toward the edges so the window reads first */
-.ld-plate::before {
-  content: "";
+.ld-bg {
   position: absolute;
   inset: 0;
-  background: radial-gradient(closest-side, transparent 40%, var(--paper-2));
-  opacity: 0.85;
-  pointer-events: none;
-}
-.ld-frame {
-  position: relative;
-  z-index: 1;
-  height: 100%;
-  max-width: 100%;
-  aspect-ratio: 16 / 10;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--paper);
-  overflow: hidden;
-  box-shadow: 0 1px 2px rgb(0 0 0 / 0.06), 0 24px 60px -24px rgb(0 0 0 / 0.35);
+  margin: 0;
   /* a recording, not a control: nothing in it can be clicked, selected or dragged */
   pointer-events: none;
   user-select: none;
@@ -1357,6 +1184,168 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: 62% 50%;
+}
+/* paper rises from the left so the words and the bot sit on calm ground, the build plays on the right */
+.ld-plate::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    var(--paper) 0%,
+    color-mix(in srgb, var(--paper) 94%, transparent) 30%,
+    color-mix(in srgb, var(--paper) 60%, transparent) 46%,
+    transparent 64%
+  );
+}
+.ld-stage {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  bottom: 0;
+  left: clamp(24px, 4vw, 64px);
+  width: clamp(320px, 44%, 580px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: clamp(20px, 4vh, 40px);
+}
+.ld-stage h1 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: clamp(34px, min(3.5vw, 5.6vh), 56px);
+  line-height: 0.98;
+  letter-spacing: var(--track-display);
+  text-wrap: balance;
+}
+
+/* Bara and its speech bubble, which is the prompt (HeroAgent). */
+.hero-agent {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.hero-bot {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  border-radius: 50%;
+  cursor: pointer;
+  line-height: 0;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.hero-bot:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -10px;
+}
+/* a ring in the page colour keeps the oval readable over the recording in dark mode */
+.hero-bot .bb-oval {
+  stroke: var(--surface);
+  stroke-width: 3;
+}
+.hero-bot-float {
+  display: block;
+  animation: ld-float 5.2s ease-in-out infinite;
+}
+@keyframes ld-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+.hero-bubble {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 6px 6px 18px;
+  border: 1.5px solid var(--ink);
+  border-radius: 24px;
+  background: var(--surface);
+  box-shadow: 0 14px 34px -18px rgb(0 0 0 / 0.4);
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+/* the tail, pointing back at the bot */
+.hero-bubble::before {
+  content: "";
+  position: absolute;
+  left: -8px;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  background: var(--surface);
+  border-left: 1.5px solid var(--ink);
+  border-bottom: 1.5px solid var(--ink);
+  transform: translateY(-50%) rotate(45deg);
+  transition: border-color 160ms ease;
+}
+.hero-bubble:focus-within {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent), 0 14px 34px -18px rgb(0 0 0 / 0.4);
+}
+.hero-bubble input {
+  flex: 1;
+  min-width: 0;
+  height: 42px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 19px;
+  letter-spacing: -0.015em;
+  outline: none;
+}
+.hero-bubble input::placeholder {
+  color: var(--text-2);
+  opacity: 0.75;
+}
+.hero-bubble input:disabled {
+  opacity: 1;
+  -webkit-text-fill-color: var(--ink);
+}
+.hero-send {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--paper);
+  cursor: pointer;
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+.hero-send:hover:not(:disabled) {
+  transform: translateX(2px);
+}
+.hero-send:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.st-listening .hero-bubble,
+.st-listening .hero-bubble::before {
+  border-color: var(--accent);
+}
+.hero-mic {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--fail);
+  animation: hero-pulse 1s ease-in-out infinite;
+}
+@keyframes hero-pulse {
+  50% { opacity: 0.3; transform: scale(0.8); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-bot-float,
+  .hero-mic { animation: none; }
 }
 .ld-steps {
   margin-top: 64px;
@@ -1494,29 +1483,55 @@
   border-top: 1.5px solid var(--ink);
   padding-top: 16px;
 }
-@media (max-width: 980px) {
-  .ld-head {
-    grid-template-columns: 1fr;
-    gap: 16px;
-  }
-  /* stacked, the head is too tall to share the screen; the plate sizes by its width instead */
+/* Narrow: the words and Bara first, the recording below them as a picture of its own. */
+@media (max-width: 760px) {
   .ld-hero {
     height: auto;
     min-height: 0;
   }
   .ld-plate {
-    flex: none;
-  }
-  .ld-frame {
     height: auto;
-    width: 100%;
+    display: flex;
+    flex-direction: column;
   }
-  .ld-home-plate {
+  .ld-plate::after {
     display: none;
   }
-  .ld-home-narrow {
-    display: block;
+  .ld-stage {
+    position: static;
+    width: auto;
+    padding: 28px 20px 22px;
+    gap: 22px;
   }
+  .ld-bg {
+    order: 2;
+    position: relative;
+    inset: auto;
+    aspect-ratio: 16 / 10;
+    border-top: 1px solid var(--line);
+  }
+  /* the bubble gets the full width under the bot, its tail pointing up at it */
+  .hero-agent {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .hero-bubble {
+    width: 100%;
+  }
+  .hero-bubble::before {
+    left: 40px;
+    top: -8px;
+    transform: rotate(135deg);
+  }
+  .hero-bubble input {
+    font-size: 17px;
+  }
+  .demo-media {
+    object-position: 50% 50%;
+  }
+}
+@media (max-width: 980px) {
   .ld-steps ol {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

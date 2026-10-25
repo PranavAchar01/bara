@@ -1,9 +1,8 @@
-// Home (Figma: Landing C2, "the product, with Bara at work"). Bara itself roams the page (LandingAgent). Under the prompt a
-// recording of a real build (scripts/record-demo.mjs) plays in a product window on a plate, all on the first screen,
-// then four stills show what Bara does on the canvas, then the user's own builds.
+// Home (Figma: Landing C2, "the product, with Bara at work"). The first screen is one plate: a recording of a real
+// build (scripts/record-demo.mjs) plays behind, and Bara sits in front with its speech bubble as the prompt
+// (HeroAgent). Then four stills show what Bara does on the canvas, then the user's own builds.
 import { useEffect, useRef, useState } from "react";
-import { LandingAgent } from "./LandingAgent";
-import { ExampleChips, PromptBar } from "./PromptBar";
+import { HeroAgent } from "./HeroAgent";
 
 // Bump V when scripts/record-demo.mjs writes a new take, so no browser plays cached bytes of the old one.
 const V = "2";
@@ -52,36 +51,20 @@ function DemoVideo() {
   );
 }
 
-/** The first screen: a short head, then the recording on a plate that fills the rest of the viewport, so it plays without a scroll. */
+/** The first screen: one plate, the recording playing behind, and Bara in front to talk to. */
 export function LandingHero() {
   return (
-    <div className="ld-hero">
-      <LandingAgent />
-      <section className="ld-head">
-        <div className="ld-copy">
-          <h1>Describe a device. Watch Bara build it from real parts.</h1>
-          <p>Open parts, a routed board, a case and firmware, built where you can see it.</p>
-          <div className="ld-home ld-home-narrow" aria-hidden />
-        </div>
-        <div className="ld-ask">
-          <div className="ld-field">
-            <PromptBar autoFocus />
-            <div className="ld-foot">
-              <span>Type it, or hold Space and say it</span>
-              <span className="mono">then watch</span>
-            </div>
-            <ExampleChips />
-          </div>
-        </div>
-      </section>
-      <figure className="ld-plate" aria-label="A recording of Bara building a device, start to finish">
-        {/* On a wide screen the bot rests in the plate's gutter, beside the recording */}
-        <div className="ld-home ld-home-plate" aria-hidden />
-        <div className="ld-frame">
+    <section className="ld-hero">
+      <div className="ld-plate">
+        <figure className="ld-bg" aria-label="A recording of Bara building a device, start to finish">
           <DemoVideo />
+        </figure>
+        <div className="ld-stage">
+          <h1>Describe a device. Watch Bara build it from real parts.</h1>
+          <HeroAgent />
         </div>
-      </figure>
-    </div>
+      </div>
+    </section>
   );
 }
 
