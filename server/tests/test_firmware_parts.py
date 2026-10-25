@@ -47,3 +47,12 @@ def test_arduino_uses_the_picked_sensor_library() -> None:
     ]
     text = "".join(f["content"] for f in files_of(slots)[0]["files"])
     assert "Adafruit_SHT31.h" in text and "BME280" not in text
+
+
+def test_a_display_slot_named_after_its_part_still_gets_configured() -> None:
+    slots = [
+        slot("controller", "compute.mcu", ESP),
+        slot("b_1_3_inch_oled", "display.oled", {"part_id": "disp:sh1106_128x64"}),
+    ]
+    text = "".join(f["content"] for f in files_of(slots)[0]["files"])
+    assert "model: SH1106 128x64" in text

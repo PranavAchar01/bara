@@ -453,8 +453,10 @@ def make_firmware(
     for s in slots:
         if s.chosen is None:
             continue
-        if s.slot_id == "display":
-            peripherals["display"] = s.chosen
+        if s.slot_id == "display" or s.function_id.startswith("display."):
+            # the first display keeps the plain key ZMK looks for; any more get their slot id
+            name = "display" if "display" not in peripherals else f"display:{s.slot_id}"
+            peripherals[name] = s.chosen
         elif s.slot_id in ("encoder", "trackball"):
             peripherals[s.slot_id] = s.chosen
         elif s.function_id.startswith("sense."):
