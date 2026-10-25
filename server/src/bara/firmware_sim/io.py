@@ -328,9 +328,17 @@ def plan_io(
                     }
                 )
         elif f == "input.potentiometer":
-            inputs.append(
-                {"id": f"{iid}#0", "label": "Dial", "kind": "axis", "instance_id": iid, "index": 0}
-            )
+            for i in range(_quantity(p)):
+                n = f" {i + 1}" if _quantity(p) > 1 else ""
+                inputs.append(
+                    {
+                        "id": f"{iid}#{i}",
+                        "label": f"Dial{n}",
+                        "kind": "axis",
+                        "instance_id": iid,
+                        "index": i,
+                    }
+                )
         elif f == "input.toggle_switch":
             for i in range(_quantity(p)):
                 inputs.append(

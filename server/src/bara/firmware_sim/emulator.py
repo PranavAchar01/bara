@@ -14,6 +14,7 @@ Both expose the same calls: press, turn, set_axis, set_power, run_ms, snapshot.
 
 from __future__ import annotations
 
+import base64
 import subprocess
 import threading
 import time
@@ -26,6 +27,30 @@ from .mcu import BOARDS, Board, pin_number
 
 MAX_EVENTS = 4000
 SLICE_INSNS = 400_000  # instructions per run before the session forces time forward
+
+FB_W, FB_H = 128, 64
+_PLAIN = "abcdefghijklmnopqrstuvwxyz1234567890\n\x1b\b\t -=[]\\#;'`,./"
+_SHIFT = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ!@#$%^&*()\n\x1b\b\t _+{}|~:"~<>?'
+
+
+def usage_char(usage: int, shift: bool) -> str | None:
+    """The character a US keyboard types for a HID usage, or None for keys that type nothing."""
+    i = usage - 0x04
+    table = _SHIFT if shift else _PLAIN
+    return table[i] if 0 <= i < len(table) and usage <= 0x38 else None
+
+
+def pack_2bpp(raw: bytes) -> bytes:
+    """One byte per pixel (0..3) to four pixels per byte."""
+    out = bytearray(len(raw) // 4)
+    for i in range(0, len(out) * 4, 4):
+        out[i // 4] = (
+            (raw[i] & 3)
+            | ((raw[i + 1] & 3) << 2)
+            | ((raw[i + 2] & 3) << 4)
+            | ((raw[i + 3] & 3) << 6)
+        )
+    return bytes(out)
 
 
 class _Inputs:
@@ -105,6 +130,9 @@ class _Base:
         self.powered = True
         self.screen: list[str] = []
         self.hid: list[int] = [0] * 8
+        self.fb: bytes | None = None  # display framebuffer, 2 bits per pixel, row-major
+        self.bootloader = False
+        self._last_keys: set[int] = set()
         self.led: dict[int, int] = {}
         self.lock = threading.RLock()
         self.watch_pins = self._watch_pins()
@@ -141,8 +169,27 @@ class _Base:
             self._emit({"type": "serial", "text": line})
             if line.startswith("HID ") or line.startswith("HIDC "):
                 self._emit({"type": "hid", "report": line[4:].strip(), "kind": line.split()[0]})
+            if line.startswith("HID kb "):
+                self._typed(line.split()[2:])
         elif c != 13:
             self.serial_line += chr(c) if 32 <= c < 127 else "?"
+
+    def _typed(self, report: list[str]) -> None:
+        """What a USB keyboard would type for a new key in this report (text the host receives)."""
+        try:
+            raw = [int(x, 16) for x in report]
+        except ValueError:
+            return
+        keys = {k for k in raw[2:8] if k}
+        shift = bool(raw[0] & 0x22) if raw else False
+        for k in sorted(keys - self._last_keys):
+            ch = usage_char(k, shift)
+            if ch is not None:
+                self._emit({"type": "typed", "text": ch})
+        self._last_keys = keys
+
+    def reboot(self, bootloader: bool = False) -> None:
+        raise NotImplementedError
 
     def _gpio(self, pin: int, level: int) -> None:
         if pin in self.inputs.matrix_rows:
@@ -231,6 +278,12 @@ class _Base:
                 "t_ms": round(self.now_ms(), 1),
                 "screen": self.screen if self.powered else [],
                 "hid": " ".join(f"{b:02X}" for b in self.hid),
+                "bootloader": self.bootloader,
+                "fb": (
+                    {"w": FB_W, "h": FB_H, "b64": base64.b64encode(self.fb).decode()}
+                    if self.fb and self.powered and not self.bootloader
+                    else None
+                ),
                 "leds": leds,
                 "inputs": {
                     "closed": {k: v for k, v in self.inputs.closed.items() if v},
@@ -353,7 +406,7 @@ class ChipSession(_Base):
         with self.lock:
             end = self.t_us + ms * 1000.0
             while self.t_us < end:
-                if not self.powered:
+                if not self.powered or self.bootloader:
                     self.t_us = end
                     break
                 self.state["idle"] = False
@@ -391,9 +444,28 @@ class ChipSession(_Base):
                 .decode("ascii", "replace")
                 for r in range(screen)
             ]
+        if "bara_fb" in sym:
+            addr, size = sym["bara_fb"]
+            self.fb = pack_2bpp(bytes(self.u.mem_read(addr, size)))
         if "bara_hid" in sym:
             addr, _ = sym["bara_hid"]
             self.hid = list(bytes(self.u.mem_read(addr, 8)))
+
+    def reboot(self, bootloader: bool = False) -> None:
+        """The reset button: restart the chip. With the boot button held, enter the bootloader."""
+        with self.lock:
+            if not self.powered:
+                return
+            self.screen, self.fb, self.hid = [], None, [0] * 8
+            self._last_keys = set()
+            for pin in list(self.out):
+                self._set_out(pin, 0)
+            self.bootloader = bootloader
+            if bootloader:
+                self._emit({"type": "power", "on": True, "text": "reset: bootloader (USB drive)"})
+                return
+            self._boot()
+            self.run_ms(5)
 
     def set_power(self, on: bool) -> None:
         with self.lock:
@@ -407,6 +479,7 @@ class ChipSession(_Base):
                 self.screen = []
             else:
                 self.powered = True
+                self.bootloader = False
                 self._boot()
                 self.run_ms(5)
 
@@ -590,6 +663,8 @@ class HostSession(_Base):
             elif tag == "S":
                 _, _, text = rest.partition(" ")
                 rows.append(text.rstrip())
+            elif tag == "F":
+                self.fb = bytes.fromhex(rest)
             elif tag == "D":
                 self.t = self.base_t + float(rest)
                 self.screen = rows
@@ -623,7 +698,7 @@ class HostSession(_Base):
 
     def run_ms(self, ms: float) -> None:
         with self.lock:
-            if not self.powered:
+            if not self.powered or self.bootloader:
                 self.t += ms
                 return
             self._cmd(f"s {max(1, int(round(ms)))}")
@@ -635,6 +710,20 @@ class HostSession(_Base):
                 parts = e["report"].split()[1:]
                 self.hid = [int(x, 16) for x in parts] + [0] * (8 - len(parts))
                 break
+
+    def reboot(self, bootloader: bool = False) -> None:
+        with self.lock:
+            if not self.powered:
+                return
+            self.close()
+            self.screen, self.fb, self.hid = [], None, [0] * 8
+            self._last_keys = set()
+            self.bootloader = bootloader
+            if bootloader:
+                self._emit({"type": "power", "on": True, "text": "reset: bootloader (USB drive)"})
+                return
+            self._start()
+            self._sync_inputs()
 
     def set_power(self, on: bool) -> None:
         with self.lock:
@@ -649,6 +738,7 @@ class HostSession(_Base):
                 self._emit({"type": "power", "on": False, "text": "power off: rail cut"})
             else:
                 self.powered = True
+                self.bootloader = False
                 self._start()
                 self._sync_inputs()
 

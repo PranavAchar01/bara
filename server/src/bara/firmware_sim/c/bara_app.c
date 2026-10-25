@@ -108,6 +108,8 @@ static void utoa_(u32 v, char *out) {
   out[n] = 0;
 }
 
+#include "bara_game.h"
+
 /* ---- HID -------------------------------------------------------------------------------- */
 static void hid_send(void) {
   puts_("HID ");
@@ -178,6 +180,7 @@ static void event(int i, int down, u32 now) {
   } else if (held > 0) {
     held--;
   }
+  if (down) game_button(i, now);
   if (in->kind == IN_KEY || in->kind == IN_MKEY) hid_key(in->hid, down);
   else if (in->kind == IN_BUTTON || in->kind == IN_SWITCH) hid_button(button_bit(i), down);
 }
@@ -228,6 +231,7 @@ static void axis(int i, u32 now) {
     for (int k = 0; k < i; k++)
       if (BARA_INPUTS[k].kind == IN_AXIS) slot++;
     if (slot < 8) bara_hid[slot] = (u8)(i8)v;
+    game_axis(i, v);
     hid_send();
     char n[12];
     n[0] = v < 0 ? '-' : '+';
@@ -283,6 +287,7 @@ void app_init(void) {
   puts_(" ms | debounce ");
   putu(DEBOUNCE_MS);
   puts_(" ms\nready\n");
+  game_init();
 }
 
 void app_tick(u32 now) {
@@ -294,6 +299,7 @@ void app_tick(u32 now) {
   }
   if (now - last_axis >= 8) last_axis = now;
   matrix_scan(now);
+  game_tick(now);
   if (LED_PIN != PIN_NONE) {
     int on;
     if (LED_ON_PRESS && held > 0) on = 1;

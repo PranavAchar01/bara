@@ -8,7 +8,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from . import spice
+from . import kicad_checks, spice
 from .codegen import FwConfig, input_rows
 from .emulator import ChipSession, HostSession, make_chip
 from .mcu import BOARDS
@@ -294,11 +294,21 @@ def catalog(io: dict[str, Any], fw: dict[str, Any]) -> list[dict[str, Any]]:
         "spice.charger": "Battery charging stays inside USB and cell limits",
     }
     items += [{"id": k, "group": "ngspice", "name": v} for k, v in names.items()]
+    items += [
+        {"id": k, "group": "kicad", "name": kicad_checks.KICAD_NAMES[k]}
+        for k in kicad_checks.KICAD_IDS
+    ]
     return items
 
 
 def run_test(
-    tid: str, io: dict[str, Any], cfg: FwConfig, fw: dict[str, Any], out_dir: Path
+    tid: str,
+    io: dict[str, Any],
+    cfg: FwConfig,
+    fw: dict[str, Any],
+    out_dir: Path,
+    state: dict[str, Any] | None = None,
+    boards_root: Path | None = None,
 ) -> dict[str, Any]:
     t0 = time.monotonic()
     meta = next((c for c in catalog(io, fw) if c["id"] == tid), None)
@@ -332,6 +342,8 @@ def run_test(
             res = fn(s, io, cfg)
     elif tid.startswith("pins."):
         res = next(c for c in pin_checks(io) if c["id"] == tid)
+    elif tid in kicad_checks.KICAD_IDS:
+        res = kicad_checks.run(tid, state or {}, boards_root)
     else:
         board = BOARDS.get(io["mcu"]["board_id"]) or BOARDS["nice_nano_v2"]
         check = spice.CHECKS[tid]

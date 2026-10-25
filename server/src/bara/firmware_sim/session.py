@@ -22,6 +22,7 @@ class SimBuild:
     state: dict[str, Any]
     out_dir: Path
     assets_url: str
+    boards_root: Path | None = None
     io: dict[str, Any] = field(default_factory=dict)
     cfg: FwConfig = field(default_factory=FwConfig)
     fw: dict[str, Any] = field(default_factory=dict)
@@ -101,7 +102,9 @@ class SimBuild:
             out = []
             for tid in wanted:
                 try:
-                    r = run_test(tid, self.io, self.cfg, self.fw, self.out_dir)
+                    r = run_test(
+                        tid, self.io, self.cfg, self.fw, self.out_dir, self.state, self.boards_root
+                    )
                 except Exception as e:  # a crashing test is a failed test, with the reason
                     r = {"id": tid, "status": "fail", "summary": f"test crashed: {e}", "log": ""}
                 self.results[tid] = r
@@ -118,7 +121,8 @@ class SimBuild:
 
 
 class SimStore:
-    def __init__(self, assets_dir: Path, limit: int = 12) -> None:
+    def __init__(self, assets_dir: Path, limit: int = 12, boards_root: Path | None = None) -> None:
+        self.boards_root = boards_root
         self.root = assets_dir / "cache" / "firmware_sim"  # gitignored, served at /assets
         self.items: dict[str, SimBuild] = {}
         self.limit = limit
@@ -144,6 +148,7 @@ class SimStore:
                 state=state,
                 out_dir=self.root / build_id,
                 assets_url=f"/assets/cache/firmware_sim/{build_id}",
+                boards_root=self.boards_root,
             )
             self.items[build_id] = sb
             return sb

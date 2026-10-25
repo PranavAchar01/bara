@@ -8,6 +8,7 @@
  * stdout: "U <text>"        a serial console line
  *         "G <ms> <pin> <level>"  an output pin changed
  *         "S <row> <text>"  a screen row (after each step)
+ *         "F <hex>"         the display framebuffer, 2 bits per pixel, when it changed
  *         "D <ms>"          step done
  */
 #include <stdio.h>
@@ -19,6 +20,20 @@
 void app_init(void);
 void app_tick(u32 now);
 extern char bara_screen[SCREEN_ROWS][SCREEN_COLS + 1];
+#if GAME_MODE
+extern u8 bara_fb[FB_W * FB_H];
+static u8 fb_sent[FB_W * FB_H / 4];
+static void send_fb(void) {
+  u8 packed[FB_W * FB_H / 4];
+  for (int i = 0; i < FB_W * FB_H; i += 4)
+    packed[i / 4] = (u8)((bara_fb[i] & 3) | ((bara_fb[i + 1] & 3) << 2) | ((bara_fb[i + 2] & 3) << 4) | ((bara_fb[i + 3] & 3) << 6));
+  if (memcmp(packed, fb_sent, sizeof packed) == 0) return;
+  memcpy(fb_sent, packed, sizeof packed);
+  printf("F ");
+  for (unsigned i = 0; i < sizeof packed; i++) printf("%02x", packed[i]);
+  printf("\n");
+}
+#endif
 
 static u32 now_ms;
 static u8 in_level[256];
@@ -108,6 +123,9 @@ int main(void) {
         app_tick(hal_millis());
       }
       for (int r = 0; r < SCREEN_ROWS; r++) printf("S %d %s\n", r, bara_screen[r]);
+#if GAME_MODE
+      send_fb();
+#endif
       printf("D %u\n", now_ms);
     }
     fflush(stdout);
