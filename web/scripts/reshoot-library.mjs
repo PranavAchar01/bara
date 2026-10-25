@@ -44,7 +44,7 @@ if (!executablePath) throw new Error("No installed Chromium or Chrome found; not
 const browser = await chromium.launch({
   executablePath,
   headless: true,
-  args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"],
+  args: ["--mute-audio", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"],
 });
 
 const ok = [];

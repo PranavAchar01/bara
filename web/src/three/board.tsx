@@ -25,8 +25,8 @@ function placeholderMats() {
         color: new THREE.Color("#143323"),
         roughness: 0.45,
         metalness: 0,
-        clearcoat: 0.18,
-        clearcoatRoughness: 0.35,
+        clearcoat: 0.35,
+        clearcoatRoughness: 0.3,
         emissive: new THREE.Color("#2e8a52"),
         emissiveIntensity: 0,
       }),
@@ -91,6 +91,23 @@ export function BoardPlaceholder(props: { board: Board; busy: boolean }) {
       {silk && <lineSegments geometry={silk} material={m.silk} raycast={() => null} />}
     </>
   );
+}
+
+/** How long a board's GLB may take before its drawn placeholder also says it is loading: a quick load never flashes a pill. */
+export const LOADING_PILL_DELAY_MS = 1500;
+
+/** True once `on` has held for `ms` (false again as soon as it drops). */
+export function useHeld(on: boolean, ms: number): boolean {
+  const [held, setHeld] = useState(false);
+  useEffect(() => {
+    if (!on) {
+      setHeld(false);
+      return;
+    }
+    const t = setTimeout(() => setHeld(true), ms);
+    return () => clearTimeout(t);
+  }, [on, ms]);
+  return held;
 }
 
 export interface BoardBadge {

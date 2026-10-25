@@ -111,16 +111,16 @@ function boardMaterial(src: THREE.MeshStandardMaterial): THREE.MeshStandardMater
     m = new THREE.MeshPhysicalMaterial({
       color,
       transparent: true,
-      // Thin enough that copper under it reads as lighter green lines, as on a real board and in
-      // KiCad's own 3D viewer; a palette pass drops alpha to 1, so cap it rather than trust it.
-      opacity: Math.min(src.opacity, 0.85),
+      // Dense enough that a copper pour under it tints the mask instead of turning the board gold, thin
+      // enough that tracks still read as lighter lines (KiCad's own 3D viewer, Etch). A palette pass drops
+      // alpha to 1, so the file's value is clamped rather than trusted.
+      opacity: Math.min(Math.max(src.opacity, 0.9), 0.94),
       roughness: 0.45,
       metalness: 0,
-      // Bara's studio environment is brighter than KiCad's: a lighter coat keeps the mask green at grazing angles.
-      clearcoat: 0.18,
-      clearcoatRoughness: 0.35,
+      clearcoat: 0.35,
+      clearcoatRoughness: 0.3,
       specularIntensity: 0.5,
-      envMapIntensity: 0.4,
+      envMapIntensity: 0.6,
       depthWrite: false,
       polygonOffset: true,
       polygonOffsetFactor: -1,
@@ -129,8 +129,8 @@ function boardMaterial(src: THREE.MeshStandardMaterial): THREE.MeshStandardMater
   } else if (layer === "silk") {
     m = new THREE.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
   } else if (layer === "pad") {
-    // bright ENIG: exposed pads read gold, and tracks show through the mask as KiCad shows them
-    m = new THREE.MeshStandardMaterial({ color: 0xf0c869, metalness: 0.85, roughness: 0.3, emissive: 0x2a1e06 });
+    // ENIG: exposed pads read gold, a true metal that takes its colour from the room's reflections
+    m = new THREE.MeshStandardMaterial({ color: 0xdfb85e, metalness: 1, roughness: 0.24 });
   } else if (layer === "copper") {
     m = new THREE.MeshStandardMaterial({ color, metalness: 0.5, roughness: 0.5 });
   } else {
@@ -418,6 +418,32 @@ function convert(gltf: GLTF, board: boolean): LoadedModel {
   }
   const footprints = [...fpBoxes].map(([ref, box]) => ({ ref, box }));
   return { groups: groupPieces(pieces), merged, bbox, components, pieces, footprints };
+}
+
+/**
+ * Redraw a board GLB's scene graph in place with the board look (mask, ENIG pads, silk, FR4, part bodies),
+ * keeping its nodes, names and transforms: for viewers that pick footprints by node (the open-source board panel).
+ */
+export function restyleBoardScene(gltf: GLTF): void {
+  const made = new Map<string, THREE.MeshStandardMaterial>();
+  const restyle = (mat: THREE.Material, g: THREE.BufferGeometry | null) => {
+    const std = mat as THREE.MeshStandardMaterial;
+    const palette = g && std.isMeshStandardMaterial && std.map && g.attributes.uv ? flatPaletteColor(std.map, g) : null;
+    const key = `${mat.uuid}:${palette ? palette.getHexString() : ""}`;
+    let m = made.get(key);
+    if (!m) {
+      m = studioMaterial(mat, true, palette, factorsInFile(gltf, mat));
+      made.set(key, m);
+    }
+    return m;
+  };
+  gltf.scene.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    if (Array.isArray(mesh.material)) mesh.material = mesh.material.map((m) => restyle(m, null));
+    else mesh.material = restyle(mesh.material, mesh.geometry);
+    if ((mesh.material as THREE.Material).transparent) mesh.renderOrder = 2;
+  });
 }
 
 /** How long one model fetch may take before it counts as failed (a stalled request never settles on its own). */

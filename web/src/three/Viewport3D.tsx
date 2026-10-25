@@ -36,7 +36,7 @@ import { DemandDriver, StudioPost, postEnabled } from "./post";
 import { SHOT_ID } from "./shot";
 import { Glyph } from "../ui/glyphs";
 import { Icon } from "../ui/common";
-import { BoardPlaceholder, BoardStatus, FootprintHover, boardBadge, footprintBoxes } from "./board";
+import { BoardPlaceholder, BoardStatus, FootprintHover, LOADING_PILL_DELAY_MS, boardBadge, footprintBoxes, useHeld } from "./board";
 import { AgentTargetProbe, partWorldBox, registerPart } from "./agentTargets";
 import { agentPose, easeOut } from "./agentCam";
 import { caps } from "../sim/press";
@@ -801,8 +801,10 @@ function BoardNode(props: {
   const playing = useSim((s) => s.active);
   const buildOver = useApp((s) => s.view.done !== null || s.view.failure !== null);
   const boardStage = useApp((s) => s.view.stages.board?.status);
-  // Routing or the GLB still on its way: the placeholder breathes and says which; a failed load offers a retry.
-  const badge = loaded ? null : boardBadge({ boardStatus: board.status, model, buildOver, boardStage, playing });
+  // Routing or the GLB still on its way: the placeholder breathes and says which (a load only once it is
+  // slow, so a quick one goes straight from the drawn board to the real one); a failed load offers a retry.
+  const slow = useHeld(model.status === "loading", LOADING_PILL_DELAY_MS);
+  const badge = loaded ? null : boardBadge({ boardStatus: board.status, model: model.status === "loading" && !slow ? { status: "none" } : model, buildOver, boardStage, playing });
   const busy = badge !== null && !badge.retry;
   const boxes = useMemo(() => footprintBoxes(board, loaded), [board, loaded]);
   const match = useMemo(() => (loaded ? matchComponents(loaded, board, props.candidates) : null), [loaded, board, props.candidates]);
@@ -1707,10 +1709,11 @@ function CompanionBoard(props: { board: Board; pick: CompanionPick }) {
   const loaded = model.status === "ready" && model.model.groups.length > 0 ? model.model : null;
   const pos = props.board.position_mm ?? [0, 0, 0];
   const rot = props.board.rotation_deg ?? [0, 0, 0];
-  if (!loaded) return null;
   return (
     <group position={[pos[0], pos[1], pos[2]]} rotation={new THREE.Euler(rot[0] * DEG, rot[1] * DEG, rot[2] * DEG, "XYZ")}>
-      {loaded.groups.map((g) => (
+      {/* until its GLB lands (or if it never does) the board is drawn from its record, never a gap */}
+      {!loaded && <BoardPlaceholder board={props.board} busy={false} />}
+      {loaded?.groups.map((g) => (
         <mesh key={`${g.geometry.uuid}:${g.material.uuid}`} geometry={g.geometry} material={g.material} onClick={props.pick.onClick} onPointerOver={(e) => (e.stopPropagation(), props.pick.onHover(true))} onPointerOut={() => props.pick.onHover(false)} />
       ))}
     </group>
