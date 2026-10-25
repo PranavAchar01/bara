@@ -311,9 +311,31 @@ def _within_router_grid(violation: dict) -> bool:
 _ITEM_OWNER = re.compile(r"\bof ([A-Za-z]+[0-9]+)\b")
 
 
+_KEEPOUT_OWNER = re.compile(r"keepout area '[^']*' of ([A-Za-z]+[0-9]+)\b")
+
+
+def _own_pad_in_own_keepout(violation: dict) -> bool:
+    """A module's own pads inside the keep-out its footprint declares (the Pico W's antenna and RF
+    zones overlap its castellated and paste pads) are the library's geometry, not a design error.
+    Anything else in the zone, a track, a via, another part's pad, still fails."""
+    m = _KEEPOUT_OWNER.search(str(violation.get("description", "")))
+    items = violation.get("items", [])
+    if not m or not items:
+        return False
+    for it in items:
+        d = str(it.get("description", ""))
+        o = _ITEM_OWNER.search(d)
+        if not o or o.group(1) != m.group(1) or "pad" not in d.lower():
+            return False
+    return True
+
+
 def _inside_one_footprint(violation: dict) -> bool:
-    """A clearance between two pads of the same footprint is the vendor land pattern's own
-    geometry. No placement or route can change it, so it is reported as a warning."""
+    """A clearance between two pads of the same footprint, or a module's own pads inside its own
+    keep-out, is the vendor land pattern's own geometry. No placement or route can change it,
+    so it is reported as a warning."""
+    if violation.get("type") == "items_not_allowed":
+        return _own_pad_in_own_keepout(violation)
     if violation.get("type") != "clearance":
         return False
     owners = set()
