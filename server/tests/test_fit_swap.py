@@ -130,3 +130,56 @@ def test_swap_to_fit_swaps_until_the_board_fits(monkeypatch: Any) -> None:
     assert gb["product_form"]["fit_report"]["ok"]
     assert run.live_composer.asked == ["aa", "pouch"]  # type: ignore[attr-defined]
     assert parts[0]["part_id"] == "pouch" and len(warned) == 2
+
+
+class _TallSource:
+    RECORDS = {
+        "nine_volt": {"mechanical": {"bbox_mm": {"min": [0, 0, 0], "max": [55, 31, 26.9]}}},
+        "pouch": {"facets": {}},  # an off-board cell with no stated height
+    }
+
+    def get_part(self, pid: str) -> dict[str, Any]:
+        return self.RECORDS[pid]
+
+
+def test_a_part_far_taller_than_the_product_is_swapped_for_a_lower_one(monkeypatch: Any) -> None:
+    result = ComposeResult(slots=[], parts=[{"instance_id": "bat", "part_id": "nine_volt"}])
+
+    def plan(gb_: dict[str, Any], parts: list[dict[str, Any]], bid: str) -> tuple[dict, None]:
+        h = 26.9 if parts[0]["part_id"] == "nine_volt" else 3.0
+        pl = {"for_instance_id": "bat", "side": "bottom", "height_mm": h}
+        return {"boards": [{"thickness_mm": 1.6, "placements": [pl]}]}, None
+
+    class Composer_:
+        def resize(self, iid: str, fits: Any, why: str, emit: Any) -> dict[str, Any] | None:
+            if fits({"part_id": "pouch"}):
+                result.parts = [{"instance_id": iid, "part_id": "pouch"}]
+                return {"part_id": "pouch", "display_name": "pouch"}
+            return None
+
+    monkeypatch.setattr(R.A, "plan_board", plan)
+    lr = R.LiveRunner.__new__(R.LiveRunner)
+    lr.source = _TallSource()
+    warned: list[str] = []
+    lr._warn = lambda run, stage, wid, code, sev, msg: warned.append(msg)  # type: ignore[method-assign]
+
+    class Run:
+        build_id = "b_test"
+        live_composer = Composer_()
+
+    class St:
+        def emit(self, *a: Any, **k: Any) -> None:
+            pass
+
+    class Product:
+        thickness_mm = 15.0
+
+    parts = [
+        {"instance_id": "bat", "part_id": "nine_volt", "record": _TallSource.RECORDS["nine_volt"]}
+    ]
+    board, err = plan({}, parts, "b_test")
+    board, err, parts = asyncio.run(
+        lr._swap_to_thickness(Run(), St(), {}, result, parts, board, err, Product())  # type: ignore[arg-type]
+    )
+    assert parts[0]["part_id"] == "pouch" and len(warned) == 1
+    assert lr._stack_mm(board)[0] < 15.0 * R.LiveRunner.THICK_SLACK
