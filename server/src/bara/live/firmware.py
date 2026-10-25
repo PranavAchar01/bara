@@ -34,6 +34,11 @@ DRIVERS: dict[str, dict[str, str]] = {
         "esphome": "esphome bme280_i2c",
         "arduino": "adafruit/Adafruit_BME280_Library",
     },
+    "tmp117": {"esphome": "esphome tmp117", "arduino": "adafruit/Adafruit_TMP117"},
+    "sht31": {"esphome": "esphome sht3xd", "arduino": "adafruit/Adafruit_SHT31"},
+    "veml7700": {"esphome": "esphome veml7700", "arduino": "adafruit/Adafruit_VEML7700"},
+    "tm1637": {"esphome": "esphome tm1637", "arduino": "avishorp/TM1637"},
+    "max7219": {"esphome": "esphome max7219", "arduino": "wayoda/LedControl"},
     "ec11": {
         "zmk": "zmk alps,ec11",
         "qmk": "qmk encoder",
