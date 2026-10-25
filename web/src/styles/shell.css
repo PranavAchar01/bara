@@ -779,6 +779,65 @@
     height: 10px;
   }
 }
+/* Talk: a mic and the Space keycap, the same kbd chip the focus card and Put back use. Listening,
+   it fills ink and a ring grows with the voice (--mic-level, set by voice/voice.ts). */
+.talk-key {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 7px 0 10px;
+  border: 0;
+  border-radius: 17px;
+  background: none;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease, box-shadow 60ms linear;
+}
+.talk-key svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+.talk-key svg rect {
+  fill: currentColor;
+  stroke: none;
+}
+.talk-key kbd {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1;
+  padding: 3px 6px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  color: var(--text-2);
+  background: var(--paper);
+}
+.talk-key:hover:not(:disabled) {
+  background: var(--paper-2);
+  color: var(--ink);
+}
+.talk-key:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.talk-key:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.talk-key.on {
+  background: var(--ink);
+  color: var(--paper);
+  box-shadow: 0 0 0 calc(2px + var(--mic-level, 0) * 8px) color-mix(in srgb, var(--ink) 18%, transparent);
+}
+.talk-key.on kbd {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--paper) 45%, transparent);
+  color: var(--paper);
+}
 .voice-toggle {
   flex: none;
   display: inline-flex;

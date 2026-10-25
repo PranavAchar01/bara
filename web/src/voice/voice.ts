@@ -3,9 +3,11 @@
 // before Bara sees it. Bara answers out loud through the engine's voice stream, with the words shown
 // under the eyes; without it, the browser's own speech fills in, so nothing depends on one service.
 import { create } from "zustand";
+import { speechFor } from "../bot/mood";
+import { answerClarify } from "../net/client";
 import { authHeaders, serverUrl } from "../net/mode";
 import { showToast, useApp } from "../state/store";
-import { cleanTranscript, endOfTurnMs } from "./turn";
+import { cleanTranscript, endOfTurnMs, pickOption } from "./turn";
 
 /** hold: Space (or the bot) is held and letting go sends. auto: a pause at the end sends. */
 export type ListenMode = "hold" | "auto";
@@ -107,6 +109,7 @@ export function stopSpeaking(): void {
   audio = null;
   upNext = null;
   afterSpeech = null;
+  waiting = null;
   if (typeof speechSynthesis !== "undefined") speechSynthesis.cancel();
   useVoice.setState({ caption: null });
 }
@@ -125,8 +128,47 @@ let afterSpeech: (() => void) | null = null;
 function finished(): void {
   useVoice.setState({ caption: null });
   const then = afterSpeech;
+  const next = waiting;
   afterSpeech = null;
+  waiting = null;
   then?.();
+  if (next && !useVoice.getState().listening) speak(next.text, false, next.then);
+}
+
+/** A line that came in while another was being said: it waits its turn instead of cutting in. */
+let waiting: { text: string; then?: () => void } | null = null;
+
+/** Says a line from the build. If Bara is mid-sentence the line waits, and only the newest waiting
+ *  line is kept, so the voice never falls behind the build or talks over itself. */
+export function narrate(text: string, then?: () => void): void {
+  const s = useVoice.getState();
+  if (!s.replies || s.listening || !text.trim()) return;
+  if (s.caption) waiting = { text, then };
+  else speak(text, false, then);
+}
+
+/** Lines of a build said out loud: the same lines the bot shows, one now and then, never one per
+ *  event. A question from Bara is always said, and hands the mic back if you were talking hands-free. */
+const SPEECH_GAP_MS = 2500;
+const ALWAYS_SAY = new Set(["build.done", "build.failed", "clarify.request"]);
+
+export function bindBuildVoice(): () => void {
+  let seen = useApp.getState().log.at(-1)?.id ?? 0;
+  let lastSaid = 0;
+  return useApp.subscribe((s) => {
+    const last = s.log.at(-1)?.id ?? seen;
+    if (last === seen) return;
+    // only the canvas on screen; a replay re-performs a build, it doesn't need narrating
+    const fresh = s.replaying ? [] : s.log.filter((e) => e.id > seen && e.dir === "in" && (!e.buildId || e.buildId === s.build?.build_id));
+    seen = last;
+    for (const e of fresh) {
+      const line = speechFor(e);
+      const now = performance.now();
+      if (!line || (!ALWAYS_SAY.has(e.type) && now - lastSaid < SPEECH_GAP_MS)) continue;
+      lastSaid = now;
+      narrate(line, e.type === "clarify.request" ? listenForFollowUp : undefined);
+    }
+  });
 }
 
 function speakInBrowser(text: string): void {
@@ -254,6 +296,15 @@ function deliver(text: string, id: number, handsFree: boolean): void {
   if (!t) return;
   lastHandsFree = handsFree ? performance.now() : 0;
   if (!useVoice.getState().replies) setReplies(true);
+  // Bara asked something: the reply answers it, it doesn't start a new build
+  const q = useApp.getState().build?.clarify;
+  if (q && useApp.getState().build?.status === "awaiting_input") {
+    const option = pickOption(t, q.options);
+    if (option) answerClarify({ option_id: option });
+    else if (q.allow_free_text) answerClarify({ free_text: t });
+    else window.dispatchEvent(new CustomEvent("bara:prompt", { detail: t }));
+    return;
+  }
   const target = useApp.getState().focusKey ? "bara:ask" : "bara:prompt";
   window.dispatchEvent(new CustomEvent(target, { detail: t }));
 }

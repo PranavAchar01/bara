@@ -21,6 +21,7 @@ import { speechFor } from "./mood";
 import { toggleTrace, useTrace } from "./traceState";
 import { canvasRect, partRect } from "../three/agentTargets";
 import { clamp, lerp, PRESETS, reducedMotion, Spring, wander, type SpringCfg } from "./spring";
+import { narrate } from "../voice/voice";
 import "./agentStage.css";
 
 /** The stage bot's rendered size; it scales to the docked bot's size at home. */
@@ -251,6 +252,8 @@ function Stage() {
     () =>
       onAgentDo((r) => {
         if (!r.beats.length) return;
+        // the bubble shows it as the beat starts; the voice says it now
+        if (r.say) narrate(r.say);
         const beats = r.say ? [{ ...r.beats[0], say: r.beats[0].say ?? r.say }, ...r.beats.slice(1)] : r.beats;
         if (r.interrupt) {
           queue.current = [];
