@@ -340,6 +340,24 @@ def resolve_model(model_ref: str, prefer: str = "") -> Path | None:
 
 
 @lru_cache(maxsize=64)
+@lru_cache(maxsize=256)
+def library_symbol(lib: str, footprint: str) -> tuple[str, str, str] | None:
+    """The symbol a footprint's own library ships for it: the longest symbol name that starts
+    the footprint name (SuperMini_nRF52840 for SuperMini_nRF52840_H_USBup)."""
+    sym_dir = LIBRARIES.get(lib, {}).get("symbols")
+    if not sym_dir or not Path(sym_dir).is_dir():
+        return None
+    best: tuple[int, str, str] | None = None
+    for path in sorted(Path(sym_dir).glob("*.kicad_sym")):
+        for name in re.findall(r'^\s*\(symbol "([^"]+)"', path.read_text(), re.M):
+            # the name, or the name past a vendor prefix (Arduino_ProMicro for ProMicro_USBup)
+            stems = [name, *name.split("_", 1)[1:]]
+            hit = max((len(t) for t in stems if footprint.lower().startswith(t.lower())), default=0)
+            if hit >= 6 and (best is None or hit > best[0]):
+                best = (hit, path.name, name)
+    return (lib, best[1], best[2]) if best else None
+
+
 def symbol_pins(lib: str, sym_file: str, symbol: str) -> dict[str, str]:
     """Pin number -> pin name from a .kicad_sym symbol (incl. its sub-units)."""
     path = Path(LIBRARIES[lib]["symbols"]) / sym_file

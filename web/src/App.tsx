@@ -19,6 +19,8 @@ import { AgentStage } from "./bot/AgentStage";
 import { ThoughtTrace } from "./bot/ThoughtTrace";
 import { Explainer } from "./bot/Explainer";
 import { CandidateFlyby } from "./bot/CandidateFlyby";
+import { SimView } from "./sim/SimView";
+import { useSimPanel } from "./sim/simPanelStore";
 
 function useKeys() {
   useEffect(() => {
@@ -153,6 +155,8 @@ function Main() {
   useEffect(() => startAutosave(), []);
   useEffect(() => startCanvasPersist(), []);
   const screen = useApp((s) => s.screen);
+  const simOpen = useSimPanel((s) => s.open) && screen === "workspace";
+  if (simOpen) return <SimView />;
   return (
     <div className="app">
       {screen === "home" && <TopBar />}

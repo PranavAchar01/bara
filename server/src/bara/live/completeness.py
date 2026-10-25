@@ -144,7 +144,9 @@ def need_from_block(block: dict[str, Any], taken: set[str]) -> Need:
         names=tuple(x.lower() for x in terms),
         terms=terms,
         kicad=kicad,
-        pin_kind=_PIN_KIND.get(fid.split(".")[0], "sensor") if fid != "power.regulator" else None,
+        pin_kind=None
+        if fid == "power.regulator" or fid.split(".")[0] in _NO_PINS
+        else _PIN_KIND.get(fid.split(".")[0], "sensor"),
         prefix=re.sub(r"[^a-z0-9]", "", key)[:10],
         touch=bool(block.get("touchpoint")),
         groups=tuple(block.get("groups") or ()),
@@ -157,6 +159,7 @@ def need_from_block(block: dict[str, Any], taken: set[str]) -> Need:
 
 
 _PIN_KIND = {"input": "button", "sense": "sensor", "output": "motor", "comms": "sensor"}
+_NO_PINS = {"mech", "interconnect"}  # a cap, case or cable has no circuit of its own
 
 
 MAINS_SYSTEM = """Decide whether a hardware request can be built as a LOW-VOLTAGE board behind

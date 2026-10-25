@@ -109,3 +109,14 @@ def test_a_repairable_fault_is_sent_back_but_not_fatal() -> None:
     ]  # fmt: skip
     assert _repair(run) is None  # reported, sent back once, never fails the build
     assert run.events.count("repair") == 1
+
+
+def test_a_cap_costs_no_controller_pin() -> None:
+    from bara.live.completeness import need_from_block
+
+    cap = need_from_block(
+        {"function_id": "mech.knob", "label": "Thumbstick cap", "count": 2}, set()
+    )
+    stick = need_from_block({"function_id": "input.joystick", "label": "Thumbstick"}, set())
+    assert cap.pin_kind is None
+    assert stick.pin_kind == "button"

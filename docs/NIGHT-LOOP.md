@@ -277,3 +277,14 @@ Web: bara-merge agent merges Nithin's figma-design-in-code / agent-board-3d / fi
   (4) GET /v1/parts/{id} read only the 21 fixtures; now falls back to the live source (715ab87).
   Engine restarted alone behind the same tunnel (scratchpad/engine-only.sh), URL unchanged.
   205/243 catalog parts have a mesh (was 198).
+- 2026-10-24 17:20 PT: game console now DONE and reads as a Game Boy (b_iS1x64qxmvTO, 36 pass,
+  1 fail = LiPo 401230 has no model). Fixes, all engine-level:
+  (1) display slot takes glass only: rejects ribbon connectors, bodies < 6 mm, and panels > 35%
+  off the asked diagonal (typed size or the brief's requirement) (8415a71); KiCad EA eDIP TFT
+  3.2 in added from the library (footprint + STEP).
+  (2) edge keep-out band: SHAPE_POLY_SET.Append(..., -1, -1) wrote the hole into the outline,
+  making a self-crossing area over the board middle: 109 "items not allowed" DRC errors and a
+  0%-routed board. Fixed + KiCad regression test (245d89a).
+  (3) mech.*/interconnect.* needs cost no controller pin (thumbstick caps took GPIO) (48094ac).
+  Controller b_4JVtdvFkFZVY DONE, no DRC errors. Open: VZ30C motor and LiPo 401230 have no
+  library 3D model (KiCad ships none); MCU free-pin count reads "unknown" for SuperMini.
