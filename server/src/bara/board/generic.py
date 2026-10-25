@@ -154,6 +154,15 @@ def footprint_name(ref: str) -> str:
     return ref.split(":", 1)[1]
 
 
+def _symbol_id(record: dict[str, Any]) -> str:
+    """The KiCad symbol a catalog record names ("Lib:Symbol"), or ""."""
+    lib_id = str(record.get("lib_id") or "")
+    pid = str(record.get("part_id") or "")
+    if not lib_id and pid.startswith("kicadgen:kicad:sym:"):  # a generated part names its symbol
+        lib_id = pid.removeprefix("kicadgen:kicad:sym:")
+    return lib_id if ":" in lib_id else ""
+
+
 def _pins_for(record: dict[str, Any], fp: FootprintInfo) -> dict[str, str]:
     """Pad -> pin name: the catalog record, else the registry map, else the KiCad symbol."""
     if isinstance(record.get("pins"), dict):  # a bare name list has no pad numbers: use the symbol
@@ -163,11 +172,8 @@ def _pins_for(record: dict[str, Any], fp: FootprintInfo) -> dict[str, str]:
         if "symbol" in reg:
             return dict(symbol_pins(*reg["symbol"]))
         return dict(reg["pins"])
-    lib_id = str(record.get("lib_id") or "")
-    pid = str(record.get("part_id") or "")
-    if not lib_id and pid.startswith("kicadgen:kicad:sym:"):  # a generated part names its symbol
-        lib_id = pid.removeprefix("kicadgen:kicad:sym:")
-    if ":" in lib_id:
+    lib_id = _symbol_id(record)
+    if lib_id:
         lib, sym = lib_id.split(":", 1)
         try:
             return dict(symbol_pins("kicad", f"{lib}.kicad_sym", sym))
@@ -244,6 +250,7 @@ def plan_device_board(
                 model_override=_model_for(fp),
             )
             it.meta["slot_id"] = part.get("slot_id")
+            it.meta["symbol"] = _symbol_id(record)  # the schematic draws this symbol
             it.meta["touch"] = part.get("slot_id") in touch_slots
             it.meta["module"] = record.get("kind") == "module"
             # an optical tracking sensor reads the desk, so it sits on the board's underside

@@ -15,6 +15,7 @@ import fcntl
 import hashlib
 import json
 import shutil
+import subprocess
 import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -27,6 +28,7 @@ from bara.geometry import glbopt
 
 from . import kicad as K
 from . import registry as R
+from . import schematic as SCH
 from .layout import HALF_GAP_MM, BoardPlan, plan_boards, sensor_lens
 from .libs import LIBRARIES, repo_commit
 
@@ -385,6 +387,35 @@ def _route_one(
         return result
 
 
+def _schematic(plan: BoardPlan, work: Path, glb_root: Path, key: str, title: str) -> dict:
+    """The board's schematic beside its routed copper, exported to SVG and PDF (served next
+    to the GLB) and checked against the board's own nets."""
+    sch = work / "main.kicad_sch"
+    name = f"{title} ({plan.name} board)" if plan.name != "main" else title
+    sheet = SCH.write(plan.items, sch, title=name)
+    try:
+        files = SCH.export(sch, work / "schematic", K.KICAD_CLI)
+        off = SCH.mismatches(plan.items, SCH.netlist(sch, K.KICAD_CLI))
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+        return {"kicad_sch": str(sch), "status": "failed", "error": str(exc)[-400:]}
+    out = {
+        "kicad_sch": str(sch),
+        "page": sheet.page,
+        "blocks": sheet.blocks,
+        "symbols": sheet.symbols,
+        "matches_board": not off,
+        "mismatches": off[:10],
+        "status": "ok" if not off else "failed",
+    }
+    for kind, src in files.items():
+        dst = glb_root / f"{key}.sch.{kind}"
+        shutil.copyfile(src, dst)
+        sha = hashlib.sha256(dst.read_bytes()).hexdigest()[:16]
+        out[kind] = str(dst)
+        out[f"{kind}_url"] = f"/assets/cache/boards/{dst.name}?v={sha}"
+    return out
+
+
 # ---------------------------------------------------------------- records
 
 
@@ -724,6 +755,7 @@ def plan_board(brief: dict, parts: list[dict], *, build_id: str | None = None) -
     _attach_daughter_boards(boards)
     return {
         "build_id": build_id,
+        "title": str(brief.get("device") or brief.get("name") or ""),
         "boards": boards,
         "controller": {bd["name"]: bd["controller"] for bd in boards if bd["controller"]},
         "pin_budget": {bd["name"]: bd["pin_budget"] for bd in boards if bd["pin_budget"]},
@@ -769,6 +801,10 @@ def route_board(
         res = _route_one(
             plan, work_root, glb_root, origin_plan, route_timeout_s, passes, sub, effort
         )
+        report(f"{plan.name}: drawing the schematic", None)
+        schematic = _schematic(
+            plan, Path(res["kicad_pcb"]).parent, glb_root, res["key"], planned.get("title", "")
+        )
         drc = res["drc"]
         ok = drc["errors"] == 0 and drc["unconnected"] == 0
         glb_ref = _glb_ref(Path(res["glb_path"]), res["key"])
@@ -812,6 +848,7 @@ def route_board(
                 "routing": res["routing"],
                 "timings": res["timings"],
                 "cache_hit": res["cache_hit"],
+                "schematic": schematic,
             }
         )
     main = boards[0]
@@ -837,6 +874,7 @@ def route_board(
             "nets": main["nets"],
             "outline": main["outline"],
             "placements": main["placements"],
+            "schematic": main["schematic"],
         }
     )
     return planned
