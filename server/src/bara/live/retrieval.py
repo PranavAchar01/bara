@@ -167,7 +167,9 @@ async def gather(product: str, scout: apify_scout.ScoutResult | None = None) -> 
             log.warning("retrieval for %s not cached", product)
     ret.designs = apify_scout.merge_designs(scouted, ret.designs)[: MAX_DESIGNS + 2]
     if scouted:
-        ret.notes.append(f"{len(scouted)} designs from the {apify_scout.CREDIT}")
+        ret.notes.append(
+            f"{len(scouted)} designs from {scout.source if scout else apify_scout.CREDIT}"
+        )
     ret.photos, ret.photo_sources, note = await photos_task
     ret.notes.append(f"photos: {note}")
     return ret

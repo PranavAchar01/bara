@@ -3,8 +3,9 @@
 // what the user touches. Keys and buttons already take clicks on their own meshes (three/sim3d).
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
-import type { ThreeEvent } from "@react-three/fiber";
+import { useThree, type ThreeEvent } from "@react-three/fiber";
 import { partWorldBox } from "../three/agentTargets";
+import { isDrag } from "../three/explode";
 import type { InputAction, RemoteInput } from "./remote";
 import { useSimLink } from "./simLink";
 
@@ -92,6 +93,8 @@ function Hotspot(props: { unit: Unit; act: Act; closed: Record<string, boolean>;
   const [hot, setHot] = useState(false);
   const drag = useRef<{ x: number; y: number; moved: boolean; dial: number; turned: number } | null>(null);
   const values = useRef<Record<string, number>>({});
+  const controls = useThree((s) => s.controls) as unknown as { enabled: boolean } | null;
+  const overRef = useRef(false);
 
   // the part registers a frame or two after the scene mounts
   useEffect(() => {
@@ -111,6 +114,30 @@ function Hotspot(props: { unit: Unit; act: Act; closed: Record<string, boolean>;
   const toggle = slot.inputs.find((i) => i.kind === "switch");
   const power = slot.inputs.find((i) => i.kind === "power");
   const live = !!(toggle && closed[toggle.id]) || hot;
+
+  // A stick or a knob is turned by dragging it, so the camera sits still while that drag runs; every
+  // other drag, starting anywhere, orbits. The capture listener runs before the camera's own.
+  const draggable = axes.length > 0 || !!knob;
+  const gl = useThree((s) => s.gl);
+  useEffect(() => {
+    if (!draggable || !controls) return;
+    const el = gl.domElement;
+    const lock = (e: PointerEvent) => {
+      if (e.button === 0 && overRef.current) controls.enabled = false;
+    };
+    const unlock = () => {
+      controls.enabled = true;
+    };
+    el.addEventListener("pointerdown", lock, true);
+    window.addEventListener("pointerup", unlock);
+    window.addEventListener("pointercancel", unlock);
+    return () => {
+      el.removeEventListener("pointerdown", lock, true);
+      window.removeEventListener("pointerup", unlock);
+      window.removeEventListener("pointercancel", unlock);
+      controls.enabled = true;
+    };
+  }, [draggable, controls, gl]);
 
   const geometry = useMemo(() => {
     if (!box) return null;
@@ -139,8 +166,6 @@ function Hotspot(props: { unit: Unit; act: Act; closed: Record<string, boolean>;
     e.stopPropagation();
     (e.target as Element).setPointerCapture?.(e.pointerId);
     drag.current = { x: e.clientX, y: e.clientY, moved: false, dial: values.current[axes[0]?.id ?? ""] ?? 0, turned: 0 };
-    if (toggle) act(toggle.id, closed[toggle.id] ? "release" : "press");
-    if (power) act(power.id, "power", !powered);
   };
   const move = (e: ThreeEvent<PointerEvent>) => {
     const d = drag.current;
@@ -148,7 +173,7 @@ function Hotspot(props: { unit: Unit; act: Act; closed: Record<string, boolean>;
     e.stopPropagation();
     const dx = e.clientX - d.x;
     const dy = e.clientY - d.y;
-    if (Math.hypot(dx, dy) > 3) d.moved = true;
+    if (isDrag(dx, dy)) d.moved = true;
     if (axes.length >= 2) {
       setAxis(axes[0], clamp(dx / SWEEP_PX));
       setAxis(axes[1], clamp(-dy / SWEEP_PX));
@@ -167,6 +192,11 @@ function Hotspot(props: { unit: Unit; act: Act; closed: Record<string, boolean>;
     drag.current = null;
     if (!d) return;
     e.stopPropagation();
+    // a switch flips on a click; a drag that began on it was the camera's
+    if (!d.moved) {
+      if (toggle) act(toggle.id, closed[toggle.id] ? "release" : "press");
+      if (power) act(power.id, "power", !powered);
+    }
     if (axes.length >= 2) {
       setAxis(axes[0], 0);
       setAxis(axes[1], 0);
@@ -194,10 +224,12 @@ function Hotspot(props: { unit: Unit; act: Act; closed: Record<string, boolean>;
       onPointerOver={(e) => {
         e.stopPropagation();
         document.body.style.cursor = "pointer";
+        overRef.current = true;
         setHot(true);
       }}
       onPointerOut={() => {
         document.body.style.cursor = "";
+        overRef.current = false;
         setHot(false);
       }}
       name={`hotspot:${label}`}

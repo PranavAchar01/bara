@@ -13,6 +13,13 @@ import pytest
 from bara import voice
 
 
+@pytest.fixture(autouse=True)
+def _server_voice(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The engine's own keys speak only on a demo box (BARA_VOICE_SERVER_KEY=1)."""
+    monkeypatch.setenv("BARA_VOICE_SERVER_KEY", "1")
+    voice._session_keys.clear()
+
+
 def test_settings_follow_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("ELEVENLABS_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
@@ -165,3 +172,25 @@ def test_dotenv_fills_only_what_the_shell_left_unset(
     assert os.environ["BARA_T_A"] == "from-file"
     assert os.environ["BARA_T_B"] == "from-shell"
     monkeypatch.delenv("BARA_T_A")
+
+
+def test_server_key_needs_the_demo_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENAI_API_KEY", "server-key")
+    assert voice.settings()["tts"] is True
+    monkeypatch.delenv("BARA_VOICE_SERVER_KEY")
+    s = voice.settings()
+    assert s["tts"] is False and s["needs_user_key"] is True
+    with pytest.raises(RuntimeError):
+        asyncio.run(voice.open_speech("hi"))
+
+
+def test_session_key_speaks_without_the_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("BARA_VOICE_SERVER_KEY")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    voice.set_session_key("sess-1234", "sk-mine")
+    mine = voice.session_key("sess-1234")
+    s = voice.settings(mine)
+    assert s["tts"] is True and s["provider"] == "openai" and s["own_key"] is True
+    assert voice.key(mine) == "sk-mine" and voice.session_key("other-sess") is None
+    voice.set_session_key("sess-1234", "")
+    assert voice.session_key("sess-1234") is None

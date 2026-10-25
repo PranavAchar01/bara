@@ -38,7 +38,7 @@ export function CanvasTabs() {
   return (
     <nav className="canvas-tabs" aria-label="Canvases">
       <button type="button" className="ct-home" onClick={() => useApp.setState({ screen: "home" })} title="Home">
-        Bara
+        Tangible
         <span className={`ct-conn ${conn === "open" ? "ok" : conn === "offline" ? "off" : "wait"}`} title={conn === "open" ? "Connected" : conn} aria-hidden />
       </button>
       {/* one workspace: no canvas tabs; a device added from the prompt joins this canvas */}

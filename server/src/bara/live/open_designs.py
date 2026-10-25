@@ -159,17 +159,19 @@ async def _inspect(client: Any, owner: str, name: str) -> dict[str, Any] | None:
     }
 
 
-async def search(product: str) -> tuple[list[dict[str, Any]], str]:
+async def search(product: str, *, require_you: bool = False) -> tuple[list[dict[str, Any]], str]:
     """Open KiCad projects for any product: GitHub's repo search plus a web search (when
     YOU_API_KEY is set) for its repos, each checked for a .kicad_pcb (and shell files) in its
     tree. (candidates best first, note). Cached by query."""
+    key = os.environ.get("YOU_API_KEY")
+    if require_you and not key:
+        return [], "search failed: no YOU_API_KEY"
     query = f"{product.strip()[:120]} open source KiCad github"
     path = SEARCH_CACHE / f"{hashlib.sha256(query.encode()).hexdigest()[:24]}.json"
     try:
         return json.loads(path.read_text()), "ok (cached)"
     except (OSError, ValueError):
         pass
-    key = os.environ.get("YOU_API_KEY")
     queries = (query, f"{product.strip()[:120]} kicad_pcb enclosure github") if key else ()
     try:
         async with httpx.AsyncClient(timeout=TIMEOUT_S) as client:

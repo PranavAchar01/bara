@@ -1,5 +1,9 @@
 """Bara's voice: text to speech (streamed) and speech to text, from OpenAI or ElevenLabs.
 
+Voice models are the one paid part Bara does not front: a visitor brings their own OpenAI key
+(held in memory per browser session, never logged or written). The engine's own keys speak only
+when BARA_VOICE_SERVER_KEY=1 is set, as for a demo.
+
 Keys stay on the server. OpenAI speaks and listens whenever OPENAI_API_KEY is set (the engine
 reads it from the macOS keychain at start when the environment has none); ElevenLabs is used
 only when that is the sole key, or when BARA_VOICE_PROVIDER=elevenlabs asks for it. The voice
@@ -82,8 +86,36 @@ def load_key_from_keychain() -> bool:
     return False
 
 
-def provider() -> str | None:
-    """Which service speaks: OpenAI when its key is set, else ElevenLabs, else none."""
+MAX_SESSIONS = 256
+_session_keys: OrderedDict[str, str] = OrderedDict()
+
+
+def server_key_allowed() -> bool:
+    return os.environ.get("BARA_VOICE_SERVER_KEY", "") == "1"
+
+
+def set_session_key(sid: str, user_key: str | None) -> None:
+    """Remember (or forget, for an empty key) a browser session's own OpenAI key. Memory only."""
+    if not user_key:
+        _session_keys.pop(sid, None)
+        return
+    _session_keys[sid] = user_key
+    _session_keys.move_to_end(sid)
+    while len(_session_keys) > MAX_SESSIONS:
+        _session_keys.popitem(last=False)
+
+
+def session_key(sid: str | None) -> str | None:
+    return _session_keys.get(sid) if sid else None
+
+
+def provider(user_key: str | None = None) -> str | None:
+    """Which service speaks: the visitor's own OpenAI key first; the engine's keys only when
+    BARA_VOICE_SERVER_KEY=1 (OpenAI when set, else ElevenLabs); else none."""
+    if user_key:
+        return "openai"
+    if not server_key_allowed():
+        return None
     has_openai = bool(os.environ.get("OPENAI_API_KEY"))
     has_eleven = bool(os.environ.get("ELEVENLABS_API_KEY"))
     if has_eleven and (not has_openai or os.environ.get("BARA_VOICE_PROVIDER") == "elevenlabs"):
@@ -93,17 +125,23 @@ def provider() -> str | None:
     return None
 
 
-def key() -> str | None:
+def key(user_key: str | None = None) -> str | None:
+    if user_key:
+        return user_key
     p = provider()
+    if p is None:
+        return None
     return os.environ.get("ELEVENLABS_API_KEY" if p == "elevenlabs" else "OPENAI_API_KEY") or None
 
 
-def settings() -> dict[str, str | bool]:
-    p = provider()
+def settings(user_key: str | None = None) -> dict[str, str | bool]:
+    p = provider(user_key)
     openai = p == "openai"
     return {
         "tts": p is not None,
         "stt": p is not None,
+        "needs_user_key": not server_key_allowed(),
+        "own_key": bool(user_key),
         "provider": p or "none",
         "voice": os.environ.get("BARA_TTS_VOICE", OPENAI_VOICE if openai else DEFAULT_VOICE),
         "model": os.environ.get("BARA_TTS_MODEL", OPENAI_TTS_MODEL if openai else DEFAULT_MODEL),
@@ -137,8 +175,8 @@ CACHE_LINES = 64
 _phrases: OrderedDict[tuple[str, str, str], bytes] = OrderedDict()
 
 
-def _cache_key(text: str) -> tuple[str, str, str]:
-    s = settings()
+def _cache_key(text: str, user_key: str | None = None) -> tuple[str, str, str]:
+    s = settings(user_key)
     return (str(s["provider"]), str(s["voice"]), text[:MAX_TTS_CHARS])
 
 
@@ -159,13 +197,13 @@ class _Remembered:
         return None
 
 
-async def open_speech(text: str) -> tuple[Any, Any]:
+async def open_speech(text: str, user_key: str | None = None) -> tuple[Any, Any]:
     """Starts a streamed synthesis, or replays a line spoken before. Iterate it with `relay`."""
-    k = key()
+    k = key(user_key)
     if not k:
-        raise RuntimeError("no ELEVENLABS_API_KEY or OPENAI_API_KEY")
-    s = settings()
-    ck = _cache_key(text)
+        raise RuntimeError("voice needs your own OpenAI key")
+    s = settings(user_key)
+    ck = _cache_key(text, user_key)
     hit = _phrases.get(ck)
     if hit is not None:
         _phrases.move_to_end(ck)
@@ -194,9 +232,9 @@ async def open_speech(text: str) -> tuple[Any, Any]:
         )
     resp = await client.send(req, stream=True)
     if resp.status_code != 200:
-        detail = (await resp.aread())[:200]
+        await resp.aread()
         await resp.aclose()
-        raise RuntimeError(f"{s['provider']} tts {resp.status_code}: {detail!r}")
+        raise RuntimeError(f"{s['provider']} tts {resp.status_code}")
     if len(text) <= MAX_CACHED_CHARS:
         resp.extensions["bara_cache_key"] = ck
     return client, resp
@@ -221,11 +259,13 @@ async def relay(client: Any, resp: Any) -> AsyncIterator[bytes]:
                 _phrases.popitem(last=False)
 
 
-async def transcribe(audio: bytes, content_type: str, keyterms: list[str] | None = None) -> str:
+async def transcribe(
+    audio: bytes, content_type: str, keyterms: list[str] | None = None, user_key: str | None = None
+) -> str:
     """Text of a short spoken clip. Part names from the build help it spell them right."""
-    k = key()
+    k = key(user_key)
     if not k:
-        raise RuntimeError("no ELEVENLABS_API_KEY or OPENAI_API_KEY")
+        raise RuntimeError("voice needs your own OpenAI key")
     ext = (
         "webm"
         if "webm" in content_type
@@ -238,7 +278,7 @@ async def transcribe(audio: bytes, content_type: str, keyterms: list[str] | None
         else "wav"
     )
     upload = {"file": (f"speech.{ext}", audio, content_type or "application/octet-stream")}
-    if provider() == "openai":
+    if provider(user_key) == "openai":
         # A clean, fluent example steers it away from writing down ums and false starts, and the
         # build's part names help it spell them right.
         hint = "Build me a split keyboard with an OLED."
@@ -252,7 +292,7 @@ async def transcribe(audio: bytes, content_type: str, keyterms: list[str] | None
             headers={"authorization": f"Bearer {k}"},
         )
         if resp.status_code != 200:
-            raise RuntimeError(f"openai stt {resp.status_code}: {resp.text[:200]}")
+            raise RuntimeError(f"openai stt {resp.status_code}")
         return str(resp.json().get("text") or "").strip()
     data: dict = {"model_id": STT_MODEL, "tag_audio_events": "false"}
     if keyterms:

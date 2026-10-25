@@ -1,11 +1,11 @@
-// Labelled exploded hold: one label per part in a right-hand column, each with
+// Labelled exploded hold: one label per part in a column on each side of the model, each with
 // a leader line to a dot on the part. Positions are written straight to the
 // DOM every frame (no React re-render); the list itself changes only with the
 // build.
 import { useEffect, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
-import { focusAmount, stage } from "./stage";
+import { focusAmount, stage, stageBox } from "./stage";
 import { focusPart, useApp } from "../state/store";
 
 export interface LabelRow {
@@ -89,9 +89,8 @@ export function LabelOverlay(props: { rows: LabelRow[]; color: string; muted: st
         >
           <div style={{ font: "600 14px/1.2 var(--font-sans, system-ui, sans-serif)", color: props.color, overflow: "hidden", textOverflow: "ellipsis" }}>
             {r.title}
-            {r.detail && <span style={{ fontWeight: 500, color: props.muted, marginLeft: 8 }}>{r.detail}</span>}
           </div>
-          <div style={{ font: "400 11.5px/1.3 var(--font-sans, system-ui, sans-serif)", color: r.generated ? props.accent : props.muted }}>{r.sub}</div>
+          <div style={{ font: "400 11.5px/1.3 var(--font-sans, system-ui, sans-serif)", color: r.generated ? props.accent : props.muted, overflow: "hidden", textOverflow: "ellipsis" }}>{r.detail || (r.generated ? r.sub : "")}</div>
         </div>
       ))}
       <div
@@ -120,6 +119,9 @@ const seen = new Map<string, Seen>();
 
 /** Vertical room one two-line label needs in the column. */
 const LABEL_GAP = 40;
+/** Width of a label column and the space between it and the model, px. */
+const COL_W = 225;
+const COL_PAD = 34;
 
 /**
  * Label heights for anchors at `ys` (sorted top to bottom): each label sits level with its anchor
@@ -274,44 +276,74 @@ export function LabelProjector() {
         if (a !== undefined) node.style.opacity = a.toFixed(3);
       }
     }
-    const maxX = pts.reduce((m, p) => Math.max(m, p.x), 0);
-    const colX = Math.min(Math.max(maxX + 48, w * 0.5), w - 300);
-    const top = Math.max(16, h * 0.27);
-    const bottom = Math.min(h - 40, h - 150);
+    // Where the model sits on screen (its box, projected), so the labels stand clear of it: parts
+    // on its left get a column on the left, the rest a column on the right.
+    let minX = Infinity;
+    let maxX = -Infinity;
+    const box = stageBox();
+    if (box) {
+      for (let i = 0; i < 8; i++) {
+        tmp.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z).project(camera);
+        const sx = ((tmp.x + 1) / 2) * w;
+        minX = Math.min(minX, sx);
+        maxX = Math.max(maxX, sx);
+      }
+    }
+    if (!Number.isFinite(minX)) {
+      minX = Math.min(...pts.map((p) => p.x), w / 2);
+      maxX = Math.max(...pts.map((p) => p.x), w / 2);
+    }
     const n = pts.length;
-    const ys = spreadLabels(
-      pts.map((p) => p.y),
-      top,
-      bottom,
-      LABEL_GAP,
-    );
-    const last = n ? ys[n - 1] : top;
-    untangle(pts, ys, colX);
-    pts.forEach((p, i) => {
-      const s = slots.get(p.key);
-      if (!s) return;
-      const y = ys[i];
-      if (s.row) {
-        s.row.style.transform = `translate(${colX + 8}px, ${y - 9}px)`;
-        s.row.style.maxWidth = `${Math.max(120, w - colX - 20)}px`;
-      }
-      if (s.line) {
-        s.line.setAttribute("x1", String(p.x));
-        s.line.setAttribute("y1", String(p.y));
-        s.line.setAttribute("x2", String(colX));
-        s.line.setAttribute("y2", String(y));
-      }
-      if (s.dot) {
-        s.dot.setAttribute("cx", String(p.x));
-        s.dot.setAttribute("cy", String(p.y));
-      }
-    });
+    const mid = (minX + maxX) / 2;
+    const byX = [...pts].sort((a, b) => a.x - b.x);
+    const wantLeft = byX.filter((p) => p.x < mid).length;
+    const nLeft = Math.min(Math.max(wantLeft, Math.ceil(n / 2) - 2), Math.floor(n / 2) + 2, n);
+    const left = new Set(byX.slice(0, Math.max(0, nLeft)).map((p) => p.key));
+    const colW = Math.min(COL_W, Math.max(140, (w - (maxX - minX)) / 2 - 24));
+    const rightX = Math.min(maxX + COL_PAD, w - colW - 16);
+    const leftX = Math.max(minX - COL_PAD, colW + 16);
+    const top = Math.max(16, h * 0.14);
+    const bottom = Math.min(h - 40, h - 150);
+    let last = top;
+    for (const side of [false, true]) {
+      const list = pts.filter((p) => left.has(p.key) === side).sort((a, b) => a.y - b.y);
+      const colX = side ? leftX : rightX;
+      const ys = spreadLabels(
+        list.map((p) => p.y),
+        top,
+        bottom,
+        LABEL_GAP,
+      );
+      untangle(list, ys, colX);
+      list.forEach((p, i) => {
+        const s = slots.get(p.key);
+        if (!s) return;
+        const y = ys[i];
+        if (!side) last = Math.max(last, y);
+        if (s.row) {
+          s.row.style.width = `${colW}px`;
+          s.row.style.textAlign = side ? "right" : "left";
+          s.row.style.transform = `translate(${side ? colX - colW - 8 : colX + 8}px, ${y - 9}px)`;
+        }
+        if (s.line) {
+          s.line.setAttribute("x1", String(p.x));
+          s.line.setAttribute("y1", String(p.y));
+          s.line.setAttribute("x2", String(colX));
+          s.line.setAttribute("y2", String(y));
+        }
+        if (s.dot) {
+          s.dot.setAttribute("cx", String(p.x));
+          s.dot.setAttribute("cy", String(p.y));
+        }
+      });
+    }
+    const colX = rightX;
     if (behindEl) {
       const v = behind > 0 && n > 0 ? "visible" : "hidden";
       if (behindEl.style.visibility !== v) behindEl.style.visibility = v;
       if (v === "visible") {
         behindEl.textContent = `+${behind} behind other parts, turn the model to see ${behind === 1 ? "it" : "them"}`;
-        behindEl.style.transform = `translate(${colX + 8}px, ${last + LABEL_GAP * 0.7}px)`;
+        behindEl.style.transform = `translate(${colX + 8}px, ${last + LABEL_GAP * 1.05}px)`;
       }
     }
   });
