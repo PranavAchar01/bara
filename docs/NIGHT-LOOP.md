@@ -305,3 +305,8 @@ Web: bara-merge agent merges Nithin's figma-design-in-code / agent-board-3d / fi
 - Pushed f8c1e87 (sim stage: no grid, ~88% fill, long axis across, Reset/Boot always, per-stick hitboxes) and engine fixes 4b8552a, 9e19ebb, ad8abc9 (tall-part swap, thickness swap, IndexError in re-narrowed slot pick that crashed the thermometer). test_fit_swap 5/5.
 - bara-general done: 4/7 of its invented devices pass. Remaining failures (parts under the case face, thermometer crash) went to bara-engine. Look gaps went to bara-look: display overlapping keys, knob drawn as a joystick, tail light with no lens, open pockets, stretched joystick shell.
 - Engine restarted. Held-out eval heldout-2015 running: fan controller, key finder, pill box from the pool, plus meat thermometer and step counter.
+
+## 2026-10-24 20:40 PT
+- Held-out heldout-2015: 3/5 pass (fan controller, pill box, step counter). Failures: key finder tag (FORM_OVERFLOW on a tiny form with free area, then floating/enclosure/access/DRC) and meat thermometer (critical display slot over-specified, every candidate rejected). Both sent to bara-engine. Identity still weak (step counter = tan slab).
+- Fixed schematic crash: _natural pin sort mixed str/int (pins 1 vs A1), which blocked board.built on 2 builds. Pushed with a test.
+- Pushed agent commits 09f192d (access ways for every touched part) and 41cf472 (footprints named by card, no brands). The committed tree passes test_case_shell 29/29; in-progress edits in the working tree break it, held back.
