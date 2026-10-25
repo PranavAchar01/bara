@@ -147,3 +147,39 @@ export function partLabel(p: PartLike & Pick<BuildPart, "origin">): PartLabel {
     generated: false,
   };
 }
+
+/** Share of the explode's travel in which the parts move; the labels fade in over the rest. */
+export const EXPLODE_SETTLE = 0.8;
+/** Share of the parts' travel spent waiting its turn: the layer on top starts first, the lowest last. */
+export const EXPLODE_STAGGER = 0.4;
+/** Time for a full open or close, ms. */
+export const EXPLODE_MS = 1000;
+
+const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
+
+/** Soft start, soft stop. */
+export function easeInOutCubic(t: number): number {
+  const x = clamp01(t);
+  return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+}
+
+/**
+ * How far a layer has lifted (0 to 1) while the explode runs from closed to open. `p` is the
+ * explode's own progress, linear in time. Every layer takes the same eased path, but the one on
+ * top (the lid, then the top parts) sets off first and the lower ones follow, so the stack
+ * unpacks from the top and packs back from the bottom (the same function run backwards). A layer
+ * above never trails the one under it, so layers cannot cross. Without `staggered` (dragging the
+ * slider) every layer follows the slider directly. At p = 0 and p = 1 both agree.
+ */
+export function layerProgress(p: number, rank: number, maxRank: number, staggered: boolean): number {
+  if (!staggered) return clamp01(p);
+  const fromTop = maxRank > 0 ? clamp01((maxRank - rank) / maxRank) : 0;
+  const run = clamp01(p / EXPLODE_SETTLE);
+  return easeInOutCubic((run - EXPLODE_STAGGER * fromTop) / (1 - EXPLODE_STAGGER));
+}
+
+/** True when the pointer has travelled far enough from where it went down to be a drag, not a press. */
+export const DRAG_PX = 5;
+export function isDrag(dx: number, dy: number, threshold = DRAG_PX): boolean {
+  return Math.hypot(dx, dy) > threshold;
+}
