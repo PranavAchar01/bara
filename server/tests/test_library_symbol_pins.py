@@ -21,3 +21,12 @@ def test_a_bare_controller_record_has_gpio() -> None:
     record = {"part_id": "mod:supermini_nrf52840",
               "footprint": "marbastlib-xp-promicroish:SuperMini_nRF52840_H_USBup"}  # fmt: skip
     assert (gpio_pins(record) or 0) >= 18  # enough for a d-pad, four face buttons and more
+
+
+def test_a_vendor_prefixed_symbol_maps_a_pro_micro_footprint() -> None:
+    from bara.board.libs import library_symbol
+
+    hit = library_symbol("marbastlib", "ProMicro_USBup")
+    assert hit is not None and hit[2] == "Arduino_ProMicro"
+    rec = {"footprint": "marbastlib-xp-promicroish:ProMicro_USBup"}
+    assert gpio_pins(rec) == 19  # AVR port pins (B0, C6, F4...) count as GPIO

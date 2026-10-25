@@ -70,7 +70,7 @@ BUS = {
     "RXD": "UART_TX",
 }
 PER_PART = {"CS", "NCS", "SS", "CSB", "INT", "IRQ", "RST", "RESET", "NRST", "DC", "BUSY"}
-GPIO_NAME = re.compile(r"^(P\d\.\d+|P[A-H]\d+|GPIO\d+|IO\d+|GP\d+|D\d+|A\d+)(-.*)?$")
+GPIO_NAME = re.compile(r"^(P\d\.\d+|P[A-H]\d+|GPIO\d+|IO\d+|GP\d+|D\d+|A\d+|[B-H][0-7])(-.*)?$")
 SKIP_NAME = re.compile(r"^(NC|DNC|N/?C|~|EP|SHIELD|MP|PAD)\d*$")
 
 
