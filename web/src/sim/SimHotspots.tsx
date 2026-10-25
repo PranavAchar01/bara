@@ -6,6 +6,7 @@ import * as THREE from "three";
 import type { ThreeEvent } from "@react-three/fiber";
 import { partWorldBox } from "../three/agentTargets";
 import type { InputAction, RemoteInput } from "./remote";
+import { useSimLink } from "./simLink";
 
 type Act = (id: string, action: InputAction, value?: number | boolean) => void;
 
@@ -76,6 +77,13 @@ export function SimHotspots(props: { slots: Slot[]; act: Act; closed: Record<str
       ))}
     </>
   );
+}
+
+/** Mounted inside the workspace canvas: the hit boxes of the open simulation, nothing when none is open. */
+export function SimHotspotsHost() {
+  const link = useSimLink();
+  if (!link.act || link.slots.length === 0) return null;
+  return <SimHotspots slots={link.slots} act={link.act} closed={link.closed} powered={link.powered} />;
 }
 
 function Hotspot(props: { unit: Unit; act: Act; closed: Record<string, boolean>; powered: boolean }) {

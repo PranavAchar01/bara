@@ -180,9 +180,8 @@ function Main() {
   const screen = useApp((s) => s.screen);
   const simOpen = useSimPanel((s) => s.open) && screen === "workspace";
   const handing = useHandoffRunning();
-  if (simOpen) return <SimView />;
   return (
-    <div className={`app ${handing ? "ho-run" : ""}`}>
+    <div className={`app ${handing ? "ho-run" : ""} ${simOpen ? "sim-on" : ""}`}>
       {screen !== "workspace" && <TopBar />}
       <EngineNotice />
       <ConnectionBanner />
@@ -191,6 +190,7 @@ function Main() {
       <Toast />
       <BuildDialog />
       <Handoff screen={screen} />
+      {simOpen && <SimView />}
     </div>
   );
 }

@@ -1,33 +1,28 @@
-// Simulation mode: its own full screen, and the screen is the device. The 3D model fills the stage,
-// seen straight on with the case clear, and every key, button, knob and stick on it is clickable
-// (a press travels down, and the arrow keys and letters of the real keyboard press the same
-// controls). The engine compiles the build's firmware for its controller and runs it in an emulator
-// (or the host test harness, said so plainly when the chip has no model); what it types, prints and
-// draws on the display comes back here: the terminal below the stage shows a "k" when K is pressed,
-// the screen on the model shows what the firmware drew. Tests (firmware, chip emulation, pin plan,
-// ngspice, KiCad ERC/DRC/board statistics), the firmware files, the agent chat and the plain
-// control list sit in a side panel that folds away. Esc leaves.
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from "react";
-import { Canvas } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
+// Simulation mode, played in place. The workspace stays mounted: the same device, materials and
+// camera glide into play pose (the viewport's own sim frame), the build-only panels fade away and
+// the device powers on where it stands. This file is the layer over it: the engine session (the
+// firmware compiled for the build's controller and run in an emulator, or the host harness when the
+// chip has no model), the play surface (PlaySurface: only the inputs the device really has, named in
+// standard terms, with the outputs shown the way the device makes them) and, behind one small
+// control, the checks (tests, firmware, signals, the build agent). Esc leaves; the camera glides back.
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../state/store";
-import { DeviceScene } from "../three/Viewport3D";
-import { previewCase } from "../three/caseFinish";
 import { partRect } from "../three/agentTargets";
 import { elementPoses } from "../three/layout";
-import { studioPalette } from "../three/studio";
 import type { Build } from "../spec/types";
 import { serverUrl } from "../net/mode";
 import { setActiveMachine, type DemoMachine } from "./api";
 import { deriveInputMap } from "./inputMap";
-import { inputForKey } from "./physical";
 import { closeSimPanel } from "./simPanelStore";
-import { enterBridge, pressInput, releaseInput, showRemote, simHooks, useSim } from "./simStore";
-import { SimHotspots, hotspotSlots } from "./SimHotspots";
-import { releaseMouse } from "../three/sim3d";
-import { sim, terminalLine, typedText, type ChatEntry, type InputAction, type RemoteInput, type SimEvent, type SimSnap, type SimTest, type SimViewData } from "./remote";
+import { enterBridge, showRemote, simHooks, useSim } from "./simStore";
+import { hotspotSlots } from "./SimHotspots";
+import { useSimLink } from "./simLink";
+import { OutputsDock, PlayPanel, toneCount, useBuzzer } from "./PlaySurface";
+import { applyOps, fallbackSurface, loadLayout, resolveRows, saveLayout, type Layout } from "./surface";
+import { sim, terminalLine, typedText, type ChatEntry, type InputAction, type SimEvent, type SimSnap, type SimTest, type SimViewData, type Surface } from "./remote";
 import "./sim.css";
 import "./simulator.css";
+import "./play.css";
 
 const TICK_MS = 200;
 const FAST_TICK_MS = 90;
@@ -42,9 +37,8 @@ export function SimView() {
   useHashRoute(build?.build_id ?? null);
   if (!build) {
     return (
-      <div className="sim" role="dialog" aria-label="Simulation">
-        <Bar data={null} busy={false} onReset={() => undefined} />
-        <div className="sim-empty">Open a build to simulate it.</div>
+      <div className="play" role="dialog" aria-label="Simulation">
+        <div className="play-loading">Open a build to simulate it.</div>
       </div>
     );
   }
@@ -82,18 +76,9 @@ function useHashRoute(buildId: string | null) {
   }, [buildId]);
 }
 
-/** The viewport in its operating pose while this screen is open, and the case clear so the parts inside show. */
+/** The viewport in its operating pose while this layer is open: same device, same materials, case shown. */
 function useDeviceStage(build: Build) {
-  useEffect(() => {
-    const leave = enterBridge(build);
-    const clear = build.enclosures.filter((e) => e.kind !== "none");
-    for (const e of clear) previewCase(e.enclosure_id, { ...(e.color ?? { hex: "#d8e6ef" }), finish: { preset: "clear" } });
-    return () => {
-      for (const e of clear) previewCase(e.enclosure_id, null);
-      leave();
-    };
-    // the stage is entered once per build; a rebuilt build remounts this screen
-  }, [build.build_id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => enterBridge(build), [build.build_id]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
 function Simulator(props: { build: Build }) {
@@ -107,7 +92,7 @@ function Simulator(props: { build: Build }) {
   const [busy, setBusy] = useState<string | null>("Building the firmware");
   const [lines, setLines] = useState<Line[]>([]);
   const [typed, setTyped] = useState("");
-  const [side, setSide] = useState(true);
+  const [tones, setTones] = useState(0);
   const seq = useRef(0);
   const inflight = useRef(false);
   const chain = useRef<Promise<unknown>>(Promise.resolve());
@@ -125,6 +110,8 @@ function Simulator(props: { build: Build }) {
     const fresh: SimEvent[] = s.events.filter((e) => e.seq > seq.current);
     seq.current = Math.max(seq.current, s.seq);
     setSnap(s);
+    const beeps = toneCount(fresh);
+    if (beeps) setTones((n) => n + beeps);
     showRemote({ powered: s.powered, bootloader: !!s.bootloader, fb: s.fb ?? null, rows: s.screen });
     if (!fresh.length) return;
     if (fresh.some((e) => e.type === "typed")) {
@@ -212,7 +199,6 @@ function Simulator(props: { build: Build }) {
       simHooks.press = simHooks.release = undefined;
     };
   }, [act]);
-  useRealKeys();
 
   // the on-screen bot drives the same device through the same engine
   useEffect(() => {
@@ -246,370 +232,152 @@ function Simulator(props: { build: Build }) {
       .finally(() => setBusy(null));
   }, [id, adopt]);
 
+  useStageLink(data, snap, act);
+  const surface = useSurface(id, data);
+  const [layout, setLayoutState] = useState<Layout | null>(null);
+  const layoutRef = useRef<Layout | null>(null);
+  useEffect(() => {
+    if (!surface) return;
+    const l = loadLayout(id, surface);
+    layoutRef.current = l;
+    setLayoutState(l);
+  }, [id, surface]);
+  const setLayout = useCallback(
+    (l: Layout) => {
+      layoutRef.current = l;
+      setLayoutState(l);
+      saveLayout(id, l);
+    },
+    [id],
+  );
+  // sensor values the person set earlier go to the device again each time it boots
+  useEffect(() => {
+    if (!data || !surface) return;
+    const l = layoutRef.current ?? loadLayout(id, surface);
+    for (const c of surface.controls) {
+      const v = l.values[c.input_id];
+      if (c.kind === "sensor" && v !== undefined && v !== c.default) act(c.input_id, "sensor", v);
+    }
+  }, [data, surface, id, act]);
+  useBuzzer(tones);
+
+  const ask = useCallback(
+    async (text: string): Promise<string> => {
+      setBusy("Working");
+      try {
+        const r = await sim.chat(id, text);
+        adopt(r.sim);
+        const ops = r.reply.surface_ops ?? [];
+        if (ops.length && surface && layoutRef.current) {
+          const out = applyOps(layoutRef.current, surface, ops);
+          setLayout(out.layout);
+          for (const x of out.sensorSets) act(x.id, "sensor", x.value);
+        }
+        return r.reply.text;
+      } finally {
+        setBusy(null);
+      }
+    },
+    [id, adopt, surface, setLayout, act],
+  );
+  const [checks, setChecks] = useState(false);
+  const rows = surface && layout ? resolveRows(surface, layout) : [];
+  const fw = data?.firmware;
+  const mode = fw?.mode === "emulated" ? `Firmware running on an emulated ${fw.board.label}` : fw?.mode === "host" ? `Firmware running in the host harness (no emulator for ${fw.board.label})` : "Not running";
   return (
-    <div className="sim sx sx2" role="dialog" aria-label="Simulation">
-      <Bar data={data} busy={!!busy} onReset={reset} side={side} onSide={() => setSide((v) => !v)} />
+    <div className="play" role="dialog" aria-label="Simulation">
+      <header className="play-bar">
+        <span className="play-live" aria-hidden />
+        <strong>Simulation</strong>
+        <span className="spacer" />
+        <button type="button" className="play-btn primary" onClick={closeSimPanel} title="Back to the build (Esc)">
+          Back <kbd>Esc</kbd>
+        </button>
+      </header>
       {error && (
-        <div className="sx-error" role="alert">
+        <div className="play-error" role="alert">
           {error}
-          <button type="button" className="sim-btn" onClick={() => setError(null)}>
+          <button type="button" className="play-btn" onClick={() => setError(null)}>
             Dismiss
           </button>
         </div>
       )}
-      {!data ? (
-        <div className="sim-empty">{busy ? `${busy}…` : "The simulator could not start for this build."}</div>
-      ) : (
-        <div className="sx2-body">
-          <div className="sx2-main">
-            <Stage data={data} snap={snap} act={act} />
-            <Console lines={lines} typed={typed} snap={snap} />
-          </div>
-          {side && <SidePane id={id} data={data} snap={snap} act={act} setData={setData} adopt={adopt} busy={busy} setBusy={setBusy} />}
+      {!data || !surface || !layout ? (
+        <div className="play-loading" role="status">
+          <i aria-hidden />
+          {busy ? `${busy}...` : "The simulator could not start for this build."}
         </div>
+      ) : (
+        <>
+          <PlayPanel
+            title={data.io.device.name ?? "Device"}
+            mode={mode}
+            surface={surface}
+            rows={rows}
+            layout={layout}
+            setLayout={setLayout}
+            snap={snap}
+            act={act}
+            busy={!!busy}
+            onReset={reset}
+            onChecks={() => setChecks((v) => !v)}
+            onAsk={ask}
+          />
+          <OutputsDock surface={surface} snap={snap} typed={typed} lines={lines} tones={tones} />
+          {checks && (
+            <div className="play-checks sx">
+              <button type="button" className="play-btn play-checks-x" onClick={() => setChecks(false)}>
+                Close
+              </button>
+              <SidePane id={id} data={data} snap={snap} act={act} setData={setData} adopt={adopt} busy={busy} setBusy={setBusy} />
+            </div>
+          )}
+        </>
       )}
     </div>
   );
 }
 
-/** The real keyboard presses the device's own controls: letters on a keyboard build, arrows / WASD / Z / X on a pad. */
-function useRealKeys() {
+/** The engine's surface spec for this build, or the one derived from the plan when it cannot be had. */
+function useSurface(id: string, data: SimViewData | null): Surface | null {
+  const [surface, setSurface] = useState<Surface | null>(null);
+  const sig = data ? data.io.inputs.map((i) => i.id).join(",") + "|" + data.io.outputs.map((o) => o.id).join(",") : "";
   useEffect(() => {
-    const held = new Map<string, ReturnType<typeof inputForKey>>();
-    const editable = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
-    const onDown = (e: KeyboardEvent) => {
-      if (editable(e.target) || e.code === "Escape") return;
-      const map = useSim.getState().map;
-      if (!map) return;
-      const bareModifier = /^(Meta|Control|Alt|Shift)(Left|Right)$/.test(e.code);
-      if ((e.metaKey || e.ctrlKey) && !bareModifier) return;
-      const input = inputForKey(e.code, map.inputs);
-      if (!input) return;
-      e.preventDefault();
-      if (e.repeat || held.has(e.code)) return;
-      held.set(e.code, input);
-      pressInput(input);
-    };
-    const onUp = (e: KeyboardEvent) => {
-      const input = held.get(e.code);
-      if (!input) return;
-      held.delete(e.code);
-      releaseInput(input);
-    };
-    const onBlur = () => {
-      for (const input of held.values()) if (input) releaseInput(input);
-      held.clear();
-      releaseMouse();
-    };
-    window.addEventListener("keydown", onDown);
-    window.addEventListener("keyup", onUp);
-    window.addEventListener("blur", onBlur);
-    window.addEventListener("pointerup", releaseMouse);
-    window.addEventListener("pointercancel", releaseMouse);
+    if (!data) return;
+    let live = true;
+    sim
+      .surface(id)
+      .then((s) => live && setSurface(s))
+      .catch(() => live && setSurface(fallbackSurface(data.io)));
     return () => {
-      window.removeEventListener("keydown", onDown);
-      window.removeEventListener("keyup", onUp);
-      window.removeEventListener("blur", onBlur);
-      window.removeEventListener("pointerup", releaseMouse);
-      window.removeEventListener("pointercancel", releaseMouse);
-      onBlur();
+      live = false;
     };
-  }, []);
+  }, [id, sig]); // eslint-disable-line react-hooks/exhaustive-deps
+  return surface;
 }
 
-// --- header ---------------------------------------------------------------------------------
-
-function Bar(props: { data: SimViewData | null; busy: boolean; onReset: () => void; side?: boolean; onSide?: () => void }) {
-  const d = props.data;
-  const fw = d?.firmware;
-  const mode =
-    fw?.mode === "emulated"
-      ? `running on an emulated ${fw.board.label}`
-      : fw?.mode === "host"
-        ? `host simulation (no emulator for ${fw.board.label})`
-        : "not running";
-  return (
-    <header className="sim-bar">
-      <span className="sim-live" aria-hidden />
-      <strong>Simulation</strong>
-      {d && (
-        <span className="sim-bar-meta small">
-          {d.io.device.name ?? "Device"} · firmware{" "}
-          <span className={`sx-chip ${fw?.status === "ok" ? "ok" : "fail"}`}>{fw?.status === "ok" ? "built" : "build failed"}</span> {mode}
-        </span>
-      )}
-      <span className="spacer" />
-      {d && (
-        <button type="button" className="sim-btn" disabled={props.busy} onClick={props.onReset} title="Load the firmware again and reboot the device">
-          Reboot
-        </button>
-      )}
-      {d && props.onSide && (
-        <button type="button" className="sim-btn" aria-pressed={props.side} onClick={props.onSide} title="Show or hide tests, firmware, chat and the control list">
-          {props.side ? "Hide panel" : "Tests and chat"}
-        </button>
-      )}
-      <button type="button" className="sim-btn primary" onClick={closeSimPanel} title="Back to the workspace (Esc)">
-        Exit <kbd>Esc</kbd>
-      </button>
-    </header>
-  );
-}
-
-// --- the device -----------------------------------------------------------------------------
-
-function Stage(props: { data: SimViewData; snap: SimSnap | null; act: Act }) {
-  const { data, snap, act } = props;
-  const palette = useMemo(() => studioPalette(), []);
-  const scene = useMemo(() => <DeviceScene />, []);
-  const placed = useMemo(() => new Set((useSim.getState().map?.inputs ?? []).map((i) => `${i.instanceId}#${i.index}`)), []);
+/** Click targets on the model for knobs, sticks, dials and switches live in the workspace canvas; this feeds them. */
+function useStageLink(data: SimViewData | null, snap: SimSnap | null, act: Act): void {
   const slots = useMemo(() => {
+    if (!data) return [];
+    const placed = new Set((useSim.getState().map?.inputs ?? []).map((i) => `${i.instanceId}#${i.index}`));
     const b = useApp.getState().build;
-    return hotspotSlots(data.io.inputs.filter((i) => i.kind !== "key"), placed, null).map((s) => {
+    const power = data.io.power.switch;
+    const own = hotspotSlots(data.io.inputs.filter((i) => i.kind !== "key" && i.kind !== "sensor"), placed, null).map((s) => {
       const part = b?.parts.find((p) => p.instance_id === s.instanceId);
       if (!b || !part || part.quantity < 2) return s;
       const layout = (b.layouts ?? []).find((l) => l.layout_id === part.placement.layout_id);
       return { ...s, poses: elementPoses(part.placement, part.quantity, layout).map((e) => [e.position[0], e.position[1], e.position[2]] as [number, number, number]) };
     });
-  }, [data.io.inputs, placed]);
-  const power = data.io.power.switch;
-  const powerSlots = useMemo(
-    () => (power ? hotspotSlots([], placed, { id: power.id, label: power.label, kind: "power", instance_id: power.instance_id }) : []),
-    [power, placed],
-  );
-  const closed = snap?.inputs.closed ?? {};
-  const leds = snap?.leds ?? [];
-  return (
-    <section className="sx2-stage" aria-label="Device" style={{ background: palette.background }}>
-      <Canvas dpr={[1, 2]} frameloop="demand" camera={{ up: [0, 0, 1], position: [0, -200, 200], near: 1, far: 10000, fov: 30 }} gl={{ antialias: true, preserveDrawingBuffer: true }}>
-        {scene}
-        <SimHotspots slots={[...slots, ...powerSlots]} act={act} closed={closed} powered={!!snap?.powered} />
-        <OrbitControls makeDefault enableDamping dampingFactor={0.12} />
-      </Canvas>
-      <div className="sx2-leds" aria-label="Lights and sound">
-        {leds.map((l) => (
-          <span key={l.id} className={`sx2-led ${l.on ? "on" : ""}`} title={`${l.label}: ${l.on ? "on" : "off"}`}>
-            <i aria-hidden />
-            {l.label}
-          </span>
-        ))}
-        {snap?.bootloader && <span className="sx2-led on">bootloader (USB drive mode)</span>}
-      </div>
-      <div className="sx2-hint small">Click the keys, buttons, knobs and sticks on the device. Arrow keys, WASD, Z and X work too. Drag to orbit.</div>
-    </section>
-  );
-}
-
-// --- under the device: what it typed and printed --------------------------------------------
-
-function Console(props: { lines: Line[]; typed: string; snap: SimSnap | null }) {
-  const [tab, setTab] = useState<"terminal" | "waves">("terminal");
-  const [open, setOpen] = useState(true);
-  return (
-    <section className={`sx2-console ${open ? "" : "folded"}`} aria-label="Terminal">
-      <div className="sx-tabs" role="tablist">
-        <button type="button" role="tab" aria-selected={tab === "terminal"} className={tab === "terminal" ? "active" : ""} onClick={() => setTab("terminal")}>
-          Terminal
-        </button>
-        <button type="button" role="tab" aria-selected={tab === "waves"} className={tab === "waves" ? "active" : ""} onClick={() => setTab("waves")}>
-          Pin waveforms
-        </button>
-        <span className="spacer" />
-        <button type="button" className="sim-btn" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
-          {open ? "Fold" : "Open"}
-        </button>
-      </div>
-      {open && (tab === "terminal" ? <Terminal lines={props.lines} typed={props.typed} powered={!!props.snap?.powered} hid={props.snap?.hid ?? null} /> : <Waves snap={props.snap} />)}
-    </section>
-  );
-}
-
-function Terminal(props: { lines: Line[]; typed: string; powered: boolean; hid: string | null }) {
-  const ref = useRef<HTMLDivElement>(null);
+    const pw = power ? hotspotSlots([], placed, { id: power.id, label: power.label, kind: "power", instance_id: power.instance_id }) : [];
+    return [...own, ...pw];
+  }, [data]);
+  const closed = snap?.inputs.closed;
+  const powered = !!snap?.powered;
   useEffect(() => {
-    const el = ref.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [props.lines]);
-  return (
-    <div className="sx2-term-wrap">
-      <div className="sx2-typed" aria-label="What the device typed">
-        <span className="sx-muted small">typed</span>
-        <pre>
-          {props.typed}
-          <span className="sx2-caret" aria-hidden />
-        </pre>
-      </div>
-      <div ref={ref} className="sx-term" role="log" aria-live="polite">
-        {props.lines.length === 0 && <div className="sx-muted">{props.powered ? "Press a key on the device." : "The device is off."}</div>}
-        {props.lines.map((l) => (
-          <div key={l.key} className={`sx-line ${l.tone}`}>
-            {l.text}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// --- the controls as a plain list (secondary) ----------------------------------------------
-
-function Controls(props: { data: SimViewData; snap: SimSnap | null; act: Act }) {
-  const { data, snap, act } = props;
-  const io = data.io;
-  const closed = snap?.inputs.closed ?? {};
-  const groups = useMemo(() => {
-    const out = new Map<string, RemoteInput[]>();
-    for (const i of io.inputs) {
-      const k = i.kind === "axis" ? `axis:${i.instance_id}` : i.kind;
-      out.set(k, [...(out.get(k) ?? []), i]);
-    }
-    return [...out.entries()];
-  }, [io.inputs]);
-  const sw = io.power.switch;
-  const bootHeld = useRef(false);
-  return (
-    <div className="sx-controls">
-      <div className="sx-controls-head">
-        <strong>Controls</strong>
-        <span className="small sx-muted">{io.labels_by === "ai" ? "named by the build agent" : "named from the parts list"}</span>
-      </div>
-      {io.try_first && <p className="small sx-try">{io.try_first}</p>}
-      <div className="sx-row">
-        <span className="sx-row-label">Chip</span>
-        <button type="button" className="sim-btn" title="Restart the chip" onClick={() => act("device", "reset", bootHeld.current)}>
-          Reset
-        </button>
-        <button
-          type="button"
-          className="sim-btn"
-          title="Hold, then press Reset: the chip comes up as a USB drive"
-          onPointerDown={() => (bootHeld.current = true)}
-          onPointerUp={() => (bootHeld.current = false)}
-          onPointerLeave={() => (bootHeld.current = false)}
-        >
-          Boot (hold)
-        </button>
-      </div>
-      {sw && (
-        <div className="sx-row">
-          <span className="sx-row-label">{sw.label}</span>
-          <button type="button" role="switch" aria-checked={!!snap?.powered} className={`sx-toggle ${snap?.powered ? "on" : ""}`} onClick={() => act(sw.id, "power", !snap?.powered)}>
-            {snap?.powered ? "On" : "Off"}
-          </button>
-        </div>
-      )}
-      {groups.map(([k, items]) =>
-        k.startsWith("axis:") ? (
-          <AxisControl key={k} items={items} values={snap?.inputs.axes ?? {}} act={act} />
-        ) : k === "encoder" ? (
-          items.map((i) => (
-            <div className="sx-row" key={i.id}>
-              <span className="sx-row-label">{i.label}</span>
-              <button type="button" className="sim-btn" onClick={() => act(i.id, "turn", -1)} aria-label={`${i.label} anticlockwise`}>
-                ↺
-              </button>
-              <button type="button" className="sim-btn" onClick={() => act(i.id, "turn", 1)} aria-label={`${i.label} clockwise`}>
-                ↻
-              </button>
-              <button type="button" className="sim-btn" onPointerDown={() => act(i.id, "press")} onPointerUp={() => act(i.id, "release")} title="Press the knob">
-                press
-              </button>
-            </div>
-          ))
-        ) : (
-          <div className="sx-grid" key={k}>
-            {items.map((i) =>
-              i.kind === "switch" ? (
-                <button key={i.id} type="button" role="switch" aria-checked={!!closed[i.id]} className={`sx-key ${closed[i.id] ? "down" : ""}`} onClick={() => act(i.id, closed[i.id] ? "release" : "press")}>
-                  {i.label} <span className="sx-muted">{closed[i.id] ? "on" : "off"}</span>
-                </button>
-              ) : (
-                <button
-                  key={i.id}
-                  type="button"
-                  className={`sx-key ${closed[i.id] ? "down" : ""}`}
-                  onPointerDown={() => act(i.id, "press")}
-                  onPointerUp={() => act(i.id, "release")}
-                  onPointerLeave={() => closed[i.id] && act(i.id, "release")}
-                  title={i.pin ? `${i.label} on ${i.pin}` : i.label}
-                >
-                  {i.label}
-                </button>
-              ),
-            )}
-          </div>
-        ),
-      )}
-      {io.unsimulated.length > 0 && <p className="small sx-muted">Not simulated: {io.unsimulated.map((u) => u.label).join(", ")}.</p>}
-    </div>
-  );
-}
-
-/** A joystick (two axes on one part) is a pad you drag; a single axis (dial, slider) is a slider. */
-function AxisControl(props: { items: RemoteInput[]; values: Record<string, number>; act: (id: string, a: InputAction, v?: number) => void }) {
-  const { items, act } = props;
-  const pad = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<[number, number]>([0, 0]);
-  const last = useRef(0);
-  const sent = useRef<[number, number]>([0, 0]);
-  if (items.length < 2) {
-    const i = items[0];
-    return (
-      <div className="sx-row">
-        <span className="sx-row-label">{i.label}</span>
-        <input type="range" min={-1} max={1} step={0.05} defaultValue={0} onChange={(e) => act(i.id, "axis", Number(e.target.value))} aria-label={i.label} />
-      </div>
-    );
-  }
-  const [x, y] = items;
-  const send = (nx: number, ny: number, force = false) => {
-    setPos([nx, ny]);
-    const now = performance.now();
-    if (!force && now - last.current < 90) return;
-    last.current = now;
-    // only the axis that moved: a sideways drag must not report "Y moved to 0.00" every step
-    if (Math.abs(nx - sent.current[0]) > 0.01) {
-      act(x.id, "axis", nx);
-      sent.current[0] = nx;
-    }
-    if (Math.abs(ny - sent.current[1]) > 0.01) {
-      act(y.id, "axis", ny);
-      sent.current[1] = ny;
-    }
-  };
-  const move = (e: RPointerEvent) => {
-    const r = pad.current?.getBoundingClientRect();
-    if (!r || !(e.buttons & 1)) return;
-    const nx = Math.max(-1, Math.min(1, ((e.clientX - r.left) / r.width) * 2 - 1));
-    const ny = Math.max(-1, Math.min(1, -(((e.clientY - r.top) / r.height) * 2 - 1)));
-    send(nx, ny);
-  };
-  return (
-    <div className="sx-row sx-joy">
-      <span className="sx-row-label">
-        {x.label} / {y.label}
-        <span className="sx-muted small">
-          {" "}
-          {pos[0].toFixed(2)}, {pos[1].toFixed(2)}
-        </span>
-      </span>
-      <div
-        ref={pad}
-        className="sx-pad"
-        role="slider"
-        aria-label={`${x.label} and ${y.label}`}
-        aria-valuenow={pos[0]}
-        onPointerDown={(e) => {
-          (e.target as HTMLElement).setPointerCapture(e.pointerId);
-          move(e);
-        }}
-        onPointerMove={move}
-        onPointerUp={() => send(0, 0, true)}
-      >
-        <span className="sx-pad-dot" style={{ left: `${50 + pos[0] * 42}%`, top: `${50 - pos[1] * 42}%` }} />
-      </div>
-    </div>
-  );
+    useSimLink.setState({ slots, act, closed: closed ?? {}, powered });
+  }, [slots, act, closed, powered]);
+  useEffect(() => () => useSimLink.setState({ slots: [], act: null, closed: {}, powered: false }), []);
 }
 
 /** The last two seconds of every watched pin as a logic trace. */
@@ -674,15 +442,15 @@ const GROUPS: { id: SimTest["group"]; title: string }[] = [
 type SideProps = { id: string; data: SimViewData; snap: SimSnap | null; act: Act; setData: (v: SimViewData) => void; adopt: (v: SimViewData) => void; busy: string | null; setBusy: (b: string | null) => void };
 
 function SidePane(props: SideProps) {
-  const [tab, setTab] = useState<"tests" | "firmware" | "chat" | "controls">("tests");
+  const [tab, setTab] = useState<"tests" | "firmware" | "chat" | "signals">("tests");
   const tabs = [
     ["tests", "Tests"],
     ["firmware", "Firmware"],
     ["chat", "Chat"],
-    ["controls", "Controls"],
+    ["signals", "Signals"],
   ] as const;
   return (
-    <aside className="sx2-side" aria-label="Tests and agent">
+    <aside className="sx2-side" aria-label="Checks">
       <div className="sx-tabs" role="tablist">
         {tabs.map(([k, label]) => (
           <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? "active" : ""} onClick={() => setTab(k)}>
@@ -694,7 +462,7 @@ function SidePane(props: SideProps) {
         {tab === "tests" && <Tests {...props} />}
         {tab === "firmware" && <Firmware id={props.id} data={props.data} />}
         {tab === "chat" && <Chat {...props} />}
-        {tab === "controls" && <Controls data={props.data} snap={props.snap} act={props.act} />}
+        {tab === "signals" && <Waves snap={props.snap} />}
       </div>
     </aside>
   );
