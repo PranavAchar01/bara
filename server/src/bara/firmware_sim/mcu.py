@@ -17,7 +17,7 @@ from typing import Any
 @dataclass(frozen=True)
 class Board:
     board_id: str
-    label: str
+    label: str  # generic, shown to people: no maker or product names
     family: str  # nrf52840 | rp2040 | esp32 | avr | unknown
     core: str  # cortex-m4 | cortex-m0plus | xtensa | avr | host
     zig_target: str | None  # cross target for zig cc, None when no cross build is possible
@@ -38,6 +38,7 @@ class Board:
     pullup_ohm: float
     vdd: float = 3.3
     notes: list[str] = field(default_factory=list)
+    reference: str = ""  # the open board it follows, for generated-code comments only
 
 
 def _p(port: int, pins: list[int]) -> list[str]:
@@ -58,7 +59,8 @@ NRF_ADC = {
 BOARDS: dict[str, Board] = {
     "nice_nano_v2": Board(
         board_id="nice_nano_v2",
-        label="nice!nano v2 (nRF52840)",
+        label="Wireless controller board (nRF52840)",
+        reference="nice!nano v2",
         family="nrf52840",
         core="cortex-m4",
         zig_target="thumb-freestanding-eabi",
@@ -91,7 +93,8 @@ BOARDS: dict[str, Board] = {
     ),
     "xiao_nrf52840": Board(
         board_id="xiao_nrf52840",
-        label="Seeed XIAO nRF52840",
+        label="Compact wireless controller board (nRF52840)",
+        reference="Seeed XIAO nRF52840",
         family="nrf52840",
         core="cortex-m4",
         zig_target="thumb-freestanding-eabi",
@@ -119,7 +122,8 @@ BOARDS: dict[str, Board] = {
     ),
     "rpi_pico": Board(
         board_id="rpi_pico",
-        label="Raspberry Pi Pico (RP2040)",
+        label="Controller board (RP2040)",
+        reference="Raspberry Pi Pico",
         family="rp2040",
         core="cortex-m0plus",
         zig_target="thumb-freestanding-eabi",
@@ -149,7 +153,8 @@ BOARDS: dict[str, Board] = {
     ),
     "esp32": Board(
         board_id="esp32",
-        label="ESP32",
+        label="Wireless controller board (ESP32)",
+        reference="ESP32 dev board",
         family="esp32",
         core="xtensa",
         zig_target=None,
@@ -175,7 +180,8 @@ BOARDS: dict[str, Board] = {
     ),
     "avr": Board(
         board_id="avr",
-        label="ATmega32U4",
+        label="Controller board (ATmega32U4)",
+        reference="Pro Micro",
         family="avr",
         core="avr",
         zig_target=None,
@@ -219,13 +225,19 @@ BOARDS: dict[str, Board] = {
 
 
 def board_for(mcu_part: dict[str, Any] | None) -> Board:
-    """The board record for the build's controller part (by part id, then by its words)."""
+    """The board record for the build's controller part: its id, then its record's words and specs
+    (display names are generic now, so the chip family comes from the id, summary or specs)."""
+    card = (mcu_part or {}).get("card") or {}
     blob = " ".join(
         str(x).lower()
         for x in (
             (mcu_part or {}).get("part_id"),
-            ((mcu_part or {}).get("card") or {}).get("display_name"),
+            card.get("display_name"),
+            card.get("summary"),
+            card.get("source_url"),
             (mcu_part or {}).get("display_name"),
+            (mcu_part or {}).get("mpn"),
+            *(f"{k.get('label')} {k.get('value')}" for k in card.get("key_specs") or []),
         )
     )
     if "xiao" in blob and "nrf52" in blob:
