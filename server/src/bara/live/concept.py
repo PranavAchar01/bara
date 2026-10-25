@@ -68,8 +68,12 @@ Write:
   "<device_name> 3D model", generic words only (no brand or model names).
 - evidence: which retrieved references you used (title or repo) and what you took from each
   (a size, a layout, a part choice). Empty when nothing retrieved was about this product.
-- reference_parts: the main parts the retrieved builds and teardowns of this product actually
-  use (controller, display, input parts, power), as names a buyer could search for.
+- reference_parts: the main parts a hobby build of this product uses (controller, display,
+  input parts, power), taken from the retrieved builds where they say, as names a buyer could
+  search for on LCSC or find in the KiCad library. Where mass-produced products use custom
+  parts (custom display glass, printed membranes, single-purpose chips), name the closest
+  standard part a hobbyist can buy instead (a display module, discrete switches, a
+  microcontroller module). The same rule holds for part_kind in controls.
 
 Reason from the retrieved references first: the open KiCad projects, web pages and photos are
 real products and real builds of this kind. Take sizes, layouts and part choices from them;

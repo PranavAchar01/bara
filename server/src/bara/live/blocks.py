@@ -32,6 +32,10 @@ Rules:
   search_terms: up to three real manufacturer part numbers (MPNs) a hobbyist can buy on LCSC or
   that exist in KiCad's library, best first. For generic parts (buttons, headers, batteries)
   leave search_terms empty. Never invent an MPN; if you do not know one, leave it empty.
+- Every block is a standard part a hobbyist can buy. Where mass-produced products of this kind
+  use a custom part (custom display glass, printed membranes, single-purpose chips), choose the
+  nearest standard part instead (a display module, discrete switches, the microcontroller
+  doing the job in firmware) and describe it that way in the label.
 - Include everything the product needs to work as that product: the controller (compute.mcu, or
   compute.sbc when the product runs a full operating system), a power path, the sensing and
   I/O its function implies (a pointing device needs its sensor, an audio device its codec or
