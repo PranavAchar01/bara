@@ -72,6 +72,8 @@ let speechGen = 0;
 /** If a line never reports its end (a stalled stream, Chrome's speech that just stops), let it go,
  *  or every line after it would wait forever. */
 let stuckTimer = 0;
+/** How long a line's audio may take to start before the browser's own voice says it instead. */
+const START_WAIT_MS = 4000;
 /** Chrome drops an utterance's end event if nothing holds on to the utterance. */
 let utterance: SpeechSynthesisUtterance | null = null;
 
@@ -156,11 +158,12 @@ function finished(): void {
 let waiting: { text: string; then?: () => void } | null = null;
 
 /** Says a line from the build. If Bara is mid-sentence the line waits, and only the newest waiting
- *  line is kept, so the voice never falls behind the build or talks over itself. */
-export function narrate(text: string, then?: () => void): void {
+ *  line is kept, so the voice never falls behind the build or talks over itself. An `urgent` line (a
+ *  question for the person, done, failed) cuts in instead of waiting behind progress chatter. */
+export function narrate(text: string, then?: () => void, urgent = false): void {
   const s = useVoice.getState();
   if (!s.replies || s.listening || !text.trim()) return;
-  if (s.caption) waiting = { text, then };
+  if (s.caption && !urgent) waiting = { text, then };
   else speak(text, false, then);
 }
 
@@ -183,7 +186,7 @@ export function bindBuildVoice(): () => void {
       const now = performance.now();
       if (!line || (!ALWAYS_SAY.has(e.type) && now - lastSaid < SPEECH_GAP_MS)) continue;
       lastSaid = now;
-      narrate(line, e.type === "clarify.request" ? listenForFollowUp : undefined);
+      narrate(line, e.type === "clarify.request" ? listenForFollowUp : undefined, ALWAYS_SAY.has(e.type));
     }
   });
 }
@@ -230,22 +233,40 @@ export function speak(text: string, force = false, then?: () => void): void {
     }
     // GET, so the audio element plays the stream as it arrives instead of waiting for the file
     const lines = sentences(clean);
+    // a failed line reports twice (the element's error and the rejected play()); fall back once
+    let fellBack = false;
+    const fallBack = (i: number) => {
+      if (fellBack) return;
+      fellBack = true;
+      speakInBrowser(lines.slice(i).join(" "), gen);
+    };
     const play = (i: number, a: HTMLAudioElement) => {
       audio = a;
       upNext = i + 1 < lines.length ? ttsAudio(lines[i + 1]) : null;
+      // some browsers (Safari) report nothing at all when the audio request fails: if the line hasn't
+      // started within a few seconds, say it with the browser's voice rather than leave a silence
+      const late = window.setTimeout(() => {
+        if (audio !== a || gen !== speechGen) return;
+        a.pause();
+        if (++engineFails >= 3) engineVoice = false;
+        fallBack(i);
+      }, START_WAIT_MS);
+      a.onplaying = () => window.clearTimeout(late);
       a.onended = () => {
+        window.clearTimeout(late);
         if (audio !== a || gen !== speechGen) return;
         engineFails = 0;
         if (upNext) play(i + 1, upNext);
         else finished();
       };
       a.onerror = () => {
+        window.clearTimeout(late);
         if (audio !== a || gen !== speechGen) return;
         if (++engineFails >= 3) engineVoice = false;
-        speakInBrowser(lines.slice(i).join(" "), gen);
+        fallBack(i);
       };
       void a.play().catch(() => {
-        if (audio === a && gen === speechGen) speakInBrowser(lines.slice(i).join(" "), gen);
+        if (audio === a && gen === speechGen) fallBack(i);
       });
     };
     play(0, ttsAudio(lines[0]));
