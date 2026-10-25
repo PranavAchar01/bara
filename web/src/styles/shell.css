@@ -2749,6 +2749,7 @@
 }
 .sl-foot a.btn {
   text-decoration: none;
+}
 /* Narrow: the words and Bara first, the recording below them as a picture of its own. */
 @media (max-width: 760px) {
   .ld-hero {
