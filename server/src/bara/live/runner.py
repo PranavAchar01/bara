@@ -272,6 +272,11 @@ def _product_name(run: BuildRun, brief: dict[str, Any]) -> str:
     return str(brief.get("device") or "") or run.prompt
 
 
+def _counts(message: object) -> str:
+    """The numbers in a failure message: the part of it that measures progress."""
+    return ",".join(re.findall(r"\d+(?:\.\d+)?", str(message)))
+
+
 class _Stage:
     """One open stage: started on enter, completed on close with its real duration."""
 
@@ -458,7 +463,14 @@ class LiveRunner:
             bad = self._failing(run, (*self.REQUIRED, *self.REPAIRABLE))
             if not bad:
                 return None
-            key = tuple(sorted((rid, str(c.get("message", ""))) for rid, c in bad))
+            # the same rules failing on the same parts is no progress, however the message
+            # is worded; only a count (open connections, errors) going down is
+            key = tuple(
+                sorted(
+                    (rid, ",".join(c.get("check_keys", [])) + "#" + _counts(c.get("message", "")))
+                    for rid, c in bad
+                )
+            )
             if key in seen:
                 break
             seen.add(key)
@@ -507,7 +519,14 @@ class LiveRunner:
             if rid in rules and check.get("status") == "fail":
                 bad.setdefault(rid, []).append(check)
         return [
-            (rid, {**cs[0], "message": " | ".join(str(c.get("message", "")) for c in cs)})
+            (
+                rid,
+                {
+                    **cs[0],
+                    "message": " | ".join(str(c.get("message", "")) for c in cs),
+                    "check_keys": sorted(str(c.get("check_key") or rid) for c in cs),
+                },
+            )
             for rid, cs in bad.items()
         ]
 
