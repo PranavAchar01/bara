@@ -852,13 +852,12 @@ def _attempt(
             it.rot = rot0 + turn
             it.x = it.y = 0.0
             base = it.footprint_poly()
-            body = it.body_poly()
             c0 = base.centroid
             shade = _shadow(it)
             for i in idx:
                 dx, dy = float(cand[i, 0] - c0.x), float(cand[i, 1] - c0.y)
                 poly = affinity.translate(base, dx, dy)
-                if not fit.contains(affinity.translate(body, dx, dy)):
+                if not fit.contains(poly):
                     continue
                 under = affinity.translate(shade, dx, dy) if shade is not None else None
                 if taken[side] is not None and taken[side].distance(poly) < gap:
@@ -908,10 +907,8 @@ def _screen_along(it: Item, region: Polygon) -> None:
 def _face_the_rim(it: Item, region: Polygon, target: tuple[float, float]) -> tuple[float, float]:
     """A part a cable plugs into goes to the rim point nearest its target, turned so its mouth
     faces out. The mouth is the side the body extends past its pads (the courtyard centre lies
-    toward it), which holds for receptacles and jacks alike. A module with an antenna keep-out
-    turns that keep-out outward instead, so the antenna sits at the board edge."""
+    toward it), which holds for receptacles and jacks alike."""
     rim = region.exterior
-    keep = it.keepout_poly() is not None
     d = rim.project(Point(target))
     p = rim.interpolate(d)
     a, b = rim.interpolate(d - 0.5), rim.interpolate(d + 0.5)
@@ -920,8 +917,7 @@ def _face_the_rim(it: Item, region: Polygon, target: tuple[float, float]) -> tup
     best = (-math.inf, it.rot)
     for rot in (0.0, 90.0, 180.0, 270.0):
         it.rot = rot
-        keepout = it.keepout_poly() if keep else None
-        body = keepout.centroid if keepout is not None else it.world(it.local_poly()).centroid
+        body = it.world(it.local_poly()).centroid
         pads = it.world(it.local_poly("pads")).centroid
         score = (body.x - pads.x) * n[0] + (body.y - pads.y) * n[1]
         best = max(best, (score, rot))
@@ -951,7 +947,7 @@ def place_in_form(
     gaps: dict[int, float] = {}
     rim: dict[int, tuple[float, float]] = {}
     for it in on_board:
-        if (it.role in CABLE_ROLES or it.keepout_poly() is not None) and it.fp is not None:
+        if it.role in CABLE_ROLES and it.fp is not None:
             t = anchored.get(id(it))
             rim[id(it)] = _face_the_rim(it, region, (t[0], t[1]) if t else hub)
     first: list[Item] = [it for it in on_board if id(it) in anchored or id(it) in rim]

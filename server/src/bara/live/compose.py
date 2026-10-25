@@ -603,8 +603,6 @@ class Composer:
                 )
                 continue
             if facet == "power_source" and value == "battery" and slot.slot_id == "controller":
-                if any(s.function_id == "power.charger" for s in self.slots if s is not slot):
-                    continue  # the design charges its own cell: a bare module runs off its rail
                 filters.append(
                     Filter(
                         facet,

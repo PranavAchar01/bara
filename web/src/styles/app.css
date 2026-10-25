@@ -129,47 +129,10 @@ mark {
   gap: 12px;
   flex: none;
 }
-.drafts-btn {
-  gap: 7px;
-}
-.drafts-btn.on {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: var(--paper);
-}
-.drafts-n {
-  font-size: 10.5px;
-  line-height: 16px;
-  min-width: 16px;
-  padding: 0 4px;
-  border-radius: 8px;
-  background: var(--paper-2);
-  color: var(--text);
-  text-align: center;
-}
-.drafts-btn.on .drafts-n {
-  background: color-mix(in srgb, var(--paper) 22%, transparent);
-  color: var(--paper);
-}
-/* Narrow screens: the model name and mock badge give way, and the connection shows as just its dot,
-   so the header never scrolls the page sideways. */
+/* Narrow screens: the model name gives way so the header never scrolls the page sideways. */
 @media (max-width: 560px) {
-  .topbar {
-    gap: 10px;
-  }
-  .topbar .brand {
-    white-space: nowrap;
-  }
-  .topbar-right {
-    gap: 8px;
-  }
-  .topbar-right > .muted.small,
-  .topbar-right > .badge {
+  .topbar-right > .muted.small {
     display: none;
-  }
-  .topbar-right > .conn-pill {
-    font-size: 0;
-    gap: 0;
   }
 }
 .status-pill {

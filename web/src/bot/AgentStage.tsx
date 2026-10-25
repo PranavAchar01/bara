@@ -1,7 +1,7 @@
 // The agent on stage. While a build runs, the bot leaves the prompt bar and
-// works the canvas: it glides beside whatever the build is touching, steers a
-// small cursor onto it, frames it with a Figma-like selection box and acts the
-// step out (scan, pick, drop, trace, type, check, cheer). When the build ends
+// works the canvas: it glides beside whatever the build is touching and steers a
+// small cursor onto it, while the viewport outlines the part in 3D (agentFocus).
+// No 2D box: a flat square over the 3D scene read as something odd sitting there. When the build ends
 // and the queue is played out it flies home to the prompt bar.
 //
 // Other features ask it to do things through agentBus.ts (explain a part, act
@@ -43,13 +43,13 @@ const AFTER_BUILD = new Set(["edit.applied", "edit.rejected"]);
 const SPEECH_GAP_MS = 3000;
 const ALWAYS_SPEAK = new Set(["build.done", "build.failed", "clarify.request"]);
 
-const FLOAT: SpringCfg = { stiffness: 85, damping: 14 }; // the bot: floaty, trails the cursor
-const STEER: SpringCfg = { stiffness: 200, damping: 23 }; // the cursor: gets there first
-const FRAME: SpringCfg = { stiffness: 240, damping: 26 }; // the selection box
+// Slow, nearly critically damped glides: the bot drifts between major steps instead of darting.
+const FLOAT: SpringCfg = { stiffness: 32, damping: 11 }; // the bot: floaty, trails the cursor
+const STEER: SpringCfg = { stiffness: 70, damping: 16 }; // the cursor: gets there first
+const FRAME: SpringCfg = { stiffness: 90, damping: 19 }; // the selection box
 
 type Phase = "home" | "out" | "returning";
 
-const CODE_SNIPPETS = ["pinMode(8, OUTPUT);", "Wire.begin(6, 7);", "#define LED_PIN 8", "void setup() {", "analogRead(A0);", "Serial.begin(115200);"];
 
 function hash(s: string): number {
   let h = 2166136261;
@@ -172,7 +172,6 @@ function Stage() {
   const [phase, setPhase] = useState<Phase>("home");
   const traceOpen = useTrace((s) => s.open);
   const stage = useRef<HTMLDivElement>(null);
-  const boxEl = useRef<HTMLDivElement>(null);
   const cursorEl = useRef<HTMLDivElement>(null);
   const rippleEl = useRef<HTMLDivElement>(null);
   const botEl = useRef<HTMLDivElement>(null);
@@ -207,7 +206,15 @@ function Stage() {
   useEffect(() => {
     let seen = useApp.getState().log.at(-1)?.id ?? 0;
     let lastSpoke = 0;
+    // once() beats (case, board, firmware) play one time per build, however often their events repeat.
+    let onceBuild: string | null = null;
+    const played = new Set<string>();
+    const fresh1 = (b: Beat) => !b.id.startsWith("once:") || (!played.has(b.id) && !!played.add(b.id));
     return useApp.subscribe((s) => {
+      if ((s.build?.build_id ?? null) !== onceBuild) {
+        onceBuild = s.build?.build_id ?? null;
+        played.clear();
+      }
       const last = s.log.at(-1)?.id ?? seen;
       if (last === seen) return;
       // Only the canvas on screen: background canvases keep building without the bot.
@@ -229,7 +236,7 @@ function Stage() {
         // (late firmware progress) are let go.
         const after = AFTER_BUILD.has(e.type);
         if (phaseRef.current !== "out" && !running && !after) continue;
-        const beats = beatsFor(e, useApp.getState().build);
+        const beats = beatsFor(e, useApp.getState().build).filter(fresh1);
         if (!beats.length) continue;
         if (after && !running) wantOut.current = true;
         push(beats);
@@ -543,64 +550,14 @@ function Stage() {
         cursorEl.current.style.transform = `translate(${cx.value.toFixed(1)}px, ${cy.value.toFixed(1)}px) scale(${clamp(press.value, 0.6, 1.3).toFixed(3)})`;
         cursorEl.current.dataset.on = phaseRef.current === "out" ? "1" : "0";
       }
-      const be = boxEl.current;
-      if (be) {
-        const w = Math.max(0, box.w.value);
-        const h = Math.max(0, box.h.value);
-        be.style.transform = `translate(${box.x.value.toFixed(1)}px, ${box.y.value.toFixed(1)}px)`;
-        be.style.width = `${w.toFixed(1)}px`;
-        be.style.height = `${h.toFixed(1)}px`;
-        be.dataset.on = b && target ? "1" : "0";
-        be.dataset.top = box.y.value < 30 ? "1" : "0"; // no room for the label above
-        be.dataset.flip = box.x.value + w + 190 > window.innerWidth ? "1" : "0"; // no room for the code chip on the right
-        // Most of the screen (the whole canvas): no tint, or a problem there turns everything red.
-        be.dataset.big = w * h > window.innerWidth * window.innerHeight * 0.25 ? "1" : "0";
-      }
     };
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  const pts = beat?.action === "trace" ? tracePoints(beat.id) : null;
-  const snippet = CODE_SNIPPETS[beat ? hash(beat.id) % CODE_SNIPPETS.length : 0];
-  const drawMs = beat ? Math.min(beat.dwellMs * 0.7, 1400) : 1000;
-  const typeMs = beat ? Math.min(beat.dwellMs * 0.8, 1400) : 1400;
 
   return (
     <div ref={stage} className="agent-stage" data-on="0" aria-hidden="true">
-      <div ref={boxEl} className="as-box" data-on="0" data-bad={beat?.bad ? "1" : "0"} data-action={beat?.action ?? ""}>
-        {beat && (
-          <div key={beat.id} className="as-frame" style={{ ["--as-draw" as string]: `${drawMs}ms`, ["--as-type" as string]: `${typeMs}ms`, ["--as-n" as string]: snippet.length }}>
-            <span className="as-h tl" />
-            <span className="as-h tr" />
-            <span className="as-h bl" />
-            <span className="as-h br" />
-            <span className="as-chip">{beat.label}</span>
-            {beat.action === "scan" && <span className="as-scan" />}
-            {pts && (
-              // The route only ever runs left to right, so revealing the svg left to right draws it in
-              // (agentStage.css as-reveal). An SVG mask did this before but did not render in Chrome.
-              <svg className="as-trace" viewBox="0 0 100 100" preserveAspectRatio="none">
-                <polyline className="as-trace-glow" points={pts.map((p) => p.join(",")).join(" ")} />
-                <polyline className="as-trace-line" points={pts.map((p) => p.join(",")).join(" ")} />
-              </svg>
-            )}
-            {beat.action === "type" && (
-              <span className="as-code">
-                <span className="as-code-text">{snippet}</span>
-                <span className="as-caret" />
-              </span>
-            )}
-            {beat.action === "check" && (
-              <span className="as-mark">
-                <svg viewBox="0 0 16 16" width="16" height="16">
-                  {beat.bad ? <path d="M4.5 4.5l7 7M11.5 4.5l-7 7" /> : <path d="M3.5 8.5l3 3 6-7" />}
-                </svg>
-              </span>
-            )}
-          </div>
-        )}
-      </div>
       <div ref={rippleEl} className="as-ripple" data-bad={beat?.bad ? "1" : "0"} />
       <div ref={cursorEl} className="as-cursor" data-on="0" data-bad={beat?.bad ? "1" : "0"}>
         <svg viewBox="0 0 16 20" width="16" height="20">

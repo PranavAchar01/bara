@@ -20,7 +20,7 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-from shapely.geometry import Point, Polygon, box
+from shapely.geometry import Point, Polygon
 
 from bara.config import load_settings
 from bara.geometry import glbopt
@@ -361,11 +361,6 @@ def _placements(
         # x/y and placement.position_mm are the footprint origin (where the KiCad model sits);
         # x_mm/y_mm are the body (courtyard) centre, which is what size_mm is centred on.
         cx, cy = _to_build(*it.centre(), dx, dy) if it.fp else (bx, by)
-        if it.fp is not None and it.fp.keepouts and it.fp.fab:  # the clearance is not body
-            x0, y0, x1, y1 = it.fp.fab
-            size = [x1 - x0, y1 - y0]
-            c = it.world(box(x0, y0, x1, y1)).centroid
-            cx, cy = _to_build(c.x, c.y, dx, dy)
         out.append(
             {
                 "ref": it.ref,
@@ -498,19 +493,6 @@ def _attach_daughter_boards(boards: list[dict]) -> None:
             cab["to_ref"] = ref
 
 
-SUPPLY_NETS = ("3V3", "BAT+", "VBAT_IN", "VDD18", "VDDPIX", "5V", "VBUS", "VBAT")
-
-
-def _drop_lone_supplies(plan: BoardPlan) -> None:
-    """A supply pin nothing draws from is an unused pad, not a net: a keyboard with no screen
-    leaves its controller's 3V3 output open."""
-    pads = [(it, pin) for it in plan.items if it.on_pcb for pin, net in it.pads.items() if net]
-    for it, pin in pads:
-        net = it.pads[pin]
-        if net in SUPPLY_NETS and sum(o.pads.get(q) == net for o, q in pads) == 1:
-            it.pads[pin] = ""
-
-
 def _nets(plan: BoardPlan, side_tag: str) -> list[dict]:
     members: dict[str, list[dict]] = {}
     for it in plan.items:
@@ -527,7 +509,7 @@ def _nets(plan: BoardPlan, side_tag: str) -> list[dict]:
             "ground"
             if name == "GND"
             else "power"
-            if name in SUPPLY_NETS
+            if name in ("3V3", "BAT+", "VBAT_IN", "VDD18", "VDDPIX", "5V", "VBUS", "VBAT")
             else "signal"
         )
         out.append({"name": name, "kind": kind, "members": members[name]})
@@ -611,8 +593,6 @@ def plan_board(brief: dict, parts: list[dict], *, build_id: str | None = None) -
         plans = [plan_device_board(parts, log, brief)]
     else:
         b, plans, log = plan_boards(brief)
-    for plan in plans:
-        _drop_lone_supplies(plan)
     plan_s = round(time.monotonic() - t, 3)
     roles = _parts_by_role(parts)
     fp_hint, model_hint = _catalog_lookup(roles.get("mcu"))

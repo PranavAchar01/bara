@@ -6,7 +6,6 @@ import { Icon } from "../ui/common";
 import { ReplayControl } from "../bot/ReplayControl";
 import type { ConnStatus } from "../net/connection";
 import { SimulateButton } from "../sim/SimulateButton";
-import { useLibrary } from "../library/library";
 
 const CONN_LABEL: Record<ConnStatus, string> = {
   connecting: "Connecting",
@@ -64,27 +63,8 @@ export function TopBar() {
           </button>
         )}
         <ExportMenu />
-        {screen !== "workspace" && <DraftsButton />}
       </div>
     </header>
-  );
-}
-
-/** Top right of Home: opens the Drafts page (every build saved in this browser); on Drafts it goes back. */
-function DraftsButton() {
-  const screen = useApp((s) => s.screen);
-  const count = useLibrary((s) => s.cards.length);
-  const on = screen === "drafts";
-  return (
-    <button
-      type="button"
-      className={`btn sm drafts-btn ${on ? "on" : ""}`}
-      aria-current={on ? "page" : undefined}
-      onClick={() => useApp.setState({ screen: on ? "home" : "drafts" })}
-    >
-      Drafts
-      {count > 0 && <span className="drafts-n mono">{count}</span>}
-    </button>
   );
 }
 
