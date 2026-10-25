@@ -22,7 +22,7 @@ import { placeholderBox, type Box } from "./bbox";
 import { boardMatrix, matchComponents, type BoardCandidate } from "./boardgeom";
 import { EXPLODE_MS, LAYER_RANK, easeInOutCubic, explodeZ, layerProgress, isKeycapPart, layerGap, layerOf, layerOffsets, partLabel, type LayerExtent, type LayerId, type PartLabel } from "./explode";
 import { elementPoses, type ElementPose } from "./layout";
-import { arrangeDevices, chooseCamera, type Box as FloorBox } from "./arrange";
+import { arrangeDevices, chooseCamera, deviceKind, layoutCamera, type Box as FloorBox, type DeviceKind } from "./arrange";
 import { LabelOverlay, LabelProjector } from "./labels";
 import { FocusDriver, meshBox, nearFocused } from "./focus";
 import { setLook, type Look } from "./look";
@@ -1044,11 +1044,14 @@ function fallbackBox(): THREE.Box3 {
  * Fit the box's eight corners (not its bounding sphere, which leaves a lot of
  * empty grid) so the projected assembly spans `fill` of the view on its
  * tighter axis. `lift` raises the model by that fraction of the view height,
- * keeping it clear of the prompt bar and toolbar along the bottom edge.
+ * keeping it clear of the prompt bar and toolbar along the bottom edge. With `square`, `fill` is a
+ * share of the view's short side on both axes, so a device reads the same size in a wide window
+ * and a tall one.
  */
-function fitPose(box: THREE.Box3, dir: THREE.Vector3, cam: THREE.PerspectiveCamera, widthFrac: number, fill: number, lift = 0) {
-  const tanV = Math.tan((cam.fov * DEG) / 2);
-  const tanH = tanV * cam.aspect * widthFrac;
+function fitPose(box: THREE.Box3, dir: THREE.Vector3, cam: THREE.PerspectiveCamera, widthFrac: number, fill: number, lift = 0, square = false) {
+  const tanFull = Math.tan((cam.fov * DEG) / 2);
+  const tanV = square ? tanFull * Math.min(1, cam.aspect) : tanFull;
+  const tanH = square ? tanV : tanV * cam.aspect * widthFrac;
   const fwd = dir.clone().negate();
   const right = new THREE.Vector3().crossVectors(fwd, cam.up).normalize();
   if (right.lengthSq() < 1e-6) right.set(1, 0, 0);
@@ -1077,7 +1080,7 @@ function fitPose(box: THREE.Box3, dir: THREE.Vector3, cam: THREE.PerspectiveCame
     const z = rel.dot(dir);
     dist = Math.max(dist, z + Math.abs(rel.dot(right)) / (tanH * fill), z + Math.abs(rel.dot(up)) / (tanV * fill));
   }
-  target.addScaledVector(up, -2 * tanV * dist * lift);
+  target.addScaledVector(up, -2 * tanFull * dist * lift);
   return { pos: target.clone().addScaledVector(dir, dist), target, dist };
 }
 
@@ -1097,13 +1100,14 @@ export function sizedFill(box: THREE.Box3, fill: number): number {
 }
 
 /**
- * Share of the view (its tighter axis) the framed device or devices may span: the device sits small
- * on the desk with plenty of breathing room, so a first look is calm rather than a wall of parts.
+ * Share of the view's short side the framed device or devices span, on both axes: the device sits
+ * on the desk with a generous margin all round, so a first look is calm rather than a wall of parts,
+ * and a small device reads a little smaller than a big one.
  */
-const FIT_MIN = 0.36;
-const FIT_MAX = 0.46;
+const FIT_MIN = 0.45;
+const FIT_MAX = 0.55;
 
-/** 36% of the view for a thumb-sized device up to 46% for a full-size keyboard or bigger. */
+/** 45% of the short side for a thumb-sized device up to 55% for a full-size keyboard or bigger. */
 export function sceneFill(box: THREE.Box3): number {
   const diag = box.getSize(new THREE.Vector3()).length();
   return FIT_MIN + (FIT_MAX - FIT_MIN) * Math.min(1, Math.max(0, diag / FULL_SIZE_DIAG_MM));
@@ -1111,15 +1115,24 @@ export function sceneFill(box: THREE.Box3): number {
 
 const toBox = (b: THREE.Box3): FloorBox => ({ min: [b.min.x, b.min.y, b.min.z], max: [b.max.x, b.max.y, b.max.z] });
 
+/** What kind of device a build is (keyboard, mouse, handheld...), for the layout and the camera. */
+function buildKind(build: Build | null | undefined): DeviceKind {
+  if (!build) return "other";
+  return deviceKind({ taxonomy: build.spec?.taxonomy_path, deviceClass: build.spec?.device_class, prompt: build.prompt });
+}
+
 /**
- * Where the camera goes for the devices on stage: one rule over their boxes (arrange.ts). Flat,
- * wide devices are seen from high up, near top-down, with the long side across the screen; tall or
- * handheld ones from a 3/4 view.
+ * Where the camera goes for the devices on stage (arrange.ts layoutCamera): a handheld from the
+ * front at a 3/4, flat things from high up, several devices from one high front view with the row
+ * across the screen; devices of no known kind by the size rule.
  */
 function sceneDir(): THREE.Vector3 | null {
-  const boxes = stageBoxes();
-  if (!boxes.length) return null;
-  const [x, y, z] = chooseCamera(boxes.map(toBox)).dir;
+  const devices = stageDevices();
+  if (!devices.length) return null;
+  const [x, y, z] = layoutCamera(
+    devices.map((d) => toBox(d.box)),
+    devices.map((d) => d.kind),
+  ).dir;
   return new THREE.Vector3(x, y, z);
 }
 
@@ -1181,6 +1194,19 @@ function stageBoxes(): THREE.Box3[] {
   return [stage.root, ...(stage.companions?.children ?? [])].filter((o): o is THREE.Object3D => !!o).map((o) => new THREE.Box3().setFromObject(o)).filter((b) => !b.isEmpty());
 }
 
+/** The open device and every device beside it, each with its measured box and its kind. */
+function stageDevices(): { box: THREE.Box3; kind: DeviceKind }[] {
+  const out: { box: THREE.Box3; kind: DeviceKind }[] = [];
+  const add = (o: THREE.Object3D | null | undefined, kind: DeviceKind) => {
+    if (!o) return;
+    const box = new THREE.Box3().setFromObject(o);
+    if (!box.isEmpty()) out.push({ box, kind });
+  };
+  add(stage.root, buildKind(useApp.getState().build));
+  for (const c of stage.companions?.children ?? []) if (c.userData.companion) add(c, (c.userData.kind as DeviceKind | undefined) ?? "other");
+  return out;
+}
+
 function framePose(kind: FrameKind, cam: THREE.PerspectiveCamera, predictExplode: number | null) {
   const box = stageBox() ?? fallbackBox();
   if (predictExplode !== null) box.max.z += (stage.layerZ ? stage.lift : stage.gap * maxRank()) * (predictExplode - stage.explode);
@@ -1211,7 +1237,7 @@ function framePose(kind: FrameKind, cam: THREE.PerspectiveCamera, predictExplode
     return fit;
   }
   if (kind === "hero" || kind === "iso" || kind === "scene") {
-    return fitPose(box, sceneDir() ?? HERO_DIR.clone().normalize(), cam, 1, sceneFill(box), 0.05);
+    return fitPose(box, sceneDir() ?? HERO_DIR.clone().normalize(), cam, 1, sceneFill(box), 0.05, true);
   }
   const dir =
     kind === "top"
@@ -1588,6 +1614,23 @@ function CameraRig() {
   useEffect(() => {
     if (shift.current !== 0) cam.setViewOffset(size.width, size.height, size.width * shift.current, 0, size.width, size.height);
   }, [size.width, size.height, cam]);
+  const sized = useRef<string | null>(null);
+  useEffect(() => {
+    // The window or the canvas changed size: frame the device again for the new view, once the
+    // resize has settled, unless the user has turned the view themselves.
+    const key = `${size.width}x${size.height}`;
+    if (sized.current === null || sized.current === key) {
+      sized.current = key;
+      return;
+    }
+    sized.current = key;
+    const id = window.setTimeout(() => {
+      if (userMoved.current || stage.moving || framedFor.current === null || useSim.getState().active) return;
+      start(mode.current === "exploded" ? "exploded" : heroOrPreset());
+    }, 220);
+    return () => window.clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [size.width, size.height]);
   return null;
 }
 
@@ -1926,7 +1969,7 @@ function CompanionDevice(props: { canvasId: string; build: Build; offset: THREE.
   });
   const tag = box ? new THREE.Vector3((box.min.x + box.max.x) / 2, (box.min.y + box.max.y) / 2, box.max.z + 6) : new THREE.Vector3(0, 0, 30);
   return (
-    <group ref={slide} position={props.offset} userData={{ companion: props.canvasId }}>
+    <group ref={slide} position={props.offset} userData={{ companion: props.canvasId, kind: buildKind(build) }}>
       {parts.map((p) => (
         <CompanionPart key={p.instance_id} part={p} build={build} pick={pick} />
       ))}
@@ -1965,12 +2008,13 @@ function CompanionRow() {
   }, []);
   const activeId = useApp((s) => s.activeCanvas);
   const slots = useMemo(() => {
-    // arrange.ts stands the devices on the floor by their sizes; the open one stays at its origin,
-    // so switching tabs never moves the device being worked on
+    // arrange.ts stands the devices on the floor by kind and size (keyboard left, mouse right, a
+    // hand's width apart); the open one stays at its origin, so switching tabs never moves the
+    // device being worked on
     const here = assemblyBox(active) ?? fallbackBox();
     const guess = new THREE.Box3(new THREE.Vector3(-40, -40, 0), new THREE.Vector3(40, 40, 20));
     const boxes = [here, ...ids.map((_, i) => assemblyBox(others[i]) ?? guess)].map(toBox);
-    const at = arrangeDevices(boxes);
+    const at = arrangeDevices(boxes, [active, ...others].map(buildKind));
     return ids.map((id, i) => ({
       id,
       build: others[i],
