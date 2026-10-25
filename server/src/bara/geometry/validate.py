@@ -47,6 +47,7 @@ SEVERITY = {
     "mech.fit.sensor_window": "error",
     "mech.view.screen": "warning",
     "mech.access.panel": "warning",
+    "mech.access.clipped": "error",
     "mech.cable.length": "error",
 }
 
@@ -515,6 +516,53 @@ def validate(report: EncloseReport) -> list[dict[str, Any]]:
                 **kw,
             )
         )
+
+    # 7b. nothing a person touches is cut off: its whole body lies on the board, inside the
+    # outline, and (top side) the bezel is open over it
+    s = time.perf_counter()
+    clipped: list[str] = []
+    covered: list[str] = []
+    n_touch = 0
+    for f in feats:
+        if not f.touch or f.role in ("usb", "mcu", "battery"):
+            continue
+        n_touch += 1
+        a = math.radians(f.rot_deg)
+        ca, sa = math.cos(a), math.sin(a)
+        corners = [
+            (f.x + u * f.w / 2 * ca - v * f.d / 2 * sa, f.y + u * f.w / 2 * sa + v * f.d / 2 * ca)
+            for u, v in ((-1, -1), (1, -1), (1, 1), (-1, 1))
+        ]
+        if not all(point_in_polygon(x, y, outline) for x, y in corners):
+            clipped.append(f.ref)
+            continue
+        if f.side == "top" and f.role not in ("screen",):  # a screen's window is check 6
+            _, z_hi = f.z_range(t)
+            if _first_hit(case, np.array([f.x, f.y, z_hi + 0.05]), np.array([0, 0, 1.0]), 100.0):
+                covered.append(f.ref)
+    ok = not clipped and not covered
+    msg = f"All {n_touch} touched parts lie inside the outline with the case open over them"
+    if not ok:
+        parts = []
+        if clipped:
+            parts.append(f"cut off by the outline: {', '.join(clipped[:8])}")
+        if covered:
+            parts.append(f"covered by the bezel with no opening: {', '.join(covered[:8])}")
+        msg = "Touched parts " + "; ".join(parts)
+    checks.append(
+        _check(
+            "mech.access.clipped",
+            eid,
+            ok,
+            msg + ".",
+            measured=len(clipped) + len(covered),
+            limit=0,
+            unit="parts",
+            started=s,
+            fix="Place every touched part fully inside the outline and open the bezel over it.",
+            **kw,
+        )
+    )
 
     # 8. cables long enough
     by_ref = {f.ref: f for f in feats}

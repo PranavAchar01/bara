@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any
 from shapely.geometry import Polygon
 
 from bara.board.evaluate import evaluate as evaluate_board
+from bara.board.generic import board_footprint_mm
 from bara.live import adapters as A
 from bara.live import archetype, completeness, hero, open_designs, websearch
 from bara.live import blocks as blocks_mod
@@ -520,6 +521,7 @@ class LiveRunner:
         "mech.fit.enclosure": "E_ENCLOSURE_FAILED",
         "mech.fit.collision": "E_ENCLOSURE_FAILED",
         "mech.fit.floating": "E_ENCLOSURE_FAILED",
+        "mech.access.clipped": "E_ENCLOSURE_FAILED",
     }
 
     def gate(self, run: BuildRun) -> dict[str, Any] | None:
@@ -1129,6 +1131,63 @@ class LiveRunner:
             )  # fmt: skip
             brief["body_thickness_mm"] = stack
 
+    MAX_SWAPS = 3
+
+    async def _swap_to_fit(
+        self,
+        run: BuildRun,
+        st: Any,
+        gb: dict[str, Any],
+        result: ComposeResult,
+        parts: list[dict[str, Any]],
+        board: dict[str, Any] | None,
+        err: str | None,
+    ) -> tuple[dict[str, Any] | None, str | None, list[dict[str, Any]]]:
+        """A part with no free spot in the product is swapped for its slot's best candidate
+        with a smaller footprint (or none: wired off the board, under it) before the product is
+        redrawn bigger: the form stays what was asked for, the part follows the volume."""
+        composer = getattr(run, "live_composer", None)
+        for _ in range(self.MAX_SWAPS):
+            report = (gb.get("product_form") or {}).get("fit_report") or {}
+            stuck = report.get("stuck")
+            if composer is None or board is None or report.get("ok", True) or not stuck:
+                break
+            longest, area = max(stuck["mm"]), float(stuck["mm2"])
+
+            def fits(cand: dict[str, Any], longest: float = longest, area: float = area) -> bool:
+                try:
+                    record = self.source.get_part(cand["part_id"])
+                except Exception:  # noqa: BLE001 - a part the source cannot serve is not a fit
+                    return False
+                ext = board_footprint_mm(record)
+                if ext is None:  # off the board: its own body must still be smaller
+                    box_ = (record.get("mechanical") or {}).get("bbox_mm") or {}
+                    lo, hi = box_.get("min"), box_.get("max")
+                    if not (lo and hi):
+                        return True
+                    ext = (hi[0] - lo[0], hi[1] - lo[1])
+                return max(ext) < longest and ext[0] * ext[1] < area
+
+            mm = "x".join(f"{v:.0f}" for v in stuck["mm"])
+            why = f"{mm} mm, no free spot in the product"
+            part = composer.resize(str(stuck["instance_id"]), fits, why, st.emit)
+            if part is None:
+                break
+            self._warn(
+                run, "place", f"w_swap_{part['part_id']}"[:60], "other", "info",
+                f"{stuck['part']} ({mm} mm) does not fit the product; swapped for "
+                f"{part.get('display_name') or part['part_id']}.",
+            )  # fmt: skip
+            parts = []
+            for p in result.parts:
+                try:
+                    record = self.source.get_part(p["part_id"])
+                except Exception:  # a part the source no longer has stays off the board
+                    record = {}
+                parts.append({**p, "record": record})
+            board, err = await asyncio.to_thread(A.plan_board, gb, parts, run.build_id)
+        return board, err, parts
+
     async def _place_generic(
         self, run: BuildRun, brief: dict[str, Any], result: ComposeResult, ctx: dict[str, Any]
     ) -> dict[str, Any] | None:
@@ -1154,6 +1213,7 @@ class LiveRunner:
             brief["edge_thickness_mm"] = product.edge_thickness_mm
             brief["anchors"] = product.anchors
         board, err = await asyncio.to_thread(A.plan_board, gb, parts, run.build_id)
+        board, err, parts = await self._swap_to_fit(run, st, gb, result, parts, board, err)
         grown = False
         for _ in range(
             1 if getattr(run, "repair", "") else self.FIT_REPAIRS

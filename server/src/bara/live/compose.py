@@ -1567,6 +1567,57 @@ class Composer:
             )
         return f"{name}: highest score" + (" after " + ", ".join(bits) if bits else "") + "."
 
+    def resize(
+        self, instance_id: str, fits: Callable[[dict[str, Any]], bool], why: str, emit: Emit
+    ) -> dict[str, Any] | None:
+        """Re-pick the slot that owns instance_id with its best-ranked candidate that fits (a
+        part too big for the product swapped for a smaller one serving the same function);
+        returns the new part, None when no other candidate fits."""
+        slot = next(
+            (s for s in self.slots if any(i.instance_id == instance_id for i in s.instances)),
+            None,
+        )
+        if slot is None or slot.chosen is None:
+            return None
+        old = slot.chosen
+        _, ranked, _ = self.narrow(slot)
+        part = next((p for p in ranked if p["part_id"] != old["part_id"] and fits(p)), None)
+        if part is None:
+            return None
+        slot.chosen = part
+        self.result.chosen_parts[slot.slot_id] = part
+        reason = f"{card_for(old)['display_name']} does not fit: {why}"
+        emit(
+            "decision.made",
+            {
+                "decision": {
+                    "decision_id": self.next_decision(),
+                    "slot_id": slot.slot_id,
+                    "step": slot.order,
+                    "method": "solver",
+                    "chosen_part_id": part["part_id"],
+                    "chosen_short_id": None,
+                    "survivors": len(ranked),
+                    "reason": reason[:240],
+                    "model": None,
+                    "propagated": self.propagated(slot),
+                }
+            },
+            stage="compose",
+        )
+        built = {
+            inst.instance_id: self.build_part(slot, inst, self.sized_part(slot, inst, part))
+            for inst in slot.instances
+        }
+        self.result.parts = [built.get(p["instance_id"], p) for p in self.result.parts]
+        for bp in built.values():
+            emit("part.updated", {"part": bp}, stage="compose")
+        emit("slot.updated", {"slot": slot.json()}, stage="compose")
+        for conn in self.connections_for(slot, list(built.values())):
+            emit("connection.added", {"connection": conn}, stage="compose")
+        self.result.log.append(f"{slot.slot_id}: {part['part_id']} (resized: {why})")
+        return part
+
     def covering_slot(self, slot: Slot) -> Slot | None:
         """An already decided slot whose part also provides this slot's function.
 

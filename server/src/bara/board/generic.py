@@ -120,6 +120,16 @@ def _footprint(record: dict[str, Any]) -> FootprintInfo | None:
         return None
 
 
+def board_footprint_mm(record: dict[str, Any]) -> tuple[float, float] | None:
+    """The courtyard a part takes on the board, or None when it has no footprint and so sits
+    off the board, wired (a pouch cell, a module on a cable)."""
+    fp = _footprint(record)
+    if fp is None:
+        return None
+    x0, y0, x1, y1 = fp.courtyard
+    return (x1 - x0, y1 - y0)
+
+
 def gpio_pins(record: dict[str, Any]) -> int | None:
     """GPIO pins a controller part has, read from the same pin map the board planner wires."""
     fp = _footprint(record)
@@ -292,6 +302,8 @@ def plan_device_board(
         # left at the centre sat over a mouse's downward-facing sensor
         _clear_of(it, held, on_board, fitted, spot is not None)
         held[it.side].append(it.footprint_poly())
+    if fitted is not None and pf and (pf.get("fit_report") or {}).get("ok"):
+        _off_board_fit(off_board, fitted, pf, log)
 
     # controller GPIO for every peripheral signal, nearest pad first
     if mcu is not None:
@@ -734,6 +746,8 @@ def _outline(placed: list[Item]) -> Polygon:
 FORM_INSET_MM = 3.5  # case wall + clearance: the board edge sits this far inside the silhouette
 FORM_GRID_POINTS = 24000
 FORM_TRIES = 6000
+OFF_BOARD_SLACK_MM = 1.0  # the tray clearance a wired part may use past the board edge
+TOUCH_MARGIN_MM = 1.5  # a touched part's opening grows past its footprint (case TOUCH_MIN_MM)
 
 
 def form_region(pf: dict[str, Any], scale: float) -> Polygon:
@@ -852,7 +866,13 @@ def _attempt(
             it.rot = rot0 + turn
             it.x = it.y = 0.0
             base = it.footprint_poly()
-            body = it.body_poly()
+            # a touched part keeps its whole footprint, keep-out included, a finger's margin
+            # inside the outline: the case opening over it must not cut the wall
+            body = (
+                base.buffer(TOUCH_MARGIN_MM, join_style="mitre")
+                if it.meta.get("touch")
+                else it.body_poly()
+            )
             c0 = base.centroid
             shade = _shadow(it)
             for i in idx:
@@ -929,6 +949,41 @@ def _face_the_rim(it: Item, region: Polygon, target: tuple[float, float]) -> tup
     return (p.x, p.y)
 
 
+def _off_board_fit(
+    off_board: list[Item], fitted: Polygon, pf: dict[str, Any], log: list[str]
+) -> None:
+    """A wired part off the board (a cell, a module) still lives inside the product, under or
+    over the board: one larger than the outline either way round does not fit, and is reported
+    the way a footprint with no free spot is."""
+    room = prepared.prep(fitted.buffer(OFF_BOARD_SLACK_MM, join_style="mitre"))
+    for it in off_board:
+        if it.size_mm is None:
+            continue
+        w, h = it.size_mm
+        x0, y0, x1, y1 = fitted.bounds
+        if (w <= x1 - x0 and h <= y1 - y0) or (h <= x1 - x0 and w <= y1 - y0):
+            if room.contains(it.footprint_poly()):
+                continue
+            rot = it.rot
+            it.rot = rot + 90.0
+            if room.contains(it.footprint_poly()):
+                continue
+            it.rot = rot
+        pf["fit_report"]["ok"] = False
+        pf["fit_report"]["stuck"] = {
+            "instance_id": it.meta.get("instance_id"),
+            "part": it.label or it.ref,
+            "mm": [round(w, 1), round(h, 1)],
+            "mm2": round(w * h),
+        }
+        log.append(
+            f"FORM_OVERFLOW: {it.label or it.ref} {w:.1f}x{h:.1f} mm, wired off the board, is "
+            f"larger than the {x1 - x0:.1f} x {y1 - y0:.1f} mm product outline; the product is "
+            "never scaled to fit"
+        )
+        return
+
+
 def place_in_form(
     on_board: list[Item], mcu: Item | None, pf: dict[str, Any], log: list[str]
 ) -> Polygon:
@@ -999,6 +1054,13 @@ def place_in_form(
         ],
         "widest_mm": round(max(_extent(widest)), 1) if widest is not None else 0.0,
     }
+    if stuck is not None:  # the part with no free spot: compose may swap it for a smaller one
+        pf["fit_report"]["stuck"] = {
+            "instance_id": stuck.meta.get("instance_id"),
+            "part": stuck.label or stuck.ref,
+            "mm": [round(v, 1) for v in _extent(stuck)],
+            "mm2": round(_area(stuck)),
+        }
     if stuck is not None:
         r = pf["fit_report"]
         log.append(
