@@ -16,6 +16,9 @@ describe("sentences", () => {
 });
 
 describe("trimReply", () => {
+  it("matches a short ask with one sentence", () => {
+    expect(trimReply("Yes it fits. It is two millimetres wide.", 3)).toBe("Yes it fits.");
+  });
   it("keeps one or two short sentences", () => {
     expect(trimReply("Routing the board. Two layers. Then the case. Then checks.")).toBe("Routing the board. Two layers.");
     expect(trimReply("  Case closed.  ")).toBe("Case closed.");

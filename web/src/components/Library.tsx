@@ -11,6 +11,7 @@ import { deleteEntry, isFlat, loadEntry, useLibrary, type LibraryCard } from "..
 import { loadGallery, useGallery, type GalleryItem } from "../library/gallery";
 import { BuildStill } from "./BuildScene";
 import { openBuildDialog } from "./BuildDialog";
+import { OpenSource } from "./OpenSource";
 
 const DAY = 86_400_000;
 
@@ -394,6 +395,7 @@ export function LibraryPage() {
             : [0, 1, 2, 3, 4, 5].map((i) => <li key={i} className="gal-card is-loading" aria-hidden />)}
         </ul>
       </section>
+      <OpenSource />
       {drafts > 0 && <Library />}
     </div>
   );

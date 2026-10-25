@@ -3108,3 +3108,7 @@
 @media (prefers-reduced-motion: reduce) {
   .ho-run .workspace { animation: none; }
 }
+
+/* the speaker toggle shows only while spoken replies are on, or when the bar is hovered or focused */
+.promptbar .voice-toggle:not(.on) { opacity: 0; transition: opacity 0.15s; }
+.promptbar:hover .voice-toggle, .promptbar:focus-within .voice-toggle { opacity: 1; }

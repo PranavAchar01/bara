@@ -102,9 +102,10 @@ export function sentences(text: string): string[] {
 
 /** A spoken reply is one or two short sentences: more is a lecture, and it delays the first word of
  *  the next turn. The caption shows exactly what is said. */
-export function trimReply(text: string): string {
+export function trimReply(text: string, askedWords = 12): string {
   const pieces = text.trim().replace(/\s+/g, " ").split(/(?<=[.!?])\s+/).filter(Boolean);
-  const said = pieces.slice(0, 2).join(" ");
+  // a short ask gets one short sentence; a longer one can have two
+  const said = pieces.slice(0, askedWords <= 5 ? 1 : 2).join(" ");
   if (said.length <= 200) return said;
   if (pieces[0].length <= 200) return pieces[0];
   return `${said.slice(0, 197).replace(/\s+\S*$/, "")}...`;
@@ -177,7 +178,7 @@ function speakInBrowser(text: string): void {
 /** Says a reply when replies are on (or `force`); the caption shows while it plays. `then` runs
  *  when it has been said through, which is how a spoken conversation hands the turn back. */
 export function speak(text: string, force = false, then?: () => void): void {
-  const clean = trimReply(text);
+  const clean = trimReply(text, askedWords);
   if (!clean || (!force && !useVoice.getState().replies)) return;
   stopSpeaking();
   afterSpeech = then ?? null;
@@ -264,12 +265,15 @@ function clearTimers(): void {
 }
 
 /** Where a finished utterance goes: the part in focus if there is one, otherwise the prompt. */
+// how long the last thing said to Bara was, so the reply can match it
+let askedWords = 12;
 function deliver(text: string, id: number, handsFree: boolean): void {
   if (delivered === id) return;
   delivered = id;
   const t = cleanTranscript(text);
   if (!t) return;
   lastHandsFree = handsFree ? performance.now() : 0;
+  askedWords = t.split(/\s+/).length;
   if (!useVoice.getState().replies) setReplies(true);
   const target = useApp.getState().focusKey ? "bara:ask" : "bara:prompt";
   window.dispatchEvent(new CustomEvent(target, { detail: t }));
