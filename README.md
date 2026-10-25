@@ -1,114 +1,115 @@
-# Bara
+<p align="center">
+  <img src="web/public/og/tangible-parts.png" alt="Bara by Tangible Parts" width="720" />
+</p>
 
-Bara turns a one-line gadget prompt into a routed build. Type something like "a wireless split keyboard with an OLED" and Bara either picks an existing open design or assembles one from parts. It lays the parts out in 3D, plans the case and the board, picks firmware, and shows each decision as it happens. After that you can edit the build (swap a part, remove an optional one), and each edit is checked against the same rules before it lands.
+<p align="center">
+  <b>Describe a device. Get it built from real parts.</b><br />
+  A <b>Cal Hacks 13.0</b> project by Pranav Achar and Nithin Aruswamy · <a href="https://tangible.parts">tangible.parts</a>
+</p>
 
-Team: Pranav Achar and Nithin. Nithin owns the web UI in `web/`.
+<p align="center">
+  <img src="https://img.shields.io/badge/Anthropic-Claude-D97757?style=flat-square" />
+  <img src="https://img.shields.io/badge/Figma-design-A259FF?style=flat-square&logo=figma&logoColor=white" />
+  <img src="https://img.shields.io/badge/OpenAI-voice-10A37F?style=flat-square" />
+  <img src="https://img.shields.io/badge/You.com-search-2563EB?style=flat-square" />
+  <img src="https://img.shields.io/badge/Apify-Actor-97D700?style=flat-square" />
+  <img src="https://img.shields.io/badge/Cerebras-fast%20path-F05A28?style=flat-square" />
+</p>
 
-## Disclosure
+---
 
-Before the event we wrote the spec and a labelled set of test prompts, and ran a small routing experiment to check the idea was feasible. None of that experiment's code is in this repo. We used Nithin's public UI skill library, the same one we used in Etch. Everything in this repo was written at Cal Hacks 13.0.
+Type "a wireless split keyboard with an OLED" and watch it come together. Bara picks real parts, lays them out in 3D, sculpts a case, routes a real KiCad board, and writes the firmware, explaining every choice as it goes. Then you change it in plain words or with your voice, and every edit is checked before it lands.
 
-## How it works
+<p align="center">
+  <img src="docs/readme/build.gif" alt="Bara building a wireless split keyboard" width="760" />
+</p>
 
-The browser (Vite, React, React Three Fiber) talks to a FastAPI server over one WebSocket (`/v1/ws`) plus a few REST reads. The contract between them is `spec/SPEC.md` (v1.1.1; the wire `spec_version` is `1.1.0`), with JSON Schemas in `spec/schemas/` and example sessions in `spec/fixtures/`.
+## Meet Bara
 
-A build runs through these stages in order:
+<img src="docs/readme/bara.gif" alt="Bara, the agent" width="180" align="right" />
 
-1. classify: prompt to a structured spec. If a wrong guess would change the device, the build pauses and asks a clarifying question (2 rounds at most).
-2. reuse: the router decides how much of an existing design can be kept.
-3. compose: fills the slots that need new parts.
-4. place: positions parts in 3D.
-5. enclose: the case.
-6. board: the circuit board.
-7. firmware: driver templates, compiled live when the parts changed.
-8. render: scene, camera and the asset preload list.
+Bara is the agent who builds with you: an ink oval with two eyes, nothing else. It walks onto the canvas, hovers over the part it's choosing, and shows how it feels through motion alone. Click a part to swap it, recolour it, move it, or ask about it. Hold <kbd>Space</kbd> to talk. Every change lands as a version you can undo.
 
-Once the build is done, an edit stage runs for each accepted edit.
+<br clear="right" />
 
-### Router and model providers
+## What it builds
 
-Cerebras handles the fast, enum-constrained calls. If it fails or times out, Anthropic takes over. If neither is available, the router uses keyword rules (`server/data/router_keywords.json`) so the build still finishes. Every model call reports which provider served it.
+Each of these started as one sentence.
 
-### Tiers
+<p align="center">
+  <img src="docs/readme/builds.png" alt="Devices built by Bara" width="760" />
+</p>
 
-| Tier | Meaning | Case | Board | Firmware |
-|---|---|---|---|---|
-| exact | one open design meets every hard requirement | the design's own | the design's routed board | prebuilt |
-| substitute | one design is close; only failing slots are refilled | the design's own | the design's board | prebuilt unless the swap changes the MCU or pins |
-| compose | no design is close enough; parts are chosen slot by slot | generated, neutral gray | autorouted, cached | compiled live |
+## How a build works
+
+```mermaid
+flowchart LR
+  P([Your prompt]) --> S[Scout open designs]
+  S --> C[Classify and compose]
+  C --> L[Place parts]
+  L --> E[Sculpt the case]
+  E --> B[Route the board]
+  B --> F[Write firmware]
+  F --> R([3D build you can edit])
+  R -. voice or text edits .-> C
+
+  classDef you fill:#2563EB,color:#fff,stroke:#2563EB
+  classDef claude fill:#D97757,color:#fff,stroke:#D97757
+  classDef kicad fill:#161616,color:#fff,stroke:#161616
+  class S you
+  class C,F claude
+  class B kicad
+```
+
+<table>
+  <tr><td>🔵 <b>Scout</b></td><td>Finds open designs that already exist, so Bara reuses before it invents.</td></tr>
+  <tr><td>🟠 <b>Compose</b></td><td>Breaks the device into function blocks and picks one real part for each, with reasons.</td></tr>
+  <tr><td>⚫ <b>Board</b></td><td>pcbnew builds it, Freerouting routes it, kicad-cli checks it. DRC errors trigger a re-route.</td></tr>
+  <tr><td>✅ <b>Checks</b></td><td>Electrical, mechanical, and a vision judge that asks if it actually looks like the device.</td></tr>
+</table>
+
+## Sponsor tools
+
+| | Tool | What it does in Bara |
+|---|---|---|
+| 🟠 | **Anthropic Claude** | The engineer behind every decision. Sonnet 5.5 classifies the prompt, asks clarifying questions, picks parts (schema-locked to real part IDs), writes firmware, judges the render, and handles edits. Claude Code built the product, including an overnight loop that ran our test prompts, found root causes, and pushed fixes. |
+| 🟣 | **Figma** | All design, made through Claude Code and the Figma MCP. FigJam teardown, a full design system with the agent's moods, a Make prototype of explode and focus, and design tokens pulled straight into `tokens.css`. |
+| 🟢 | **OpenAI** | Bara's voice. gpt-4o-mini-tts speaks with a written personality, and gpt-4o-transcribe listens, hinted with the build's part names so "SSD1306" comes through right. |
+| 🔵 | **You.com** | The first search on every build. Finds open designs with a real KiCad board, plus photos of the real product so the case looks right. |
+| 🟩 | **Apify** | The Open Hardware Scout Actor ([actors/](actors/bara-hardware-scout)). Fallback search, and it prices every part so the BOM has live stock and buy links. |
+| 🔶 | **Cerebras** | A fast path for quick, constrained calls, with Claude as backup and keyword rules as the last resort, so a build always finishes. |
 
 ## Run it
 
-You need [uv](https://docs.astral.sh/uv/), [pnpm](https://pnpm.io) and Node.
+You need [uv](https://docs.astral.sh/uv/), [pnpm](https://pnpm.io), and Node.
 
-```
+```bash
 scripts/dev.sh
 ```
 
-This starts the server on 127.0.0.1:8790 and the web app on http://localhost:5173, which proxies `/v1` and `/assets` to the server.
+That starts the engine on `127.0.0.1:8790` and the app on http://localhost:5173. No keys? Open http://localhost:5173/?mock=1 to replay a recorded build in the browser.
 
-To run each half on its own:
+Live builds need `ANTHROPIC_API_KEY`, plus KiCad 10 and Freerouting for boards. `OPENAI_API_KEY`, `YOU_API_KEY`, `APIFY_TOKEN`, and `CEREBRAS_API_KEY` are optional. Keys come from the environment only.
 
-```
-cd server && uv run bara-server
-cd web && pnpm install && pnpm dev
-```
+<details>
+<summary>Tests and repo layout</summary>
 
-Mock mode needs no server and replays the spec fixtures in the browser:
-
-http://localhost:5173/?mock=1&mock_fixture=exact_keyboard
-
-### The deployed site
-
-The Vercel site is the web app only; the engine (pcbnew, Freerouting, kicad-cli, the model key) runs on a Mac. On that Mac:
-
-```
-scripts/serve-public.sh        # engine on :8797 + Cloudflare quick tunnel; publishes the tunnel URL
-scripts/serve-public.sh open   # opens the site with the access key, once per browser
-```
-
-For local UI work against that engine, `cd web && BARA_SERVER=auto pnpm dev` looks up the published tunnel and the dev proxy adds the key for you (from `BARA_ACCESS_TOKEN`, else the keychain), so http://localhost:5173 needs no `?key=`.
-
-The engine refuses every request without the access key (keychain item `bara-access-token`, also the Vercel env var `BARA_ACCESS_TOKEN`). The site asks `/api/engine` for the tunnel URL with that key, then talks to the engine directly. When the engine is down or the key is missing, the site says "Engine offline" or "Engine locked" and plays the recorded demo instead.
-
-### Environment variables
-
-| Variable | Purpose | Default |
-|---|---|---|
-| `CEREBRAS_API_KEY` | primary model provider | unset |
-| `ANTHROPIC_API_KEY` | backup model provider | unset |
-| `BARA_CEREBRAS_MODEL` | Cerebras model name | `llama-3.3-70b` |
-| `BARA_ANTHROPIC_MODEL` | Anthropic model name | `claude-haiku-5-5` |
-| `BARA_SPEED` | replay playback rate; higher is faster, `0` skips delays | `1.0` |
-| `BARA_MOCK` | server replays fixture streams | on (`1`) |
-| `BARA_HOST`, `BARA_PORT` | bind address | `127.0.0.1`, `8790` |
-| `BARA_ACCESS_TOKEN` | when set, every request but `/v1/health` needs it (`X-Bara-Token` header or `?token=`) | unset |
-| `BARA_LLM_TIMEOUT_S` | per-call model timeout | `5.0` |
-| `BARA_DATA_DIR`, `BARA_SPEC_DIR` | catalog/assets and spec locations | `server/data`, `spec` |
-
-Keys come from the environment only. None are stored in the repo.
-
-## Tests
-
-```
+```bash
 cd server && uv run pytest
 cd web && pnpm test
 scripts/e2e.sh
 ```
 
-## Repo layout
-
 ```
-spec/       contract: SPEC.md, schemas/, fixtures/ (8 streams, REST fixtures)
-server/     FastAPI app (src/bara), catalog and assets in data/, tests/
-web/        Vite + React + React Three Fiber UI (src/), mock-mode socket
-scripts/    dev.sh (run both), e2e.sh (end-to-end check)
-e2e/        WebSocket smoke test and live UI check
+spec/      the contract between app and engine (SPEC.md, schemas, fixtures)
+server/    FastAPI engine (src/bara), catalog and assets in data/
+web/       Vite + React + React Three Fiber app
+actors/    the Apify Open Hardware Scout
+scripts/   dev, e2e, deploy, and render scripts
 ```
 
-## Known limits (v0)
+</details>
 
-- Every build replays one of the 8 fixture streams. A prompt that matches a fixture's prompt list plays that fixture; any other prompt is classified and plays the fixture for its tier.
-- The composer that builds from the full parts library comes next. Until then, compose-tier results come from the recorded streams, not live part selection.
-- STL, 3MF, STEP and KiCad exports are not wired up yet, and part meshes are not shipped, so the viewport draws bounding boxes.
-- The part catalog is small and covers keyboards best.
+## Disclosure
+
+Before the event we wrote the spec and a labelled set of test prompts, and ran a small routing experiment to check the idea was feasible. None of that experiment's code is in this repo. We used Nithin's public UI skill library, the same one we used in Etch. Everything in this repo was written at Cal Hacks 13.0.
