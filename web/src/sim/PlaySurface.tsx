@@ -63,7 +63,7 @@ export function PlayPanel(p: PanelProps) {
         </div>
         {visible.length === 0 && <p className="small play-muted">Every control is hidden. Choose Arrange to bring them back.</p>}
         {groupRows(visible).map((g) => (
-          <section key={g.group} className="play-group" aria-label={g.group}>
+          <section key={g.group} className={`play-group ${g.rows.length > 2 && g.rows.every((r) => r.control === "button" || r.control === "key") ? "grid" : ""}`} aria-label={g.group}>
             <h3 className="play-group-title">{g.group}</h3>
             {g.rows.map((r) => (
               <ControlRow key={r.input_id} row={r} {...p} edit={edit} pair={p.rows.find((x) => x.input_id === r.input_id.replace(/\.x$/, ".y") && r.input_id.endsWith(".x")) ?? null} />
