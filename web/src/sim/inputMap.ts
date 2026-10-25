@@ -198,6 +198,30 @@ export function findPlus(pts: { x: number; y: number }[]): Plus | null {
   return best?.plus ?? null;
 }
 
+const DPAD_WORDS = /d-?pad|direction|arrow|cross ?pad/i;
+
+/**
+ * The four switches of a part its own label calls a D-pad, as a plus read by angle around their
+ * middle: when the board placer set them askew (one arm pulled in), the label still says what they
+ * are. Indices into `raws`, or null when no labelled part has exactly four.
+ */
+export function labelledPlus(raws: { pos: V3; part: BuildPart }[]): Plus | null {
+  const ids = [...new Set(raws.filter((r) => DPAD_WORDS.test(`${r.part.label ?? ""} ${r.part.card.display_name}`)).map((r) => r.part.instance_id))];
+  for (const id of ids) {
+    const idx = raws.flatMap((r, i) => (r.part.instance_id === id ? [i] : []));
+    if (idx.length !== 4) continue;
+    const [cx, cy] = centroid(idx.map((i) => raws[i].pos));
+    const ang = (i: number) => Math.atan2(raws[i].pos[1] - cy, raws[i].pos[0] - cx);
+    const ccw = [...idx].sort((a, b) => ang(a) - ang(b));
+    const off = (i: number) => Math.abs(Math.atan2(Math.sin(ang(i) - Math.PI / 2), Math.cos(ang(i) - Math.PI / 2)));
+    const top = ccw.reduce((best, i) => (off(i) < off(best) ? i : best), ccw[0]);
+    const k = ccw.indexOf(top);
+    const at = (n: number) => ccw[(k + n) % 4];
+    return { up: at(0), left: at(1), down: at(2), right: at(3) };
+  }
+  return null;
+}
+
 const SYSTEM_WORDS = /\b(reset|boot|select|start|menu|power|mode)\b/gi;
 
 /** Reset and boot style buttons are named by the part's own label, in the order the label lists them. */
@@ -232,7 +256,7 @@ function nameButtons(all: Raw[], up: [number, number]): Named[] {
   const rest = raws.filter((r) => !isSystemPart(r.part) && !isShoulderPart(r.part));
   // shoulder buttons sit on the top edge: left to right on screen they are L and R
   [...shoulders].sort((p, q) => p.pos[0] - q.pos[0]).forEach((raw, i, all) => out.push({ raw, name: all.length === 1 ? "L" : i === 0 ? "L" : i === all.length - 1 ? "R" : `S${i + 1}`, role: "action" }));
-  const plus = findPlus(rest.map((r) => ({ x: r.pos[0], y: r.pos[1] })));
+  const plus = findPlus(rest.map((r) => ({ x: r.pos[0], y: r.pos[1] }))) ?? labelledPlus(rest);
   const used = new Set<number>();
   if (plus) {
     const arms: [keyof Plus, string][] = [["up", "UP"], ["down", "DOWN"], ["left", "LEFT"], ["right", "RIGHT"]];
@@ -286,7 +310,7 @@ export function screenUp(build: Build | null): [number, number] | null {
   const screen = display ? (display.placement.position_mm as V3) : null;
   const controls = centroid(raws.map((r) => r.pos));
   const toScreen: [number, number] | null = screen ? [screen[0] - controls[0], screen[1] - controls[1]] : null;
-  const plus = findPlus(raws.map((r) => ({ x: r.pos[0], y: r.pos[1] })));
+  const plus = findPlus(raws.map((r) => ({ x: r.pos[0], y: r.pos[1] }))) ?? labelledPlus(raws);
   if (plus) {
     const inPlus = new Set([plus.up, plus.down, plus.left, plus.right]);
     const dpad = centroid([...inPlus].map((i) => raws[i].pos));

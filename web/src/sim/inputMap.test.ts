@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Build, BuildPart, Layout } from "../spec/types";
-import { deriveInputMap, findPlus, orderByPosition, screenUp } from "./inputMap";
+import { deriveInputMap, findPlus, labelledPlus, orderByPosition, screenUp } from "./inputMap";
 import { createRuntime, press, release } from "./runtime";
 import { inputForKey } from "./physical";
 
@@ -72,6 +72,25 @@ describe("findPlus", () => {
     const plus = findPlus(pts);
     expect(plus?.left).toBe(6);
     expect(plus?.right).toBe(7);
+  });
+});
+
+describe("labelledPlus", () => {
+  it("reads a D-pad part's four switches as a plus by angle, even with one arm pulled in", () => {
+    // the board placer left the left arm near the middle: no clean plus, but the label says D-pad
+    const pad = part({ id: "u_dpad", fn: "input.button", label: "D-pad direction switches", quantity: 4 });
+    const ab = part({ id: "u_ab", fn: "input.button", label: "A and B action buttons", quantity: 2 });
+    const raws = [
+      { part: pad, pos: [-95, -8, 0] as V },
+      { part: pad, pos: [-86, -17, 0] as V },
+      { part: pad, pos: [-95, -26, 0] as V },
+      { part: pad, pos: [-97, -18, 0] as V },
+      { part: ab, pos: [92, -15, 0] as V },
+      { part: ab, pos: [92, -3, 0] as V },
+    ];
+    expect(findPlus(raws.map((r) => ({ x: r.pos[0], y: r.pos[1] })))).toBeNull();
+    expect(labelledPlus(raws)).toEqual({ up: 0, right: 1, down: 2, left: 3 });
+    expect(labelledPlus(raws.slice(4))).toBeNull();
   });
 });
 

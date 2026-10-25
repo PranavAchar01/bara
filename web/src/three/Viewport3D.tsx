@@ -491,7 +491,8 @@ function PartNode(props: PartNodeProps) {
   }, [loaded, box, matrices]);
   useEffect(() => (ref.current ? registerPart(part.instance_id, ref.current, localBox) : undefined), [ref, part.instance_id, localBox]);
   // A placeholder's "(no model)" tag shows on hover or when the parts panel points at it, never by
-  // default: a tag pinned in the hero sat on top of real parts (battery under the OLED).
+  // default: a tag pinned in the hero sat on top of real parts (battery under the OLED). While
+  // simulating, hidden parts never tag the screen the game is drawn on.
   const [hover, setHover] = useState(false);
   // hoverPart: the nearest part mesh under the pointer (its over handler stops propagation), for the agent on stage.
   const id = part.instance_id;
@@ -523,7 +524,7 @@ function PartNode(props: PartNodeProps) {
           <meshBasicMaterial color={outline} side={THREE.BackSide} transparent opacity={0.95} depthWrite={false} toneMapped={false} />
         </instancedMesh>
       )}
-      {!focusOn && (props.labels || props.selected || (missing && !props.covered && assembled && (hover || props.highlight))) && (
+      {!focusOn && (props.labels || props.selected || (missing && !props.covered && assembled && !simActive && (hover || props.highlight))) && (
         <Html position={htmlAnchor} center zIndexRange={[20, 0]} style={{ pointerEvents: "none" }}>
           <span className={`vp-label ${missing ? "missing" : ""} ${props.failing ? "failing" : ""}`}>
             {part.label ?? part.card.display_name}
