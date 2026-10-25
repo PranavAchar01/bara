@@ -120,6 +120,17 @@ def _dropped(block: dict[str, Any], reason: str) -> dict[str, str]:
     }
 
 
+_LABEL_CUT = re.compile(r",| \(| - | with | for | on | that | which ")
+
+
+def short_label(text: str, limit: int = 38) -> str:
+    """A slot heading from a block's label: the name before its explanation, cut at a word."""
+    head = _LABEL_CUT.split(text, maxsplit=1)[0].strip() or text.strip()
+    if len(head) <= limit:
+        return head
+    return head[:limit].rsplit(" ", 1)[0] or head[:limit]
+
+
 def _slug(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", text.lower()).strip("_")[:24] or "block"
 

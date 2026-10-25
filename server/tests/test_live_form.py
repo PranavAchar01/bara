@@ -754,6 +754,7 @@ def test_ask_json_asks_again_when_the_answer_was_cut_off(
             return types.SimpleNamespace(
                 stop_reason="max_tokens" if cut else "end_turn",
                 content=[types.SimpleNamespace(type="text", text=text)],
+                usage=None,
             )
 
     class Client:

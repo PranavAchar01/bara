@@ -411,7 +411,7 @@ def derive_slots(
         slots.append(
             Slot(
                 slot_id=need.key,
-                label=need.label,
+                label=cp.short_label(need.label),
                 function_id=need.function_id,
                 criticality="critical",
                 order=0,
