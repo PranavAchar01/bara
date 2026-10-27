@@ -60,4 +60,4 @@ opencv, python, aws-lambda, aws-graviton, amazon-s3, amazon-cloudwatch, fastapi,
 - Repo: https://github.com/PranavAchar01/bara/tree/opencv-aws
 - Technical report: https://github.com/PranavAchar01/bara/blob/opencv-aws/docs/hackathons/opencv26/report.md
 - Live endpoint: https://utmqhifgnhqgep65hqqhuh56aa0rukxb.lambda-url.us-west-2.on.aws/
-- Video: (YouTube, unlisted)
+- Video: https://youtu.be/AV-6akZKhRU (YouTube, unlisted)

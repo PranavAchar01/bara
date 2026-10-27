@@ -11,7 +11,7 @@ Source: https://opencv26.devpost.com/ (rules and overview, read 2026-10-26). Dea
 | 5 | Pinned dependencies, build / deploy / test instructions | `server/pyproject.toml` + `uv.lock`, `server/aws/deploy.py` PINS, report section 10, README | done |
 | 6 | Architecture diagram | `docs/hackathons/opencv26/architecture.svg` / `.png` | done |
 | 7 | Working web endpoint or live screen-share demo | Lambda function URL (public); full app runs locally, screen share on request | done |
-| 8 | Video, 5 minutes or less, public or unlisted, showing team, app working, architecture, results | YouTube (unlisted), link in the Devpost entry | in progress |
+| 8 | Video, 5 minutes or less, public or unlisted, showing team, app working, architecture, results | https://youtu.be/AV-6akZKhRU (unlisted, 3:10), linked in the Devpost entry; submitted 2026-10-26 21:25 PT, https://devpost.com/software/tangible-fit-check | done |
 | 9 | Evaluation evidence including failure cases | `eval/results.json`, report section 7, `e2e/` screenshots | done (synthetic photos) |
 | 10 | Prior work disclosed | report header, Devpost text: Cal Hacks 13.0 line | done |
 | 11 | Eligibility: entrant 13 or older | profile | done |
