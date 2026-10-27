@@ -1,0 +1,234 @@
+# Tangible on GitLab: every board Tangible generates goes through KiCad's own checks, a parts
+# licence gate and a fab package before it ships, and the web app deploys to GitLab Pages.
+# GitLab Duo flows in .gitlab/duo/ pick up from here: they read the gate results, explain the
+# failures on the merge request and open issues for boards that need a human.
+
+stages:
+  - verify
+  - secure
+  - package
+  - govern
+  - deploy
+  - release
+  - monitor
+
+include:
+  - template: Jobs/SAST.gitlab-ci.yml
+  - template: Jobs/Secret-Detection.gitlab-ci.yml
+  - template: Jobs/Dependency-Scanning.gitlab-ci.yml
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+
+variables:
+  KICAD_IMAGE: kicad/kicad:10.0
+  PYTHONPATH: $CI_PROJECT_DIR/server/src
+  HW_BOARDS: hardware/boards
+  HW_POLICY: hardware/policy.json
+
+.kicad:
+  image: $KICAD_IMAGE
+  before_script:
+    - kicad-cli version
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - changes: [hardware/**/*, server/src/bara/hwci/**/*, .gitlab-ci.yml]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG
+
+# verify ----------------------------------------------------------------------------------
+
+hardware:gate:
+  extends: .kicad
+  stage: verify
+  script:
+    - python3 -m bara.hwci check $HW_BOARDS --policy $HW_POLICY --out hw-report
+  # On a merge request a failing board fails the pipeline. On the default branch the known
+  # failures stay visible (orange) and are tracked as issues by hardware:report.
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes: [hardware/**/*, server/src/bara/hwci/**/*, .gitlab-ci.yml]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_TAG
+      allow_failure:
+        exit_codes: [1]
+  artifacts:
+    when: always
+    expose_as: hardware gate
+    paths: [hw-report/]
+    reports:
+      junit: hw-report/junit.xml
+      codequality: hw-report/gl-code-quality-report.json
+      cyclonedx: hw-report/hbom/*.cdx.json
+
+hardware:report:
+  extends: .kicad
+  stage: verify
+  needs: [hardware:gate]
+  when: always
+  script:
+    - python3 -m bara.hwci post hw-report/results.json
+    - cat hw-report/gate.md
+
+server:test:
+  stage: verify
+  image: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+  variables:
+    UV_CACHE_DIR: $CI_PROJECT_DIR/.uv-cache
+  cache:
+    key: uv-$CI_COMMIT_REF_SLUG
+    paths: [.uv-cache]
+  script:
+    - cd server
+    - uv run --frozen ruff check src/bara/hwci tests/test_hwci.py
+    - uv run --frozen pytest -q tests/test_hwci.py tests/test_contract.py --junitxml=../server-junit.xml
+  artifacts:
+    when: always
+    reports:
+      junit: server-junit.xml
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - changes: [server/**/*, hardware/**/*, .gitlab-ci.yml]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+web:test:
+  stage: verify
+  image: node:22-bookworm-slim
+  cache:
+    key: pnpm-$CI_COMMIT_REF_SLUG
+    paths: [.pnpm-store]
+  before_script:
+    - corepack enable
+    - cd web && pnpm config set store-dir ../.pnpm-store && pnpm install --frozen-lockfile
+  script:
+    - pnpm typecheck
+    - pnpm test
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - changes: [web/**/*, .gitlab-ci.yml]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# package -----------------------------------------------------------------------------------
+
+hardware:fab:
+  extends: .kicad
+  stage: package
+  needs: [hardware:gate]
+  image: $KICAD_IMAGE
+  script:
+    - python3 -m bara.hwci fab $HW_BOARDS --out hw-fab
+    - |
+      if [ "$CI_COMMIT_BRANCH" = "$CI_DEFAULT_BRANCH" ] || [ -n "$CI_COMMIT_TAG" ]; then
+        VERSION=${CI_COMMIT_TAG:-0.0.$CI_PIPELINE_IID}
+        for f in hw-fab/*.zip; do
+          curl --fail -sS --header "JOB-TOKEN: $CI_JOB_TOKEN" --upload-file "$f" \
+            "$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/tangible-fab/$VERSION/$(basename $f)"
+          echo "uploaded $(basename $f) to tangible-fab/$VERSION"
+        done
+      fi
+  artifacts:
+    paths: [hw-fab/]
+
+web:build:
+  stage: package
+  image: node:22-bookworm-slim
+  cache:
+    key: pnpm-$CI_COMMIT_REF_SLUG
+    paths: [.pnpm-store]
+    policy: pull
+  script:
+    - corepack enable
+    - cd web && pnpm config set store-dir ../.pnpm-store && pnpm install --frozen-lockfile
+    # The public build replays a recorded build in the browser, so it needs no engine or keys.
+    - VITE_MOCK=1 pnpm build
+    - cp dist/index.html dist/404.html
+  artifacts:
+    paths: [web/dist/]
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG
+    - changes: [web/**/*]
+
+# govern ------------------------------------------------------------------------------------
+
+hardware:provenance:
+  stage: govern
+  image: $KICAD_IMAGE
+  needs: [hardware:gate]
+  script:
+    # Every footprint on every board must resolve to a library in hardware/policy.json with a
+    # licence the policy allows. Parts the policy marks for review are listed on the MR.
+    - |
+      python3 - <<'EOF'
+      import json
+      run = json.load(open("hw-report/results.json"))
+      blocked = [(b["name"], p["ref"]) for b in run["boards"] for p in b["provenance"]["parts"]
+                 if p["verdict"] == "blocked"]
+      review = sum(b["provenance"]["review"] for b in run["boards"])
+      total = sum(len(b["provenance"]["parts"]) for b in run["boards"])
+      print(f"{total} footprints, {review} for licence review, {len(blocked)} blocked")
+      raise SystemExit(1 if blocked else 0)
+      EOF
+  rules:
+    - !reference [.kicad, rules]
+
+# deploy ------------------------------------------------------------------------------------
+
+pages:
+  stage: deploy
+  image: busybox:1.36
+  needs: [web:build]
+  script:
+    - mv web/dist public
+  artifacts:
+    paths: [public]
+  environment:
+    name: production
+    url: $CI_PAGES_URL
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# release -----------------------------------------------------------------------------------
+
+release:
+  stage: release
+  image: registry.gitlab.com/gitlab-org/cli:latest
+  needs: [hardware:fab, hardware:gate]
+  script:
+    - |
+      ASSETS=""
+      for f in hw-fab/*.zip; do
+        n=$(basename $f)
+        ASSETS="$ASSETS --assets-links={\"name\":\"$n\",\"url\":\"$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/tangible-fab/$CI_COMMIT_TAG/$n\",\"link_type\":\"package\"}"
+      done
+      glab release create "$CI_COMMIT_TAG" --name "Tangible hardware $CI_COMMIT_TAG" \
+        --notes-file hw-report/gate.md $ASSETS
+  rules:
+    - if: $CI_COMMIT_TAG
+
+# monitor -----------------------------------------------------------------------------------
+
+monitor:smoke:
+  stage: monitor
+  image: python:3.12-alpine
+  script:
+    - python3 -m bara.hwci smoke "${TANGIBLE_URL:-$CI_PAGES_URL}" --expect Tangible
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: delayed
+      start_in: 2 minutes
