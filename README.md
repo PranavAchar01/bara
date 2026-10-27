@@ -96,6 +96,21 @@ flowchart LR
 | 🟩 | **Apify** | The Open Hardware Scout Actor ([actors/](actors/bara-hardware-scout)). Fallback search, and it prices every part so the BOM has live stock and buy links. |
 | 🔶 | **Cerebras** | A fast path for quick, constrained calls, with Claude as backup and keyword rules as the last resort, so a build always finishes. |
 
+## Hardware gate on GitLab
+
+Every board Tangible makes goes through KiCad's own checks before it ships. On GitLab
+(https://gitlab.com/tangible-parts/tangible) each merge request runs KiCad 10 DRC and ERC on the
+boards in hardware/boards, checks every footprint's library licence against hardware/policy.json,
+and posts the result as a merge request note, JUnit and Code Quality reports and a CycloneDX
+hardware BOM. A GitLab Duo flow (.gitlab/duo/flows/hardware-gate-triage.yml) explains each error
+on the merge request and files one issue per failing board; a custom Duo agent and an MCP server
+(.gitlab/duo/mcp.json) answer questions about the boards. Details in hardware/README.md.
+
+The pipeline runs on a project runner on our Mac with native KiCad 10, because the account's
+hosted runners are waiting on identity verification. GitLab's SAST, Secret Detection and
+Dependency Scanning jobs are in .gitlab-ci.yml but switched off by project variables until then:
+they need Docker, which that runner does not have.
+
 ## Run it
 
 You need [uv](https://docs.astral.sh/uv/), [pnpm](https://pnpm.io), and Node.
@@ -129,4 +144,4 @@ scripts/   dev, e2e, deploy, and render scripts
 
 ## Disclosure
 
-Before the event we wrote the spec and a labelled set of test prompts, and ran a small routing experiment to check the idea was feasible. None of that experiment's code is in this repo. We used Nithin's public UI skill library, the same one we used in Etch. Everything in this repo was written at Cal Hacks 13.0.
+Before the event we wrote the spec and a labelled set of test prompts, and ran a small routing experiment to check the idea was feasible. None of that experiment's code is in this repo. We used Nithin's public UI skill library, the same one we used in Etch. Everything in this repo was written at Cal Hacks 13.0, except the GitLab hardware gate (hardware/, server/src/bara/hwci, .gitlab-ci.yml, .gitlab/duo), which was built afterwards for GitLab's Life After Code hackathon.

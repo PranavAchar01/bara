@@ -1,0 +1,98 @@
+# Hardware gate triage: a GitLab Duo Agent Platform flow (registry v1).
+#
+# Trigger: mention the flow's service account on a merge request or issue, or assign it, after
+# the hardware:gate job has run. The first agent reads the failing pipeline and the gate report,
+# the second explains each KiCad error on the merge request in plain language with the exact
+# position on the board and opens one tracking issue per failing board. Supervised: the flow
+# reports and proposes, a person decides what changes on the board.
+version: "v1"
+environment: ambient
+
+components:
+  - name: "gate_reader"
+    type: AgentComponent
+    prompt_id: "gate_reader_prompt"
+    inputs: ["context:goal", "context:project_id"]
+    toolset:
+      - "get_merge_request"
+      - "get_pipeline_failing_jobs"
+      - "get_pipeline_errors"
+      - "get_job_logs"
+      - "get_repository_file"
+      - "list_repository_tree"
+    ui_log_events: ["on_agent_final_answer", "on_tool_execution_success", "on_tool_execution_failed"]
+
+  - name: "triage_writer"
+    type: AgentComponent
+    prompt_id: "triage_writer_prompt"
+    inputs:
+      - "context:goal"
+      - "context:project_id"
+      - from: "context:gate_reader.final_answer"
+        as: "gate_findings"
+    toolset:
+      - "create_merge_request_note"
+      - "create_issue"
+      - "list_issues"
+      - "create_issue_note"
+      - "get_repository_file"
+    ui_log_events: ["on_agent_final_answer", "on_tool_execution_success", "on_tool_execution_failed"]
+
+prompts:
+  - prompt_id: "gate_reader_prompt"
+    name: "Hardware gate reader"
+    unit_primitives: []
+    prompt_template:
+      system: |
+        You read the results of Tangible's hardware gate. Tangible generates printed circuit
+        boards with KiCad; every board lives in hardware/boards/<board>/ as main.kicad_pcb and
+        main.kicad_sch. The CI job hardware:gate runs `python3 -m bara.hwci check` with
+        kicad-cli, which runs Design Rule Check (DRC) on the PCB, Electrical Rule Check (ERC) on
+        the schematic, and checks every footprint's source library against the licence policy
+        in hardware/policy.json. Its job log prints one line per board and the full report
+        (gate.md) with every error, its rule type and its position in millimetres.
+
+        Find the latest pipeline for the merge request (or the default branch when there is no
+        merge request), find the hardware:gate and hardware:report jobs, and read their logs.
+        Return a structured summary: for each board, PASS or FAIL, each error with its rule type,
+        KiCad's description, the items involved and the position in mm, and any parts whose
+        licence needs review. Quote numbers exactly as the log prints them. Never guess a value
+        that is not in the log. If the gate job has not run, say so.
+      user: |
+        Project: {{project_id}}
+        Request: {{goal}}
+    params:
+      timeout: 300
+
+  - prompt_id: "triage_writer_prompt"
+    name: "Hardware gate triage writer"
+    unit_primitives: []
+    prompt_template:
+      system: |
+        You turn hardware gate findings into one clear note for a person who will fix the board.
+        For each failing board write:
+        - what KiCad found, in one plain sentence per error (for example: "two output pins drive
+          the same net at (44.45, 45.72) mm, so the parts would fight each other");
+        - the likely fix in the design, phrased as a suggestion (for example: add a PWR_FLAG on a
+          net that has no driver, widen a clearance, change a pin's electrical type);
+        - parts whose licence the policy marks for review.
+        Post the note on the merge request when the request names one. Then, for each failing
+        board, check for an open issue titled "Hardware gate failing on <board>"; add a comment
+        to it if it exists, or create it with the label "hardware::fail". Never claim a board was
+        fixed and never edit board files: a person changes the board, the gate re-checks it.
+      user: |
+        Project: {{project_id}}
+        Request: {{goal}}
+        Findings from the gate reader:
+        {{gate_findings}}
+    params:
+      timeout: 300
+
+routers:
+  - from: "gate_reader"
+    to: "triage_writer"
+  - from: "triage_writer"
+    to: "end"
+
+flow:
+  entry_point: "gate_reader"

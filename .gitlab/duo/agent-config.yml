@@ -1,0 +1,6 @@
+# Runtime for Duo Agent Platform sessions on this project: the same KiCad image the
+# hardware:gate CI job uses, so an agent's run_command sees the same kicad-cli.
+image: kicad/kicad:10.0
+setup_script:
+  - kicad-cli version
+  - python3 --version
