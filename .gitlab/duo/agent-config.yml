@@ -1,6 +1,8 @@
-# Runtime for Duo Agent Platform sessions on this project: the same KiCad image the
-# hardware:gate CI job uses, so an agent's run_command sees the same kicad-cli.
-image: kicad/kicad:10.0
+# Runtime for Duo Agent Platform sessions on this project. The session runner downloads the
+# Duo CLI with curl, which the kicad/kicad image does not ship, so sessions use a full Python
+# image. The triage flow only reads GitLab (job logs, gate report, issues) and writes notes, so
+# it does not need kicad-cli; the KiCad checks themselves run in the hardware:gate CI job.
+image: python:3.12-bookworm
 setup_script:
-  - kicad-cli version
   - python3 --version
+  - curl --version | head -1
