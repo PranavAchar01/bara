@@ -63,6 +63,35 @@ Each of these started as one sentence.
   <img src="docs/readme/builds.png" alt="Devices built by Bara" width="760" />
 </p>
 
+## Tangible vs a general chat model
+
+We gave Claude (Fable 5.1, a fresh chat on claude.ai) the prompt "an ergonomic mouse with a PAW3212 optical sensor, two main click switches, a scroll wheel encoder and an nRF52840 board", and compared what it produced with a Tangible build of the same kind of mouse.
+
+| | Claude (Fable 5.1) | Tangible |
+|---|---|---|
+| First reply | Text only: a pin map and a bill of materials (33 s) | An existing library build, so no new run was timed |
+| 3D model | Only after a follow-up asking for one: a Three.js page you can rotate (150 s) | Built in |
+| Exploded view | Only after a second follow-up (59 s) | Built in |
+| Part shapes | Procedural boxes and cylinders | KiCad library part models on a routed PCB |
+| Board and export | A PCB shape and a shell, with no routed board and no export | A routed KiCad board and a case |
+
+Claude needed 2 follow-ups to reach an exploded 3D view. Its viewer is interactive: rotate, X-ray, underside, and an explode slider.
+
+Two caveats. The Tangible build is an existing, larger version of the mouse from the library (extra thumb switches, a slide switch, an IMU, a proximity sensor and a battery connector), not a fresh run against the same prompt. It also lists one push button, where the prompt asked for two main click switches. Screenshots were taken at different sizes: Claude at 1200x1189 with its chat pane, Tangible at 1600x1000.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/compare/fable-assembled.png" alt="Claude: assembled mouse" /><br /><b>Claude, assembled</b></td>
+    <td width="50%"><img src="docs/compare/fable-exploded.png" alt="Claude: exploded mouse" /><br /><b>Claude, exploded</b></td>
+  </tr>
+  <tr>
+    <td><img src="docs/compare/tangible-assembled.png" alt="Tangible: assembled mouse" /><br /><b>Tangible, assembled</b></td>
+    <td><img src="docs/compare/tangible-exploded.png" alt="Tangible: exploded mouse" /><br /><b>Tangible, exploded</b></td>
+  </tr>
+</table>
+
+In a separate measurement for the demo video, a general coding agent given a handheld-console prompt took 50.4 s and answered with text and a browser game.
+
 ## How a build works
 
 ```mermaid
