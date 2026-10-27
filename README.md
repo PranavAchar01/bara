@@ -131,6 +131,18 @@ flowchart LR
 | 🟩 | **Apify** | The Open Hardware Scout Actor ([actors/](actors/bara-hardware-scout)). Fallback search, and it prices every part so the BOM has live stock and buy links. |
 | 🔶 | **Cerebras** | A fast path for quick, constrained calls, with Claude as backup and keyword rules as the last resort, so a build always finishes. |
 
+## Fit check (OpenCV 5 on AWS)
+
+Built for the OpenCV AI Competition 2026, after Cal Hacks. Lay a printed ArUco marker next to the space a device has to fit and take one photo from above. OpenCV 5 on AWS Lambda (arm64 Graviton) rectifies the photo and measures the space in millimetres. The agent then proposes the next step: build to that size, shrink the current case, cut its height, or retake the photo if it can't trust it. Nothing changes until you approve.
+
+On synthetic photos with known sizes the mean error is 0.42 mm (p95 1.4 mm), and bad photos get a retake request in 29 of 30 cases. The [technical report](docs/hackathons/opencv26/report.md) covers the method, the deployment, the evaluation and its limits.
+
+```bash
+cd server && uv run pytest tests/test_vision.py
+uv run python scripts/vision_eval.py ../docs/hackathons/opencv26/eval
+uv run python aws/deploy.py        # needs AWS credentials in the environment
+```
+
 ## Run it
 
 You need [uv](https://docs.astral.sh/uv/), [pnpm](https://pnpm.io), and Node.

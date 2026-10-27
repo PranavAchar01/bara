@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="560" viewBox="0 0 1100 560" font-family="Helvetica, Arial, sans-serif" font-size="14">
+  <rect width="1100" height="560" fill="#ffffff"/>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#333"/></marker>
+  </defs>
+  <text x="550" y="34" text-anchor="middle" font-size="20" font-weight="bold">Tangible fit check: photo to next build action</text>
+
+  <!-- browser -->
+  <rect x="30" y="70" width="250" height="200" rx="10" fill="#eef4ff" stroke="#3b6fd8"/>
+  <text x="155" y="96" text-anchor="middle" font-weight="bold">Browser (Tangible web app)</text>
+  <text x="45" y="124">Fit check panel</text>
+  <text x="45" y="148">1. photo + printed ArUco marker</text>
+  <text x="45" y="170">2. shrink to 1600 px JPEG</text>
+  <text x="62" y="190">(drops EXIF / GPS)</text>
+  <text x="45" y="212">5. show top-down view, size,</text>
+  <text x="62" y="232">agent steps, proposal</text>
+  <text x="45" y="256">6. human approves (or not)</text>
+
+  <!-- engine -->
+  <rect x="370" y="70" width="330" height="290" rx="10" fill="#f3f0ff" stroke="#6b4fd8"/>
+  <text x="535" y="96" text-anchor="middle" font-weight="bold">Tangible engine (FastAPI)</text>
+  <text x="385" y="122">POST /v1/vision/fit  (agent.decide)</text>
+  <rect x="385" y="134" width="300" height="214" rx="6" fill="#fff" stroke="#999"/>
+  <text x="397" y="156" font-weight="bold">Agent loop</text>
+  <text x="397" y="178">perceive: measure(photo) on Lambda</text>
+  <text x="397" y="198">  if no marker / unsure: retry with CLAHE</text>
+  <text x="397" y="218">  if still bad: ask for a retake</text>
+  <text x="397" y="240">check: case footprint + clearance vs space</text>
+  <text x="397" y="262">decide next action:</text>
+  <text x="407" y="282">no build: build sized to the space</text>
+  <text x="407" y="302">too big: shrink-to-fit prompt</text>
+  <text x="407" y="322">too tall: resize height edit</text>
+  <text x="407" y="342">fits: report spare mm</text>
+
+  <!-- lambda -->
+  <rect x="790" y="70" width="280" height="290" rx="10" fill="#fff6e8" stroke="#e08a00"/>
+  <text x="930" y="96" text-anchor="middle" font-weight="bold">AWS Lambda (us-west-2)</text>
+  <text x="805" y="118">arm64 Graviton, python3.12, 1 GB</text>
+  <text x="805" y="138">function URL, CloudWatch logs</text>
+  <rect x="805" y="150" width="250" height="196" rx="6" fill="#fff" stroke="#999"/>
+  <text x="817" y="172" font-weight="bold">OpenCV 5.0.0 measure()</text>
+  <text x="817" y="194">ArucoDetector, subpixel corners</text>
+  <text x="817" y="214">getPerspectiveTransform +</text>
+  <text x="817" y="234">  warpPerspective, 4 px/mm</text>
+  <text x="817" y="254">sheet mask via floodFill</text>
+  <text x="817" y="274">Lab + Otsu, adaptive, Canny</text>
+  <text x="817" y="294">minAreaRect, approxPolyDP</text>
+  <text x="817" y="314">checks: cut off, two objects,</text>
+  <text x="817" y="334">  ragged, whole frame</text>
+
+  <!-- arrows -->
+  <line x1="280" y1="150" x2="368" y2="150" stroke="#333" stroke-width="2" marker-end="url(#a)"/>
+  <text x="288" y="140" font-size="12">3. image + mode</text>
+  <line x1="700" y1="180" x2="788" y2="180" stroke="#333" stroke-width="2" marker-end="url(#a)"/>
+  <text x="708" y="170" font-size="12">image (base64)</text>
+  <line x1="788" y1="230" x2="702" y2="230" stroke="#333" stroke-width="2" marker-end="url(#a)"/>
+  <text x="708" y="250" font-size="12">mm, shape, status</text>
+  <line x1="368" y1="230" x2="282" y2="230" stroke="#333" stroke-width="2" marker-end="url(#a)"/>
+  <text x="288" y="250" font-size="12">4. proposal</text>
+
+  <!-- build pipeline -->
+  <rect x="370" y="410" width="330" height="110" rx="10" fill="#eafaf0" stroke="#2a9d5c"/>
+  <text x="535" y="436" text-anchor="middle" font-weight="bold">Existing Tangible build pipeline</text>
+  <text x="385" y="462">real parts, 3D layout, sculpted case,</text>
+  <text x="385" y="484">KiCad board, firmware (Claude)</text>
+  <text x="385" y="506">rebuild or edit with the measured limits</text>
+  <path d="M155,270 L155,465 L368,465" fill="none" stroke="#333" stroke-width="2" marker-end="url(#a)"/>
+  <text x="165" y="455" font-size="12">7. approved prompt or edit</text>
+
+  <text x="790" y="410" font-size="12" fill="#555">Fallback: if Lambda is unreachable,</text>
+  <text x="790" y="428" font-size="12" fill="#555">the engine runs the same measure.py</text>
+  <text x="790" y="446" font-size="12" fill="#555">in process and says so in the trace.</text>
+</svg>
