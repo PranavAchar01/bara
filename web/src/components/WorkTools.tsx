@@ -117,6 +117,7 @@ function ExplodeButton() {
 export function WorkTools() {
   const panels = useApp((s) => s.panels);
   const hasBuild = useApp((s) => s.build !== null);
+  const fitOpen = useApp((s) => s.overlay === "fit");
   const toggle = (k: "layers" | "details") => useApp.setState((s) => ({ panels: { ...s.panels, [k]: !s.panels[k] } }));
   return (
     <div className="wt">
@@ -129,6 +130,16 @@ export function WorkTools() {
           </button>
           <button type="button" className={`wt-btn ${panels.details ? "on" : ""}`} aria-pressed={panels.details} onClick={() => toggle("details")} title="Details" aria-label="Details">
             <Glyph name="details" />
+          </button>
+          <button
+            type="button"
+            className={`wt-btn ${fitOpen ? "on" : ""}`}
+            aria-pressed={fitOpen}
+            onClick={() => useApp.setState({ overlay: fitOpen ? null : "fit" })}
+            title="Fit check: measure a real space from a photo"
+            aria-label="Fit check"
+          >
+            <Glyph name="fit" />
           </button>
           <span className="wt-sep" aria-hidden />
           <ExplodeButton />

@@ -14,7 +14,8 @@ export type GlyphName =
   | "more"
   | "around"
   | "pull"
-  | "view";
+  | "view"
+  | "fit";
 
 const PATHS: Record<GlyphName, string> = {
   undo: "M6 4.5 3 7.5l3 3M3.5 7.5H10a3 3 0 0 1 0 6H8",
@@ -30,6 +31,7 @@ const PATHS: Record<GlyphName, string> = {
   more: "M3.5 8h.01M8 8h.01M12.5 8h.01",
   around: "M5.5 5.5h5v5h-5zM2.5 2.5h2.2M2.5 2.5v2.2M13.5 2.5h-2.2M13.5 2.5v2.2M2.5 13.5h2.2M2.5 13.5v-2.2M13.5 13.5h-2.2M13.5 13.5v-2.2",
   pull: "M8 13V4M4.5 7.5 8 4l3.5 3.5M3 13.5h10",
+  fit: "M2.5 5V2.5H5M11 2.5h2.5V5M13.5 11v2.5H11M5 13.5H2.5V11M5.5 6.5h5v3h-5z",
   view: "M1.8 8s2.3-4.3 6.2-4.3 6.2 4.3 6.2 4.3-2.3 4.3-6.2 4.3S1.8 8 1.8 8zM8 6.2a1.8 1.8 0 1 0 0 3.6 1.8 1.8 0 0 0 0-3.6z",
 };
 

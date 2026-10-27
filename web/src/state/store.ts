@@ -20,7 +20,7 @@ export interface LogEntry {
   raw: string;
 }
 
-export type Overlay = "inspector" | "swap" | "resize" | "connect" | "addpart" | "focus" | null;
+export type Overlay = "inspector" | "swap" | "resize" | "connect" | "addpart" | "focus" | "fit" | null;
 /** Right panel tabs, as in the Figma layout: Design (what), Build (how it was decided), Code (wiring, board, firmware). */
 export type RightTab = "design" | "build" | "code";
 export type CodeTab = "connections" | "board" | "firmware";

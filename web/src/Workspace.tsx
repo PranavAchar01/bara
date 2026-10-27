@@ -8,6 +8,7 @@ import { BuildProgress, EditStatus, FailureCard, LatencyHUD, WarningBanner } fro
 import { PartsList, RightColumn } from "./components/RightColumn";
 import { AddPartPicker, ConnectDialog, PartInspector, ResizePanel, SwapDrawer } from "./components/Overlays";
 import { FocusCard } from "./components/FocusCard";
+import { FitCheck } from "./components/FitCheck";
 import { SaysLine, SelectionBar } from "./components/SelectionBar";
 import { Icon } from "./ui/common";
 import { Viewport3D } from "./three/Viewport3D";
@@ -27,12 +28,13 @@ function RightOverlay() {
   if (overlay === "inspector" && (selection || inspectPartId)) return <PartInspector />;
   if (overlay === "swap" && selection) return <SwapDrawer />;
   if (overlay === "resize") return <ResizePanel />;
+  if (overlay === "fit") return <FitCheck />;
   return null;
 }
 
 /** The details panel opens when asked for, or when an action needs it (swap, details, resize). */
 function useDetailsOpen(): boolean {
-  return useApp((s) => s.panels.details || s.overlay === "swap" || s.overlay === "inspector" || s.overlay === "resize");
+  return useApp((s) => s.panels.details || s.overlay === "swap" || s.overlay === "inspector" || s.overlay === "resize" || s.overlay === "fit");
 }
 
 function closeDetails() {
