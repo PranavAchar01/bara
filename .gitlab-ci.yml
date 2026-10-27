@@ -17,14 +17,19 @@ include:
   - template: Jobs/Secret-Detection.gitlab-ci.yml
   - template: Jobs/Dependency-Scanning.gitlab-ci.yml
 
+# The security scanners run in Docker, so they go to GitLab's hosted runners (no tag) while the
+# KiCad jobs stay on the Mac runner.
 sast:
   stage: secure
+  tags: []
 
 secret_detection:
   stage: secure
+  tags: []
 
 dependency_scanning:
   stage: secure
+  tags: []
 
 workflow:
   rules:
