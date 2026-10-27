@@ -21,6 +21,8 @@ import cv2
 import numpy as np
 
 ARUCO_DICT = cv2.aruco.DICT_4X4_50
+MARKER_ID = 7  # the id on the printed sheet; any other 4x4 code is a keyboard key or a pattern
+MIN_MARKER_PX = 40.0  # mean side after downscaling; smaller means a fleck, not the 40 mm sheet
 MAX_SIDE_PX = 1600  # photos are downscaled to this before anything else
 PX_PER_MM = 4.0  # resolution of the rectified top-down view
 HALF_SPAN_MM = 450.0  # rectified view covers at most this far from the marker in each direction
@@ -48,7 +50,7 @@ def _enhance(img: np.ndarray) -> np.ndarray:
 
 
 def find_marker(img: np.ndarray) -> dict[str, Any] | None:
-    """The largest ArUco 4x4 marker in the photo: id, corners (px) and how skewed it looks."""
+    """The printed marker (id MARKER_ID, at least MIN_MARKER_PX a side): corners (px) and skew."""
     params = cv2.aruco.DetectorParameters()
     params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX
     detector = cv2.aruco.ArucoDetector(cv2.aruco.getPredefinedDictionary(ARUCO_DICT), params)
@@ -57,16 +59,22 @@ def find_marker(img: np.ndarray) -> dict[str, Any] | None:
     if ids is None or len(ids) == 0:
         return None
     ids = np.asarray(ids).reshape(-1)
-    best = max(range(len(ids)), key=lambda i: cv2.contourArea(corners[i].reshape(4, 2)))
-    quad = corners[best].reshape(4, 2).astype(np.float64)
-    sides = [float(np.linalg.norm(quad[i] - quad[(i + 1) % 4])) for i in range(4)]
+    found = []
+    for i, marker_id in enumerate(ids):
+        quad = corners[i].reshape(4, 2).astype(np.float64)
+        sides = [float(np.linalg.norm(quad[j] - quad[(j + 1) % 4])) for j in range(4)]
+        if int(marker_id) == MARKER_ID and sum(sides) / 4 >= MIN_MARKER_PX:
+            found.append((cv2.contourArea(quad.astype(np.float32)), quad, sides))
+    if not found:
+        return None
+    _, quad, sides = max(found, key=lambda f: f[0])
     return {
-        "id": int(ids[best]),
+        "id": MARKER_ID,
         "corners_px": quad.round(2).tolist(),
         "side_px": round(sum(sides) / 4, 2),
         # 1.0 is a square on screen; far from 1 means a steep camera angle
         "skew": round(min(sides) / max(sides), 3),
-        "count": int(len(ids)),
+        "count": len(found),
     }
 
 
@@ -324,7 +332,7 @@ def measure(
     return result
 
 
-def marker_png(marker_id: int = 7, marker_mm: float = 40.0, dpi: int = 300) -> bytes:
+def marker_png(marker_id: int = MARKER_ID, marker_mm: float = 40.0, dpi: int = 300) -> bytes:
     """A printable marker: the black square is exactly marker_mm wide at the given dpi."""
     side = round(marker_mm / 25.4 * dpi)
     mark = cv2.aruco.generateImageMarker(
@@ -334,7 +342,7 @@ def marker_png(marker_id: int = 7, marker_mm: float = 40.0, dpi: int = 300) -> b
     page = cv2.copyMakeBorder(
         mark, border, border * 3, border, border, cv2.BORDER_CONSTANT, value=255
     )
-    text = f"Tangible fit marker  id {marker_id}  {marker_mm:g} mm  print at 100%"
+    text = f"Fit marker  id {marker_id}  {marker_mm:g} mm  print at 100%"
     cv2.putText(
         page,
         text,

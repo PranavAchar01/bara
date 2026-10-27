@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import base64
+import os
+import shutil
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -11,7 +14,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from bara.vision import agent
-from bara.vision.measure import measure
+from bara.vision.measure import ARUCO_DICT, MARKER_ID, measure
 from bara.vision.routes import build_vision_router
 from bara.vision.synth import make_scene
 
@@ -96,3 +99,54 @@ def test_route_round_trip():
     assert data["annotated_jpg_b64"]
     png = client.get("/v1/vision/marker.png")
     assert png.status_code == 200 and png.content[:4] == b"\x89PNG"
+
+
+def _jpg(img: np.ndarray) -> bytes:
+    ok, jpg = cv2.imencode(".jpg", img)
+    assert ok
+    return jpg.tobytes()
+
+
+def _sheet_with(marker_id: int, side: int) -> np.ndarray:
+    img = np.full((800, 1000, 3), 120, np.uint8)
+    mark = cv2.aruco.generateImageMarker(
+        cv2.aruco.getPredefinedDictionary(ARUCO_DICT), marker_id, side
+    )
+    pad = max(side // 4, 6)
+    img[100 - pad : 100 + side + pad, 100 - pad : 100 + side + pad] = 250
+    img[100 : 100 + side, 100 : 100 + side] = mark[..., None]
+    cv2.rectangle(img, (500, 400), (700, 550), (40, 40, 40), -1)
+    return img
+
+
+def test_a_marker_with_another_id_is_not_the_printed_sheet():
+    assert measure(_jpg(_sheet_with(17, 160)))["status"] == "no_marker"
+    assert measure(_jpg(_sheet_with(MARKER_ID, 160)))["marker"]["id"] == MARKER_ID
+
+
+def test_a_tiny_printed_marker_is_ignored():
+    assert measure(_jpg(_sheet_with(MARKER_ID, 24)))["status"] == "no_marker"
+
+
+DESK_PHOTO = Path(
+    os.environ.get(
+        "BARA_DESK_PHOTO",
+        "/Users/pranav/helloworld/videos-2026-10/tangible-opencv/assets/his-desk.png",
+    )
+)
+
+
+@pytest.mark.skipif(not DESK_PHOTO.exists(), reason="desk photo stays out of the repo")
+def test_desk_photo_without_the_sheet_gets_no_marker(tmp_path):
+    # a real desk where the CLAHE retry used to read a keyboard key as "id 17"
+    copy = tmp_path / "desk.png"
+    shutil.copy(DESK_PHOTO, copy)
+    img = cv2.imread(str(copy))
+    s = 1280 / max(img.shape[:2])
+    small = cv2.resize(img, None, fx=s, fy=s, interpolation=cv2.INTER_AREA)
+    # this exact JPEG made the old detector report an 18 px "id 17" with made-up sizes
+    jpg = cv2.imencode(".jpg", small, [cv2.IMWRITE_JPEG_QUALITY, 70])[1].tobytes()
+    for data in (copy.read_bytes(), jpg):
+        assert measure(data)["status"] == "no_marker"
+        assert measure(data, enhance=True)["status"] == "no_marker"
+        assert agent.decide(data)["action"]["kind"] == "retake"
