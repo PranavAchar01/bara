@@ -1,0 +1,43 @@
+{
+  "gate": {
+    "drc_errors": 0,
+    "erc_errors": 0,
+    "unconnected": 0,
+    "blocked_parts": 0
+  },
+  "allowed_licences": [
+    "CC-BY-SA-4.0 WITH KiCad-libraries-exception",
+    "CERN-OHL-P-2.0",
+    "CC-BY-SA-4.0",
+    "MIT",
+    "CC0-1.0"
+  ],
+  "review_licences": ["NOASSERTION"],
+  "sources": {
+    "kicad": {
+      "match": ["${KICAD10_FOOTPRINT_DIR}", "/kicad/footprints", "SharedSupport/footprints"],
+      "licence": "CC-BY-SA-4.0 WITH KiCad-libraries-exception",
+      "url": "https://gitlab.com/kicad/libraries/kicad-footprints"
+    },
+    "marbastlib": {
+      "match": ["kicad-libs/marbastlib"],
+      "licence": "CERN-OHL-P-2.0",
+      "url": "https://github.com/ebastler/marbastlib"
+    },
+    "kiswitch": {
+      "match": ["kicad-libs/kiswitch"],
+      "licence": "MIT",
+      "url": "https://github.com/kiswitch/kiswitch"
+    },
+    "seeed_opl": {
+      "match": ["OPL_Kicad_Library"],
+      "licence": "CC-BY-SA-4.0",
+      "url": "https://github.com/Seeed-Studio/OPL_Kicad_Library"
+    },
+    "lcsc": {
+      "match": ["catalog/fetched/src/"],
+      "licence": "NOASSERTION",
+      "url": "https://www.lcsc.com/"
+    }
+  }
+}
