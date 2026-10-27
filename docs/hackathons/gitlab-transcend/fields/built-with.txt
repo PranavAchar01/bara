@@ -1,1 +1,1 @@
-GitLab CI/CD, GitLab Duo Agent Platform (flows, custom agents, MCP), GitLab Pages, GitLab Package Registry, GitLab Runner, KiCad 10, Python, TypeScript, React, Vite, Three.js, CycloneDX, MCP
+GitLab CI/CD, GitLab Duo Agent Platform (flows, custom agents, MCP), GitLab Pages, GitLab Package Registry, GitLab Runner, GitLab SAST, Secret Detection, Dependency Scanning, GitLab Releases, KiCad 10, Python, TypeScript, React, Vite, Three.js, CycloneDX, MCP

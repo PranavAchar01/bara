@@ -9,11 +9,11 @@ Status key: DONE, OPEN (work left), HIS (needs Pranav).
 
 | # | Requirement | Status | Where |
 |---|---|---|---|
-| 1 | Uses the GitLab Duo Agent Platform (agents, flows or MCP) | Flow + agent in AI Catalog, enabled on project; RUN blocked (HIS: identity verification, REST 403) | `.gitlab/duo/flows/hardware-gate-triage.yml`, `.gitlab/duo/agents/hardware-reviewer.md`, `.gitlab/duo/mcp.json` |
+| 1 | Uses the GitLab Duo Agent Platform (agents, flows or MCP) | DONE: flow ran on MR !1 (session 10098503), posted triage note 4095376337 and commented on issues #1 and #2 | `.gitlab/duo/flows/hardware-gate-triage.yml`, `.gitlab/duo/agents/hardware-reviewer.md`, `.gitlab/duo/mcp.json` |
 | 2 | Public GitLab repo | DONE | https://gitlab.com/tangible-parts/tangible |
 | 3 | MIT LICENSE visible in About | DONE (GitLab detects MIT) | `LICENSE` |
-| 4 | Original project is MIT, URL given | GitLab DONE; GitHub HIS (the Devpost field says the original must be MIT) | https://github.com/PranavAchar01/bara has no LICENSE yet |
-| 5 | CI/CD pipeline history visible | DONE on a Mac project runner (shared runners need verification); SAST/Secret/Dependency scans off (need Docker) | https://gitlab.com/tangible-parts/tangible/-/pipelines/2992379626 |
+| 4 | Original project is MIT, URL given | DONE (GitHub detects MIT, commit 3517de3) | https://github.com/PranavAchar01/bara |
+| 5 | CI/CD pipeline history visible | DONE: KiCad jobs on a Mac project runner; SAST, Secret Detection and Dependency Scanning on hosted runners (main pipeline 2992410626) | https://gitlab.com/tangible-parts/tangible/-/pipelines/2992379626 |
 | 6 | Deployed public URL, live until about Nov 16 | DONE (GitLab Pages from main pipeline 2992391781) | https://tangible-c3783a.gitlab.io/ |
 | 7 | Demo video under 3 min, public on YouTube | OPEN | `docs/hackathons/gitlab-transcend/` |
 | 8 | Say what was added on or after Oct 5 | DONE in draft | `devpost.md` "How we built it" |
@@ -38,8 +38,8 @@ Status key: DONE, OPEN (work left), HIS (needs Pranav).
 | Create | Duo reviewer agent and MCP tools in the editor |
 | Verify | `hardware:gate`, `server:test`, `web:test` |
 | Package | `hardware:fab` to the Generic Package Registry, `web:build` |
-| Secure | SAST, Secret Detection, Dependency Scanning templates included, switched off by project variables until Docker runners are available |
-| Release | `release` job on tags with fab zips and gate notes |
+| Secure | SAST, Secret Detection, Dependency Scanning on hosted runners, every main pipeline |
+| Release | `release` job on tags; v0.1.0 released with 3 fab zip links and the gate report as notes |
 | Configure | `.gitlab/duo/agent-config.yml`, masked CI variable for the gate token |
 | Monitor | `monitor:smoke` on the Pages URL, schedule; opens an incident issue on failure |
 | Govern | `hardware:provenance` licence policy, CycloneDX hardware BOM |
@@ -65,6 +65,8 @@ Status key: DONE, OPEN (work left), HIS (needs Pranav).
 - MR !1 merged. Main pipeline 2992391781 passed: fab zips in the package registry (tangible-fab
   0.0.9), issues #1 and #2 for the failing boards, Pages deployed, monitor:smoke passed.
 - Daily pipeline schedule 4514143 runs monitor:smoke at 9:00 PT.
-- Duo flow start returns "403 Forbidden - Identity verification is required to use GitLab Duo
-  Agent Platform". Needs Pranav's phone verification.
+- After identity verification: shared runners on. Duo session 10098461 failed (KiCad image has no
+  curl); agent-config moved to python:3.12-bookworm. Session 10098503 finished: triage note on MR !1,
+  comments on issues #1 and #2. Started with the flow consumer id, not the catalog version id.
+- Main pipeline 2992410626 passed, scanners included. Tag v0.1.0 pipeline 2992406317 cut the release.
 - Screenshots in evidence/ (taken signed out, public view).

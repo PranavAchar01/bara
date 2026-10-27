@@ -15,11 +15,11 @@ The results go where GitLab already shows them:
 - a CycloneDX hardware BOM per board
 - a hardware::pass or hardware::fail label
 
-A Duo Agent Platform flow, "Tangible hardware gate triage", picks up from there. Mention it or assign it on a merge request. One agent reads the failing job logs and the gate report. A second writes a plain explanation of each error with the likely fix, and keeps one tracking issue per failing board. It is supervised on purpose: the flow explains and files, and a person changes the board. The flow and the agent are registered in the GitLab AI Catalog and enabled on the project. GitLab won't start a Duo Agent Platform session until the account passes identity verification, so the flow hasn't run on a real merge request yet.
+A Duo Agent Platform flow, "Tangible hardware gate triage", picks up from there. Mention it or assign it on a merge request. One agent reads the failing job logs and the gate report. A second writes a plain explanation of each error with the likely fix, and keeps one tracking issue per failing board. It is supervised on purpose: the flow explains and files, and a person changes the board. On merge request !1 the flow read the failing pipeline and posted a note explaining each error in plain words. One example: two output pins share a net at (44.45, 45.72) mm, so the parts would fight each other, and changing one pin's type or removing one connection would fix it. It then commented on the tracking issue for each failing board. It also said what it couldn't see. The carrier board's one ERC error was counted in the report but not listed, so the note sends the reader to the job artifacts instead of guessing.
 
-A custom Duo agent, "Tangible hardware reviewer", answers questions about hardware merge requests in Duo Chat. The same checks run as an MCP server (list_boards, check_board, board_parts, export_fab), so an assistant in the editor can ask which boards fail and where.
+A custom Duo agent, "Tangible hardware reviewer", is published in the AI Catalog for questions about hardware merge requests in Duo Chat. The same checks run as an MCP server (list_boards, check_board, board_parts, export_fab), so an assistant in the editor can ask which boards fail and where.
 
-The rest of the pipeline covers the lifecycle. Gerbers, drill, pick-and-place and BOM go into the package registry. Tags cut releases with the fab zips. The web app deploys to GitLab Pages, and a scheduled smoke check opens an incident issue if the site goes down.
+The rest of the pipeline covers the lifecycle. GitLab SAST, Secret Detection and Dependency Scanning run on every main pipeline. Gerbers, drill, pick-and-place and BOM go into the package registry. Tag v0.1.0 cut the first release, with the gate report as its notes and links to the three fab zips. The web app deploys to GitLab Pages, and a daily scheduled smoke check opens an incident issue if the site goes down.
 
 ## How we built it
 
@@ -28,7 +28,7 @@ Everything below was added on or after Oct 5, for this hackathon:
 - bara.hwci, a small stdlib Python package that drives kicad-cli for DRC, ERC and fab export, parses footprints and the board's library table for provenance, and writes the GitLab report formats
 - three boards Tangible generated (a WiFi handheld, a macropad, a carrier board), with portable library paths, as test fixtures for the gate
 - .gitlab-ci.yml with stages for verify, secure, package, govern, deploy, release and monitor
-- a GitLab project runner on a Mac with native KiCad 10, since the account's hosted runners are also waiting on identity verification (each job keeps its kicad/kicad:10.0 image line for when they open up)
+- a GitLab project runner on a Mac with native KiCad 10 for the hardware jobs, while the security scanners and Duo sessions run on GitLab's hosted runners
 - the Duo flow (registry v1 YAML, two agent components with their own prompts and tool sets), the custom agent, .gitlab/duo/agent-config.yml and .gitlab/duo/mcp.json
 - a stdio MCP server, tested with the official MCP Python client
 - 7 tests for the gate, including a real KiCad run and an MCP round trip
@@ -37,7 +37,7 @@ KiCad marks some notices only because a library is missing on the CI image, so t
 
 ## Challenges we ran into
 
-Generated boards point at absolute library paths on the machine that built them, so we rewrote them to environment variables before KiCad could open them anywhere else. The first gate run reported 329 library notices that had nothing to do with the design, and we had to separate those from real errors without hiding anything. LCSC footprints carry no licence statement, so the policy sends them to review instead of passing or blocking them. The pipeline includes GitLab's SAST, Secret Detection and Dependency Scanning templates, but project variables switch them off for now. They need Docker, and the Mac runner uses a shell executor.
+Generated boards point at absolute library paths on the machine that built them, so we rewrote them to environment variables before KiCad could open them anywhere else. The first gate run reported 329 library notices that had nothing to do with the design, and we had to separate those from real errors without hiding anything. LCSC footprints carry no licence statement, so the policy sends them to review instead of passing or blocking them. Until the account was verified, neither hosted runners nor Duo sessions would start, so the KiCad jobs moved to a Mac project runner, and they stayed there. The first Duo session then failed because the KiCad image has no curl to fetch the Duo CLI. Sessions now use a Python image, which is enough because the flow only reads GitLab and writes notes.
 
 ## Accomplishments that we're proud of
 
@@ -51,10 +51,11 @@ All three boards check in about 7 seconds on a laptop. In CI the hardware:gate j
 
 ## What we learned
 
-Hardware fits merge request review well once the results are in formats GitLab already reads. The useful part of the agent is the translation: "pin_to_pin at (44.45, 45.72)" becomes "two outputs drive the same net here, so the parts would fight each other."
+Hardware fits merge request review well once the results are in formats GitLab already reads. The agent's note can only be as complete as the job log it reads: the report left one ERC error out, and the agent said so instead of making one up. The useful part of the agent is the translation: "pin_to_pin at (44.45, 45.72)" becomes "two outputs drive the same net here, so the parts would fight each other."
 
 ## What's next for Tangible
 
 - feed the gate's errors back into Tangible's board generator, so a failing board is regenerated before anyone sees it
+- print every error in the gate report, so the triage note never has to point at the artifacts
 - run the gate on every board in Tangible's library
 - add a fab-house design-rule profile, so the gate checks a specific manufacturer's limits
