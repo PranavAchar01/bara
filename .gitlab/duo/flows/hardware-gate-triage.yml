@@ -7,10 +7,6 @@
 # reports and proposes, a person decides what changes on the board.
 version: "v1"
 environment: ambient
-name: "Tangible hardware gate triage"
-description: >-
-  Reads the KiCad DRC/ERC and parts-licence results from the hardware:gate CI job, explains each
-  failure on the merge request with its board position, and files a tracking issue per board.
 
 components:
   - name: "gate_reader"
