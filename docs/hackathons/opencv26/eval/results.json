@@ -12,7 +12,7 @@
    "adaptive": 0,
    "edges": 0
   },
-  "local_ms_median": 87.2,
+  "local_ms_median": 138.2,
   "by_tilt": {
    "0.05": {
     "n": 14,
@@ -40,13 +40,20 @@
    "cut_off": "10/10 asked for a retake",
    "two_objects": "9/10 asked for a retake"
   },
+  "agent_decisions": {
+   "cases": 56,
+   "correct": 53,
+   "asked_for_retake": 3,
+   "wrong": 0,
+   "wrong_margins_mm": []
+  },
   "lambda": {
    "url": "https://utmqhifgnhqgep65hqqhuh56aa0rukxb.lambda-url.us-west-2.on.aws/",
    "runs": 20,
-   "first_call_round_trip_ms": 2814.6,
-   "local_ms_median": 71.6,
-   "lambda_measure_ms_median": 462.3,
-   "lambda_round_trip_ms_median": 828.6,
+   "first_call_round_trip_ms": 3397.0,
+   "local_ms_median": 199.9,
+   "lambda_measure_ms_median": 634.6,
+   "lambda_round_trip_ms_median": 1035.3,
    "max_width_disagreement_mm": 0.0
   }
  },
@@ -58,7 +65,7 @@
    "kind": "rectangle",
    "tilt": 0.05,
    "status": "ok",
-   "ms": 158.5,
+   "ms": 305.8,
    "strategy": "lab_otsu",
    "got_w": 40.3,
    "got_d": 30.2,
@@ -74,7 +81,7 @@
    "kind": "rectangle",
    "tilt": 0.12,
    "status": "ok",
-   "ms": 80.5,
+   "ms": 113.3,
    "strategy": "lab_otsu",
    "got_w": 40.4,
    "got_d": 30.2,
@@ -90,7 +97,7 @@
    "kind": "rectangle",
    "tilt": 0.18,
    "status": "ok",
-   "ms": 71.3,
+   "ms": 87.4,
    "strategy": "lab_otsu",
    "got_w": 40.0,
    "got_d": 30.0,
@@ -106,7 +113,7 @@
    "kind": "rectangle",
    "tilt": 0.25,
    "status": "ok",
-   "ms": 69.9,
+   "ms": 87.5,
    "strategy": "lab_otsu",
    "got_w": 40.2,
    "got_d": 30.5,
@@ -122,7 +129,7 @@
    "kind": "round",
    "tilt": 0.05,
    "status": "unsure",
-   "ms": 99.3,
+   "ms": 125.6,
    "strategy": null,
    "got_w": 339.7,
    "got_d": 302.4,
@@ -135,7 +142,7 @@
    "kind": "round",
    "tilt": 0.12,
    "status": "ok",
-   "ms": 72.8,
+   "ms": 92.5,
    "strategy": "lab_otsu",
    "got_w": 39.7,
    "got_d": 30.0,
@@ -151,7 +158,7 @@
    "kind": "round",
    "tilt": 0.18,
    "status": "ok",
-   "ms": 72.4,
+   "ms": 93.9,
    "strategy": "lab_otsu",
    "got_w": 39.9,
    "got_d": 30.0,
@@ -167,7 +174,7 @@
    "kind": "round",
    "tilt": 0.25,
    "status": "ok",
-   "ms": 69.4,
+   "ms": 99.5,
    "strategy": "lab_otsu",
    "got_w": 40.7,
    "got_d": 30.4,
@@ -183,7 +190,7 @@
    "kind": "rectangle",
    "tilt": 0.05,
    "status": "ok",
-   "ms": 74.2,
+   "ms": 113.1,
    "strategy": "lab_otsu",
    "got_w": 59.5,
    "got_d": 39.7,
@@ -199,7 +206,7 @@
    "kind": "rectangle",
    "tilt": 0.12,
    "status": "ok",
-   "ms": 75.1,
+   "ms": 100.3,
    "strategy": "lab_otsu",
    "got_w": 60.1,
    "got_d": 39.9,
@@ -215,7 +222,7 @@
    "kind": "rectangle",
    "tilt": 0.18,
    "status": "ok",
-   "ms": 74.3,
+   "ms": 113.3,
    "strategy": "lab_otsu",
    "got_w": 60.2,
    "got_d": 40.2,
@@ -231,7 +238,7 @@
    "kind": "rectangle",
    "tilt": 0.25,
    "status": "ok",
-   "ms": 73.0,
+   "ms": 114.7,
    "strategy": "lab_otsu",
    "got_w": 59.9,
    "got_d": 40.3,
@@ -247,7 +254,7 @@
    "kind": "round",
    "tilt": 0.05,
    "status": "ok",
-   "ms": 81.2,
+   "ms": 110.7,
    "strategy": "lab_otsu",
    "got_w": 59.8,
    "got_d": 40.0,
@@ -263,7 +270,7 @@
    "kind": "round",
    "tilt": 0.12,
    "status": "ok",
-   "ms": 79.0,
+   "ms": 123.9,
    "strategy": "lab_otsu",
    "got_w": 59.8,
    "got_d": 40.0,
@@ -279,7 +286,7 @@
    "kind": "round",
    "tilt": 0.18,
    "status": "ok",
-   "ms": 84.0,
+   "ms": 130.9,
    "strategy": "lab_otsu",
    "got_w": 60.5,
    "got_d": 40.0,
@@ -295,7 +302,7 @@
    "kind": "round",
    "tilt": 0.25,
    "status": "ok",
-   "ms": 84.0,
+   "ms": 149.2,
    "strategy": "lab_otsu",
    "got_w": 60.3,
    "got_d": 40.4,
@@ -311,7 +318,7 @@
    "kind": "rectangle",
    "tilt": 0.05,
    "status": "ok",
-   "ms": 84.1,
+   "ms": 166.2,
    "strategy": "lab_otsu",
    "got_w": 80.1,
    "got_d": 79.8,
@@ -327,7 +334,7 @@
    "kind": "rectangle",
    "tilt": 0.12,
    "status": "ok",
-   "ms": 84.0,
+   "ms": 140.7,
    "strategy": "lab_otsu",
    "got_w": 80.8,
    "got_d": 80.6,
@@ -343,7 +350,7 @@
    "kind": "rectangle",
    "tilt": 0.18,
    "status": "ok",
-   "ms": 81.4,
+   "ms": 150.9,
    "strategy": "lab_otsu",
    "got_w": 81.0,
    "got_d": 80.0,
@@ -359,7 +366,7 @@
    "kind": "rectangle",
    "tilt": 0.25,
    "status": "no_marker",
-   "ms": 12.1,
+   "ms": 16.0,
    "strategy": null,
    "got_w": null,
    "got_d": null,
@@ -372,7 +379,7 @@
    "kind": "round",
    "tilt": 0.05,
    "status": "ok",
-   "ms": 74.3,
+   "ms": 183.9,
    "strategy": "lab_otsu",
    "got_w": 80.5,
    "got_d": 80.2,
@@ -388,7 +395,7 @@
    "kind": "round",
    "tilt": 0.12,
    "status": "ok",
-   "ms": 79.9,
+   "ms": 260.1,
    "strategy": "lab_otsu",
    "got_w": 80.0,
    "got_d": 79.8,
@@ -404,7 +411,7 @@
    "kind": "round",
    "tilt": 0.18,
    "status": "ok",
-   "ms": 90.9,
+   "ms": 150.9,
    "strategy": "lab_otsu",
    "got_w": 80.0,
    "got_d": 79.8,
@@ -420,7 +427,7 @@
    "kind": "round",
    "tilt": 0.25,
    "status": "ok",
-   "ms": 94.3,
+   "ms": 159.8,
    "strategy": "lab_otsu",
    "got_w": 80.0,
    "got_d": 80.0,
@@ -436,7 +443,7 @@
    "kind": "rectangle",
    "tilt": 0.05,
    "status": "ok",
-   "ms": 106.2,
+   "ms": 133.1,
    "strategy": "lab_otsu",
    "got_w": 94.7,
    "got_d": 45.2,
@@ -452,7 +459,7 @@
    "kind": "rectangle",
    "tilt": 0.12,
    "status": "ok",
-   "ms": 101.4,
+   "ms": 144.9,
    "strategy": "lab_otsu",
    "got_w": 95.3,
    "got_d": 45.1,
@@ -468,7 +475,7 @@
    "kind": "rectangle",
    "tilt": 0.18,
    "status": "ok",
-   "ms": 101.6,
+   "ms": 148.3,
    "strategy": "lab_otsu",
    "got_w": 96.2,
    "got_d": 45.6,
@@ -484,7 +491,7 @@
    "kind": "rectangle",
    "tilt": 0.25,
    "status": "ok",
-   "ms": 102.8,
+   "ms": 133.8,
    "strategy": "lab_otsu",
    "got_w": 95.9,
    "got_d": 45.6,
@@ -500,7 +507,7 @@
    "kind": "round",
    "tilt": 0.05,
    "status": "ok",
-   "ms": 122.7,
+   "ms": 239.9,
    "strategy": "lab_otsu",
    "got_w": 95.2,
    "got_d": 44.8,
@@ -516,7 +523,7 @@
    "kind": "round",
    "tilt": 0.12,
    "status": "ok",
-   "ms": 103.7,
+   "ms": 133.5,
    "strategy": "lab_otsu",
    "got_w": 93.5,
    "got_d": 44.7,
@@ -532,7 +539,7 @@
    "kind": "round",
    "tilt": 0.18,
    "status": "ok",
-   "ms": 98.7,
+   "ms": 134.0,
    "strategy": "lab_otsu",
    "got_w": 93.6,
    "got_d": 44.6,
@@ -548,7 +555,7 @@
    "kind": "round",
    "tilt": 0.25,
    "status": "ok",
-   "ms": 98.0,
+   "ms": 156.7,
    "strategy": "lab_otsu",
    "got_w": 93.6,
    "got_d": 44.7,
@@ -564,7 +571,7 @@
    "kind": "rectangle",
    "tilt": 0.05,
    "status": "ok",
-   "ms": 95.6,
+   "ms": 198.8,
    "strategy": "lab_otsu",
    "got_w": 120.2,
    "got_d": 70.1,
@@ -580,7 +587,7 @@
    "kind": "rectangle",
    "tilt": 0.12,
    "status": "ok",
-   "ms": 98.5,
+   "ms": 150.9,
    "strategy": "lab_otsu",
    "got_w": 120.2,
    "got_d": 69.9,
@@ -596,7 +603,7 @@
    "kind": "rectangle",
    "tilt": 0.18,
    "status": "ok",
-   "ms": 97.3,
+   "ms": 142.6,
    "strategy": "lab_otsu",
    "got_w": 122.3,
    "got_d": 70.9,
@@ -612,7 +619,7 @@
    "kind": "rectangle",
    "tilt": 0.25,
    "status": "ok",
-   "ms": 92.4,
+   "ms": 141.5,
    "strategy": "lab_otsu",
    "got_w": 118.9,
    "got_d": 69.5,
@@ -628,7 +635,7 @@
    "kind": "round",
    "tilt": 0.05,
    "status": "ok",
-   "ms": 77.6,
+   "ms": 162.6,
    "strategy": "lab_otsu",
    "got_w": 119.6,
    "got_d": 70.0,
@@ -644,7 +651,7 @@
    "kind": "round",
    "tilt": 0.12,
    "status": "ok",
-   "ms": 77.3,
+   "ms": 131.6,
    "strategy": "lab_otsu",
    "got_w": 119.9,
    "got_d": 69.8,
@@ -660,7 +667,7 @@
    "kind": "round",
    "tilt": 0.18,
    "status": "ok",
-   "ms": 94.1,
+   "ms": 132.4,
    "strategy": "lab_otsu",
    "got_w": 119.6,
    "got_d": 69.7,
@@ -676,7 +683,7 @@
    "kind": "round",
    "tilt": 0.25,
    "status": "ok",
-   "ms": 104.8,
+   "ms": 142.1,
    "strategy": "lab_otsu",
    "got_w": 120.4,
    "got_d": 70.3,
@@ -692,7 +699,7 @@
    "kind": "rectangle",
    "tilt": 0.05,
    "status": "ok",
-   "ms": 102.6,
+   "ms": 185.4,
    "strategy": "lab_otsu",
    "got_w": 148.8,
    "got_d": 60.2,
@@ -708,7 +715,7 @@
    "kind": "rectangle",
    "tilt": 0.12,
    "status": "ok",
-   "ms": 93.4,
+   "ms": 143.3,
    "strategy": "lab_otsu",
    "got_w": 150.4,
    "got_d": 60.4,
@@ -724,7 +731,7 @@
    "kind": "rectangle",
    "tilt": 0.18,
    "status": "ok",
-   "ms": 85.5,
+   "ms": 199.2,
    "strategy": "lab_otsu",
    "got_w": 150.3,
    "got_d": 60.2,
@@ -740,7 +747,7 @@
    "kind": "rectangle",
    "tilt": 0.25,
    "status": "no_marker",
-   "ms": 11.0,
+   "ms": 27.3,
    "strategy": null,
    "got_w": null,
    "got_d": null,
@@ -753,7 +760,7 @@
    "kind": "round",
    "tilt": 0.05,
    "status": "ok",
-   "ms": 108.3,
+   "ms": 190.6,
    "strategy": "lab_otsu",
    "got_w": 150.5,
    "got_d": 60.1,
@@ -769,7 +776,7 @@
    "kind": "round",
    "tilt": 0.12,
    "status": "ok",
-   "ms": 125.5,
+   "ms": 144.0,
    "strategy": "lab_otsu",
    "got_w": 152.6,
    "got_d": 61.0,
@@ -785,7 +792,7 @@
    "kind": "round",
    "tilt": 0.18,
    "status": "ok",
-   "ms": 120.8,
+   "ms": 166.4,
    "strategy": "lab_otsu",
    "got_w": 150.2,
    "got_d": 59.9,
@@ -801,7 +808,7 @@
    "kind": "round",
    "tilt": 0.25,
    "status": "ok",
-   "ms": 111.3,
+   "ms": 135.8,
    "strategy": "lab_otsu",
    "got_w": 149.7,
    "got_d": 60.0,
@@ -817,7 +824,7 @@
    "kind": "rectangle",
    "tilt": 0.05,
    "status": "ok",
-   "ms": 98.7,
+   "ms": 111.4,
    "strategy": "lab_otsu",
    "got_w": 169.8,
    "got_d": 110.0,
@@ -833,7 +840,7 @@
    "kind": "rectangle",
    "tilt": 0.12,
    "status": "ok",
-   "ms": 98.1,
+   "ms": 127.8,
    "strategy": "lab_otsu",
    "got_w": 169.9,
    "got_d": 110.6,
@@ -849,7 +856,7 @@
    "kind": "rectangle",
    "tilt": 0.18,
    "status": "ok",
-   "ms": 93.3,
+   "ms": 153.7,
    "strategy": "lab_otsu",
    "got_w": 171.7,
    "got_d": 111.0,
@@ -865,7 +872,7 @@
    "kind": "rectangle",
    "tilt": 0.25,
    "status": "ok",
-   "ms": 88.9,
+   "ms": 160.2,
    "strategy": "lab_otsu",
    "got_w": 171.5,
    "got_d": 110.8,
@@ -881,7 +888,7 @@
    "kind": "round",
    "tilt": 0.05,
    "status": "ok",
-   "ms": 79.6,
+   "ms": 125.3,
    "strategy": "lab_otsu",
    "got_w": 169.7,
    "got_d": 110.0,
@@ -897,7 +904,7 @@
    "kind": "round",
    "tilt": 0.12,
    "status": "ok",
-   "ms": 85.0,
+   "ms": 146.6,
    "strategy": "lab_otsu",
    "got_w": 169.3,
    "got_d": 109.8,
@@ -913,7 +920,7 @@
    "kind": "round",
    "tilt": 0.18,
    "status": "ok",
-   "ms": 81.4,
+   "ms": 129.9,
    "strategy": "lab_otsu",
    "got_w": 170.8,
    "got_d": 110.2,
@@ -929,7 +936,7 @@
    "kind": "round",
    "tilt": 0.25,
    "status": "ok",
-   "ms": 83.3,
+   "ms": 126.2,
    "strategy": "lab_otsu",
    "got_w": 170.5,
    "got_d": 111.0,
@@ -1179,6 +1186,2036 @@
    "action": "retake",
    "caught": true,
    "message": "I see two things of similar size. Clear the desk so only one is there."
+  }
+ ],
+ "agent_decisions": [
+  {
+   "seed": 1,
+   "margin_mm": 4.3,
+   "want": "none",
+   "got": "none",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 210.9
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      31.7,
+      21.7,
+      25.0
+     ],
+     "space_mm": [
+      36.3,
+      26.2
+     ],
+     "footprint_fits": true,
+     "spare_mm": 4.5,
+     "height_fits": true
+    },
+    {
+     "decide": "report_fit"
+    }
+   ]
+  },
+  {
+   "seed": 2,
+   "margin_mm": 0.8,
+   "want": "none",
+   "got": "none",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 221.4
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      35.2,
+      25.2,
+      25.0
+     ],
+     "space_mm": [
+      36.4,
+      26.2
+     ],
+     "footprint_fits": true,
+     "spare_mm": 1.0,
+     "height_fits": true
+    },
+    {
+     "decide": "report_fit"
+    }
+   ]
+  },
+  {
+   "seed": 3,
+   "margin_mm": 1.7,
+   "want": "none",
+   "got": "none",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 221.0
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      34.3,
+      24.3,
+      25.0
+     ],
+     "space_mm": [
+      36.0,
+      26.0
+     ],
+     "footprint_fits": true,
+     "spare_mm": 1.7,
+     "height_fits": true
+    },
+    {
+     "decide": "report_fit"
+    }
+   ]
+  },
+  {
+   "seed": 4,
+   "margin_mm": 6.7,
+   "want": "none",
+   "got": "none",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 185.2
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      29.3,
+      19.3,
+      25.0
+     ],
+     "space_mm": [
+      36.2,
+      26.5
+     ],
+     "footprint_fits": true,
+     "spare_mm": 6.9,
+     "height_fits": true
+    },
+    {
+     "decide": "report_fit"
+    }
+   ]
+  },
+  {
+   "seed": 5,
+   "margin_mm": 4.4,
+   "want": "none",
+   "got": "retake",
+   "outcome": "retake",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "unsure",
+     "where": "local",
+     "ms": 439.1
+    },
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": true
+     },
+     "status": "unsure",
+     "where": "local",
+     "ms": 369.4,
+     "why": "first pass was unsure, retrying with contrast boost"
+    },
+    {
+     "decide": "ask_retake",
+     "reason": "cut_off"
+    }
+   ]
+  },
+  {
+   "seed": 6,
+   "margin_mm": -5.8,
+   "want": "prompt",
+   "got": "prompt",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 208.1
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      41.8,
+      31.8,
+      25.0
+     ],
+     "space_mm": [
+      35.7,
+      26.0
+     ],
+     "footprint_fits": false,
+     "spare_mm": -6.1,
+     "height_fits": true
+    },
+    {
+     "decide": "propose_shrink",
+     "over_mm": 6.1
+    }
+   ]
+  },
+  {
+   "seed": 7,
+   "margin_mm": -6.7,
+   "want": "prompt",
+   "got": "prompt",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 272.0
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      42.7,
+      32.7,
+      25.0
+     ],
+     "space_mm": [
+      35.9,
+      26.0
+     ],
+     "footprint_fits": false,
+     "spare_mm": -6.8,
+     "height_fits": true
+    },
+    {
+     "decide": "propose_shrink",
+     "over_mm": 6.8
+    }
+   ]
+  },
+  {
+   "seed": 8,
+   "margin_mm": -0.8,
+   "want": "prompt",
+   "got": "prompt",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 179.6
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      36.8,
+      26.8,
+      25.0
+     ],
+     "space_mm": [
+      36.7,
+      26.4
+     ],
+     "footprint_fits": false,
+     "spare_mm": -0.4,
+     "height_fits": true
+    },
+    {
+     "decide": "propose_shrink",
+     "over_mm": 0.4
+    }
+   ]
+  },
+  {
+   "seed": 9,
+   "margin_mm": 4.1,
+   "want": "none",
+   "got": "none",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 235.3
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      51.9,
+      31.9,
+      25.0
+     ],
+     "space_mm": [
+      55.5,
+      35.7
+     ],
+     "footprint_fits": true,
+     "spare_mm": 3.6,
+     "height_fits": true
+    },
+    {
+     "decide": "report_fit"
+    }
+   ]
+  },
+  {
+   "seed": 10,
+   "margin_mm": 1.9,
+   "want": "none",
+   "got": "none",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 328.5
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      54.1,
+      34.1,
+      25.0
+     ],
+     "space_mm": [
+      56.1,
+      35.9
+     ],
+     "footprint_fits": true,
+     "spare_mm": 1.8,
+     "height_fits": true
+    },
+    {
+     "decide": "report_fit"
+    }
+   ]
+  },
+  {
+   "seed": 11,
+   "margin_mm": -0.7,
+   "want": "prompt",
+   "got": "prompt",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 240.0
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      56.7,
+      36.7,
+      25.0
+     ],
+     "space_mm": [
+      56.2,
+      36.2
+     ],
+     "footprint_fits": false,
+     "spare_mm": -0.5,
+     "height_fits": true
+    },
+    {
+     "decide": "propose_shrink",
+     "over_mm": 0.5
+    }
+   ]
+  },
+  {
+   "seed": 12,
+   "margin_mm": -6.0,
+   "want": "prompt",
+   "got": "prompt",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 201.9
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      62.0,
+      42.0,
+      25.0
+     ],
+     "space_mm": [
+      55.9,
+      36.3
+     ],
+     "footprint_fits": false,
+     "spare_mm": -6.1,
+     "height_fits": true
+    },
+    {
+     "decide": "propose_shrink",
+     "over_mm": 6.1
+    }
+   ]
+  },
+  {
+   "seed": 13,
+   "margin_mm": -4.5,
+   "want": "prompt",
+   "got": "prompt",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 200.3
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      60.5,
+      40.5,
+      25.0
+     ],
+     "space_mm": [
+      55.8,
+      36.0
+     ],
+     "footprint_fits": false,
+     "spare_mm": -4.7,
+     "height_fits": true
+    },
+    {
+     "decide": "propose_shrink",
+     "over_mm": 4.7
+    }
+   ]
+  },
+  {
+   "seed": 14,
+   "margin_mm": -2.0,
+   "want": "prompt",
+   "got": "prompt",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 400.4
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      58.0,
+      38.0,
+      25.0
+     ],
+     "space_mm": [
+      55.8,
+      36.0
+     ],
+     "footprint_fits": false,
+     "spare_mm": -2.2,
+     "height_fits": true
+    },
+    {
+     "decide": "propose_shrink",
+     "over_mm": 2.2
+    }
+   ]
+  },
+  {
+   "seed": 15,
+   "margin_mm": 3.1,
+   "want": "none",
+   "got": "none",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 200.6
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      52.9,
+      32.9,
+      25.0
+     ],
+     "space_mm": [
+      56.5,
+      36.0
+     ],
+     "footprint_fits": true,
+     "spare_mm": 3.1,
+     "height_fits": true
+    },
+    {
+     "decide": "report_fit"
+    }
+   ]
+  },
+  {
+   "seed": 16,
+   "margin_mm": -4.0,
+   "want": "prompt",
+   "got": "prompt",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 356.5
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      60.0,
+      40.0,
+      25.0
+     ],
+     "space_mm": [
+      56.3,
+      36.4
+     ],
+     "footprint_fits": false,
+     "spare_mm": -3.7,
+     "height_fits": true
+    },
+    {
+     "decide": "propose_shrink",
+     "over_mm": 3.7
+    }
+   ]
+  },
+  {
+   "seed": 17,
+   "margin_mm": 7.4,
+   "want": "none",
+   "got": "none",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 201.5
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      68.6,
+      68.6,
+      25.0
+     ],
+     "space_mm": [
+      76.1,
+      75.8
+     ],
+     "footprint_fits": true,
+     "spare_mm": 7.2,
+     "height_fits": true
+    },
+    {
+     "decide": "report_fit"
+    }
+   ]
+  },
+  {
+   "seed": 18,
+   "margin_mm": 2.1,
+   "want": "none",
+   "got": "none",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 232.0
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      73.9,
+      73.9,
+      25.0
+     ],
+     "space_mm": [
+      76.8,
+      76.6
+     ],
+     "footprint_fits": true,
+     "spare_mm": 2.7,
+     "height_fits": true
+    },
+    {
+     "decide": "report_fit"
+    }
+   ]
+  },
+  {
+   "seed": 19,
+   "margin_mm": -5.5,
+   "want": "prompt",
+   "got": "prompt",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 200.3
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      81.5,
+      81.5,
+      25.0
+     ],
+     "space_mm": [
+      77.0,
+      76.0
+     ],
+     "footprint_fits": false,
+     "spare_mm": -5.5,
+     "height_fits": true
+    },
+    {
+     "decide": "propose_shrink",
+     "over_mm": 5.5
+    }
+   ]
+  },
+  {
+   "seed": 20,
+   "margin_mm": -0.7,
+   "want": "prompt",
+   "got": "retake",
+   "outcome": "retake",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "no_marker",
+     "where": "local",
+     "ms": 19.9
+    },
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": true
+     },
+     "status": "no_marker",
+     "where": "local",
+     "ms": 37.0,
+     "why": "first pass was no_marker, retrying with contrast boost"
+    },
+    {
+     "decide": "ask_retake",
+     "reason": "no_marker"
+    }
+   ]
+  },
+  {
+   "seed": 21,
+   "margin_mm": 0.3,
+   "want": "none",
+   "got": "none",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 199.4
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      75.7,
+      75.7,
+      25.0
+     ],
+     "space_mm": [
+      76.5,
+      76.2
+     ],
+     "footprint_fits": true,
+     "spare_mm": 0.5,
+     "height_fits": true
+    },
+    {
+     "decide": "report_fit"
+    }
+   ]
+  },
+  {
+   "seed": 22,
+   "margin_mm": -1.3,
+   "want": "prompt",
+   "got": "prompt",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 275.3
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      77.3,
+      77.3,
+      25.0
+     ],
+     "space_mm": [
+      76.0,
+      75.8
+     ],
+     "footprint_fits": false,
+     "spare_mm": -1.5,
+     "height_fits": true
+    },
+    {
+     "decide": "propose_shrink",
+     "over_mm": 1.5
+    }
+   ]
+  },
+  {
+   "seed": 23,
+   "margin_mm": -6.8,
+   "want": "prompt",
+   "got": "prompt",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 258.8
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      82.8,
+      82.8,
+      25.0
+     ],
+     "space_mm": [
+      76.0,
+      75.8
+     ],
+     "footprint_fits": false,
+     "spare_mm": -7.0,
+     "height_fits": true
+    },
+    {
+     "decide": "propose_shrink",
+     "over_mm": 7.0
+    }
+   ]
+  },
+  {
+   "seed": 24,
+   "margin_mm": -3.8,
+   "want": "prompt",
+   "got": "prompt",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 461.0
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      79.8,
+      79.8,
+      25.0
+     ],
+     "space_mm": [
+      76.0,
+      76.0
+     ],
+     "footprint_fits": false,
+     "spare_mm": -3.8,
+     "height_fits": true
+    },
+    {
+     "decide": "propose_shrink",
+     "over_mm": 3.8
+    }
+   ]
+  },
+  {
+   "seed": 25,
+   "margin_mm": -6.0,
+   "want": "prompt",
+   "got": "prompt",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 389.6
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      97.0,
+      47.0,
+      25.0
+     ],
+     "space_mm": [
+      90.7,
+      41.2
+     ],
+     "footprint_fits": false,
+     "spare_mm": -6.3,
+     "height_fits": true
+    },
+    {
+     "decide": "propose_shrink",
+     "over_mm": 6.3
+    }
+   ]
+  },
+  {
+   "seed": 26,
+   "margin_mm": -2.5,
+   "want": "prompt",
+   "got": "prompt",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 365.2
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      93.5,
+      43.5,
+      25.0
+     ],
+     "space_mm": [
+      91.3,
+      41.1
+     ],
+     "footprint_fits": false,
+     "spare_mm": -2.4,
+     "height_fits": true
+    },
+    {
+     "decide": "propose_shrink",
+     "over_mm": 2.4
+    }
+   ]
+  },
+  {
+   "seed": 27,
+   "margin_mm": 1.7,
+   "want": "none",
+   "got": "none",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 270.0
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      89.3,
+      39.3,
+      25.0
+     ],
+     "space_mm": [
+      92.2,
+      41.6
+     ],
+     "footprint_fits": true,
+     "spare_mm": 2.3,
+     "height_fits": true
+    },
+    {
+     "decide": "report_fit"
+    }
+   ]
+  },
+  {
+   "seed": 28,
+   "margin_mm": -4.9,
+   "want": "prompt",
+   "got": "prompt",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 230.1
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      95.9,
+      45.9,
+      25.0
+     ],
+     "space_mm": [
+      91.9,
+      41.6
+     ],
+     "footprint_fits": false,
+     "spare_mm": -4.3,
+     "height_fits": true
+    },
+    {
+     "decide": "propose_shrink",
+     "over_mm": 4.3
+    }
+   ]
+  },
+  {
+   "seed": 29,
+   "margin_mm": 3.1,
+   "want": "none",
+   "got": "none",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 249.6
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      87.9,
+      37.9,
+      25.0
+     ],
+     "space_mm": [
+      91.2,
+      40.8
+     ],
+     "footprint_fits": true,
+     "spare_mm": 2.9,
+     "height_fits": true
+    },
+    {
+     "decide": "report_fit"
+    }
+   ]
+  },
+  {
+   "seed": 30,
+   "margin_mm": 3.4,
+   "want": "none",
+   "got": "none",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 358.6
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      87.6,
+      37.6,
+      25.0
+     ],
+     "space_mm": [
+      89.5,
+      40.7
+     ],
+     "footprint_fits": true,
+     "spare_mm": 1.9,
+     "height_fits": true
+    },
+    {
+     "decide": "report_fit"
+    }
+   ]
+  },
+  {
+   "seed": 31,
+   "margin_mm": 2.2,
+   "want": "none",
+   "got": "none",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 239.7
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      88.8,
+      38.8,
+      25.0
+     ],
+     "space_mm": [
+      89.6,
+      40.6
+     ],
+     "footprint_fits": true,
+     "spare_mm": 0.8,
+     "height_fits": true
+    },
+    {
+     "decide": "report_fit"
+    }
+   ]
+  },
+  {
+   "seed": 32,
+   "margin_mm": -3.0,
+   "want": "prompt",
+   "got": "prompt",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 226.3
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      94.0,
+      44.0,
+      25.0
+     ],
+     "space_mm": [
+      89.6,
+      40.7
+     ],
+     "footprint_fits": false,
+     "spare_mm": -4.4,
+     "height_fits": true
+    },
+    {
+     "decide": "propose_shrink",
+     "over_mm": 4.4
+    }
+   ]
+  },
+  {
+   "seed": 33,
+   "margin_mm": 2.7,
+   "want": "none",
+   "got": "none",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 334.3
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      113.3,
+      63.3,
+      25.0
+     ],
+     "space_mm": [
+      116.2,
+      66.1
+     ],
+     "footprint_fits": true,
+     "spare_mm": 2.8,
+     "height_fits": true
+    },
+    {
+     "decide": "report_fit"
+    }
+   ]
+  },
+  {
+   "seed": 34,
+   "margin_mm": 1.6,
+   "want": "none",
+   "got": "none",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 277.3
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      114.4,
+      64.4,
+      25.0
+     ],
+     "space_mm": [
+      116.2,
+      65.9
+     ],
+     "footprint_fits": true,
+     "spare_mm": 1.5,
+     "height_fits": true
+    },
+    {
+     "decide": "report_fit"
+    }
+   ]
+  },
+  {
+   "seed": 35,
+   "margin_mm": -1.2,
+   "want": "prompt",
+   "got": "prompt",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 310.0
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      117.2,
+      67.2,
+      25.0
+     ],
+     "space_mm": [
+      118.3,
+      66.9
+     ],
+     "footprint_fits": false,
+     "spare_mm": -0.3,
+     "height_fits": true
+    },
+    {
+     "decide": "propose_shrink",
+     "over_mm": 0.3
+    }
+   ]
+  },
+  {
+   "seed": 36,
+   "margin_mm": -2.4,
+   "want": "prompt",
+   "got": "prompt",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 249.7
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      118.4,
+      68.4,
+      25.0
+     ],
+     "space_mm": [
+      114.9,
+      65.5
+     ],
+     "footprint_fits": false,
+     "spare_mm": -3.5,
+     "height_fits": true
+    },
+    {
+     "decide": "propose_shrink",
+     "over_mm": 3.5
+    }
+   ]
+  },
+  {
+   "seed": 37,
+   "margin_mm": -6.8,
+   "want": "prompt",
+   "got": "prompt",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 240.7
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      122.8,
+      72.8,
+      25.0
+     ],
+     "space_mm": [
+      115.6,
+      66.0
+     ],
+     "footprint_fits": false,
+     "spare_mm": -7.2,
+     "height_fits": true
+    },
+    {
+     "decide": "propose_shrink",
+     "over_mm": 7.2
+    }
+   ]
+  },
+  {
+   "seed": 38,
+   "margin_mm": -7.1,
+   "want": "prompt",
+   "got": "prompt",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 273.4
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      123.1,
+      73.1,
+      25.0
+     ],
+     "space_mm": [
+      115.9,
+      65.8
+     ],
+     "footprint_fits": false,
+     "spare_mm": -7.3,
+     "height_fits": true
+    },
+    {
+     "decide": "propose_shrink",
+     "over_mm": 7.3
+    }
+   ]
+  },
+  {
+   "seed": 39,
+   "margin_mm": 3.1,
+   "want": "none",
+   "got": "none",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 342.9
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      112.9,
+      62.9,
+      25.0
+     ],
+     "space_mm": [
+      115.6,
+      65.7
+     ],
+     "footprint_fits": true,
+     "spare_mm": 2.7,
+     "height_fits": true
+    },
+    {
+     "decide": "report_fit"
+    }
+   ]
+  },
+  {
+   "seed": 40,
+   "margin_mm": 6.5,
+   "want": "none",
+   "got": "none",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 214.6
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      109.5,
+      59.5,
+      25.0
+     ],
+     "space_mm": [
+      116.4,
+      66.3
+     ],
+     "footprint_fits": true,
+     "spare_mm": 6.8,
+     "height_fits": true
+    },
+    {
+     "decide": "report_fit"
+    }
+   ]
+  },
+  {
+   "seed": 41,
+   "margin_mm": 7.0,
+   "want": "none",
+   "got": "none",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 222.4
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      139.0,
+      49.0,
+      25.0
+     ],
+     "space_mm": [
+      144.8,
+      56.2
+     ],
+     "footprint_fits": true,
+     "spare_mm": 5.8,
+     "height_fits": true
+    },
+    {
+     "decide": "report_fit"
+    }
+   ]
+  },
+  {
+   "seed": 42,
+   "margin_mm": 4.1,
+   "want": "none",
+   "got": "none",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 186.6
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      141.9,
+      51.9,
+      25.0
+     ],
+     "space_mm": [
+      146.4,
+      56.4
+     ],
+     "footprint_fits": true,
+     "spare_mm": 4.5,
+     "height_fits": true
+    },
+    {
+     "decide": "report_fit"
+    }
+   ]
+  },
+  {
+   "seed": 43,
+   "margin_mm": -0.0,
+   "want": "none",
+   "got": "none",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 176.5
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      146.0,
+      56.0,
+      25.0
+     ],
+     "space_mm": [
+      146.3,
+      56.2
+     ],
+     "footprint_fits": true,
+     "spare_mm": 0.2,
+     "height_fits": true
+    },
+    {
+     "decide": "report_fit"
+    }
+   ]
+  },
+  {
+   "seed": 44,
+   "margin_mm": 2.8,
+   "want": "none",
+   "got": "retake",
+   "outcome": "retake",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "no_marker",
+     "where": "local",
+     "ms": 37.4
+    },
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": true
+     },
+     "status": "no_marker",
+     "where": "local",
+     "ms": 176.0,
+     "why": "first pass was no_marker, retrying with contrast boost"
+    },
+    {
+     "decide": "ask_retake",
+     "reason": "no_marker"
+    }
+   ]
+  },
+  {
+   "seed": 45,
+   "margin_mm": 3.6,
+   "want": "none",
+   "got": "none",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 300.5
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      142.4,
+      52.4,
+      25.0
+     ],
+     "space_mm": [
+      146.5,
+      56.1
+     ],
+     "footprint_fits": true,
+     "spare_mm": 3.7,
+     "height_fits": true
+    },
+    {
+     "decide": "report_fit"
+    }
+   ]
+  },
+  {
+   "seed": 46,
+   "margin_mm": 5.3,
+   "want": "none",
+   "got": "none",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 230.6
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      140.7,
+      50.7,
+      25.0
+     ],
+     "space_mm": [
+      148.6,
+      57.0
+     ],
+     "footprint_fits": true,
+     "spare_mm": 6.3,
+     "height_fits": true
+    },
+    {
+     "decide": "report_fit"
+    }
+   ]
+  },
+  {
+   "seed": 47,
+   "margin_mm": 6.9,
+   "want": "none",
+   "got": "none",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 339.4
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      139.1,
+      49.1,
+      25.0
+     ],
+     "space_mm": [
+      146.2,
+      55.9
+     ],
+     "footprint_fits": true,
+     "spare_mm": 6.8,
+     "height_fits": true
+    },
+    {
+     "decide": "report_fit"
+    }
+   ]
+  },
+  {
+   "seed": 48,
+   "margin_mm": 4.7,
+   "want": "none",
+   "got": "none",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 218.2
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      141.3,
+      51.3,
+      25.0
+     ],
+     "space_mm": [
+      145.7,
+      56.0
+     ],
+     "footprint_fits": true,
+     "spare_mm": 4.4,
+     "height_fits": true
+    },
+    {
+     "decide": "report_fit"
+    }
+   ]
+  },
+  {
+   "seed": 49,
+   "margin_mm": 6.4,
+   "want": "none",
+   "got": "none",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 263.0
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      159.6,
+      99.6,
+      25.0
+     ],
+     "space_mm": [
+      165.8,
+      106.0
+     ],
+     "footprint_fits": true,
+     "spare_mm": 6.2,
+     "height_fits": true
+    },
+    {
+     "decide": "report_fit"
+    }
+   ]
+  },
+  {
+   "seed": 50,
+   "margin_mm": -0.9,
+   "want": "prompt",
+   "got": "prompt",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 348.0
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      166.9,
+      106.9,
+      25.0
+     ],
+     "space_mm": [
+      165.9,
+      106.6
+     ],
+     "footprint_fits": false,
+     "spare_mm": -1.0,
+     "height_fits": true
+    },
+    {
+     "decide": "propose_shrink",
+     "over_mm": 1.0
+    }
+   ]
+  },
+  {
+   "seed": 51,
+   "margin_mm": 4.2,
+   "want": "none",
+   "got": "none",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 572.6
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      161.8,
+      101.8,
+      25.0
+     ],
+     "space_mm": [
+      167.7,
+      107.0
+     ],
+     "footprint_fits": true,
+     "spare_mm": 5.2,
+     "height_fits": true
+    },
+    {
+     "decide": "report_fit"
+    }
+   ]
+  },
+  {
+   "seed": 52,
+   "margin_mm": -7.2,
+   "want": "prompt",
+   "got": "prompt",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 585.0
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      173.2,
+      113.2,
+      25.0
+     ],
+     "space_mm": [
+      167.5,
+      106.8
+     ],
+     "footprint_fits": false,
+     "spare_mm": -6.4,
+     "height_fits": true
+    },
+    {
+     "decide": "propose_shrink",
+     "over_mm": 6.4
+    }
+   ]
+  },
+  {
+   "seed": 53,
+   "margin_mm": -3.1,
+   "want": "prompt",
+   "got": "prompt",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 608.7
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      169.1,
+      109.1,
+      25.0
+     ],
+     "space_mm": [
+      165.7,
+      106.0
+     ],
+     "footprint_fits": false,
+     "spare_mm": -3.4,
+     "height_fits": true
+    },
+    {
+     "decide": "propose_shrink",
+     "over_mm": 3.4
+    }
+   ]
+  },
+  {
+   "seed": 54,
+   "margin_mm": -0.9,
+   "want": "prompt",
+   "got": "prompt",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 814.4
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      166.9,
+      106.9,
+      25.0
+     ],
+     "space_mm": [
+      165.3,
+      105.8
+     ],
+     "footprint_fits": false,
+     "spare_mm": -1.6,
+     "height_fits": true
+    },
+    {
+     "decide": "propose_shrink",
+     "over_mm": 1.6
+    }
+   ]
+  },
+  {
+   "seed": 55,
+   "margin_mm": 4.6,
+   "want": "none",
+   "got": "none",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 555.0
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      161.4,
+      101.4,
+      25.0
+     ],
+     "space_mm": [
+      166.8,
+      106.2
+     ],
+     "footprint_fits": true,
+     "spare_mm": 4.8,
+     "height_fits": true
+    },
+    {
+     "decide": "report_fit"
+    }
+   ]
+  },
+  {
+   "seed": 56,
+   "margin_mm": 3.3,
+   "want": "none",
+   "got": "none",
+   "outcome": "correct",
+   "trace": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "local",
+     "ms": 597.5
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      162.7,
+      102.7,
+      25.0
+     ],
+     "space_mm": [
+      166.5,
+      107.0
+     ],
+     "footprint_fits": true,
+     "spare_mm": 3.8,
+     "height_fits": true
+    },
+    {
+     "decide": "report_fit"
+    }
+   ]
   }
  ]
 }

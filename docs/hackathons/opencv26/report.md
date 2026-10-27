@@ -19,7 +19,7 @@ Tangible turns a sentence ("a 2x2 macropad with a volume knob") into a device bu
 1. The user prints a 40 mm ArUco marker (the panel links to `/v1/vision/marker.png`), lays it next to the space or object, and takes one photo from above.
 2. OpenCV 5 finds the marker, rectifies the photo to a top-down view at 4 px/mm, segments the space or object, and measures it in millimetres with a shape class (rectangle, round, oval, freeform).
 3. An agent reads that measurement and picks the next action for the build:
-   - no build open: propose a build sized to the space (the measured footprint minus clearance goes into the prompt as a hard limit);
+   - no build open: propose a build sized to the space (the measured footprint minus clearance goes into the prompt as a size limit);
    - the open case is too big: propose a shrink-to-fit prompt with the target size;
    - the footprint fits but a height limit is exceeded: propose a resize edit on the case height;
    - it fits: report the spare millimetres;
@@ -36,6 +36,30 @@ What the camera sees decides the next action. Different photos produce different
 - Engine (FastAPI): `POST /v1/vision/fit` runs `agent.decide()` in a thread pool. `GET /v1/vision/status` and `GET /v1/vision/marker.png` support the panel.
 - AWS Lambda: `tangible-fit-measure`, arm64 (Graviton), python3.12, 1024 MB, 30 s timeout, behind a function URL. It runs the same `measure.py`, which imports only `cv2` and `numpy`. Each call logs one JSON line to CloudWatch with status, timings and sizes, never the image.
 - Fallback: if Lambda is unreachable the engine measures in process and the step trace says `local` with the error, so the feature keeps working.
+
+### Agent workflow and trace
+
+The diagram's middle box is the agent. Perception is the OpenCV measurement, the decision is the fit check against the open case, and the action is a proposal the person approves. Every response carries the step trace, and the panel lists it. This trace is from evaluation scene 6 (a 40 x 30 mm space with a 41.8 x 31.8 mm case open), copied from `eval/results.json`:
+
+```json
+[{"tool": "measure", "args": {"enhance": false}, "status": "ok", "where": "local", "ms": 208.1},
+ {"tool": "fit_check", "case_mm": [41.8, 31.8, 25.0], "space_mm": [35.7, 26.0],
+  "footprint_fits": false, "spare_mm": -6.1, "height_fits": true},
+ {"decide": "propose_shrink", "over_mm": 6.1}]
+```
+
+A photo the agent cannot trust ends differently. Scene 5 came back `unsure`, the agent retried with CLAHE, got `unsure` again and asked for a retake:
+
+```json
+[{"tool": "measure", "args": {"enhance": false}, "status": "unsure", "where": "local", "ms": 439.1},
+ {"tool": "measure", "args": {"enhance": true}, "status": "unsure", "where": "local", "ms": 369.4,
+  "why": "first pass was unsure, retrying with contrast boost"},
+ {"decide": "ask_retake", "reason": "cut_off"}]
+```
+
+In the running app the `where` field reads `aws-lambda`. The end-to-end run's responses, with the Lambda traces, are saved in `e2e/e2e-log.json`.
+
+Human control: build, shrink and height proposals need a click (`needs_approval: true`); a fit report and a retake request change nothing. Observability: the trace in each response, plus one CloudWatch log line per Lambda call.
 
 ## 5. OpenCV 5 implementation (`server/src/bara/vision/measure.py`)
 
@@ -76,7 +100,7 @@ Accuracy, 56 scenes (7 sizes from 40x30 to 170x110 mm, rectangles and round shap
 | max error | 2.6 mm |
 | p95 relative error | 1.69% |
 | shape class correct | 53 / 53 |
-| median time, local | 87 ms |
+| median time per photo, local | 138 ms |
 
 By tilt: 0.05 gave 13/14 (MAE 0.25 mm), 0.12 gave 14/14 (0.42), 0.18 gave 14/14 (0.51), 0.25 gave 12/14 (0.52). The three misses: one small 40x30 round object came back `unsure` instead of a size, and two strongly tilted scenes lost the marker and asked for a retake. None of the 56 returned a wrong size.
 
@@ -90,7 +114,17 @@ Failure cases, 10 seeded scenes each, where the right answer is to ask for a ret
 
 The one two-objects miss measured the correct object (111.6 x 69 mm for 110 x 70) instead of asking.
 
-AWS Lambda vs local, 20 runs of the same photos: the first call took 2815 ms round trip (cold start). After that the medians were 71.6 ms local, 462 ms measurement inside Lambda and 829 ms round trip from the engine. Lambda and local agreed to 0.0 mm on width in every run.
+Agent decisions, the same 56 scenes against an open case set a few millimetres (up to 8) bigger or smaller than the room left after clearance. The right action comes from the true size, the agent's from the photo:
+
+| outcome | count |
+|---|---|
+| right action (report the fit, or propose a shrink) | 53 / 56 |
+| asked for a retake instead | 3 / 56 |
+| wrong action | 0 / 56 |
+
+Each decision is stored with its full step trace in `eval/results.json` (`agent_decisions`).
+
+AWS Lambda vs local, 20 runs of the same photos: the first call took 3.4 s round trip (cold start). After that the medians were 200 ms local, 635 ms measurement inside Lambda and 1035 ms round trip from the engine. The machine was also running a browser test and a screen recording during this run, so the local and round-trip times are on the slow side. Lambda and local agreed to 0.0 mm on width in every run.
 
 Tests: `server/tests/test_vision.py` has 9 tests (known sizes within 2 mm; a photo without a marker leads to a CLAHE retry and then a retake; a sized build proposal; a shrink proposal; a fit report plus a height edit; the HTTP route and the marker PNG). End to end, `e2e/fit_check.mjs` drives the real app through a live build, a too-small space, the approve step, the rebuild and a roomy space, and saves screenshots and the agent's responses to `e2e/`.
 
@@ -101,7 +135,8 @@ Tests: `server/tests/test_vision.py` has 9 tests (known sizes within 2 mm; a pho
 - The marker must lie in the same plane as the space it measures. A drawer floor photographed with the marker on the counter will be wrong.
 - Strong tilt starts to lose the marker; the agent then asks for a retake.
 - Low-contrast scenes (a white object on white paper) depend on the CLAHE retry and can fail.
-- A Lambda cold start adds about 2.8 s to the first call.
+- A Lambda cold start adds about 3 s to the first call.
+- The build engine does not enforce a size limit yet. Shrink to fit rebuilds the same device on the same canvas with the limit in its prompt, but the result is not guaranteed to be smaller. In the end-to-end run a 66 x 78 mm case came back as 67 x 92 mm, and Check again reported that it still did not fit.
 
 ## 9. Responsible use
 

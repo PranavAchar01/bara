@@ -92,6 +92,33 @@ def main() -> None:
                 }
             )
 
+    # agent decisions: the same scenes against an open case a few mm either side of the room
+    # left after clearance. The right action comes from the true size, the agent's from the photo.
+    decisions = []
+    seed = 0
+    for w, d in SIZES:
+        for kind in KINDS:
+            for tilt in TILTS:
+                seed += 1
+                rng = np.random.default_rng(seed)
+                s = make_scene(rng, w, d, kind, tilt=tilt)
+                off = float(np.random.default_rng(5000 + seed).uniform(-8, 8))
+                case = [round(w - 4 + off, 1), round(d - 4 + off, 1), 25.0]
+                truth_fits, _ = agent._fits((case[0], case[1]), (w - 4, d - 4))
+                res = agent.decide(s.jpg, enclosure={"enclosure_id": "e", "outer_size_mm": case})
+                got = res["action"]["kind"]
+                want = "none" if truth_fits else "prompt"
+                decisions.append(
+                    {
+                        "seed": seed,
+                        "margin_mm": round(-off, 1),
+                        "want": want,
+                        "got": got,
+                        "outcome": "correct" if got == want else ("retake" if got == "retake" else "wrong"),
+                        "trace": res["steps"],
+                    }
+                )
+
     ok = [r for r in rows if r["status"] == "ok"]
     errs = [e for r in ok for e in (r["err_w"], r["err_d"])]
     rel = [r["rel"] for r in ok]
@@ -130,6 +157,14 @@ def main() -> None:
         },
     }
 
+    summary["agent_decisions"] = {
+        "cases": len(decisions),
+        "correct": sum(1 for x in decisions if x["outcome"] == "correct"),
+        "asked_for_retake": sum(1 for x in decisions if x["outcome"] == "retake"),
+        "wrong": sum(1 for x in decisions if x["outcome"] == "wrong"),
+        "wrong_margins_mm": [x["margin_mm"] for x in decisions if x["outcome"] == "wrong"],
+    }
+
     if lam:
         times = {"local_ms": [], "lambda_measure_ms": [], "lambda_round_trip_ms": []}
         agree = []
@@ -155,7 +190,15 @@ def main() -> None:
         }
 
     (out / "results.json").write_text(
-        json.dumps({"summary": summary, "scenes": rows, "failure_cases": fail_cases}, indent=1)
+        json.dumps(
+            {
+                "summary": summary,
+                "scenes": rows,
+                "failure_cases": fail_cases,
+                "agent_decisions": decisions,
+            },
+            indent=1,
+        )
     )
     print(json.dumps(summary, indent=1))  # noqa: T201
 

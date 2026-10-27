@@ -23,7 +23,7 @@ Then an agent decides what to do with that measurement:
 - It fits: it tells you how much room is left.
 - The photo is bad (no marker, the space is cut off, two things in frame): it retries once with CLAHE contrast boost, then asks for a retake and says why.
 
-You see the top-down view with the outline it measured, the size, and every step it took. Nothing changes until you press approve. After the rebuild, "Check again" runs the same photo against the new case.
+You see the top-down view with the outline it measured, the size, and every step it took. Nothing changes until you press approve. After the rebuild, "Check again" runs the same photo against the new case. The build engine can't enforce a size limit yet, so a shrink rebuild isn't always smaller. In the end-to-end run a 66 x 78 mm case came back at 67 x 92 mm, and "Check again" caught it.
 
 ### How we built it
 - OpenCV 5.0.0: ArucoDetector with subpixel corners, getPerspectiveTransform and warpPerspective, a floodFill mask so the marker sheet isn't counted, then three segmentation strategies in order (Lab colour distance with Otsu, adaptive threshold, Canny edges), minAreaRect and approxPolyDP for size and shape, and checks for cut-off, ragged or duplicate outlines.
@@ -35,7 +35,8 @@ You see the top-down view with the outline it measured, the size, and every step
 All numbers are on synthetic photos with known sizes (random tilt, lighting falloff, blur, noise and JPEG compression). We didn't have a labelled set of real photos in time.
 - 56 scenes: 53 measured, mean error 0.42 mm, p95 1.4 mm, max 2.6 mm. Shape class right on 53 of 53. The other 3 asked for a retake or said unsure; none gave a wrong size.
 - Bad photos that should get a retake: no marker 10/10, cut off 10/10, two objects 9/10.
-- Lambda vs local on the same 20 photos: 0.0 mm difference. Median 462 ms inside Lambda, 829 ms round trip, 2.8 s on a cold start.
+- With a case open a few mm bigger or smaller than the space, the agent picked the right action on 53 of 56 scenes, asked for a retake on 3, and never picked a wrong one.
+- Lambda vs local on the same 20 photos: 0.0 mm difference. Median 635 ms inside Lambda, about 1 s round trip, 3.4 s on a cold start.
 - 9 unit tests and a Playwright run through the real app: build, fit check, approve, rebuild, check again.
 
 ### Challenges we ran into
