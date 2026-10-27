@@ -75,9 +75,9 @@ We gave Claude (Fable 5.1, a fresh chat on claude.ai) the prompt "an ergonomic m
 | Part shapes | Procedural boxes and cylinders | KiCad library part models on a routed PCB |
 | Board and export | A PCB shape and a shell, with no routed board and no export | A routed KiCad board and a case |
 
-Claude needed 2 follow-ups to reach an exploded 3D view. Its viewer is interactive: rotate, X-ray, underside, and an explode slider.
+It took Claude two follow-ups to get to an exploded 3D view. That viewer does work well: you can rotate it, X-ray it, flip to the underside and drag an explode slider.
 
-Two caveats. The Tangible build is an existing, larger version of the mouse from the library (extra thumb switches, a slide switch, an IMU, a proximity sensor and a battery connector), not a fresh run against the same prompt. It also lists one push button, where the prompt asked for two main click switches. Screenshots were taken at different sizes: Claude at 1200x1189 with its chat pane, Tangible at 1600x1000.
+The Tangible build here is an existing, larger version of the mouse from the library (extra thumb switches, a slide switch, an IMU, a proximity sensor and a battery connector), not a fresh run against the same prompt. It also lists one push button, where the prompt asked for two main click switches. Screenshots were taken at different sizes: Claude at 1200x1189 with its chat pane, Tangible at 1600x1000.
 
 <table>
   <tr>
