@@ -1,0 +1,1 @@
+Describe a gadget and Tangible builds it from real parts. GitLab CI and a Duo flow check every board with KiCad before anyone orders it.

@@ -229,17 +229,25 @@ pages:
 
 release:
   stage: release
-  image: registry.gitlab.com/gitlab-org/cli:latest
+  image: python:3.12-alpine
   needs: [hardware:fab, hardware:gate]
   script:
+    # The release notes are the gate report; each fab zip is linked from the package registry.
     - |
-      ASSETS=""
-      for f in hw-fab/*.zip; do
-        n=$(basename $f)
-        ASSETS="$ASSETS --assets-links={\"name\":\"$n\",\"url\":\"$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/tangible-fab/$CI_COMMIT_TAG/$n\",\"link_type\":\"package\"}"
-      done
-      glab release create "$CI_COMMIT_TAG" --name "Tangible hardware $CI_COMMIT_TAG" \
-        --notes-file hw-report/gate.md $ASSETS
+      python3 - <<'EOF'
+      import glob, json, os, urllib.request
+      e = os.environ
+      pkg = f"{e['CI_API_V4_URL']}/projects/{e['CI_PROJECT_ID']}/packages/generic/tangible-fab/{e['CI_COMMIT_TAG']}"
+      links = [{"name": os.path.basename(f), "url": f"{pkg}/{os.path.basename(f)}", "link_type": "package"}
+               for f in sorted(glob.glob("hw-fab/*.zip"))]
+      body = {"tag_name": e["CI_COMMIT_TAG"], "name": f"Tangible hardware {e['CI_COMMIT_TAG']}",
+              "description": open("hw-report/gate.md").read(), "assets": {"links": links}}
+      req = urllib.request.Request(f"{e['CI_API_V4_URL']}/projects/{e['CI_PROJECT_ID']}/releases",
+                                   data=json.dumps(body).encode(), method="POST",
+                                   headers={"JOB-TOKEN": e["CI_JOB_TOKEN"], "Content-Type": "application/json"})
+      with urllib.request.urlopen(req) as r:
+          print("release", json.load(r)["_links"]["self"])
+      EOF
   rules:
     - if: $CI_COMMIT_TAG
 

@@ -1,0 +1,1 @@
+Tangible: KiCad checks every board before it ships
