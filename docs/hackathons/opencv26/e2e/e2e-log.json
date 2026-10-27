@@ -1,0 +1,471 @@
+[
+ {
+  "t": "2026-10-27T02:30:21.045Z",
+  "k": "retry_start",
+  "v": 0
+ },
+ {
+  "t": "2026-10-27T02:30:48.464Z",
+  "k": "build_s",
+  "v": 24
+ },
+ {
+  "t": "2026-10-27T02:30:50.891Z",
+  "k": "fit_response",
+  "v": {
+   "status": 200,
+   "measurement": {
+    "opencv": "5.0.0",
+    "image_px": [
+     1600,
+     771
+    ],
+    "marker_mm": 40,
+    "enhanced": false,
+    "marker": null,
+    "status": "no_marker",
+    "object": null,
+    "ms": 10,
+    "lambda_ms": 10.3,
+    "where": "aws-lambda",
+    "round_trip_ms": 444.4
+   },
+   "action": {
+    "kind": "retake",
+    "label": "Retake photo",
+    "needs_approval": false
+   },
+   "message": "I can't find the printed marker. Lay it flat next to the object, fully in frame.",
+   "steps": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "no_marker",
+     "where": "aws-lambda",
+     "ms": 10
+    },
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": true
+     },
+     "status": "no_marker",
+     "where": "aws-lambda",
+     "ms": 80.9,
+     "why": "first pass was no_marker, retrying with contrast boost"
+    },
+    {
+     "decide": "ask_retake",
+     "reason": "no_marker"
+    }
+   ]
+  }
+ },
+ {
+  "t": "2026-10-27T02:30:52.493Z",
+  "k": "fit_response",
+  "v": {
+   "status": 200,
+   "measurement": {
+    "opencv": "5.0.0",
+    "image_px": [
+     1600,
+     1015
+    ],
+    "marker_mm": 40,
+    "enhanced": false,
+    "marker": {
+     "id": 7,
+     "corners_px": [
+      [
+       262.74,
+       220.5
+      ],
+      [
+       389.63,
+       215.87
+      ],
+      [
+       378.6,
+       317.58
+      ],
+      [
+       250.02,
+       322.37
+      ]
+     ],
+     "side_px": 115.15,
+     "skew": 0.795,
+     "count": 1
+    },
+    "status": "ok",
+    "object": {
+     "strategy": "lab_otsu",
+     "touches_edge": false,
+     "width_mm": 91.4,
+     "depth_mm": 60.7,
+     "area_mm2": 5484.8,
+     "angle_deg": -65.6,
+     "center_mm": [
+      310.5,
+      210.2
+     ],
+     "kind": "rectangle",
+     "rect_fill": 0.988,
+     "solidity": 0.991,
+     "circularity": 0.656,
+     "outline_mm": [
+      [
+       281.5,
+       164.5
+      ],
+      [
+       257.2,
+       219
+      ],
+      [
+       339.8,
+       255.8
+      ],
+      [
+       363.8,
+       201.2
+      ]
+     ]
+    },
+    "rectified_mm": [
+     522.8,
+     401.2
+    ],
+    "ms": 393.4,
+    "lambda_ms": 393.8,
+    "where": "aws-lambda",
+    "round_trip_ms": 887.9
+   },
+   "fit": {
+    "case_mm": [
+     66.5,
+     78.4,
+     9.3
+    ],
+    "space_mm": [
+     87.4,
+     56.7
+    ],
+    "footprint_fits": false,
+    "spare_mm": -9.8,
+    "height_fits": true
+   },
+   "action": {
+    "kind": "prompt",
+    "label": "Shrink to fit",
+    "prompt": "Make the case smaller so its footprint is at most 87.4 x 56.7 mm. Pack the parts closer together or pick smaller ones if needed.",
+    "needs_approval": true
+   },
+   "message": "The case is 66 x 78 mm but the space allows 87.4 x 56.7 mm: 9.8 mm too big on the tight side.",
+   "steps": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "aws-lambda",
+     "ms": 393.4
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      66.5,
+      78.4,
+      9.3
+     ],
+     "space_mm": [
+      87.4,
+      56.7
+     ],
+     "footprint_fits": false,
+     "spare_mm": -9.8,
+     "height_fits": true
+    },
+    {
+     "decide": "propose_shrink",
+     "over_mm": 9.8
+    }
+   ]
+  }
+ },
+ {
+  "t": "2026-10-27T02:30:53.109Z",
+  "k": "approve",
+  "v": "Shrink to fit"
+ },
+ {
+  "t": "2026-10-27T02:31:43.515Z",
+  "k": "fit_response",
+  "v": {
+   "status": 200,
+   "measurement": {
+    "opencv": "5.0.0",
+    "image_px": [
+     1600,
+     1015
+    ],
+    "marker_mm": 40,
+    "enhanced": false,
+    "marker": {
+     "id": 7,
+     "corners_px": [
+      [
+       262.74,
+       220.5
+      ],
+      [
+       389.63,
+       215.87
+      ],
+      [
+       378.6,
+       317.58
+      ],
+      [
+       250.02,
+       322.37
+      ]
+     ],
+     "side_px": 115.15,
+     "skew": 0.795,
+     "count": 1
+    },
+    "status": "ok",
+    "object": {
+     "strategy": "lab_otsu",
+     "touches_edge": false,
+     "width_mm": 91.4,
+     "depth_mm": 60.7,
+     "area_mm2": 5484.8,
+     "angle_deg": -65.6,
+     "center_mm": [
+      310.5,
+      210.2
+     ],
+     "kind": "rectangle",
+     "rect_fill": 0.988,
+     "solidity": 0.991,
+     "circularity": 0.656,
+     "outline_mm": [
+      [
+       281.5,
+       164.5
+      ],
+      [
+       257.2,
+       219
+      ],
+      [
+       339.8,
+       255.8
+      ],
+      [
+       363.8,
+       201.2
+      ]
+     ]
+    },
+    "rectified_mm": [
+     522.8,
+     401.2
+    ],
+    "ms": 403,
+    "lambda_ms": 403.4,
+    "where": "aws-lambda",
+    "round_trip_ms": 722.3
+   },
+   "fit": {
+    "case_mm": [
+     67.4,
+     92.3,
+     9.6
+    ],
+    "space_mm": [
+     87.4,
+     56.7
+    ],
+    "footprint_fits": false,
+    "spare_mm": -10.7,
+    "height_fits": true
+   },
+   "action": {
+    "kind": "prompt",
+    "label": "Shrink to fit",
+    "prompt": "Make the case smaller so its footprint is at most 87.4 x 56.7 mm. Pack the parts closer together or pick smaller ones if needed.",
+    "needs_approval": true
+   },
+   "message": "The case is 67 x 92 mm but the space allows 87.4 x 56.7 mm: 10.7 mm too big on the tight side.",
+   "steps": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "aws-lambda",
+     "ms": 403
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      67.4,
+      92.3,
+      9.6
+     ],
+     "space_mm": [
+      87.4,
+      56.7
+     ],
+     "footprint_fits": false,
+     "spare_mm": -10.7,
+     "height_fits": true
+    },
+    {
+     "decide": "propose_shrink",
+     "over_mm": 10.7
+    }
+   ]
+  }
+ },
+ {
+  "t": "2026-10-27T02:31:45.023Z",
+  "k": "fit_response",
+  "v": {
+   "status": 200,
+   "measurement": {
+    "opencv": "5.0.0",
+    "image_px": [
+     1600,
+     1313
+    ],
+    "marker_mm": 40,
+    "enhanced": false,
+    "marker": {
+     "id": 7,
+     "corners_px": [
+      [
+       273.47,
+       288.14
+      ],
+      [
+       395.94,
+       290.55
+      ],
+      [
+       391.69,
+       422.26
+      ],
+      [
+       268.68,
+       419.55
+      ]
+     ],
+     "side_px": 127.2,
+     "skew": 0.93,
+     "count": 1
+    },
+    "status": "ok",
+    "object": {
+     "strategy": "lab_otsu",
+     "touches_edge": false,
+     "width_mm": 161.1,
+     "depth_mm": 110.4,
+     "area_mm2": 17673.2,
+     "angle_deg": -70.8,
+     "center_mm": [
+      309.9,
+      210.1
+     ],
+     "kind": "rectangle",
+     "rect_fill": 0.994,
+     "solidity": 0.996,
+     "circularity": 0.654,
+     "outline_mm": [
+      [
+       252,
+       132
+      ],
+      [
+       216.5,
+       235.8
+      ],
+      [
+       368,
+       288
+      ],
+      [
+       403.2,
+       184.5
+      ]
+     ]
+    },
+    "rectified_mm": [
+     519.5,
+     400.2
+    ],
+    "ms": 418.3,
+    "lambda_ms": 418.9,
+    "where": "aws-lambda",
+    "round_trip_ms": 751.5
+   },
+   "fit": {
+    "case_mm": [
+     67.4,
+     92.3,
+     9.6
+    ],
+    "space_mm": [
+     157.1,
+     106.4
+    ],
+    "footprint_fits": true,
+    "spare_mm": 39,
+    "height_fits": true
+   },
+   "action": {
+    "kind": "none",
+    "label": "It fits",
+    "needs_approval": false
+   },
+   "message": "The case is 67 x 92 mm and the space allows 157.1 x 106.4 mm. It fits with 39 mm to spare.",
+   "steps": [
+    {
+     "tool": "measure",
+     "args": {
+      "enhance": false
+     },
+     "status": "ok",
+     "where": "aws-lambda",
+     "ms": 418.3
+    },
+    {
+     "tool": "fit_check",
+     "case_mm": [
+      67.4,
+      92.3,
+      9.6
+     ],
+     "space_mm": [
+      157.1,
+      106.4
+     ],
+     "footprint_fits": true,
+     "spare_mm": 39,
+     "height_fits": true
+    },
+    {
+     "decide": "report_fit"
+    }
+   ]
+  }
+ }
+]

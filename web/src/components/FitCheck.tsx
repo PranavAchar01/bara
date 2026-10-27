@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useApp } from "../state/store";
-import { applyEdit, getRest } from "../net/client";
+import { applyEdit, getRest, startBuild } from "../net/client";
 import { serverUrl } from "../net/mode";
 import type { EditOp } from "../spec/types";
 import { Icon } from "../ui/common";
@@ -80,7 +80,10 @@ export function FitCheck() {
   };
 
   const act = (a: FitAction) => {
-    if ((a.kind === "build" || a.kind === "prompt") && a.prompt) {
+    if (a.kind === "prompt" && a.prompt && build) {
+      // a shrink is a rebuild of this same device on this canvas, with the measured limit added
+      startBuild(`${build.prompt.trim().replace(/\.$/, "")}. ${a.prompt}`);
+    } else if ((a.kind === "build" || a.kind === "prompt") && a.prompt) {
       window.dispatchEvent(new CustomEvent("bara:prompt", { detail: a.prompt }));
     } else if (a.kind === "edit" && a.ops) {
       applyEdit(a.ops, a.label);

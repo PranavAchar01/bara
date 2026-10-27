@@ -21,22 +21,34 @@ const note = (k, v) => {
   console.log(k, typeof v === "string" ? v : JSON.stringify(v));
 };
 
-const browser = await chromium.launch({ headless: true });
+const browser = await chromium.launch({ headless: true, args: ["--use-angle=metal", "--ignore-gpu-blocklist", "--enable-gpu"] });
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+page.setDefaultTimeout(90_000);
 page.on("response", async (r) => {
   if (r.url().includes("/v1/vision/fit")) {
     const b = await r.json().catch(() => null);
     if (b) note("fit_response", { status: r.status(), measurement: { ...b.measurement, tried: undefined }, fit: b.fit, action: b.action, message: b.message, steps: b.steps });
   }
 });
-process.on("unhandledRejection", async (e) => { await page.screenshot({ path: resolve(OUT, "fail.png") }).catch(() => {}); console.error(e); process.exit(1); });
 await page.goto(BASE);
-await page.click(".hero-cta");
-await page.waitForSelector(".ai-field input");
-await page.fill(".ai-field input", PROMPT);
-await page.click(".ai-send");
+await page.getByText("Connected", { exact: true }).first().waitFor();
+for (let i = 0; i < 3 && !(await page.locator(".bot-mic").count()); i++) {
+  if (!(await page.locator(".ai-field input").isVisible())) await page.click(".hero-cta", { force: true });
+  await page.waitForSelector(".ai-field input");
+  await page.fill(".ai-field input", PROMPT);
+  await page.click(".ai-send");
+  await page.waitForSelector(".bot-mic", { timeout: 30_000 }).catch(() => note("retry_start", i));
+}
 const t0 = Date.now();
-const done = () => page.waitForFunction(() => /Done!/.test(document.querySelector(".bot-mic")?.textContent ?? ""), null, { timeout: 420_000 });
+const done = () =>
+  page
+    .waitForFunction(() => /Done!/.test(document.querySelector(".bot-mic")?.textContent ?? ""), null, { timeout: 420_000 })
+    .catch(async (e) => {
+      await page.screenshot({ path: resolve(OUT, "fail.png") });
+      note("stuck_on", await page.evaluate(() => document.querySelector(".bot-mic")?.textContent ?? document.body.innerText.slice(0, 400)));
+      writeFileSync(resolve(OUT, "e2e-log.json"), JSON.stringify(log, null, 1));
+      throw e;
+    });
 await done();
 note("build_s", Math.round((Date.now() - t0) / 1000));
 await page.waitForTimeout(1500);
@@ -45,7 +57,12 @@ async function measure(photo, shot) {
   const wait = page.waitForResponse((r) => r.url().includes("/v1/vision/fit"), { timeout: 90_000 });
   await page.setInputFiles('.side-overlay[aria-label="Fit check"] input[type=file]', resolve(PHOTOS, photo));
   await wait;
-  await page.waitForSelector(".fit-result");
+  await page.locator(".fit-result").last().waitFor({ state: "attached", timeout: 60_000 }).catch(async (e) => {
+    await page.screenshot({ path: resolve(OUT, "fail.png") });
+    note("panel_html", await page.evaluate(() => document.querySelector('.side-overlay[aria-label="Fit check"]')?.outerHTML.slice(0, 1500) ?? "no panel"));
+    writeFileSync(resolve(OUT, "e2e-log.json"), JSON.stringify(log, null, 1));
+    throw e;
+  });
   await page.waitForTimeout(400);
   await page.screenshot({ path: resolve(OUT, shot) });
 }
@@ -54,7 +71,7 @@ await page.click('[aria-label="Fit check"]', { force: true });
 await page.waitForSelector('.side-overlay[aria-label="Fit check"]');
 await measure("synthetic_no_marker.jpg", "1-no-marker.png");
 await measure("synthetic_space_90x60.jpg", "2-too-small-space.png");
-const action = page.locator(".fit-result .btn.primary");
+const action = page.locator(".fit-result .btn.primary").last();
 if (await action.count()) {
   note("approve", await action.innerText());
   await action.click();
@@ -64,6 +81,7 @@ if (await action.count()) {
   await page.screenshot({ path: resolve(OUT, "3-after-approve.png") });
   if (!(await page.locator('.side-overlay[aria-label="Fit check"]').count())) await page.click('[aria-label="Fit check"]', { force: true });
 }
-await measure("synthetic_space_160x110.jpg", "4-roomy-space.png");
+await measure("synthetic_space_90x60.jpg", "4-recheck-same-space.png");
+await measure("synthetic_space_160x110.jpg", "5-roomy-space.png");
 writeFileSync(resolve(OUT, "e2e-log.json"), JSON.stringify(log, null, 1));
 await browser.close();
