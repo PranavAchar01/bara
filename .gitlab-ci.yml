@@ -17,6 +17,15 @@ include:
   - template: Jobs/Secret-Detection.gitlab-ci.yml
   - template: Jobs/Dependency-Scanning.gitlab-ci.yml
 
+sast:
+  stage: secure
+
+secret_detection:
+  stage: secure
+
+dependency_scanning:
+  stage: secure
+
 workflow:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
@@ -52,14 +61,15 @@ hardware:gate:
     - python3 -m bara.hwci check $HW_BOARDS --policy $HW_POLICY --out hw-report
   # On a merge request a failing board fails the pipeline. On the default branch the known
   # failures stay visible (orange) and are tracked as issues by hardware:report.
+  allow_failure:
+    exit_codes: [1]
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: never
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       changes: [hardware/**/*, server/src/bara/hwci/**/*, .gitlab-ci.yml]
+      allow_failure: false
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_TAG
-      allow_failure:
-        exit_codes: [1]
   artifacts:
     when: always
     expose_as: hardware gate
