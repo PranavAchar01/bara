@@ -19,6 +19,7 @@ from bara.access import AccessTokenMiddleware
 from bara.config import Settings, load_dotenv, load_settings
 from bara.rest import ApiError, build_router, error_response
 from bara.services import build_services
+from bara.vision.routes import build_vision_router
 from bara.ws import WsHandler
 
 log = logging.getLogger(__name__)
@@ -74,6 +75,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return error_response("E_INTERNAL", str(exc.detail))
 
     app.include_router(build_router(svc))
+    app.include_router(build_vision_router())
     handler = WsHandler(svc)
 
     @app.websocket("/v1/ws")
