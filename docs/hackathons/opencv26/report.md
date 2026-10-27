@@ -1,18 +1,18 @@
-# Tangible fit check: technical report
+# Measure Twice: technical report
 
 OpenCV AI Competition 2026 (powered by AWS). Branch `opencv-aws` of https://github.com/PranavAchar01/bara.
 
-Prior work: Tangible was first shown at Cal Hacks 13.0 (Oct 24-25, 2026); the OpenCV/AWS vision feature was built for this competition. New for this competition: `server/src/bara/vision/`, `server/aws/`, `server/scripts/vision_eval.py`, `server/tests/test_vision.py`, `web/src/components/FitCheck.tsx`, `e2e/fit_check.mjs` and this folder.
+A variant of this idea was also shown at Cal Hacks.
 
 ## 1. Problem
 
-Tangible turns a sentence ("a 2x2 macropad with a volume knob") into a device built from real parts: a 3D layout, a sculpted case, a KiCad board and firmware. Until now the case size came only from the parts. People build devices for a real place: a shelf gap, a desk corner, a drawer, the footprint of an old remote. A case that is 6 mm too wide does not go in, and most people do not own calipers or know how to measure a curved outline.
+It started with an app that turns a sentence ("a 2x2 macropad with a volume knob") into a device built from real parts: a 3D layout, a sculpted case, a KiCad board and firmware. Until now the case size came only from the parts. People build devices for a real place: a shelf gap, a desk corner, a drawer, the footprint of an old remote. A case that is 6 mm too wide does not go in, and most people do not own calipers or know how to measure a curved outline.
 
 ## 2. Users
 
 - Hobbyists and makers who want a device for a specific spot.
 - People replacing an existing object (a remote, a controller) who want the new case to match its outline.
-- Anyone using Tangible on a phone, where one photo is easier than typing dimensions.
+- Anyone using the app on a phone, where one photo is easier than typing dimensions.
 
 ## 3. What it does
 
@@ -24,7 +24,7 @@ Tangible turns a sentence ("a 2x2 macropad with a volume knob") into a device bu
    - the footprint fits but a height limit is exceeded: propose a resize edit on the case height;
    - it fits: report the spare millimetres;
    - the photo is not usable (no marker, object cut off, two objects, low contrast): retry once with CLAHE contrast enhancement, then ask for a retake with a specific tip.
-4. The user sees the annotated top-down view, the size, every step the agent took, and one approve button. Nothing changes until they approve. Approving sends the prompt or edit into the existing Tangible build pipeline, and "Check again" re-runs the same photo against the new case.
+4. The user sees the annotated top-down view, the size, every step the agent took, and one approve button. Nothing changes until they approve. Approving sends the prompt or edit into the existing build pipeline, and "Check again" re-runs the same photo against the new case.
 
 What the camera sees decides the next action. Different photos produce different actions, and a bad photo produces a retake request instead of a guess.
 
@@ -34,7 +34,7 @@ What the camera sees decides the next action. Different photos produce different
 
 - Browser: the `FitCheck.tsx` panel, opened from the workspace toolbar. The photo is redrawn on a canvas to a 1600 px JPEG before upload, which also drops EXIF and GPS.
 - Engine (FastAPI): `POST /v1/vision/fit` runs `agent.decide()` in a thread pool. `GET /v1/vision/status` and `GET /v1/vision/marker.png` support the panel.
-- AWS Lambda: `tangible-fit-measure`, arm64 (Graviton), python3.12, 1024 MB, 30 s timeout, behind a function URL. It runs the same `measure.py`, which imports only `cv2` and `numpy`. Each call logs one JSON line to CloudWatch with status, timings and sizes, never the image.
+- AWS Lambda: arm64 (Graviton), python3.12, 1024 MB, 30 s timeout, behind a function URL. It runs the same `measure.py`, which imports only `cv2` and `numpy`. Each call logs one JSON line to CloudWatch with status, timings and sizes, never the image.
 - Fallback: if Lambda is unreachable the engine measures in process and the step trace says `local` with the error, so the feature keeps working.
 
 ### Agent workflow and trace

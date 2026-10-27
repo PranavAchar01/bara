@@ -42,7 +42,7 @@ export function TopBar() {
       <button type="button" className="brand" onClick={() => useApp.setState({ screen: "home" })} title="Home">
         <BaraMark className="brand-mark" />
         <span>Bara</span>
-        {screen !== "workspace" && <span className="brand-by">by Tangible Parts</span>}
+        {screen !== "workspace" && <span className="brand-by">Measure Twice</span>}
       </button>
       {screen === "home" && <LandingNav />}
       {screen === "workspace" && build && (

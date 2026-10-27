@@ -329,7 +329,7 @@ function LandingFoot() {
       <span className="ld-foot-brand">
         <BaraMark className="brand-mark" />
         Bara
-        <span className="brand-by">by Tangible Parts</span>
+        <span className="brand-by">Measure Twice</span>
       </span>
       <button type="button" className="ld-foot-link" onClick={() => useApp.setState({ screen: "drafts" })}>
         Library

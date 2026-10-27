@@ -3,11 +3,11 @@
   <defs>
     <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#333"/></marker>
   </defs>
-  <text x="550" y="34" text-anchor="middle" font-size="20" font-weight="bold">Tangible fit check: photo to next build action</text>
+  <text x="550" y="34" text-anchor="middle" font-size="20" font-weight="bold">Measure Twice: photo to next build action</text>
 
   <!-- browser -->
   <rect x="30" y="70" width="250" height="200" rx="10" fill="#eef4ff" stroke="#3b6fd8"/>
-  <text x="155" y="96" text-anchor="middle" font-weight="bold">Browser (Tangible web app)</text>
+  <text x="155" y="96" text-anchor="middle" font-weight="bold">Browser (web app)</text>
   <text x="45" y="124">Fit check panel</text>
   <text x="45" y="148">1. photo + printed ArUco marker</text>
   <text x="45" y="170">2. shrink to 1600 px JPEG</text>
@@ -18,7 +18,7 @@
 
   <!-- engine -->
   <rect x="370" y="70" width="330" height="290" rx="10" fill="#f3f0ff" stroke="#6b4fd8"/>
-  <text x="535" y="96" text-anchor="middle" font-weight="bold">Tangible engine (FastAPI)</text>
+  <text x="535" y="96" text-anchor="middle" font-weight="bold">Engine (FastAPI)</text>
   <text x="385" y="122">POST /v1/vision/fit  (agent.decide)</text>
   <rect x="385" y="134" width="300" height="214" rx="6" fill="#fff" stroke="#999"/>
   <text x="397" y="156" font-weight="bold">Agent loop</text>
@@ -60,7 +60,7 @@
 
   <!-- build pipeline -->
   <rect x="370" y="410" width="330" height="110" rx="10" fill="#eafaf0" stroke="#2a9d5c"/>
-  <text x="535" y="436" text-anchor="middle" font-weight="bold">Existing Tangible build pipeline</text>
+  <text x="535" y="436" text-anchor="middle" font-weight="bold">Existing build pipeline</text>
   <text x="385" y="462">real parts, 3D layout, sculpted case,</text>
   <text x="385" y="484">KiCad board, firmware (Claude)</text>
   <text x="385" y="506">rebuild or edit with the measured limits</text>
