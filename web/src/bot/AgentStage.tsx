@@ -25,6 +25,7 @@ import { toggleTrace, useTrace } from "./traceState";
 import { canvasRect, partRect } from "../three/agentTargets";
 import { clamp, lerp, PRESETS, reducedMotion, Spring, type SpringCfg } from "./spring";
 import { narrate } from "../voice/voice";
+import { popup } from "./popups";
 import "./agentStage.css";
 
 /** The stage bot's rendered size; it scales to the docked bot's size at home. */
@@ -146,21 +147,82 @@ function homeRect(): Rect | null {
   return { x: r.left, y: r.top, w: r.width, h: r.height };
 }
 
-/** A spot for the bot (its centre) just outside r, on screen, not over it. */
-function perch(r: Rect, fromX: number): { x: number; y: number } {
-  const W = window.innerWidth;
-  const H = window.innerHeight;
+/** Everything the bot must never sit on: panels, the strip, the prompt, popovers, cards. The 3D
+ *  product itself is fair game. Read from the DOM, cached for a moment (panels open and close). */
+const OBSTACLES = [
+  ".canvas-tabs",
+  ".float-panel",
+  ".centre-bottom > *",
+  ".centre-top > *",
+  ".centre-mid > *",
+  ".pj-panel",
+  ".vp-view-btn",
+  ".vp-toolbar",
+  ".ct-menu",
+  ".wt-versions",
+  ".sim-view, .sim-panel",
+  ".explode-labels, .xl-list",
+  ".focus-card",
+].join(",");
+const OB_MS = 200;
+let obCache: { at: number; rects: Rect[] } = { at: -Infinity, rects: [] };
+
+function obstacles(): Rect[] {
+  const now = performance.now();
+  if (now - obCache.at < OB_MS) return obCache.rects;
+  const rects: Rect[] = [];
+  for (const el of document.querySelectorAll<HTMLElement>(OBSTACLES)) {
+    if (el.closest(".agent-stage")) continue;
+    const r = el.getBoundingClientRect();
+    if (r.width < 2 || r.height < 2) continue;
+    rects.push({ x: r.left, y: r.top, w: r.width, h: r.height });
+  }
+  obCache = { at: now, rects };
+  return rects;
+}
+
+/** Whether a bot centred at (x, y) keeps clear of every rect, with a little air. */
+export function clearOf(x: number, y: number, rects: Rect[], half = BOT / 2, air = 6): boolean {
+  for (const r of rects) {
+    if (x + half + air > r.x && x - half - air < r.x + r.w && y + half + air > r.y && y - half - air < r.y + r.h) return false;
+  }
+  return true;
+}
+
+/**
+ * A spot for the bot (its centre) just outside r, on screen, clear of every panel and control (it may
+ * sit over the 3D product). Tries the four sides first, then rings outward from the target, so it
+ * always lands in the nearest free zone, whichever panels are open.
+ */
+export function perch(r: Rect, fromX: number, rects: Rect[] = obstacles(), W = window.innerWidth, H = window.innerHeight): { x: number; y: number } {
   const half = BOT / 2;
-  const fits = (x: number, y: number) => x - half >= 8 && x + half <= W - 8 && y - half >= 8 && y + half <= H - 8;
+  const fits = (x: number, y: number) => x - half >= 8 && x + half <= W - 8 && y - half >= 8 && y + half <= H - 8 && clearOf(x, y, rects);
   const left = { x: r.x - GAP - half, y: r.y + half };
   const right = { x: r.x + r.w + GAP + half, y: r.y + half };
   const leftLow = { x: left.x, y: r.y + r.h - half };
   const rightLow = { x: right.x, y: r.y + r.h - half };
+  const above = { x: r.x + r.w / 2, y: r.y - GAP - half };
+  const below = { x: r.x + r.w / 2, y: r.y + r.h + GAP + half };
   const preferRight = fromX > r.x + r.w / 2;
-  const order = preferRight ? [right, left, rightLow, leftLow] : [left, right, leftLow, rightLow];
+  const order = preferRight ? [right, left, rightLow, leftLow, above, below] : [left, right, leftLow, rightLow, above, below];
   for (const p of order) if (fits(p.x, p.y)) return p;
-  // Too big to sit beside (the whole canvas): tuck into its top-left corner, under the label.
-  return { x: clamp(r.x + half + 14, half + 8, W - half - 8), y: clamp(r.y + half + 34, half + 8, H - half - 8) };
+  // rings outward from the target's centre: the nearest free spot wins
+  const cx = r.x + r.w / 2;
+  const cy = r.y + r.h / 2;
+  const big = r.w > W * 0.6 || r.h > H * 0.6;
+  // too big to sit beside (the whole canvas): its top-left corner, under the label, if that is free
+  const tuck = { x: clamp(r.x + half + 14, half + 8, W - half - 8), y: clamp(r.y + half + 34, half + 8, H - half - 8) };
+  if (big && fits(tuck.x, tuck.y)) return tuck;
+  for (let d = big ? 24 : Math.max(r.w, r.h) / 2 + GAP + half; d < Math.max(W, H); d += 24) {
+    const steps = Math.max(8, Math.round((2 * Math.PI * d) / 28));
+    for (let i = 0; i < steps; i++) {
+      const a = (i / steps) * Math.PI * 2 + (preferRight ? 0 : Math.PI);
+      const x = cx + Math.cos(a) * d;
+      const y = cy + Math.sin(a) * d * 0.8;
+      if (fits(x, y)) return { x, y };
+    }
+  }
+  return { x: clamp(cx, half + 8, W - half - 8), y: clamp(cy, half + 8, H - half - 8) };
 }
 
 export function AgentStage() {
@@ -195,6 +257,7 @@ function Stage() {
   const sayOn = useRef(false);
   const speak = (text: string) => {
     sayOn.current = true;
+    popup(text);
     setSay({ text, n: ++sayN.current });
   };
 
@@ -558,7 +621,7 @@ function Stage() {
       <div ref={rippleEl} className="as-ripple" data-bad={beat?.bad ? "1" : "0"} />
       <div ref={botEl} className="as-bot" data-phase={phase} onClick={toggleTrace}>
         <div ref={botBody} className="as-bot-body">
-          {phase !== "home" && <BaraBot size={BOT} bubbles say={say} typing={traceOpen} />}
+          {phase !== "home" && <BaraBot size={BOT} bubbles quiet say={say} typing={traceOpen} />}
         </div>
       </div>
     </div>

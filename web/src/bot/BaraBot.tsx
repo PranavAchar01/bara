@@ -117,6 +117,8 @@ export interface BaraBotProps {
   typing?: boolean;
   typingNonce?: number;
   bubbles?: boolean;
+  /** No speech bubble: its lines show as popups instead (bot/BotPopups); the thought cloud stays. */
+  quiet?: boolean;
   className?: string;
 }
 
@@ -187,7 +189,7 @@ export function BaraBot(props: BaraBotProps) {
       mood={mood}
       activity={activity}
       emote={props.emote ?? emote}
-      say={props.say ?? speech}
+      say={props.quiet ? null : (props.say ?? speech)}
       typingNonce={props.typingNonce ?? 0}
       bubbles={props.bubbles ?? false}
       className={props.className}

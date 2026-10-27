@@ -272,12 +272,12 @@ export function ConnectionBanner() {
     conn === "resyncing"
       ? "Reconnected. Catching up on missed events; editing is paused."
       : conn === "offline"
-        ? "Can't reach the build engine. Trying again every 8 s; what's on screen stays, and your saved builds still open."
+        ? "Can't reach the build engine yet. Still trying every few seconds; everything on screen is kept and the build picks up where it left off."
         : conn === "connecting"
           ? "Connecting to the build server."
-          : "Connection lost. Reconnecting; the last state stays on screen.";
+          : "Reconnecting. Everything on screen is kept; the build picks up where it left off.";
   return (
-    <div className={`conn-banner tone-${conn === "offline" ? "fail" : "warn"}`} role="status">
+    <div className="conn-banner tone-warn" role="status">
       <span className="spinner" aria-hidden />
       {text}
     </div>

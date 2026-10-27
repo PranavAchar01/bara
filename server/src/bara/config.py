@@ -59,6 +59,8 @@ class Settings:
     mock: bool
     # When set, every request except /v1/health must carry it (X-Bara-Token header or ?token=).
     access_token: str | None = None
+    # Where the build library lives; tests and side engines point it away from the real one.
+    library_override: Path | None = None
 
     @property
     def schemas_dir(self) -> Path:
@@ -75,6 +77,10 @@ class Settings:
     @property
     def catalog_dir(self) -> Path:
         return self.data_dir / "catalog"
+
+    @property
+    def library_dir(self) -> Path:
+        return self.library_override or self.data_dir / "library"
 
 
 def load_settings() -> Settings:
@@ -99,4 +105,5 @@ def load_settings() -> Settings:
         anthropic_model=os.environ.get("BARA_ANTHROPIC_MODEL", "claude-sonnet-5-5"),
         mock=os.environ.get("BARA_MOCK", "1") not in ("0", "false", "no"),
         access_token=os.environ.get("BARA_ACCESS_TOKEN") or None,
+        library_override=Path(lib) if (lib := os.environ.get("BARA_LIBRARY_DIR")) else None,
     )

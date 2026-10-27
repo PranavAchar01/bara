@@ -118,6 +118,25 @@ export class Connection {
     };
   }
 
+  /** Try again now instead of waiting out the backoff (the browser came back online, or the tab
+   *  was shown again). Does nothing while a socket is open or opening. */
+  nudge(): void {
+    if (this.disposed || this.socket || this.reconnectTimer === null) return;
+    this.timers.clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
+    this.attempts = 0;
+    this.connect();
+  }
+
+  /** The browser says the network is gone: give up on this socket now rather than waiting for
+   *  the keepalive to notice, so the screen says so at once. Reconnect follows the usual backoff. */
+  drop(): void {
+    const ws = this.socket;
+    if (this.disposed || !ws) return;
+    ws.close();
+    this.handleClose(ws);
+  }
+
   dispose(): void {
     this.disposed = true;
     this.stopKeepalive();

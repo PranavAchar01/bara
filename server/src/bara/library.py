@@ -1,7 +1,9 @@
 """Persistent build library: every live build's outgoing event stream, kept on the engine.
 
-A build is two small files under <data_dir>/library: <id>.jsonl (one event per line, the same
-messages a socket receives) and <id>.meta.json (the index row, written when the build ends).
+A build is small files under <data_dir>/library: <id>.jsonl (one event per line, the same
+messages a socket receives), <id>.run.json (prompt and start time, written with the first event so
+a build cut off by an engine restart can still be found) and <id>.meta.json (the index row,
+written when the build ends; only builds with one are listed).
 Deleting a build only hides it: the index row gets a `hidden_at` stamp, the listing leaves it out,
 and every file stays, so `restore` brings it back exactly as it was. Nothing here removes data.
 """
@@ -32,6 +34,10 @@ class Library:
             raise ValueError("invalid build id")
         return self.root / f"{build_id}.jsonl", self.root / f"{build_id}.meta.json"
 
+    def _run_path(self, build_id: str) -> Path:
+        self._paths(build_id)
+        return self.root / f"{build_id}.run.json"
+
     def _hero_url(self, build_id: str) -> str | None:
         for suffix in ("_repaired", ""):
             if (self.assets_dir / "cache" / "hero" / f"{build_id}{suffix}.png").is_file():
@@ -42,7 +48,8 @@ class Library:
         return self.assets_dir / "cache" / "shots" / f"{build_id}.webp"
 
     def save_shot(self, build_id: str, webp: bytes) -> str:
-        """Keep a product shot for a stored build (the browser that built it renders one when it finishes)."""
+        """Keep a product shot for a stored build (the browser that built it renders one when it
+        finishes)."""
         if not BUILD_ID_RE.fullmatch(build_id):
             raise ValueError("invalid build id")
         if len(webp) > MAX_SHOT_BYTES or webp[:4] != b"RIFF" or webp[8:12] != b"WEBP":
@@ -55,7 +62,8 @@ class Library:
         return self._shot_url(build_id) or ""
 
     def _shot_url(self, build_id: str) -> str | None:
-        """The product shot scripts/render-shots.mjs writes: the finished device alone, transparent around it."""
+        """The product shot scripts/render-shots.mjs writes: the finished device alone, transparent
+        around it."""
         path = self._shot_path(build_id)
         try:
             return f"/assets/cache/shots/{build_id}.webp?v={int(path.stat().st_mtime)}"
@@ -67,8 +75,21 @@ class Library:
         events, meta = self._paths(run.build_id)
         with self._lock:
             self.root.mkdir(parents=True, exist_ok=True)
+            started = self._run_path(run.build_id)
+            if not started.is_file() and not meta.is_file():
+                row = {
+                    "build_id": run.build_id,
+                    "prompt": run.prompt,
+                    "device": getattr(run, "device", "") or None,
+                    "created_at": run.state.get("created_at") or msg.get("ts"),
+                    "status": "running",
+                }
+                tmp = started.with_suffix(".tmp")
+                tmp.write_text(json.dumps(row), encoding="utf-8")
+                tmp.replace(started)
             with events.open("a", encoding="utf-8") as fh:
                 fh.write(json.dumps(msg, separators=(",", ":")) + "\n")
+                fh.flush()
             status = TERMINAL_STATUS.get(msg.get("type", ""))
             if status:
                 row = {
@@ -93,22 +114,34 @@ class Library:
                 continue
             if not isinstance(row, dict) or bool(row.get("hidden_at")) != hidden:
                 continue
+            if row.get("origin") == "open_source":  # opened from the open-source shelf
+                continue
             if BUILD_ID_RE.fullmatch(str(row.get("build_id", ""))):
-                # shots are rendered after the fact, so look for one each time rather than in the stored row
+                # shots are rendered after the fact, so look for one each time, not in the row
                 rows.append({**row, "shot_url": self._shot_url(row["build_id"])})
         rows.sort(key=lambda r: str(r.get("created_at") or ""), reverse=True)
         return rows
 
     def get(self, build_id: str) -> dict[str, Any] | None:
+        """A stored build with its events. One that never finished (the engine stopped mid-build)
+        comes back with status "running" and every event it had sent."""
         events, meta = self._paths(build_id)
-        if not meta.is_file() or not events.is_file():
+        row_path = meta if meta.is_file() else self._run_path(build_id)
+        if not row_path.is_file() or not events.is_file():
             return None
         try:
-            row = json.loads(meta.read_text(encoding="utf-8"))
+            row = json.loads(row_path.read_text(encoding="utf-8"))
             lines = events.read_text(encoding="utf-8").splitlines()
-            return {**row, "events": [json.loads(ln) for ln in lines if ln.strip()]}
         except (OSError, ValueError):
             return None
+        out: list[dict[str, Any]] = []
+        for ln in lines:
+            try:
+                out.append(json.loads(ln))
+            except ValueError:
+                # a line cut short by a crash mid-write; everything before it is still good
+                continue
+        return {**row, "events": out}
 
     def _set_hidden(self, build_id: str, when: str | None) -> bool:
         _, meta = self._paths(build_id)

@@ -147,7 +147,7 @@ function Workspace() {
   const layers = useApp((s) => s.panels.layers);
   const details = useDetailsOpen();
   return (
-    <main className="workspace canvas-first">
+    <main className={`workspace canvas-first ${layers && !empty ? "has-left" : ""} ${details && !empty ? "has-right" : ""}`}>
       <section className="centre">
         <CanvasTabs />
         {empty ? (

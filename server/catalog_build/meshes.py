@@ -86,8 +86,13 @@ def model_node(path: Path, m: Model | None = None) -> Node:
     ]
 
 
-def board_text(fp: Footprint | None, models: list[tuple[Path, Model | None]]) -> str:
-    """One footprint at (0, 0) carrying only the given (resolved) models."""
+def board_text(
+    fp: Footprint | None,
+    models: list[tuple[Path, Model | None]],
+    at: tuple[float, float, float] = (0.0, 0.0, 0.0),
+) -> str:
+    """One footprint at `at` (x, y mm, angle deg; the origin unless a lender is posed onto
+    another footprint's pads) carrying only the given (resolved) models."""
     if fp is None:
         body: Node = ["footprint", Quoted("bara:model_only"), ["layer", Quoted("F.Cu")]]
     else:
@@ -104,7 +109,8 @@ def board_text(fp: Footprint | None, models: list[tuple[Path, Model | None]]) ->
     for i, item in enumerate(body):
         if isinstance(item, list) and item and item[0] == "layer":
             insert_at = i + 1
-    body.insert(insert_at, ["at", "0", "0"])
+    pose = [f"{v:g}" for v in at[:2]] + ([f"{at[2]:g}"] if at[2] else [])
+    body.insert(insert_at, ["at", *pose])
     body += [model_node(path, m) for path, m in models]
     return PCB_HEADER + "\t" + dump(body) + "\n)\n"
 
@@ -125,11 +131,12 @@ def export_glb(
     fp: Footprint | None,
     models: list[tuple[Path, Model | None]],
     out: Path,
+    at: tuple[float, float, float] = (0.0, 0.0, 0.0),
 ) -> dict[str, Any]:
     """Export and simplify. Returns {"ok", "raw_bytes", "bytes", "log"}."""
     work.mkdir(parents=True, exist_ok=True)
     pcb = work / f"{stem}.kicad_pcb"
-    pcb.write_text(board_text(fp, models))
+    pcb.write_text(board_text(fp, models, at))
     raw = work / f"{stem}.raw.glb"
     res = _run(
         [

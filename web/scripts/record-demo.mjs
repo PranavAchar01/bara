@@ -22,7 +22,7 @@ const arg = (name, fallback) => {
   const i = process.argv.indexOf(`--${name}`);
   return i > 0 && process.argv[i + 1] ? process.argv[i + 1] : fallback;
 };
-const URL = arg("url", "http://localhost:5173/");
+const URL = arg("url", "http://localhost:5173/");  // for the live engine: http://127.0.0.1:<port>/?server=http://127.0.0.1:8797
 const PROMPT = arg("prompt", "a wireless split keyboard with an OLED");
 const OUT = resolve(arg("out", "public/landing"));
 const HEADED = process.argv.includes("--headed");
@@ -33,14 +33,27 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const browser = await chromium.launch({ headless: !HEADED, args: ["--enable-gpu", "--ignore-gpu-blocklist", "--use-angle=metal"] });
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
 await page.goto(URL);
-const input = page.locator(".prompt-input").first();
-await input.waitFor({ state: "visible", timeout: 30000 });
-await page.waitForFunction(() => !document.querySelector(".prompt-input")?.hasAttribute("disabled"), null, { timeout: 60000 });
-// The hero holds this very video: hide it (and the steps under it) so the recording doesn't show itself.
-await page.addStyleTag({ content: ".ld-window, .ld-steps { display: none !important; } .ld-hero { grid-template-columns: minmax(0, 600px); }" });
+// The hero is a live control now: wait for the Start building button to be ready (the engine said hello).
+const cta = page.locator(".hero-cta");
+await cta.waitFor({ state: "visible", timeout: 30000 });
+await page.waitForFunction(() => !document.querySelector(".hero-cta")?.hasAttribute("disabled"), null, { timeout: 60000 });
 await sleep(800);
 
-// Record from the home page, so the video opens on the prompt being typed.
+// No part maker or part number may appear in the recording: the page text is checked all the way through.
+const BRANDS = /gateron|cherry|kailh|mx2a|ec11e?|alps|panasonic|espressif|esp32|rp2040|raspberry|adafruit|sparkfun|seeed|xiao|arduino|stmicro|stm32|nordic|nrf5\d|texas instr|ssd1306|molex|omron|bourns|lcsc|digi-?key|mouser|nintendo|game ?boy/i;
+const brandHits = new Set();
+const scanBrands = async () => {
+  const text = await page.evaluate(() => document.body.innerText).catch(() => "");
+  for (const m of text.matchAll(new RegExp(BRANDS.source, "gi"))) brandHits.add(m[0]);
+};
+let scanning = true;
+const scanLoop = (async () => {
+  while (scanning) {
+    await scanBrands();
+    await sleep(400);
+  }
+})();
+
 const dir = mkdtempSync(join(tmpdir(), "bara-demo-"));
 const frames = [];
 const cdp = await page.context().newCDPSession(page);
@@ -52,15 +65,26 @@ cdp.on("Page.screencastFrame", async (f) => {
 });
 await cdp.send("Page.startScreencast", { format: "jpeg", quality: 92, maxWidth: 1440, maxHeight: 900, everyNthFrame: 1 });
 
+// The real path: Start building, the intro asks, the prompt is typed, the handoff, the workspace.
 await sleep(600);
+await cta.click();
+const input = page.locator(".ai-field input");
+await page.waitForFunction(() => { const i = document.querySelector(".ai-field input"); return i && !i.disabled; }, null, { timeout: 30000 });
+await sleep(1800);
 await input.click();
 await input.pressSequentially(PROMPT, { delay: 55 });
 await sleep(500);
 await input.press("Enter");
 await page.locator(".workspace").waitFor({ timeout: 30000 });
+// The video is the hero's backdrop, so it opens on the workspace once the handoff has landed (the intro is the hero itself).
+await sleep(1000);
+const workspaceFrom = frames.length;
 
 // The build, until done or failed.
-await page.waitForFunction(() => /done|failed/i.test(document.querySelector(".status-pill")?.textContent ?? ""), null, { timeout: 240000 });
+// The Stop button is on the prompt bar while a build runs. A slow engine step is capped, so the video keeps moving.
+await page
+  .waitForFunction(() => !!document.querySelector(".promptbar") && ![...document.querySelectorAll(".promptbar .btn")].some((b) => /stop/i.test(b.textContent ?? "")), null, { timeout: 150000 })
+  .catch(() => undefined);
 await sleep(6000); // late models land; the agent cheers and flies home
 
 // Pull the exploded view open, slowly, the way a person drags the slider.
@@ -87,7 +111,12 @@ if ((await rows.count()) > 2) {
 }
 
 await cdp.send("Page.stopScreencast");
+scanning = false;
+await scanLoop;
+await scanBrands();
 await browser.close();
+if (brandHits.size) throw new Error(`brand names on screen: ${[...brandHits].join(", ")}`);
+frames.splice(0, workspaceFrom);
 if (frames.length < 10) throw new Error(`only ${frames.length} frames recorded`);
 
 // Each frame shows until the next; stalls are capped so the video never sits still for long.

@@ -299,6 +299,31 @@ def build_router(svc: Services) -> APIRouter:
             raise ApiError("E_NOT_FOUND", f"No stored build {build_id}.")
         return body({"restored": build_id})
 
+    @api.post("/v1/library/import/{board_id}")
+    async def library_import(board_id: str) -> JSONResponse:
+        """An open-source board as a build: its own KiCad files become a stored build that opens,
+        edits and simulates like a generated one. The same board always gives the same build."""
+        import asyncio
+
+        from bara import oss_import
+
+        try:
+            out = await asyncio.to_thread(
+                oss_import.import_board,
+                board_id,
+                data_dir=svc.settings.data_dir,
+                assets_dir=svc.settings.assets_dir,
+                library=svc.engine.library,
+                catalog=svc.catalog,
+            )
+        except oss_import.ImportError_ as exc:
+            raise ApiError("E_NOT_FOUND", str(exc)) from exc
+        except Exception as exc:
+            raise ApiError(
+                "E_BOARD_FAILED", f"Could not open this board as a build: {str(exc)[:200]}"
+            ) from exc
+        return body(out)
+
     @api.post("/v1/builds/{build_id}/restore")
     async def restore(build_id: str, request: Request) -> JSONResponse:
         """Undo, redo and history: the build as it was at an earlier revision, as a new revision."""

@@ -215,10 +215,29 @@ export async function startClient(): Promise<Mode> {
     onDrop,
   });
   conn.connect();
+  watchNetwork(conn);
   void loadReference();
   void restoreCanvases();
   return mode;
 }
+
+/** Network changes the browser can see: a lost network drops the socket at once (the banner says
+ *  so), and a network or tab that comes back reconnects now instead of after the backoff. */
+function watchNetwork(c: Connection): void {
+  window.addEventListener("offline", () => c.drop());
+  window.addEventListener("online", () => c.nudge());
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") c.nudge();
+  });
+}
+
+/** A REST answer that means the engine could not be reached (no network, or a tunnel with nothing
+ *  behind it), as opposed to one saying the build is not there. */
+function unreachable(res: { ok: boolean; status: number }): boolean {
+  return !res.ok && (res.status === 0 || res.status >= 500);
+}
+
+const RESTORE_RETRY_MS = [1000, 2000, 4000, 8000, 10_000];
 
 function readStoredCanvases(): string | null {
   try {
@@ -229,7 +248,10 @@ function readStoredCanvases(): string | null {
 }
 
 /** A build put back together from its recorded events: the engine's, then the shared library's, then this browser's copy. */
-async function fetchBuild(buildId: string, prompt: string): Promise<{ build: Build; view: ViewState; saved: boolean } | null> {
+async function fetchBuild(
+  buildId: string,
+  prompt: string,
+): Promise<{ build: Build; view: ViewState; saved: boolean } | null | "unreachable"> {
   const fold = (events: ServerEnvelope[], p: string, createdAt?: string) => {
     const now = performance.now();
     return {
@@ -240,6 +262,7 @@ async function fetchBuild(buildId: string, prompt: string): Promise<{ build: Bui
   const events: ServerEnvelope[] = [];
   for (let after = 0; ; ) {
     const res = await rest.get<{ events: ServerEnvelope[]; next_after_seq: number; complete: boolean }>(paths.events(buildId, after));
+    if (unreachable(res)) return "unreachable";
     if (!res.ok) break;
     events.push(...res.body.events);
     if (res.body.complete || res.body.events.length === 0 || res.body.next_after_seq <= after) return { ...fold(events, prompt), saved: false };
@@ -262,11 +285,18 @@ async function restoreCanvases(): Promise<void> {
   await Promise.all(
     stored.canvases.map(async (c) => {
       if (!c.build_id) return;
-      const got = await fetchBuild(c.build_id, c.prompt ?? "");
+      // An engine that is restarting or a network that is down is waited out: the tab keeps its
+      // build id (nothing is written back while it is restoring) and fills in once it answers.
+      let got = await fetchBuild(c.build_id, c.prompt ?? "");
+      for (let i = 0; got === "unreachable"; i++) {
+        await new Promise((r) => setTimeout(r, RESTORE_RETRY_MS[Math.min(i, RESTORE_RETRY_MS.length - 1)]));
+        if (!canvasState(useApp.getState(), c.id)) break;
+        got = await fetchBuild(c.build_id, c.prompt ?? "");
+      }
       useApp.setState((s) => ({ canvasRestoring: s.canvasRestoring.filter((id) => id !== c.id) }));
       const now = canvasState(useApp.getState(), c.id);
       // closed, or given a new build, while this one was on its way
-      if (!now || now.build || now.pendingStart) return;
+      if (!now || now.build || now.pendingStart || got === "unreachable") return;
       if (!got) {
         lost += 1;
         return;

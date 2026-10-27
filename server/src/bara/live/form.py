@@ -87,6 +87,14 @@ Rules:
   lens: a clear dome on the main face width_mm x height_mm, thickness_mm tall (a tail light,
   a sensor eye, an indicator lens).
   Fields a kind does not use are 0 or empty. Surface features sit inside the silhouette.
+- A product made of separate bodies joined by a thin link (headphones: two cups on a band;
+  glasses: two lenses and temples; a wearable with a strap) is drawn flat, as laid out on a
+  table. The silhouette is the one body that holds the electronics (one ear cup, the front of
+  the frame, the watch case), thickness_mm is that body's thickness. Every other body is an
+  appendage: the link (a headband arc, a strap) with its own thin thickness_mm, and each
+  further body (the second cup) as an appendage of the body's full thickness that touches the
+  previous appendage's end. The reference width and height are the whole product including its
+  appendages. Never draw such a product as one slab with notches.
 - Use only slot_id values from the list."""
 
 
@@ -513,6 +521,7 @@ def validate(form: Form, touches: list[Touch]) -> list[str]:
         return problems
     x0, y0, x1, y1 = poly.bounds
     w, h = x1 - x0, y1 - y0
+    ex0, ey0, ex1, ey1 = overall_bounds(form)
     if min(w, h) < MIN_SIDE_MM or max(w, h) > MAX_SIDE_MM:
         problems.append(f"{w:.0f} x {h:.0f} mm is outside the range of any real product")
     if max(w, h) / max(min(w, h), 1e-6) > MAX_ASPECT:
@@ -520,11 +529,12 @@ def validate(form: Form, touches: list[Touch]) -> list[str]:
     ref = form.reference
     rw, rh = float(ref.get("width_mm") or 0), float(ref.get("height_mm") or 0)
     if rw > 0 and rh > 0:
-        direct = max(abs(w / rw - 1), abs(h / rh - 1))
-        turned = max(abs(w / rh - 1), abs(h / rw - 1))
+        ow, oh = ex1 - ex0, ey1 - ey0
+        direct = max(abs(ow / rw - 1), abs(oh / rh - 1))
+        turned = max(abs(ow / rh - 1), abs(oh / rw - 1))
         if min(direct, turned) > SIZE_TOLERANCE:
             problems.append(
-                f"the silhouette is {w:.0f} x {h:.0f} mm but your reference size is "
+                f"the silhouette with its appendages is {ow:.0f} x {oh:.0f} mm but your reference size is "
                 f"{rw:.0f} x {rh:.0f} mm: use the real size"
             )
     else:
@@ -569,6 +579,16 @@ def validate(form: Form, touches: list[Touch]) -> list[str]:
     return problems
 
 
+def overall_bounds(form: Form) -> tuple[float, float, float, float]:
+    """Bounds of the silhouette and every appendage: the whole product laid flat."""
+    x0, y0, x1, y1 = Polygon(form.silhouette).bounds
+    for f in form.features:
+        if f["kind"] == "appendage" and len(f["outline"]) >= 3:
+            ax0, ay0, ax1, ay1 = Polygon(f["outline"]).buffer(0).bounds
+            x0, y0, x1, y1 = min(x0, ax0), min(y0, ay0), max(x1, ax1), max(y1, ay1)
+    return x0, y0, x1, y1
+
+
 def feature_problems(form: Form) -> list[str]:
     """Each form feature must be buildable: an appendage reaches out from the rim, a surface
     feature sits on the face, sizes and thicknesses are those of a real product."""
@@ -576,6 +596,7 @@ def feature_problems(form: Form) -> list[str]:
     x0, y0, x1, y1 = poly.bounds
     short = min(x1 - x0, y1 - y0)
     out: list[str] = []
+    body = poly  # the silhouette plus the appendages already placed: a chain may continue
     if len(form.features) > MAX_FEATURES:
         out.append(f"{len(form.features)} features: keep the {MAX_FEATURES} that matter most")
     for i, f in enumerate(form.features):
@@ -586,12 +607,13 @@ def feature_problems(form: Form) -> list[str]:
             if ap.is_empty or not ap.is_valid or ap.area < 4.0:
                 out.append(f"{name}: its outline is not a simple closed shape with area")
                 continue
-            if ap.distance(poly) > 1.0:
-                out.append(f"{name}: its outline must touch the silhouette's rim")
-            elif ap.difference(poly).area < 0.5 * ap.area:
+            if ap.distance(body) > 1.0:
+                out.append(f"{name}: its outline must touch the silhouette's rim or the appendage before it")
+            elif ap.difference(body).area < 0.5 * ap.area:
                 out.append(f"{name}: most of it must lie outside the silhouette")
             if not 0.8 <= t <= form.thickness_mm + 1e-6:
                 out.append(f"{name}: thickness_mm {t:g} must be 0.8 to {form.thickness_mm:g}")
+            body = body.union(ap)
             if f["hole_mm"] and not ap.buffer(-0.8 * max(f["hole_mm"], 0.0)).contains(
                 Point(f["centre"])
             ):

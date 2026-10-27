@@ -201,3 +201,22 @@ describe("canvas tabs", () => {
     });
   });
 });
+
+describe("tab titles and overflow", () => {
+  it("shortens a prompt to the device", async () => {
+    const { shortTitle } = await import("./canvases");
+    expect(shortTitle("a macropad with a knob")).toBe("Macropad");
+    expect(shortTitle("wireless split keyboard, 38 keys, sage and cream")).toBe("Wireless split keyboard");
+    expect(shortTitle("a low-profile mechanical keyboard with choc switches")).toBe("Low-profile mechanical keyboard");
+    expect(shortTitle("New canvas")).toBe("New canvas");
+  });
+  it("keeps the active tab visible and folds the rest", async () => {
+    const { visibleTabs } = await import("./canvases");
+    const tabs = ["a", "b", "c", "d", "e"].map((id) => ({ id }));
+    expect(visibleTabs(tabs, "b", 9).hidden).toEqual([]);
+    const r = visibleTabs(tabs, "e", 3);
+    expect(r.shown.map((t) => t.id)).toEqual(["a", "b", "e"]);
+    expect(r.hidden.map((t) => t.id)).toEqual(["c", "d"]);
+    expect(visibleTabs(tabs, "a", 0).shown.map((t) => t.id)).toEqual(["a"]);
+  });
+});

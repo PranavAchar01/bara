@@ -1,0 +1,58 @@
+[
+ {
+  "scene_id": "s_4c20fbef6963",
+  "builds": [
+   "b_7FsTQSicA9Wg",
+   "b_L6J7EsM96uhV"
+  ],
+  "title": "Macropad with desktop display",
+  "by": "rules",
+  "names": [
+   "4-key USB macropad for streaming controls",
+   "small desktop status display panel"
+  ],
+  "updated_at": "2026-10-25T06:28:23+00:00"
+ },
+ {
+  "scene_id": "s_1281f3ba0e6c",
+  "builds": [
+   "b_XeqtMKUcrD0t",
+   "b_x4Lk91TFA9jO"
+  ],
+  "title": "Macropad with kitchen countdown timer",
+  "by": "rules",
+  "names": [
+   "USB macropad with rotary knob",
+   "mechanical-style kitchen countdown timer with dial"
+  ],
+  "updated_at": "2026-10-25T06:41:29+00:00"
+ },
+ {
+  "scene_id": "s_5d6adf6cd645",
+  "builds": [
+   "b_wRy0GL9APjVD",
+   "b_7UG7U3aFVeEf"
+  ],
+  "title": "Split keyboard with vertical mouse",
+  "by": "model",
+  "names": [
+   "split ergonomic mechanical keyboard",
+   "ergonomic vertical wireless mouse"
+  ],
+  "updated_at": "2026-10-25T12:45:15+00:00"
+ },
+ {
+  "scene_id": "s_61f784f94442",
+  "builds": [
+   "b_blsId7t5E1ix",
+   "b_8EoqeiDVAlt6"
+  ],
+  "title": "Full-size keyboard with mouse",
+  "by": "rules",
+  "names": [
+   "full-size wired computer keyboard",
+   "wireless Bluetooth desk mouse"
+  ],
+  "updated_at": "2026-10-25T17:44:13+00:00"
+ }
+]

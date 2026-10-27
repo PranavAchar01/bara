@@ -197,3 +197,170 @@
   font-size: 22px;
   font-weight: 400;
 }
+
+/* ---- calm strip: tabs as wide as their names (up to a cap), overflow in one menu, rare tools under "More" ---- */
+.ct-strip {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
+}
+.ct-strip .ct-list {
+  flex: 0 1 auto;
+  overflow: hidden;
+}
+.canvas-first .ct-tab {
+  width: auto;
+  min-width: 0;
+  max-width: 188px;
+  flex: none;
+  padding: 0 4px 0 12px;
+  border-right: 0;
+  color: var(--muted);
+}
+.canvas-first .ct-tab + .ct-tab::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 14px;
+  bottom: 14px;
+  width: 1px;
+  background: var(--line);
+}
+.canvas-first .ct-tab.active {
+  color: var(--ink);
+  font-weight: 500;
+}
+.canvas-first .ct-tab.active::after {
+  left: 10px;
+  right: 10px;
+  bottom: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--ink);
+}
+.canvas-first .ct-tab.active + .ct-tab::before,
+.canvas-first .ct-tab:has(+ .ct-tab.active)::after {
+  display: none;
+}
+.ct-more {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.ct-more-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  margin: 0 4px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--paper);
+  color: var(--text-2);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.ct-more-btn:hover,
+.ct-more-btn.on {
+  border-color: var(--ink-faint);
+  color: var(--ink);
+}
+.ct-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  min-width: 220px;
+  max-height: 340px;
+  overflow: auto;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper);
+  box-shadow: var(--shadow-pop);
+}
+.ct-menu-right {
+  left: auto;
+  right: 0;
+}
+.ct-menu button[role="menuitem"] {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.ct-menu button[role="menuitem"]:hover:not(:disabled) {
+  background: var(--paper-3);
+}
+.ct-menu button[role="menuitem"]:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.ct-menu-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ct-menu kbd {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted);
+}
+.ct-menu-ico {
+  display: grid;
+  place-items: center;
+  width: 12px;
+}
+.ct-speeds {
+  display: flex;
+  gap: 2px;
+  margin: 0 10px 6px 32px;
+}
+.ct-speeds button {
+  flex: 1;
+  padding: 3px 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+}
+.ct-speeds button.on {
+  border-color: var(--line);
+  background: var(--paper-2);
+  color: var(--ink);
+}
+.ct-tools-more {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding-right: 10px;
+}
+.canvas-first .canvas-tabs .wt {
+  padding-right: 2px;
+}
+.canvas-first .canvas-tabs .pj-pill {
+  margin-left: 0;
+  border-left: 0;
+  border-radius: 8px;
+  align-self: center;
+  height: 32px;
+}

@@ -3,10 +3,11 @@
 // made it, which commit, which licence, both linked: the licences ask for that), what it is made of, and
 // a one-line "what is this part" for every part, taken from the board's own part descriptions, beside an
 // interactive 3D view of the board itself (LibraryBoard3D) where picking a part lights it.
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "../styles/opensource.css";
 import { LibraryBoard3D } from "./LibraryBoard3D";
-import { capital, filterBoards, loadOpenSource, loadParts, scrubMakers, thumbUrl, useOpenSource, type OsBoard, type OsPart, type OsSort } from "../library/openSource";
+import { openLibraryBuild } from "../net/client";
+import { capital, filterBoards, importBoard, loadOpenSource, loadParts, scrubMakers, thumbUrl, useOpenSource, type OsBoard, type OsPart, type OsSort } from "../library/openSource";
 
 const FIRST = 8;
 
@@ -87,7 +88,10 @@ function PartInfo({ p }: { p: OsPart }) {
   );
 }
 
-function BoardDetail({ b, onClose }: { b: OsBoard; onClose: () => void }) {
+/** Where opening a board as a build stands: still opening, or failed with the reason and a retry. */
+export type OpenState = { state: "opening" } | { state: "failed"; message: string };
+
+function BoardDetail({ b, onClose, opening, onRetry }: { b: OsBoard; onClose: () => void; opening?: OpenState; onRetry?: () => void }) {
   const [parts, setParts] = useState<OsPart[] | null>(null);
   const [err, setErr] = useState(false);
   const [sel, setSel] = useState<string | null>(null);
@@ -123,6 +127,22 @@ function BoardDetail({ b, onClose }: { b: OsBoard; onClose: () => void }) {
             Close
           </button>
         </header>
+        {opening && (
+          <div className={`os-opening ${opening.state}`} role="status">
+            {opening.state === "opening" ? (
+              <span>Opening it as a build you can edit…</span>
+            ) : (
+              <>
+                <span>It could not open as a build: {opening.message}</span>
+                {onRetry && (
+                  <button type="button" className="btn sm" onClick={onRetry}>
+                    Try again
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        )}
         <div className="os-d-body">
           <div className="os-d-left">
             <LibraryBoard3D slug={b.slug} title={scrubMakers(b.title)} refs={refs} selected={sel} onPick={setSel} poster={b.thumb ? thumbUrl(b) : undefined} />
@@ -170,6 +190,35 @@ export function OpenSource() {
   const [sort, setSort] = useState<OsSort>("popular");
   const [all, setAll] = useState(false);
   const [open, setOpen] = useState<OsBoard | null>(null);
+  const [opening, setOpening] = useState<OpenState | undefined>(undefined);
+  const [showDetail, setShowDetail] = useState(false);
+  const attempt = useRef(0);
+  // An open-source board opens in the same workspace as any build: it is imported once (its own KiCad
+  // files become a build on the engine) and then opened by id. The 3D look-only view shows only while a
+  // first import takes a while, or when it fails, with a retry.
+  const openBoard = (b: OsBoard) => {
+    const n = ++attempt.current;
+    setOpen(b);
+    setOpening({ state: "opening" });
+    setShowDetail(false);
+    const slow = window.setTimeout(() => n === attempt.current && setShowDetail(true), 700);
+    void importBoard(b.slug).then(async (r) => {
+      window.clearTimeout(slow);
+      if (n !== attempt.current) return;
+      if (r.ok && (await openLibraryBuild(r.buildId))) {
+        setOpen(null);
+        setOpening(undefined);
+        return;
+      }
+      setOpening({ state: "failed", message: r.ok ? "the build did not load" : r.message });
+      setShowDetail(true);
+    });
+  };
+  const closeDetail = useCallback(() => {
+    attempt.current++;
+    setOpen(null);
+    setOpening(undefined);
+  }, []);
   useEffect(() => void loadOpenSource(), []);
   const list = useMemo(() => filterBoards(boards, { q, category, sort }), [boards, q, category, sort]);
   if (ready && (failed || boards.length === 0)) return null;
@@ -203,7 +252,7 @@ export function OpenSource() {
           ))}
       </div>
       <ul className="gal-grid">
-        {!ready ? [0, 1, 2, 3].map((i) => <li key={i} className="gal-card is-loading" aria-hidden />) : visible.map((b) => <BoardCard key={b.id} b={b} onOpen={() => setOpen(b)} />)}
+        {!ready ? [0, 1, 2, 3].map((i) => <li key={i} className="gal-card is-loading" aria-hidden />) : visible.map((b) => <BoardCard key={b.id} b={b} onOpen={() => openBoard(b)} />)}
       </ul>
       {ready && list.length === 0 && <p className="muted">No board matches.</p>}
       {ready && !all && !narrowed && list.length > FIRST && (
@@ -211,7 +260,7 @@ export function OpenSource() {
           See all {list.length}
         </button>
       )}
-      {open && <BoardDetail b={open} onClose={() => setOpen(null)} />}
+      {open && showDetail && <BoardDetail b={open} onClose={closeDetail} opening={opening} onRetry={() => openBoard(open)} />}
     </section>
   );
 }

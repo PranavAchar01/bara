@@ -9,6 +9,53 @@ import { addCanvas } from "../state/canvases";
 import { act } from "../bot/act";
 import { Icon } from "../ui/common";
 import { VoiceKey } from "./VoiceKey";
+import { vlabel } from "../ui/format";
+import { STAGE_IDS } from "../spec/types";
+
+/** The part a part.added event names, or null. */
+function partName(raw: string): string | null {
+  try {
+    const p = (JSON.parse(raw) as { payload?: { part?: { label?: string; card?: { display_name?: string } } } }).payload?.part;
+    return p?.label ?? p?.card?.display_name ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Where the build is, in a few words: the part it just placed, else the stage it is in. */
+function useWhere(): string | null {
+  return useApp((s) => {
+    const st = s.build?.status;
+    if (st !== "running" && st !== "awaiting_input") return null;
+    if (st === "awaiting_input") return "Waiting for you";
+    const id = STAGE_IDS.find((k) => s.view.stages[k]?.status === "active");
+    const stage = id ? (s.view.stages[id]?.label ?? vlabel(s.vocab, "stages", id)) : null;
+    const bid = s.build?.build_id;
+    for (let i = s.log.length - 1, n = 0; i >= 0 && n < 40; i--, n++) {
+      const e = s.log[i];
+      if (e.dir !== "in" || (e.buildId && e.buildId !== bid)) continue;
+      if (e.type === "stage.started") break;
+      if (e.type === "part.added") return partName(e.raw) ?? stage;
+    }
+    return stage ?? "Working";
+  });
+}
+
+/** Small thinking dots pinned at the right end of the field, with the part or stage Bara is on. */
+function WorkingDots() {
+  const where = useWhere();
+  if (!where) return null;
+  return (
+    <span className="prompt-working" role="status" aria-live="polite" title={where}>
+      <span className="pw-dots" aria-hidden>
+        <i />
+        <i />
+        <i />
+      </span>
+      <span className="pw-where">{where}</span>
+    </span>
+  );
+}
 
 /** A press shorter than this on the docked bot is a tap. */
 const HOLD_MS = 220;
@@ -176,6 +223,7 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean; fresh?
           typingNonce={keys}
           bubbles={bubbles || !!say}
           say={say}
+          quiet={props.docked}
           mood={listening ? "listening" : transcribing ? "thinking" : undefined}
           className={away ? "prompt-bot is-away" : "prompt-bot"}
         />
@@ -189,6 +237,7 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean; fresh?
           <i />
         </span>
       )}
+      <span className="prompt-field">
       <input
         ref={inputRef}
         className={`prompt-input ${listening ? "listening" : ""}`}
@@ -211,8 +260,10 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean; fresh?
                     ? `Change or ask about ${focusName ? `the ${focusName}` : "this part"}`
                     : props.docked && done
                     ? "Change it, or describe something new"
+                    : props.docked && running
+                    ? "Describe another device"
                     : props.docked
-                    ? "Describe another device, or hold Space to talk"
+                    ? "Describe a device, or hold Space"
                     : (props.placeholder ?? "Describe the device you want, or hold Space to talk")
         }
         aria-label="Prompt"
@@ -224,6 +275,8 @@ export function PromptBar(props: { docked?: boolean; autoFocus?: boolean; fresh?
         onBlur={() => setFocused(false)}
         disabled={disabled}
       />
+      {props.docked && !text && !listening && !transcribing && <WorkingDots />}
+      </span>
       {/* the way in to talking, for anyone who hasn't found Space yet: tap it (or Space) to talk
           hands-free, hold Space to talk while held. The ring grows with the voice. */}
       <button

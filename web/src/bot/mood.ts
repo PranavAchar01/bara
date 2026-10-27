@@ -114,35 +114,78 @@ export function emoteFor(e: EventLike): Emote | null {
 const SPEECH_MAX = 60;
 const short = (s: string) => (s.length > SPEECH_MAX ? s.slice(0, SPEECH_MAX - 1).trimEnd() + "…" : s);
 
-/** One line the bot says about an event (SPEC UI: under 60 characters), or null. */
+/** What Bara says as each stage starts: a person talking, not a status line. */
+const STAGE_LINES: Record<string, string> = {
+  classify: "Ooh, okay. Let me picture this.",
+  reuse: "Let's see what's out there already.",
+  compose: "Shopping for parts!",
+  place: "Now, where does everything go?",
+  enclose: "Time to give it a home.",
+  board: "Wiring it all up.",
+  firmware: "Teaching it what to do.",
+  render: "Almost there. Making it pretty.",
+};
+
+/** A part, in a line: what it is to you, under ten words. First match wins. */
+const PART_LINES: [RegExp, string[]][] = [
+  [/knob/i, ["Ooh, a knob. That's your volume.", "A knob. Twist away."]],
+  [/encoder|potentiometer|\bpot\b|dial/i, ["Ooh, a dial. Something to twist.", "A dial. Your fingers will love this."]],
+  [/keycap/i, ["Keycaps! The part you actually touch.", "Caps on. Looking like a keyboard now."]],
+  [/switch/i, ["Switches! That's the clicky bit.", "Here come the clicks."]],
+  [/trackball/i, ["A trackball. Rolling, rolling.", "Trackball! Thumb's gonna love it."]],
+  [/joystick|thumbstick|stick/i, ["A stick. Game on.", "Joystick! This one's for fun."]],
+  [/oled|display|screen|lcd/i, ["A little screen. Now it can talk back.", "A screen! Something to look at."]],
+  [/battery|lipo|cell/i, ["A battery. No cable needed.", "Power, packed in."]],
+  [/controller|mcu|microcontroller|pico|\bboard\b/i, ["There's the brain.", "The brain goes in."]],
+  [/usb|connector|jack|port/i, ["A port, so it can plug in.", "Plug goes here."]],
+  [/buzzer|speaker|piezo/i, ["A buzzer. It can beep at you now.", "Beep beep. Found a buzzer."]],
+  [/led|light/i, ["A light. Little bit of glow.", "Ooh, it lights up."]],
+  [/button/i, ["A button. Press it, it'll know.", "Buttons! Something to press."]],
+  [/diode/i, ["Diodes. Tiny traffic cops.", "Diodes keep the keys honest."]],
+  [/standoff|screw|spacer/i, ["Standoffs. Keeps it sturdy.", "Little legs for the board."]],
+  [/sensor/i, ["A sensor. It can feel things now.", "A sensor! Now it notices."]],
+  [/motor|fan/i, ["A motor. It moves!", "Something that spins. Fun."]],
+];
+
+function pick(options: string[], key: string): string {
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) | 0;
+  return options[Math.abs(h) % options.length];
+}
+
+/** What Bara says when a part goes in: a reaction to what the part is for. */
+export function partLine(name: string, seed = ""): string {
+  for (const [re, lines] of PART_LINES) if (re.test(name)) return pick(lines, name + seed);
+  const plain = name.length > 28 ? "this one" : name.toLowerCase();
+  return pick([`Ooh, ${plain}. Nice.`, `Grabbed ${plain}.`], name + seed);
+}
+
+/** One line the bot says about an event (spoken and shown as a popup): short, warm, under ten words. */
 export function speechFor(e: EventLike): string | null {
   const p = payload(e);
   switch (e.type) {
     case "stage.started": {
+      const id = typeof p.stage === "string" ? p.stage : null;
+      if (id && STAGE_LINES[id]) return STAGE_LINES[id];
       const label = typeof p.label === "string" ? p.label : null;
       return label ? short(label) : null;
     }
     case "part.added": {
-      const part = p.part as { label?: string; card?: { display_name?: string } } | undefined;
+      const part = p.part as { label?: string; instance_id?: string; card?: { display_name?: string } } | undefined;
       const name = part?.label ?? part?.card?.display_name;
-      return name ? short(`Got ${name}`) : null;
+      return name ? partLine(name, part?.instance_id ?? "") : null;
     }
     case "reuse.decided":
-      return "Found an open design to start from";
+      return "Found a design to build on. Nice.";
     case "clarify.request":
       return typeof p.question === "string" ? short(p.question) : "Quick question for you";
-    case "build.done": {
-      const s = p.summary as { instance_count?: number } | undefined;
-      return s?.instance_count ? short(`Done! ${s.instance_count} parts, all placed`) : "Done!";
-    }
-    case "build.failed": {
-      const err = p.error as { message?: string } | undefined;
-      return short(err?.message ? `Hmm. ${err.message}` : "That one didn't work");
-    }
+    case "build.done":
+      return "There it is. All done!";
+    case "build.failed":
+      return "Oof. That one didn't work.";
     case "check.result": {
       const results = (p.results as { status?: string; message?: string }[] | undefined) ?? [];
-      const bad = results.find((r) => r.status === "fail");
-      return bad?.message ? short(`Uh oh: ${bad.message}`) : null;
+      return results.some((r) => r.status === "fail") ? "Hmm, something's off. Looking." : null;
     }
     default:
       return null;

@@ -141,7 +141,7 @@ class Engine:
         self.router = router
         self.edits = edits
         self.builds: dict[str, BuildRun] = {}
-        self.library = Library(settings.data_dir / "library", settings.assets_dir)
+        self.library = Library(settings.library_dir, settings.assets_dir)
         # Live 8-stage runner for BARA_MOCK=0 (bara.live.runner.LiveRunner), set by services.
         self.live: Any = None
         kw = router.keywords
@@ -164,8 +164,12 @@ class Engine:
         return entry, events
 
     @staticmethod
-    def _replay_state(build_id: str, entry: dict[str, Any], events: list[dict[str, Any]]) -> dict[str, Any]:
-        build: dict[str, Any] = new_build(build_id, str(entry.get("prompt") or ""), str(entry.get("created_at") or now_ts()))
+    def _replay_state(
+        build_id: str, entry: dict[str, Any], events: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        build: dict[str, Any] = new_build(
+            build_id, str(entry.get("prompt") or ""), str(entry.get("created_at") or now_ts())
+        )
         for e in events:
             build = apply_event(build, e) or build
         return build
@@ -188,15 +192,42 @@ class Engine:
         )
         run.seq = max(int(e["seq"]) for e in events)
         run.log = events[-run.keep :]
-        done = run.state.get("status") == "done"
-        run.terminal = "build.done" if done else "build.failed"
+        ended = any(e.get("type") in TERMINAL for e in events)
         run.replay_finished = True
-        run.edit_counter = len({e["payload"].get("edit_id") for e in events if e.get("type") in ("edit.applied", "edit.rejected")})
+        run.edit_counter = len(
+            {
+                e["payload"].get("edit_id")
+                for e in events
+                if e.get("type") in ("edit.applied", "edit.rejected")
+            }
+        )
         self.builds[build_id] = run
+        if not ended:
+            self._close_interrupted(run, events)
+        else:
+            run.terminal = "build.done" if run.state.get("status") == "done" else "build.failed"
         return run
 
+    def _close_interrupted(self, run: BuildRun, events: list[dict[str, Any]]) -> None:
+        """A build the engine was running when it stopped: everything it sent is kept, and it ends
+        now with a plain failure, so a browser that reconnects sees it finish instead of a build
+        that runs forever."""
+        for e in events:
+            stage = (e.get("payload") or {}).get("stage")
+            if e.get("type") == "stage.started":
+                run.open_stage = stage
+            elif e.get("type") == "stage.completed" and stage == run.open_stage:
+                run.open_stage = None
+        run.open_stage_started = time.monotonic()
+        message = (
+            "The engine restarted while this was building. Everything built up to here is kept; "
+            "start the build again to finish it."
+        )
+        self._fail(run, error_obj("E_INTERNAL", message, stage=run.open_stage))
+
     def restore(self, run: BuildRun, revision: int) -> int:
-        """Put the build back the way it was at `revision`, as a new revision (undo, redo and history).
+        """Put the build back the way it was at `revision`, as a new revision (undo, redo,
+        history).
 
         The stored events up to that revision are replayed; a later restore is itself a snapshot, so
         going back and forth stays exact. Returns the new revision."""

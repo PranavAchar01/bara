@@ -236,6 +236,38 @@ export function canvasLabel(meta: CanvasMeta, c: CanvasSnapshot | null): string 
   return meta.name ?? c?.pendingStart?.prompt ?? c?.build?.prompt ?? "New canvas";
 }
 
+/**
+ * A tab's short title: the device noun phrase, not the whole prompt. "a macropad with a knob" reads
+ * "Macropad"; "wireless split keyboard, 38 keys, sage" reads "Wireless split keyboard". The full
+ * prompt stays in the tab's tooltip.
+ */
+export function shortTitle(label: string, maxWords = 3): string {
+  const head = label
+    .trim()
+    .replace(/^(?:an?|the)\s+/i, "")
+    .split(/\s*[,;:(]\s*|\s+(?:with|that|for|which|and|to|using|plus|in|on)\s+/i)[0]
+    .trim();
+  const words = head.split(/\s+/).filter(Boolean).slice(0, maxWords).join(" ");
+  const t = words || label.trim();
+  return t ? t[0].toUpperCase() + t.slice(1) : t;
+}
+
+/**
+ * Which tabs fit in the strip: the first `fit` in order, with the active one always among them (it
+ * takes the last visible slot when it would otherwise be folded away). The rest go in the overflow menu.
+ */
+export function visibleTabs<T extends { id: string }>(tabs: T[], activeId: string, fit: number): { shown: T[]; hidden: T[] } {
+  const n = Math.max(1, Math.floor(fit));
+  if (tabs.length <= n) return { shown: tabs, hidden: [] };
+  const shown = tabs.slice(0, n);
+  if (!shown.some((t) => t.id === activeId)) {
+    const act = tabs.find((t) => t.id === activeId);
+    if (act) shown[n - 1] = act;
+  }
+  const ids = new Set(shown.map((t) => t.id));
+  return { shown, hidden: tabs.filter((t) => !ids.has(t.id)) };
+}
+
 // ---- kept across reloads ----
 
 export const CANVAS_STORE = "bara.canvases";

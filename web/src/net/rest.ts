@@ -92,6 +92,7 @@ export const paths = {
   libraryShot: (id: string) => `/v1/library/${encodeURIComponent(id)}/shot`,
   libraryHidden: () => "/v1/library?hidden=1",
   libraryRestore: (id: string) => `/v1/library/${encodeURIComponent(id)}/restore`,
+  libraryImport: (slug: string) => `/v1/library/import/${encodeURIComponent(slug)}`,
   build: (id: string) => `/v1/builds/${encodeURIComponent(id)}`,
   events: (id: string, afterSeq = 0) => `/v1/builds/${encodeURIComponent(id)}/events?after_seq=${afterSeq}`,
   part: (partId: string) => `/v1/parts/${encodeURIComponent(partId)}`,

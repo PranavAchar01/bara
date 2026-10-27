@@ -189,4 +189,45 @@ describe("C26 connection", () => {
     expect(t.drops).toEqual([]);
     expect(t.seen.map((e) => e.type)).toEqual(["hello", "future.thing", "stage.progress"]);
   });
+
+  it("drops the socket at once when the browser goes offline, and resumes from the last event", () => {
+    const t = setup({ build_id: "b_test0001", last_seq: 0 });
+    t.last().hello();
+    t.last().serverMsg({ type: "stage.progress", seq: 1, build_id: "b_test0001" });
+    t.last().serverMsg({ type: "stage.progress", seq: 2, build_id: "b_test0001" });
+    const first = t.last();
+    t.conn.drop();
+    expect(first.closed).toBe(true);
+    expect(t.conn.state).toBe("reconnecting");
+    // the late close event of the old socket changes nothing
+    first.drop();
+    expect(t.sockets).toHaveLength(1);
+    vi.advanceTimersByTime(BACKOFF_MS[0]);
+    expect(t.sockets).toHaveLength(2);
+    t.last().hello();
+    const resume = t.last().sent.find((m) => m.type === "build.resume");
+    expect(resume?.payload).toEqual({ build_id: "b_test0001", last_seq: 2 });
+  });
+
+  it("reconnects at once when nudged instead of waiting out the backoff", () => {
+    const t = setup();
+    t.last().hello();
+    for (let i = 0; i < 4; i++) {
+      t.last().drop();
+      vi.advanceTimersByTime(BACKOFF_MS[Math.min(i, BACKOFF_MS.length - 1)] * 1.3);
+    }
+    t.last().drop();
+    const before = t.sockets.length;
+    t.conn.nudge();
+    expect(t.sockets).toHaveLength(before + 1);
+    // a socket is already opening: a second nudge does not open another
+    t.conn.nudge();
+    expect(t.sockets).toHaveLength(before + 1);
+    t.last().hello();
+    expect(t.conn.state).toBe("open");
+    // the backoff starts over after a nudge
+    t.last().drop();
+    vi.advanceTimersByTime(BACKOFF_MS[0] * 1.3);
+    expect(t.sockets).toHaveLength(before + 2);
+  });
 });

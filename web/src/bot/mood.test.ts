@@ -35,8 +35,16 @@ describe("bot mood", () => {
   });
 
   it("says one short line about an event", () => {
-    expect(speechFor(ev("part.added", { part: { card: { display_name: "Cherry MX2A Brown" } } }))).toBe("Got Cherry MX2A Brown");
-    expect(speechFor(ev("build.done", { summary: { instance_count: 76 } }))).toBe("Done! 76 parts, all placed");
+    expect(speechFor(ev("part.added", { part: { card: { display_name: "Tactile key switch" } } }))).toMatch(/clic/i);
+    expect(speechFor(ev("part.added", { part: { label: "6mm knob" } }))).toMatch(/knob/i);
+    expect(speechFor(ev("build.done", { summary: { instance_count: 76 } }))).toBe("There it is. All done!");
+    expect(speechFor(ev("stage.started", { stage: "compose", label: "Choosing parts" }))).toBe("Shopping for parts!");
+    // every line stays short enough to say in a breath
+    for (const name of ["Rotary encoder", "Wireless controller board", "Battery", "USB-C receptacle", "Mystery widget"]) {
+      const line = speechFor(ev("part.added", { part: { label: name } })) ?? "";
+      expect(line.split(/\s+/).length).toBeLessThanOrEqual(10);
+      expect(line).not.toMatch(/^Got /);
+    }
     const long = speechFor(ev("stage.started", { label: "x".repeat(200) }));
     expect(long?.length).toBeLessThanOrEqual(60);
     expect(speechFor(ev("connection.added", {}))).toBeNull();

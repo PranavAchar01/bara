@@ -53,6 +53,9 @@ def build_services(settings: Settings) -> Services:
     router = Router(catalog, settings)
     edits = EditEngine(catalog, settings.catalog_dir / "check_rules.json", schemas)
     engine = Engine(catalog, settings, router, edits)
+    from bara.oss_import import load_records
+
+    load_records(catalog, settings.data_dir)  # imported open-source boards' parts
     if not settings.mock:
         from bara.live.catalog_source import open_part_source
         from bara.live.runner import LiveRunner

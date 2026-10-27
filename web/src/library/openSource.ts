@@ -133,3 +133,12 @@ export function boardGlbUrls(slug: string): string[] {
   const s = encodeURIComponent(slug);
   return [`/explore/glb/${s}.glb`, `${BOARD_GLB_REMOTE}/${s}/board.glb`];
 }
+
+/** Turns an open-source board into a build on the engine (its own KiCad files: parts, nets, footprints,
+ *  checks) and returns the build id, the same one every time for the same board. */
+export async function importBoard(slug: string): Promise<{ ok: true; buildId: string } | { ok: false; message: string }> {
+  const { getRest } = await import("../net/client");
+  const { paths } = await import("../net/rest");
+  const r = await getRest().request<{ build_id: string }>("POST", paths.libraryImport(slug));
+  return r.ok ? { ok: true, buildId: r.body.build_id } : { ok: false, message: r.error.message };
+}
